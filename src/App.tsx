@@ -26,7 +26,7 @@ function App() {
           count is {count}
         </button>
         <p className="text-gray-600">
-          Edit <code className="bg-gray-100 px-2 py-1 rounded text-sm">src/App.jsx</code> and save to test HMR
+          Edit <code className="bg-gray-100 px-2 py-1 rounded text-sm">src/App.tsx</code> and save to test HMR
         </p>
       </div>
       
