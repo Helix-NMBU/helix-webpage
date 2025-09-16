@@ -10,23 +10,9 @@ export const Navbar = () => {
           <a href="#contact" className="hover:text-[#67cdbc] transition-colors">Kontakt oss</a>
         </nav>
 
-        {/* Centered Logo */}
-        <div className="absolute transform -translate-x-1/2 left-1/2">
-          <a href="/" className="flex items-center">
-            <div className="relative w-16 h-16">
-              <img
-                src="/helix.svg"
-                alt="Helix Logo"
-                width={70}
-                height={70}
-                style={{ display: "block", width: "100%", height: "100%" }}
-              />
-            </div>
-          </a>
-        </div>
         {/* Right Button */}
         <div>
-          <button className="bg-[#482ffe]/80 hover:bg-[#482ffe]/60 text-[#fff8e6] opacity-100">
+          <button className="bg-[#482ffe]/80 hover:bg-[#482ffe]/60 text-[#fff8e6] opacity-100 rounded-md px-4 py-2">
             Partner portal
           </button>
         </div>

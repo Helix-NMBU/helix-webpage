@@ -7,9 +7,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        ibmMono: ['IBM Plex Mono', 'monospace'],
+        sans: ['Montserrat'],
       },
-      colors:{
+      colors: {
         primary: '#03094a',
         secondary: '#09117c',
         accent: '#aaebdf',
@@ -18,5 +18,7 @@ export default {
       }
     },
   },
-  plugins: [],
+  plugins: [
+    require('tailwindcss-animate')
+  ],
 }
