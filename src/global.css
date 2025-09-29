@@ -10,3 +10,18 @@ body {
   background-color: #00064e;
   color: #ffffff;
 }
+
+
+/*<style> @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap');</style> 
+lexend font link fra google fonts for html*/
+
+/*
+.lexend-<uniquifier> {
+  font-family: "Lexend", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: <weight>;
+  font-style: normal;
+}
+  dette er for css klasser for lexend fonten*/
+  
+
