@@ -1,11 +1,8 @@
-import { HeroSection, AchievementStats } from "../features/home/components";
-import { Navbar } from "@libs/components/navbar/Navbar";
 
 const Homepage = () => {
   return (
     <div>
-      <Navbar />
-      <HeroSection />
+      <h1>Welcome to Helix NMBU</h1>
     </div>
   );
 };
