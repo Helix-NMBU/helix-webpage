@@ -8,6 +8,9 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/sponsorspage" element={<SponsorsPage />} />
+        <Route path="/sponsorspage" element={<SponsorsPage />} />
+        <Route path="/sponsorspage" element={<SponsorsPage />} />
+        <Route path="/sponsorspage" element={<SponsorsPage />} />
 
       </Routes>
     </BrowserRouter>

@@ -1,9 +1,8 @@
-import { Navbar } from "@libs/components/navbar/Navbar";
 
 const Homepage = () => {
   return (
     <div>
-      <Navbar />
+      <h1>Welcome to Helix NMBU</h1>
     </div>
   );
 };
