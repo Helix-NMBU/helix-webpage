@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -9,8 +10,12 @@
 body {
   background-color: #00064e;
   color: #ffffff;
+  font-family: "Lexend", sans-serif;
 }
 
+link{
+  color: #63e4ca;
+}
 
 /*<style> @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap');</style> 
 lexend font link fra google fonts for html*/
