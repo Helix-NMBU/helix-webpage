@@ -2,10 +2,8 @@ import { Link } from "react-router-dom";
 export const Navbar = () => {
   return (
     <div className="bg-background text-foreground">
-      <header className="sticky w-full z-50 from-[#040076] to-transparent mb-10"> 
-        
-        <div className="container flex items-center justify-between px-4 py-4 mx-auto">
-          <div className="flex justify-center items-start"> 
+        <div className="flex items-center justify-between px-4 py-4 mx-auto stickycontainer">
+          <div className="flex items-start justify-center"> 
           <Link to="/">
            <img src="/helix.svg" alt="Helix Logo" />
           </Link>
@@ -20,7 +18,6 @@ export const Navbar = () => {
             
           </nav>
           </div>
-      </header>
     </div>
   );
 };

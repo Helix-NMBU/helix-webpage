@@ -1,8 +1,8 @@
-import CarInfoCard from "@libs/components/CarInfoCard";
-import React, { useEffect, useState } from "react";
+import CarCarousel from "@libs/components/CarCarousel";
+import { useEffect, useState } from "react";
 
 interface Car {
-    id: number;
+  id: number;
   name: string;
   season: string;
   image: string;
@@ -13,24 +13,32 @@ interface Car {
   };
 }
 
-const garage = () => {
-const [cars, setCars] = useState<Car[]>([]);
+const Garage = () => {
+  const [cars, setCars] = useState<Car[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/CarInfo.json")
       .then((res) => res.json())
-      .then((data) => setCars(data));
+      .then((data) => {
+        setCars(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error loading cars:", error);
+        setLoading(false);
+      });
   }, []);
 
-  if (cars.length === 0) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background text-foreground">
+        <div className="text-xl">Loading cars...</div>
+      </div>
+    );
+  }
 
-  return (
-    <div className="bg-background text-foreground flex flex-col gap-32 items-center py-12">
-        {cars.map((car, index) => (
-                <CarInfoCard key={index} car={car} />
-            ))}
-     </div>
-  );
+  return <CarCarousel cars={cars} />;
 };
 
-export default garage;
+export default Garage;
