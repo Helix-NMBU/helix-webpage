@@ -7,6 +7,7 @@ import Garage from './pages/garage.tsx'
 import Join from './pages/join.tsx'
 import Members from './pages/members.tsx'
 import Newsletter from './pages/newsletter.tsx'
+import SponsorPortal from './pages/Sponsorportal.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
         <Route path="/join" element={<Join />} />
         <Route path="/members" element={<Members />} />
         <Route path="/newsletter" element={<Newsletter />} />
+        <Route path="/sponsorportal" element={<SponsorPortal />} />
       </Routes>
     </BrowserRouter>
     
