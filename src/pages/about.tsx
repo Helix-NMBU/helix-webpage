@@ -1,0 +1,35 @@
+const about = () => {
+    return (
+        <div className="bg-background text-foreground">
+            <h1 className="text-5xl font-bold">Hei, dette er om oss siden!</h1>
+            <p className= "text-4xs font-cursive">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ante massa, lacinia a turpis at, eleifend ornare eros. Phasellus turpis nibh, ultrices sed ornare et, hendrerit et leo. Aliquam consectetur sapien diam, et sagittis lorem maximus eu. Ut laoreet aliquam laoreet. Morbi ex urna, gravida ut posuere mollis, imperdiet eget lectus. Nam at elit felis. Ut ut tellus quam. Ut at nibh sit amet sapien tristique finibus. Etiam quam erat, sagittis sed dapibus eget, vehicula quis erat. Pellentesque convallis dapibus sodales. Proin diam ligula, tincidunt et mi sed, auctor dapibus libero. Proin vitae dolor in massa commodo hendrerit eget in leo. Fusce sagittis tempus tincidunt. Donec condimentum suscipit massa, et pretium nibh faucibus at.
+
+Praesent et hendrerit lorem, varius efficitur erat. Vestibulum eleifend ante quis orci dignissim, non egestas ex condimentum. Suspendisse potenti. Quisque vulputate felis quis malesuada vestibulum. Vivamus facilisis a ligula at laoreet. Vivamus et dignissim magna. Aliquam ut faucibus elit. Morbi in semper est, et tempor neque.
+
+Duis porttitor hendrerit risus aliquet porta. Integer congue ipsum in magna rutrum, id efficitur risus sagittis. Nullam vitae posuere mauris. In nec vulputate nibh, et rutrum ex. Curabitur eget sollicitudin dui. Integer dolor felis, facilisis sit amet euismod id, tempor in nisi. Curabitur sit amet lobortis ante. Integer lacinia tortor sit amet urna aliquet mattis. Nulla facilisi. Nullam fermentum mauris leo, ut vehicula mauris egestas vel. Praesent enim risus, gravida ut ipsum id, bibendum luctus augue. Nullam quis tempor elit.
+
+Quisque gravida, lectus pharetra tempus porta, neque nibh tristique orci, nec blandit metus lorem sed lacus. Donec blandit turpis ut ipsum aliquet, ac scelerisque felis egestas. Mauris lorem ante, malesuada ut blandit a, rhoncus id massa. Donec a mauris accumsan, pulvinar enim non, aliquam diam. Vestibulum condimentum diam id interdum vulputate. Cras vestibulum aliquam felis. Nunc volutpat mauris id blandit venenatis. Proin orci enim, finibus vel nisl venenatis, condimentum congue arcu. Nullam mollis vel sem vel tempor. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae;
+
+Proin suscipit ac dolor et convallis. Mauris volutpat vehicula neque imperdiet tincidunt. Nunc rutrum, turpis a mollis fringilla, ipsum lorem porttitor magna, quis convallis elit diam vitae magna. Etiam tempus faucibus elit, eget efficitur urna sollicitudin at. Nulla ornare, ante eu scelerisque tempus, ex risus sollicitudin nunc, at vulputate lectus augue id odio. Proin nec ex nisl. Suspendisse tincidunt eros sed interdum tristique. Vivamus nisi massa, dapibus id commodo elementum, consectetur non metus. Duis tempor ligula sed dolor facilisis fringilla. In facilisis sapien vitae magna suscipit iaculis. Nulla eros lacus, bibendum id sapien sit amet, fermentum fermentum sem. Quisque aliquam leo lectus, ac sollicitudin quam lacinia sed. Nullam egestas tellus mi, vehicula faucibus nibh efficitur nec.
+                
+            </p>
+            <br />
+            <br></br>
+            
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ante massa, lacinia a turpis at, eleifend ornare eros. Phasellus turpis nibh, ultrices sed ornare et, hendrerit et leo. Aliquam consectetur sapien diam, et sagittis lorem maximus eu. Ut laoreet aliquam laoreet. Morbi ex urna, gravida ut posuere mollis, imperdiet eget lectus. Nam at elit felis. Ut ut tellus quam. Ut at nibh sit amet sapien tristique finibus. Etiam quam erat, sagittis sed dapibus eget, vehicula quis erat. Pellentesque convallis dapibus sodales. Proin diam ligula, tincidunt et mi sed, auctor dapibus libero. Proin vitae dolor in massa commodo hendrerit eget in leo. Fusce sagittis tempus tincidunt. Donec condimentum suscipit massa, et pretium nibh faucibus at.
+
+Praesent et hendrerit lorem, varius efficitur erat. Vestibulum eleifend ante quis orci dignissim, non egestas ex condimentum. Suspendisse potenti. Quisque vulputate felis quis malesuada vestibulum. Vivamus facilisis a ligula at laoreet. Vivamus et dignissim magna. Aliquam ut faucibus elit. Morbi in semper est, et tempor neque.
+
+Duis porttitor hendrerit risus aliquet porta. Integer congue ipsum in magna rutrum, id efficitur risus sagittis. Nullam vitae posuere mauris. In nec vulputate nibh, et rutrum ex. Curabitur eget sollicitudin dui. Integer dolor felis, facilisis sit amet euismod id, tempor in nisi. Curabitur sit amet lobortis ante. Integer lacinia tortor sit amet urna aliquet mattis. Nulla facilisi. Nullam fermentum mauris leo, ut vehicula mauris egestas vel. Praesent enim risus, gravida ut ipsum id, bibendum luctus augue. Nullam quis tempor elit.
+
+Quisque gravida, lectus pharetra tempus porta, neque nibh tristique orci, nec blandit metus lorem sed lacus. Donec blandit turpis ut ipsum aliquet, ac scelerisque felis egestas. Mauris lorem ante, malesuada ut blandit a, rhoncus id massa. Donec a mauris accumsan, pulvinar enim non, aliquam diam. Vestibulum condimentum diam id interdum vulputate. Cras vestibulum aliquam felis. Nunc volutpat mauris id blandit venenatis. Proin orci enim, finibus vel nisl venenatis, condimentum congue arcu. Nullam mollis vel sem vel tempor. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae;
+
+Proin suscipit ac dolor et convallis. Mauris volutpat vehicula neque imperdiet tincidunt. Nunc rutrum, turpis a mollis fringilla, ipsum lorem porttitor magna, quis convallis elit diam vitae magna. Etiam tempus faucibus elit, eget efficitur urna sollicitudin at. Nulla ornare, ante eu scelerisque tempus, ex risus sollicitudin nunc, at vulputate lectus augue id odio. Proin nec ex nisl. Suspendisse tincidunt eros sed interdum tristique. Vivamus nisi massa, dapibus id commodo elementum, consectetur non metus. Duis tempor ligula sed dolor facilisis fringilla. In facilisis sapien vitae magna suscipit iaculis. Nulla eros lacus, bibendum id sapien sit amet, fermentum fermentum sem. Quisque aliquam leo lectus, ac sollicitudin quam lacinia sed. Nullam egestas tellus mi, vehicula faucibus nibh efficitur nec.
+            </p>
+        </div>
+            
+        
+    )
+}
+
+export default about;

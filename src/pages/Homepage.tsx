@@ -1,8 +1,8 @@
-
 const Homepage = () => {
   return (
     <div className="bg-background text-foreground">
-      <h1>Welcome to Helix NMBU</h1>
+     <h1 className="text-5xl font-bold"> Velkommen til Helix!</h1>
+      
     </div>
   );
 };
