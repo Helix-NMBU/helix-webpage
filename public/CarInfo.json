@@ -1,0 +1,25 @@
+[
+{
+    "id": 2,
+  "name": "Børsen",
+  "season": "24/25",
+  "image": "/Børsen (1).png",
+  "stats": {
+    "focus": "Vekt",
+    "motor": "Zusuki 4-sylinder",
+    "weight": "206 kg"
+  }
+},
+
+{
+    "id": 1,
+  "name": "Arken",
+  "season": "23/24",
+  "image": "/Arken1.png",
+  "stats": {
+    "focus": "Hjuloppheng",
+    "motor": "1-sylinder",
+    "weight": "234 kg"
+  }
+}
+]
