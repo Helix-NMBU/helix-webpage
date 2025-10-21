@@ -6,7 +6,7 @@
   "image": "/Børsen (1).png",
   "stats": {
     "focus": "Vekt",
-    "motor": "Zusuki 4-sylinder",
+    "motor": "Suzuki, 4 sylinder",
     "weight": "206 kg"
   }
 },
@@ -18,7 +18,7 @@
   "image": "/Arken1.png",
   "stats": {
     "focus": "Hjuloppheng",
-    "motor": "1-sylinder",
+    "motor": "1 sylinder",
     "weight": "234 kg"
   }
 }

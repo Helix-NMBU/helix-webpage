@@ -38,26 +38,28 @@ const CarCarousel = ({ cars }: CarCarouselProps) => {
   }
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
-      <div className="relative w-full px-4 max-w-7xl">
-        
-        {/* Car Display */}
-        <div className="relative overflow-hidden">
-          <CarInfoCard car={cars[currentIndex]} />
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground overflow-visible">
+      {/* full-width wrapper so arrows position relative to viewport width */}
+      <div className="relative w-full px-4">
+        <div className="mx-auto max-w-7xl">
+          {/* Car Display (allow overflow so big background text isn't clipped) */}
+          <div className="relative overflow-visible">
+            <CarInfoCard car={cars[currentIndex]} />
+          </div>
         </div>
 
-        {/* Navigation Arrows */}
+        {/* Navigation Arrows: position relative to full-width wrapper so they move with screen width */}
         <button
           onClick={prevCar}
-          className="absolute z-20 p-3 transition-all -translate-y-1/2 rounded-full cursor-pointer left-4 top-1/2 text-foreground"
+          className="absolute z-20 p-3 transition-all -translate-y-1/2 rounded-full cursor-pointer left-6 top-1/2 text-foreground"
           aria-label="Previous car"
         >
           <ChevronLeft className="w-8 h-8" />
         </button>
-        
+
         <button
           onClick={nextCar}
-          className="absolute z-20 p-3 transition-all -translate-y-1/2 rounded-full cursor-pointer right-4 top-1/2 text-foreground"
+          className="absolute z-20 p-3 transition-all -translate-y-1/2 rounded-full cursor-pointer right-6 top-1/2 text-foreground"
           aria-label="Next car"
         >
           <ChevronRight className="w-8 h-8" />
