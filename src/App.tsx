@@ -4,9 +4,7 @@ import SponsorsPage from './pages/SponsorPage.tsx'
 import About from './pages/about.tsx'
 import Contact from './pages/contact.tsx'
 import Garage from './pages/garage.tsx'
-import Join from './pages/join.tsx'
 import Members from './pages/members.tsx'
-import Newsletter from './pages/newsletter.tsx'
 import SponsorPortalLogin from './pages/SponsorportalLogin.tsx'
 import SponsorPortal from './pages/Sponsorportal.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
@@ -25,7 +23,6 @@ function AppContent() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/garage" element={<Garage />} />
         <Route path="/members" element={<Members />} />
-        <Route path="/newsletter" element={<Newsletter />} />
         <Route path="/sponsorportal-login" element={<SponsorPortalLogin />} />
         <Route path="/sponsorportal" element={<SponsorPortal />} />
       </Routes>
