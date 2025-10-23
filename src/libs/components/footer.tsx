@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 const Footer = () => {
   return (
-    <footer className="bg-background text-foreground border-t border-foreground/20 py-8 px-4 mt-16">
+  <footer className="bg-background text-foreground py-8 px-4 mt-16 footer-gradient">
       <div className="w-auto mx-auto px-4 py-4 flex flex-col md:flex-row gap-8 justify-between items-center">
         <div>
           <img className="h-60 object-contain" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" />
