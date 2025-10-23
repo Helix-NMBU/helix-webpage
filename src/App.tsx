@@ -24,7 +24,6 @@ function AppContent() {
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/garage" element={<Garage />} />
-        <Route path="/join" element={<Join />} />
         <Route path="/members" element={<Members />} />
         <Route path="/newsletter" element={<Newsletter />} />
         <Route path="/sponsorportal-login" element={<SponsorPortalLogin />} />
