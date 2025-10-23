@@ -15,7 +15,7 @@ export const Navbar = () => {
             <Link to ="sponsorpage" className="text-foreground hover:text-accent">Samarbeidspartnere</Link>
             <Link to ="garage" className="text-foreground hover:text-accent">Garasje</Link>
             <Link to ="about" className="text-foreground hover:text-accent">Om oss</Link>
-            
+            <Link to ="sponsorportal-login" className="text-foreground hover:text-accent">Sponsorportal</Link>
           </nav>
           </div>
     </div>
