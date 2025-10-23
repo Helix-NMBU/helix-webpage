@@ -8,6 +8,7 @@ import Members from './pages/members.tsx'
 import SponsorPortalLogin from './pages/SponsorportalLogin.tsx'
 import SponsorPortal from './pages/Sponsorportal.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
+import Footer from './libs/components/footer.tsx'
 
 function AppContent() {
   const location = useLocation();
@@ -26,6 +27,7 @@ function AppContent() {
         <Route path="/sponsorportal-login" element={<SponsorPortalLogin />} />
         <Route path="/sponsorportal" element={<SponsorPortal />} />
       </Routes>
+      {!hideNavbar && <Footer />}
     </>
   );
 }

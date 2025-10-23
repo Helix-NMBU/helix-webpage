@@ -42,6 +42,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Footer gradient component: a bottom-to-top accent color layered above the background */
+@layer components {
+  .footer-gradient {
+    /* Keep the site's background as the base layer and add an accent gradient on top */
+    background: linear-gradient(to top, var(--secondary) 0%, rgba(255,255,255,0) 99%), var(--background);
+  }
+}
+
 :root {
   --background: #00007A;
   --foreground: oklch(100% 0.00011 271.152);
