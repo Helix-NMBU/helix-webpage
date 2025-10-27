@@ -1,5 +1,4 @@
 import React from "react";
-import "./autoplaycarousel.scss";
 import { cardDetails } from "/sponsor.json";
 import CarouselItem from "";
 

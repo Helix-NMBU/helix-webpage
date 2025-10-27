@@ -1,9 +1,9 @@
 import React from "react";
 
-export default function CarouselItem({ imgUrl, imgTitle }) {
+export default function CarouselItem({image, name}: {image: string; name: string}) {
   return (
     <div className="carousel-card">
-      <img src={imgUrl} alt={imgTitle}></img>
+      <img src={image} alt={name}></img>
     </div>
   );
 }
