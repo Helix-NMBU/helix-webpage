@@ -1,0 +1,15 @@
+[
+{
+    "id": 1,
+  "name": "Sponsor 1",
+  "image": "/Helix Logo Hvit.png"
+  
+},
+
+{
+    "id": 2,
+  "name": "Sponsor 2",
+  "image": "NMBU logo.png"
+  
+}
+]
