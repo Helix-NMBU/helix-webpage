@@ -2,7 +2,7 @@
 {
     "id": 1,
   "name": "Sponsor 1",
-  "image": "/Helix Logo Hvit.png"
+  "image": "/necia.svg"
   
 },
 
@@ -11,5 +11,11 @@
   "name": "Sponsor 2",
   "image": "NMBU logo.png"
   
+},
+
+{
+  "id":3,
+  "name":"Sponsor 3",
+  "image": "Norbygg.svg"
 }
 ]
