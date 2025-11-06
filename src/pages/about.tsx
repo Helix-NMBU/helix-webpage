@@ -1,42 +1,59 @@
 const about = () => {
     return (
-        <div className="relative text-foreground">
-            <img src="/Helixspiral.png" alt="" className="absolute inset-0 w-full h-full object-top object-cover opacity-30 pointer-events-none" />
-            <div className="relative z-10 px-8 py-8">
-                <h1 className="text-5xl font-bold">Hei, dette er om oss siden!</h1>
-            <p className= "text-4xs font-cursive">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ante massa, lacinia a turpis at, eleifend ornare eros. Phasellus turpis nibh, ultrices sed ornare et, hendrerit et leo. Aliquam consectetur sapien diam, et sagittis lorem maximus eu. Ut laoreet aliquam laoreet. Morbi ex urna, gravida ut posuere mollis, imperdiet eget lectus. Nam at elit felis. Ut ut tellus quam. Ut at nibh sit amet sapien tristique finibus. Etiam quam erat, sagittis sed dapibus eget, vehicula quis erat. Pellentesque convallis dapibus sodales. Proin diam ligula, tincidunt et mi sed, auctor dapibus libero. Proin vitae dolor in massa commodo hendrerit eget in leo. Fusce sagittis tempus tincidunt. Donec condimentum suscipit massa, et pretium nibh faucibus at.
+        <div className="relative text-foreground min-h-[60vh]">
+            <img src="/Helixspiral.png" alt="decorative spiral" className="absolute inset-0 w-full h-full object-top object-cover opacity-12 pointer-events-none" />
+            <div className="relative z-10 px-8 md:px-12 py-12">
+                <div className="mx-auto max-w-7xl space-y-6 text-base md:text-lg leading-relaxed">
+                    <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold">About us</h1>
+<h2 className="text-2xl font-semibold">Helix NMBU</h2>
+                    <p>
+                        Helix NMBU is a dedicated Formula Student team based at the Norwegian University of Life Sciences (NMBU). Our team brings together a diverse group of students from thirteen different academic programs, ranging in age from 18 to 32. This wide range of backgrounds fosters a unique environment for interdisciplinary collaboration and skill development across faculties.
+We are currently gearing up for our third consecutive participation in the prestigious Formula Student competition at Silverstone in 2025. With a strong focus on innovation, teamwork, and continuous improvement, we are working hard to build a competitive race car that reflects our passion and dedication
+                    </p>
 
-Praesent et hendrerit lorem, varius efficitur erat. Vestibulum eleifend ante quis orci dignissim, non egestas ex condimentum. Suspendisse potenti. Quisque vulputate felis quis malesuada vestibulum. Vivamus facilisis a ligula at laoreet. Vivamus et dignissim magna. Aliquam ut faucibus elit. Morbi in semper est, et tempor neque.
+                    <h2 className="text-2xl font-semibold">The beginning</h2>
+                    <p>
+                       Helix NMBU began as a bold vision shared by five passionate students at the Norwegian University of Life Sciences (NMBU), united by a common fascination with Formula 1 and a desire to build something extraordinary. Founding members André Hellne Rasen, Mari Helene Aasbø Heiberg, Carolyn Charles, Lavanyan Rathy, and Sathuriyan Sivathas laid the foundation for what was originally known as NMBU Racing.
+Their goal was clear: to create a platform where students could bridge the gap between theory and practice. By establishing a Formula Student team, they aimed to offer fellow students a hands-on environment to apply their academic knowledge, develop practical skills, and collaborate across disciplines in pursuit of a shared ambition.
+                    </p>
 
-Duis porttitor hendrerit risus aliquet porta. Integer congue ipsum in magna rutrum, id efficitur risus sagittis. Nullam vitae posuere mauris. In nec vulputate nibh, et rutrum ex. Curabitur eget sollicitudin dui. Integer dolor felis, facilisis sit amet euismod id, tempor in nisi. Curabitur sit amet lobortis ante. Integer lacinia tortor sit amet urna aliquet mattis. Nulla facilisi. Nullam fermentum mauris leo, ut vehicula mauris egestas vel. Praesent enim risus, gravida ut ipsum id, bibendum luctus augue. Nullam quis tempor elit.
+                    <h2 className="text-2xl font-semibold">The journey</h2>
+                    <p>
+                        The journey of Helix NMBU began in the autumn of 2022, when the founding members came together to shape their vision and define the goals of the team. After months of planning and collaboration throughout the autumn and spring semesters, NMBU Racing was officially established on May 2, 2023.
+As the team evolved, so did its identity. In August 2023, following discussions around branding and design, the team adopted a new name—Helix NMBU—to better reflect its dynamic and forward-thinking spirit.
+Later that autumn, the first official Helix NMBU team was assembled, ready to take on the ambitious challenge of designing and building their very first Formula Student race car.
+                    </p>
+                    <div className="mt-12">
+                        <h2 className="text-2xl font-semibold">Logo evolution</h2>
+       
+                    <div>
 
-Quisque gravida, lectus pharetra tempus porta, neque nibh tristique orci, nec blandit metus lorem sed lacus. Donec blandit turpis ut ipsum aliquet, ac scelerisque felis egestas. Mauris lorem ante, malesuada ut blandit a, rhoncus id massa. Donec a mauris accumsan, pulvinar enim non, aliquam diam. Vestibulum condimentum diam id interdum vulputate. Cras vestibulum aliquam felis. Nunc volutpat mauris id blandit venenatis. Proin orci enim, finibus vel nisl venenatis, condimentum congue arcu. Nullam mollis vel sem vel tempor. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae;
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start mt-6">
+                            <figure className="flex flex-col items-center text-center">
+                                <img src="/Helix%2022.avif" alt="Helix 22" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <figcaption className="mt-2 text-sm">2022 — 2023</figcaption>
+                            </figure>
 
-Proin suscipit ac dolor et convallis. Mauris volutpat vehicula neque imperdiet tincidunt. Nunc rutrum, turpis a mollis fringilla, ipsum lorem porttitor magna, quis convallis elit diam vitae magna. Etiam tempus faucibus elit, eget efficitur urna sollicitudin at. Nulla ornare, ante eu scelerisque tempus, ex risus sollicitudin nunc, at vulputate lectus augue id odio. Proin nec ex nisl. Suspendisse tincidunt eros sed interdum tristique. Vivamus nisi massa, dapibus id commodo elementum, consectetur non metus. Duis tempor ligula sed dolor facilisis fringilla. In facilisis sapien vitae magna suscipit iaculis. Nulla eros lacus, bibendum id sapien sit amet, fermentum fermentum sem. Quisque aliquam leo lectus, ac sollicitudin quam lacinia sed. Nullam egestas tellus mi, vehicula faucibus nibh efficitur nec.
-                
-            </p>
-            <br />
-            <br></br>
-            
-            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ante massa, lacinia a turpis at, eleifend ornare eros. Phasellus turpis nibh, ultrices sed ornare et, hendrerit et leo. Aliquam consectetur sapien diam, et sagittis lorem maximus eu. Ut laoreet aliquam laoreet. Morbi ex urna, gravida ut posuere mollis, imperdiet eget lectus. Nam at elit felis. Ut ut tellus quam. Ut at nibh sit amet sapien tristique finibus. Etiam quam erat, sagittis sed dapibus eget, vehicula quis erat. Pellentesque convallis dapibus sodales. Proin diam ligula, tincidunt et mi sed, auctor dapibus libero. Proin vitae dolor in massa commodo hendrerit eget in leo. Fusce sagittis tempus tincidunt. Donec condimentum suscipit massa, et pretium nibh faucibus at.
+                            <figure className="flex flex-col items-center text-center">
+                                <img src="/Helix%2023.avif" alt="Helix 23" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <figcaption className="mt-2 text-sm">2023 — 2024</figcaption>
+                            </figure>
 
-Praesent et hendrerit lorem, varius efficitur erat. Vestibulum eleifend ante quis orci dignissim, non egestas ex condimentum. Suspendisse potenti. Quisque vulputate felis quis malesuada vestibulum. Vivamus facilisis a ligula at laoreet. Vivamus et dignissim magna. Aliquam ut faucibus elit. Morbi in semper est, et tempor neque.
+                            <figure className="flex flex-col items-center text-center">
+                                <img src="/Helix%2024.avif" alt="Helix 24" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <figcaption className="mt-2 text-sm">2024 — 2025</figcaption>
+                            </figure>
 
-Duis porttitor hendrerit risus aliquet porta. Integer congue ipsum in magna rutrum, id efficitur risus sagittis. Nullam vitae posuere mauris. In nec vulputate nibh, et rutrum ex. Curabitur eget sollicitudin dui. Integer dolor felis, facilisis sit amet euismod id, tempor in nisi. Curabitur sit amet lobortis ante. Integer lacinia tortor sit amet urna aliquet mattis. Nulla facilisi. Nullam fermentum mauris leo, ut vehicula mauris egestas vel. Praesent enim risus, gravida ut ipsum id, bibendum luctus augue. Nullam quis tempor elit.
-
-Quisque gravida, lectus pharetra tempus porta, neque nibh tristique orci, nec blandit metus lorem sed lacus. Donec blandit turpis ut ipsum aliquet, ac scelerisque felis egestas. Mauris lorem ante, malesuada ut blandit a, rhoncus id massa. Donec a mauris accumsan, pulvinar enim non, aliquam diam. Vestibulum condimentum diam id interdum vulputate. Cras vestibulum aliquam felis. Nunc volutpat mauris id blandit venenatis. Proin orci enim, finibus vel nisl venenatis, condimentum congue arcu. Nullam mollis vel sem vel tempor. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae;
-
-Proin suscipit ac dolor et convallis. Mauris volutpat vehicula neque imperdiet tincidunt. Nunc rutrum, turpis a mollis fringilla, ipsum lorem porttitor magna, quis convallis elit diam vitae magna. Etiam tempus faucibus elit, eget efficitur urna sollicitudin at. Nulla ornare, ante eu scelerisque tempus, ex risus sollicitudin nunc, at vulputate lectus augue id odio. Proin nec ex nisl. Suspendisse tincidunt eros sed interdum tristique. Vivamus nisi massa, dapibus id commodo elementum, consectetur non metus. Duis tempor ligula sed dolor facilisis fringilla. In facilisis sapien vitae magna suscipit iaculis. Nulla eros lacus, bibendum id sapien sit amet, fermentum fermentum sem. Quisque aliquam leo lectus, ac sollicitudin quam lacinia sed. Nullam egestas tellus mi, vehicula faucibus nibh efficitur nec.
-            </p>
-            <br />
-            <br></br>
-            <p>
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ante massa, lacinia a turpis at, eleifend ornare eros. Phasellus turpis nibh, ultrices sed ornare et, hendrerit et leo. Aliquam consectetur sapien diam, et sagittis lorem maximus eu. Ut laoreet aliquam laoreet. Morbi ex urna, gravida ut posuere mollis, imperdiet eget lectus. Nam at elit felis. Ut ut tellus quam. Ut at nibh sit amet sapien tristique finibus. Etiam quam erat, sagittis sed dapibus eget, vehicula quis erat. Pellentesque convallis dapibus sodales. Proin diam ligula, tincidunt et mi sed, auctor dapibus libero. Proin vitae dolor in massa commodo hendrerit eget in leo. Fusce sagittis tempus tincidunt. Donec condimentum suscipit massa, et pretium nibh faucibus at. Praesent et hendrerit lorem, varius efficitur erat. Vestibulum eleifend ante quis orci dignissim, non egestas ex condimentum. Suspendisse potenti. Quisque vulputate felis quis malesuada vestibulum. Vivamus facilisis a ligula at laoreet. Vivamus et dignissim magna. Aliquam ut faucibus elit. Morbi in semper est, et tempor neque. Duis porttitor hendrerit risus aliquet porta. Integer congue ipsum in magna rutrum, id efficitur risus sagittis. Nullam vitae posuere mauris. In nec vulputate nibh, et rutrum ex. Curabitur eget sollicitudin dui. Integer dolor felis, facilisis sit amet euismod id, tempor in nisi. Curabitur sit amet lobortis ante. Integer lacinia tortor sit amet urna aliquet mattis. Nulla facilisi. Nullam fermentum mauris leo, ut vehicula mauris egestas vel. Praesent enim risus, gravida ut ipsum id, bibendum luctus augue. Nullam quis tempor elit. Quisque gravida, lectus pharetra tempus porta, neque nibh tristique orci, nec blandit metus lorem sed lacus. Donec blandit turpis ut ipsum aliquet, ac scelerisque felis egestas. Mauris lorem ante, malesuada ut blandit a, rhoncus id massa. Donec a mauris accumsan, pulvinar enim non, aliquam diam. Vestibulum condimentum diam id interdum vulputate. Cras vestibulum aliquam felis. Nunc volutpat mauris id blandit venenatis. Proin orci enim, finibus vel nisl venenatis, condimentum congue arcu. Nullam mollis vel sem vel tempor. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Proin suscipit ac dolor et convallis. Mauris volutpat vehicula neque imperdiet tincidunt. Nunc rutrum, turpis a mollis fringilla, ipsum lorem porttitor magna, quis convallis elit diam vitae magna. Etiam tempus faucibus elit, eget efficitur urna sollicitudin at. Nulla ornare, ante eu scelerisque tempus, ex risus sollicitudin nunc, at vulputate lectus augue id odio. Proin nec ex nisl. Suspendisse tincidunt eros sed interdum tristique. Vivamus nisi massa, dapibus id commodo elementum, consectetur non metus. Duis tempor ligula sed dolor facilisis fringilla. In facilisis sapien vitae magna suscipit iaculis. Nulla eros lacus, bibendum id sapien sit amet, fermentum fermentum sem. Quisque aliquam leo lectus, ac sollicitudin quam lacinia sed. Nullam egestas tellus mi, vehicula faucibus nibh efficitur nec.
-            </p>
+                            <figure className="flex flex-col items-center text-center">
+                                <img src="/Helix%2025.png" alt="Helix logo (white)" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <figcaption className="mt-2 text-sm">2025 - current</figcaption>
+                            </figure>
+                        </div>
+                         </div>
+                    </div>
+                </div>
             </div>
         </div>
-            
-        
     )
 }
 
