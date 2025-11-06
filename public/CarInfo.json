@@ -5,8 +5,8 @@
   "season": "24/25",
   "image": "/Børsen (1).png",
   "stats": {
-    "focus": "Vekt",
-    "motor": "Suzuki, 4 sylinder",
+    "focus": "Weight reduction",
+    "motor": "Suzuki, 4 cylinder",
     "weight": "206 kg"
   }
 },
@@ -17,8 +17,8 @@
   "season": "23/24",
   "image": "/Arken1.png",
   "stats": {
-    "focus": "Hjuloppheng",
-    "motor": "1 sylinder",
+    "focus": "Wheel suspension",
+    "motor": "KTM 6090, 1 cylinder",
     "weight": "234 kg"
   }
 }

@@ -77,8 +77,8 @@ export default function Contact() {
                     </div>
                     <div>
                       <div className="text-sm text-[#a0a1da]">Email</div>
-                      <a href="mailto:contact@helixnmbu.no" className="text-[#fff8e6] hover:text-[#67cdbc]">
-                        contact@helixnmbu.no
+                      <a href="mailto:post@helixnmbu.no" className="text-[#fff8e6] hover:text-[#67cdbc]">
+                        post@helixnmbu.no
                       </a>
                     </div>
                   </div>
