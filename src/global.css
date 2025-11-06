@@ -46,7 +46,7 @@
 @layer components {
   .footer-gradient {
     /* Keep the site's background as the base layer and add an accent gradient on top */
-    background: linear-gradient(to top, var(--secondary) 0%, rgba(255,255,255,0) 99%), var(--background);
+    background: linear-gradient(to top, var(--popover) 0%, rgba(255,255,255,0) 99%), var(--background);
   }
 }
 
@@ -55,7 +55,7 @@
   --foreground: oklch(100% 0.00011 271.152);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
+  --popover: #4B32FF;
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
