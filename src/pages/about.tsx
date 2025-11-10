@@ -30,12 +30,12 @@ Later that autumn, the first official Helix NMBU team was assembled, ready to ta
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start mt-6">
                             <figure className="flex flex-col items-center text-center">
-                                <img src="/Helix%2022.avif" alt="Helix 22" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <img src="/Helix%2022.jpg" alt="Helix 22" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
                                 <figcaption className="mt-2 text-sm">2022 — 2023</figcaption>
                             </figure>
 
                             <figure className="flex flex-col items-center text-center">
-                                <img src="/Helix%2023.avif" alt="Helix 23" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <img src="/Helix%2023.jpg" alt="Helix 23" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
                                 <figcaption className="mt-2 text-sm">2023 — 2024</figcaption>
                             </figure>
 
