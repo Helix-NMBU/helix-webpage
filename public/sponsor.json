@@ -1,0 +1,21 @@
+[
+{
+    "id": 1,
+  "name": "Sponsor 1",
+  "image": "/necia-logo.png"
+  
+},
+
+{
+    "id": 2,
+  "name": "Sponsor 2",
+  "image": "NMBU logo.png"
+  
+},
+
+{
+  "id":3,
+  "name":"Sponsor 3",
+  "image": "norbygg-logo.png"
+}
+]

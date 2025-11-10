@@ -139,3 +139,50 @@
     color: var(--color-foreground);
   }
 }
+
+/* Carousel styles moved from src/libs/components/autoplaycarousel.scss */
+.carousel-container {
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 8px 0;
+}
+
+.carousel-track {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  /* make sure track is at least twice the visible width because we duplicate items */
+  animation: scroll var(--carousel-speed, 20s) linear infinite;
+}
+
+.carousel-card {
+  flex: 0 0 auto;
+  width: 160px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.carousel-card img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* move left by 50% (because we rendered two copies) to create seamless loop */
+@keyframes scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* make the animation pause on hover for better accessibility */
+.carousel-container:hover .carousel-track {
+  animation-play-state: paused;
+}

@@ -1,8 +1,14 @@
+import AutoplayCarousel from "../libs/components/sponsorcarousel";
+import HeroSection from "../libs/components/herosection";
+
 const Homepage = () => {
   return (
     <div className="bg-background text-foreground">
-     <h1 className="text-5xl font-bold"> Velkommen til Helix!</h1>
-      
+      <HeroSection />
+      {/* Sponsor carousel */}
+      <section className="mt-8">
+        <AutoplayCarousel />
+      </section>
     </div>
   );
 };
