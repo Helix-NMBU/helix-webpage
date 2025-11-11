@@ -40,6 +40,7 @@
   --color-sponsor-silver: var(--sponsor-silver);
   --color-sponsor-bronze: var(--sponsor-bronze);
   --color-sponsor-service: var(--sponsor-service);
+  --color-footer: var(--footer);
 }
 
 /* Include Tailwind layers so utilities and base styles are emitted */
@@ -102,6 +103,7 @@
   --sponsor-silver: #C0C0C0;
   --sponsor-bronze: #b7722d;
   --sponsor-service: #ffffff;
+  --footer: #00003d;
 }
 
 .dark {
@@ -150,6 +152,7 @@
   --sponsor-silver: #C0C0C0;
   --sponsor-bronze: #CD7F32;
   --sponsor-service: #ffffff;
+  --footer: #00003d;
 }
 
 @layer base {
