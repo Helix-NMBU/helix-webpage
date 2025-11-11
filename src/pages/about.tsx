@@ -1,9 +1,9 @@
 const about = () => {
     return (
-        <div className="relative text-foreground min-h-[60vh]">
-            <img src="/Helixspiral.png" alt="decorative spiral" className="absolute inset-0 w-full h-full object-top object-cover opacity-12 pointer-events-none" />
-            <div className="relative z-10 px-8 md:px-12 py-12">
-                <div className="mx-auto max-w-7xl space-y-6 text-base md:text-lg leading-relaxed">
+        <div className="relative bg-background text-foreground">
+            <img src="/Helixspiral.png" alt="decorative spiral" className="absolute w-full h-full object-top object-cover opacity-12" />
+            
+                <div className="mx-auto max-w-7xl space-y-6 text-base md:text-lg leading-relaxed pt-[92px]">
                     <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold">About us</h1>
 <h2 className="text-2xl font-semibold">Helix NMBU</h2>
                     <p>
@@ -53,7 +53,6 @@ Later that autumn, the first official Helix NMBU team was assembled, ready to ta
                     </div>
                 </div>
             </div>
-        </div>
     )
 }
 

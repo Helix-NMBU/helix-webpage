@@ -11,7 +11,7 @@ export default function HeroSection() {
           src={teamImg}
           alt="Helix team - Formel Student lag"
           className="absolute inset-0 w-full h-full object-cover brightness-75 transition-opacity duration-700"
-          style={{ objectPosition: '10% 90%' }}
+          style={{ objectPosition: '10% 110%' }}
         />
  
          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6 translate-y-6 md:translate-y-10">
@@ -24,7 +24,15 @@ export default function HeroSection() {
        
          </div>
  
-         {/* overlay container stays absolute so text sits over the image */}
+         {/* top gradient (92px) so the image fades from the same overlay color used at the bottom */}
+         <div
+           className="pointer-events-none absolute top-0 left-0 right-0 h-[92px]"
+           style={{
+             backgroundImage: "linear-gradient(to bottom, #00007A, rgba(0,0,0,0))",
+           }}
+         />
+
+         {/* overlay container stays absolute so text sits over the image (bottom overlay) */}
          <div
           className="pointer-events-none absolute inset-0"
           style={{
