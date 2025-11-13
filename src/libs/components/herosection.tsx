@@ -26,7 +26,7 @@ export default function HeroSection() {
  
          {/* top gradient (92px) so the image fades from the same overlay color used at the bottom */}
          <div
-           className="pointer-events-none absolute top-0 left-0 right-0 h-[92px]"
+           className="pointer-events-none absolute top-0 left-0 right-0 h-[100px]"
            style={{
              backgroundImage: "linear-gradient(to bottom, #00007A, rgba(0,0,0,0))",
            }}
