@@ -1,13 +1,13 @@
 [
   {
     "id": 1,
-    "name": "Emma Johansen",
-    "fieldOfStudy": "Datavitenskap",
-    "yearOfStudy": 1,
+    "name": "Selma Woldseth",
+    "fieldOfStudy": "Teknologi og produktutvikling",
+    "yearOfStudy": 2,
     "department": "Utvikling",
     "seasonsInHelix": 2,
-    "linkedin": "https://linkedin.com/in/emmajohansen",
-    "email": "emma.johansen@example.com",
+    "linkedin": "www.linkedin.com/in/selma-w-040660363",
+    "email": "selma.woldseth@helixnmbu.no",
     "phone": "+47 123 45 678"
   },
   {
