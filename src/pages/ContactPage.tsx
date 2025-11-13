@@ -1,7 +1,9 @@
 import { Button } from "@components//ui/button";
 import { Facebook, Instagram, Linkedin, Mail } from "lucide-react";
+import { ContactForm } from "./ContactForm";
 
 export default function Contact() {
+  const application_url = import.meta.env.VITE_FORMS_URL;
     return (
       <section id="contact" className="relative py-24">
         <div className="container px-4 mx-auto">
@@ -14,57 +16,7 @@ export default function Contact() {
 
           <div className="grid items-start gap-8 md:grid-cols-2">
             <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6 md:p-8">
-              <form>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="name" className="block mb-1 text-sm font-medium text-foreground">
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        id="name"
-                        className="w-full bg-[#482ffe]/10 border border-[#a0a1da]/20 rounded-lg px-4 py-2 text-[#fff8e6] focus:outline-none focus:ring-2 focus:ring-[#67cdbc]/50"
-                        placeholder="Your name"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="email" className="block mb-1 text-sm font-medium text-foreground">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        id="email"
-                        className="w-full bg-[#482ffe]/10 border border-[#a0a1da]/20 rounded-lg px-4 py-2 text-[#fff8e6] focus:outline-none focus:ring-2 focus:ring-[#67cdbc]/50"
-                        placeholder="your.email@example.com"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="subject" className="block mb-1 text-sm font-medium text-foreground">
-                      Subject
-                    </label>
-                    <input
-                      type="text"
-                      id="subject"
-                      className="w-full bg-[#482ffe]/10 border border-[#a0a1da]/20 rounded-lg px-4 py-2 text-[#fff8e6] focus:outline-none focus:ring-2 focus:ring-[#67cdbc]/50"
-                      placeholder="How can we help?"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="message" className="block mb-1 text-sm font-medium text-foreground">
-                      Message
-                    </label>
-                    <textarea
-                      id="message"
-                      rows={11}
-                      className="w-full bg-[#482ffe]/10 border border-[#a0a1da]/20 rounded-lg px-4 py-2 text-[#fff8e6] focus:outline-none focus:ring-2 focus:ring-[#67cdbc]/50"
-                      placeholder="Your message..."
-                    ></textarea>
-                  </div>
-                  <Button className="w-full bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6]">Send Message</Button>
-                </div>
-              </form>
+              <ContactForm />
             </div>
 
             <div className="space-y-8">
@@ -117,19 +69,19 @@ export default function Contact() {
                 <h3 className="mb-4 text-xl font-bold">Follow Us</h3>
                 <div className="flex gap-4">
                   <a
-                    href="#"
+                    href="https://www.linkedin.com/company/helix-nmbu"
                     className="h-10 w-10 rounded-full bg-[#482ffe]/20 flex items-center justify-center hover:bg-[#482ffe]/40 transition-colors"
                   >
                     <Linkedin className="w-5 h-5" />
                   </a>
                   <a
-                    href="#"
+                    href="https://instagram.com/helixnmbu"
                     className="h-10 w-10 rounded-full bg-[#482ffe]/20 flex items-center justify-center hover:bg-[#482ffe]/40 transition-colors"
                   >
                     <Instagram className="w-5 h-5" />
                   </a>
                   <a
-                    href="#"
+                    href="https://www.facebook.com/profile.php?id=100091245669131"
                     className="h-10 w-10 rounded-full bg-[#482ffe]/20 flex items-center justify-center hover:bg-[#482ffe]/40 transition-colors"
                   >
                     <Facebook className="w-5 h-5" />
@@ -143,7 +95,12 @@ export default function Contact() {
                   Interested in becoming part of Helix NMBU? We're always looking for passionate students to join our
                   team!
                 </p>
-                <Button className="bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6]">Apply Now</Button>
+                <Button 
+                  className="bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6]"
+                  asChild
+                >
+                  <a href={application_url}>Apply Now</a>
+                </Button>
               </div>
             </div>
           </div>

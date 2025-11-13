@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function Frontpage() {
   return (
-<div className="mt-28 mb-28 py-12 dark:bg-slate-900">
+<div className="py-12 mt-28 mb-28">
 
     <div className="max-w-screen-md mx-auto text-center">
         <h1 className="mb-4 text-3xl font-bold">What is<span className="text-accent"> Helix NMBU?</span></h1>
@@ -10,7 +10,7 @@ export default function Frontpage() {
 Helix NMBU is a Formula Student team at Norwegian University of Life Sciences (NMBU). The team aims to be a platform where students can develop technical skills and challenge themselves in innovation, entrepreneurship, marketing, finance and technological development to reach a common goal. </p>
     </div>
 
-    <div className="flex flex-col justify-center space-y-5 md:flex-row md:space-y-0 md:space-x-6 lg:space-x-10 mt-7 mb-8">
+    <div className="flex flex-col justify-center mb-8 space-y-5 md:flex-row md:space-y-0 md:space-x-6 lg:space-x-10 mt-7">
         <div className="relative md:w-5/12">
             <img className="rounded-2xl" src="/lagbilde_2025.JPG" />
             <div className="absolute transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
