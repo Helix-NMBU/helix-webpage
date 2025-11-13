@@ -5,7 +5,9 @@ const Footer = () => {
   <footer className="bg-background text-foreground py-8 px-4 mt-16 footer-gradient">
       <div className="w-auto mx-auto px-4 py-4 flex flex-col md:flex-row gap-8 justify-between items-center">
         <div>
-          <img className="h-60 object-contain" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" />
+          <Link to="/" aria-label="Go to homepage">
+            <img className="h-50 object-contain" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" />
+          </Link>
         </div>
   {/* Interactive Google Map */}
   <div className="w-auto w-auto max-w-full object-contain md:max-w-sm rounded-lg overflow-hidden shadow-lg md:ml-8">
@@ -102,12 +104,19 @@ const Footer = () => {
             </svg>
           </a>
           <div>
-          <img className="h-60 object-contain" src="/NMBU logo.png" alt="NMBU logo" />
-        </div>
+            <a
+              href="https://www.nmbu.no/studenter/helix-passer-alle-uansett-studieretning"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="NMBU website"
+            >
+              <img className="h-60 object-contain" src="/sponsor_logos/NMBU_logo.png" alt="NMBU logo" />
+            </a>
+          </div>
         </div>
       </div>
       <div className="mt-8 text-center text-xs text-foreground/60">
-        &copy; {new Date().getFullYear()} by Helix NMBU. All rights reserved.
+        Made with 💙 by Helix NMBU
       </div>
     </footer>
   );

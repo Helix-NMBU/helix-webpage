@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export default function Frontpage() {
   return (
 <div className="py-12 mt-28 mb-28">
@@ -12,21 +14,20 @@ Helix NMBU is a Formula Student team at Norwegian University of Life Sciences (N
         <div className="relative md:w-5/12">
             <img className="rounded-2xl" src="/lagbilde_2025.JPG" />
             <div className="absolute transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
-                <h1 className="mb-3 font-bold text-center text-white uppercase lg:text-xl">About us</h1>
-                <button className="w-full px-6 py-3 text-xs font-medium transition duration-300 ease-in-out transform bg-white rounded-full text-slate-900 lg:text-md focus:outline-none hover:scale-110 hover:bg-gray-100">Learn more</button>
+                <Link to="/about" className="w-full inline-block text-center px-6 py-3 text-xs bg-white opacity-95 text-chart-3 ground transition duration-300 ease-in-out transform rounded-full lg:text-md focus:outline-none hover:scale-110 hover:bg-gray-100 font-medium">About Helix</Link>
             </div>
         </div>
 
-        <div className="relative overflow-hidden md:w-5/12 rounded-2xl">
-            <img className="w-full h-auto" src="/lagbilde.jpg" />
+        <div className="relative md:w-5/12 overflow-hidden rounded-2xl">
+            <img className="w-full h-auto" src="/lagbilde_1.jpg" />
             {/* FS logo overlay - top centered, clipped by the rounded container */}
             <img
                 src="/Updated_05_22/PNG/FS%20Logo%20Positive%20Print.png"
                 alt="FS Logo"
-                 className="pointer-events-none absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[65%] md:w-[65%] lg:w-[70%] z-15"
+                 className="pointer-events-none absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[70%] md:w-[75%] lg:w-[75%] z-15"
             />
-            <div className="absolute z-30 transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
-                <button className="w-full px-6 py-3 text-xs font-medium transition duration-300 ease-in-out transform bg-white rounded-full  text-muted lg:text-md focus:outline-none hover:scale-110 hover:bg-gray-100">Go to Website</button>
+            <div className="absolute transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2 z-30">
+                <a href="https://www.imeche.org/events/formula-student" target="_blank" rel="noopener noreferrer" className="w-full inline-block text-center px-6 py-3 opacity-95 text-xs bg-white text-destructive transition duration-300 ease-in-out transform rounded-full lg:text-md focus:outline-none hover:scale-110 hover:bg-gray-100 font-medium">Go to Website</a>
             </div>
         </div>
     </div>
