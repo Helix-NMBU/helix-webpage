@@ -5,7 +5,7 @@ const Footer = () => {
   <footer className="bg-background text-foreground py-8 px-4 mt-16 footer-gradient">
       <div className="w-auto mx-auto px-4 py-4 flex flex-col md:flex-row gap-8 justify-between items-center">
         <div>
-          <img className="h-60 object-contain" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" />
+          <img className="h-50 object-contain" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" />
         </div>
   {/* Interactive Google Map */}
   <div className="w-auto w-auto max-w-full object-contain md:max-w-sm rounded-lg overflow-hidden shadow-lg md:ml-8">
@@ -102,7 +102,7 @@ const Footer = () => {
             </svg>
           </a>
           <div>
-          <img className="h-60 object-contain" src="/NMBU logo.png" alt="NMBU logo" />
+          <img className="h-60 object-contain" src="/sponsor_logos/NMBU_logo.png" alt="NMBU logo" />
         </div>
         </div>
       </div>
