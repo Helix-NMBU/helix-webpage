@@ -42,34 +42,10 @@ export const SponsorGrid = ({
     } as const)[title] ?? 'text-foreground';
 
     return (
-        <motion.div
-            ref={containerRef}
-            initial={{ opacity: 0, y: 40 }}
-            animate={motionState}
-            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className={`px-6 py-8 ${className}`}
-        >
-            <motion.h2
-                className={`mb-4 text-4xl font-bold text-left ${titleColorClass}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.05 }}
-            >
-                {title}
-            </motion.h2>
-            <motion.hr
-                className="mb-16 border-t border-gray-300"
-                initial={{ opacity: 0, scaleX: 0 }}
-                animate={isInView ? { opacity: 1, scaleX: 1 } : { opacity: 0, scaleX: 0 }}
-                transition={{ duration: 0.45, ease: 'easeOut', delay: 0.1 }}
-                style={{ transformOrigin: 'left center' }}
-            />
-            <motion.div
-                className={`${columns} gap-x-6 ${rowGap}`}
-                initial={{ opacity: 0, y: 30 }}
-                animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-                transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}
-            >
+        <div className={`px-16 py-8 ${className}`}>
+            <h2 className="mb-4 text-4xl font-bold text-left">{title}</h2>
+            <hr className="mb-16 border-t border-gray-300" />
+            <div className={`${columns} gap-x-30 ${rowGap}`}>
                 {sponsors.map((sponsor) => {
                     const hasLogo = !!sponsor.logo;
                     const containerHeightClass = 'h-24';

@@ -41,5 +41,35 @@
   "id":7,
   "name":"Norsk kranpartner",
   "image": "/sponsor_logos/Kranpartner_logo.png"
+},
+
+{
+  "id":8,
+  "name":"Vulkan engineering",
+  "image": "/sponsor_logos/Vulkan_logo.png"
+},
+
+{
+  "id":9,
+  "name":"MHTech",
+  "image": "/sponsor_logos/MHTech_logo.png"
+},
+
+{
+  "id":10,
+  "name":"SMT Service",
+  "image": "/sponsor_logos/SMT_logo.png"
+},
+
+{
+  "id":11,
+  "name":"Telemetry",
+  "image": "/sponsor_logos/Telemetry_logo.png"
+},
+
+{
+  "id":12,
+  "name":"Biesterfeld",
+  "image": "/sponsor_logos/Biesterfeld.png"
 }
 ]
