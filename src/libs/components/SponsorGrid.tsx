@@ -42,7 +42,13 @@ export const SponsorGrid = ({
     } as const)[title] ?? 'text-foreground';
 
     return (
-        <div className={`px-16 py-8 ${className}`}>
+        <motion.div
+            ref={containerRef}
+            initial={{ opacity: 0, y: 40 }}
+            animate={motionState}
+            transition={{ duration: 0.6 }}
+            className={`px-16 py-8 ${className}`}
+        >
             <h2 className="mb-4 text-4xl font-bold text-left">{title}</h2>
             <hr className="mb-16 border-t border-gray-300" />
             <div className={`${columns} gap-x-30 ${rowGap}`}>
@@ -69,7 +75,7 @@ export const SponsorGrid = ({
                         </div>
                     );
                 })}
-            </motion.div>
+            </div>
         </motion.div>
     );
 };
