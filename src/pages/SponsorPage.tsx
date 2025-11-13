@@ -3,7 +3,7 @@ import { SponsorGrid } from "@libs/components/SponsorGrid";
 
 const SponsorPage = () => {
     return (
-        <div className="mx-auto max-w-7xl group">
+        <div className="mx-auto mt-20 max-w-7xl group">
             <div className="py-12 bg-background text-foreground">
              <h1 className="text-5xl font-bold text-center">Our Partners</h1> 
              <p className="text-center text-md text-accent">The ones making it all possible</p>    
