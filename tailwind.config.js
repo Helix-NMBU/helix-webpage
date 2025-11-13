@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Montserrat'],
+        sans: ['Lexend', 'sans-serif'],
       },
       colors: {
         primary: '#03094a',

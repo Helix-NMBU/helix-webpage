@@ -1,10 +1,10 @@
 const about = () => {
     return (
-        <div className="relative bg-background text-foreground">
-            <img src="/Helixspiral.png" alt="decorative spiral" className="absolute w-full h-full object-top object-cover opacity-12" />
-            
-                <div className="mx-auto max-w-7xl space-y-6 text-base md:text-lg leading-relaxed pt-[92px]">
-                    <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold">About us</h1>
+        <div className="relative text-foreground min-h-[60vh] mt-20">
+            <img src="/Helixspiral.png" alt="decorative spiral" className="absolute inset-0 object-cover object-top w-full h-full pointer-events-none opacity-12" />
+            <div className="relative z-10 px-8 py-12 md:px-12">
+                <div className="mx-auto space-y-6 text-base leading-relaxed max-w-7xl md:text-lg">
+                    <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl">About us</h1>
 <h2 className="text-2xl font-semibold">Helix NMBU</h2>
                     <p>
                         Helix NMBU is a dedicated Formula Student team based at the Norwegian University of Life Sciences (NMBU). Our team brings together a diverse group of students from thirteen different academic programs, ranging in age from 18 to 32. This wide range of backgrounds fosters a unique environment for interdisciplinary collaboration and skill development across faculties.
@@ -28,24 +28,24 @@ Later that autumn, the first official Helix NMBU team was assembled, ready to ta
        
                     <div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start mt-6">
+                        <div className="grid items-start grid-cols-2 gap-4 mt-6 md:grid-cols-4">
                             <figure className="flex flex-col items-center text-center">
-                                <img src="/Helix%2022.jpg" alt="Helix 22" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <img src="/Helix%2022.jpg" alt="Helix 22" className="object-contain w-full h-32 p-2 bg-white rounded-md shadow-sm" />
                                 <figcaption className="mt-2 text-sm">2022 — 2023</figcaption>
                             </figure>
 
                             <figure className="flex flex-col items-center text-center">
-                                <img src="/Helix%2023.jpg" alt="Helix 23" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <img src="/Helix%2023.jpg" alt="Helix 23" className="object-contain w-full h-32 p-2 bg-white rounded-md shadow-sm" />
                                 <figcaption className="mt-2 text-sm">2023 — 2024</figcaption>
                             </figure>
 
                             <figure className="flex flex-col items-center text-center">
-                                <img src="/Helix%2024.avif" alt="Helix 24" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <img src="/Helix%2024.avif" alt="Helix 24" className="object-contain w-full h-32 p-2 bg-white rounded-md shadow-sm" />
                                 <figcaption className="mt-2 text-sm">2024 — 2025</figcaption>
                             </figure>
 
                             <figure className="flex flex-col items-center text-center">
-                                <img src="/Helix%2025.png" alt="Helix logo (white)" className="w-full h-32 object-contain bg-white p-2 rounded-md shadow-sm" />
+                                <img src="/Helix%2025.png" alt="Helix logo (white)" className="object-contain w-full h-32 p-2 bg-white rounded-md shadow-sm" />
                                 <figcaption className="mt-2 text-sm">2025 - current</figcaption>
                             </figure>
                         </div>
@@ -53,6 +53,7 @@ Later that autumn, the first official Helix NMBU team was assembled, ready to ta
                     </div>
                 </div>
             </div>
+        </div>
     )
 }
 
