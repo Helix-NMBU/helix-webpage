@@ -24,10 +24,10 @@ export const SponsorGrid = ({
     rowGap = 'gap-y-4'
 }: SponsorGridProps) => {
     return (
-        <div className={`px-6 py-8 ${className}`}>
+        <div className={`px-16 py-8 ${className}`}>
             <h2 className="mb-4 text-4xl font-bold text-left">{title}</h2>
             <hr className="mb-16 border-t border-gray-300" />
-            <div className={`${columns} gap-x-6 ${rowGap}`}>
+            <div className={`${columns} gap-x-30 ${rowGap}`}>
                 {sponsors.map((sponsor) => {
                     const hasLogo = !!sponsor.logo;
                     const containerHeightClass = 'h-24';
