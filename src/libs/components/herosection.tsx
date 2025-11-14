@@ -22,6 +22,8 @@ export default function HeroSection() {
           }}
         />
 
+        
+
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6 translate-y-6 md:translate-y-10">
           <h1 className="text-white/70 text-5xl md:text-7xl lg:text-9xl font-extrabold tracking-tight leading-tight">
             HELIX NMBU
@@ -29,8 +31,9 @@ export default function HeroSection() {
           <p className="mt-4 text-white max-w-2xl text-base md:text-lg">
             From campus to circuit — building ideas that move
           </p>
-        </div>
+        </div>  
        </section>
+
      </div>
    );
 }
