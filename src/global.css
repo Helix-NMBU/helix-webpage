@@ -40,6 +40,7 @@
   --color-sponsor-bronze: var(--sponsor-bronze);
   --color-sponsor-service: var(--sponsor-service);
   --color-footer: var(--footer);
+  --color-menu-background: var(--menu-background);
 }
 
 /* Include Tailwind layers so utilities and base styles are emitted */
@@ -62,6 +63,18 @@
     height: 40vh; /* visual reach into the next section */
     pointer-events: none;
     background: linear-gradient(to top, var(--popover) 0%, rgba(255,255,255,0) 99%), var(--background);
+  }
+}
+
+/* Keyframe animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -103,6 +116,7 @@
   --sponsor-bronze: #b7722d;
   --sponsor-service: #ffffff;
   --footer: #00003d;
+  --menu-background: #080843;
 }
 
 .dark {
@@ -152,6 +166,7 @@
   --sponsor-bronze: #CD7F32;
   --sponsor-service: #ffffff;
   --footer: #00003d;
+  --menu-background: #080843;
 }
 
 @layer base {

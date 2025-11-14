@@ -7,20 +7,20 @@ export default function Contact() {
     return (
       <section id="contact" className="relative py-24">
         <div className="container px-4 mx-auto">
-          <div className="max-w-3xl mx-auto mb-16 text-center">
+          <div className="max-w-3xl mx-auto mb-16 text-center opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.1s_forwards]">
             <h2 className="mb-6 text-3xl font-bold md:text-4xl">Contact Us</h2>
-            <p className="text-[#fff8e6]/80">
+            <p className="text-accent">
               Have questions or want to learn more about Helix NMBU? We'd love to hear from you!
             </p>
           </div>
 
           <div className="grid items-start gap-8 md:grid-cols-2">
-            <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6 md:p-8">
+            <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6 md:p-8 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.2s_forwards]">
               <ContactForm />
             </div>
 
             <div className="space-y-8">
-              <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6">
+              <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.3s_forwards]">
                 <h3 className="mb-4 text-xl font-bold">Contact Information</h3>
                 <div className="space-y-4">
                   <div className="flex items-start gap-4">
@@ -65,7 +65,7 @@ export default function Contact() {
                 </div>
               </div>
 
-              <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6">
+              <div className="bg-[#040076] border border-[#a0a1da]/20 rounded-xl p-6 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.4s_forwards]">
                 <h3 className="mb-4 text-xl font-bold">Follow Us</h3>
                 <div className="flex gap-4">
                   <a
@@ -89,7 +89,7 @@ export default function Contact() {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-[#482ffe]/20 to-[#67cdbc]/20 rounded-xl p-6">
+              <div className="bg-gradient-to-r from-[#482ffe]/20 to-[#67cdbc]/20 rounded-xl p-6 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.5s_forwards]">
                 <h3 className="mb-4 text-xl font-bold">Join Our Team</h3>
                 <p className="text-[#fff8e6]/80 mb-4">
                   Interested in becoming part of Helix NMBU? We're always looking for passionate students to join our

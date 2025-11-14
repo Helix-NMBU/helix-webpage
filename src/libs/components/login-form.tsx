@@ -34,14 +34,14 @@ export function LoginForm({
   return (
     <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold text-background">Sponsor Portal</h1>
-        <p className="text-sm text-gray-400 text-balance">
+        <h1 className="text-2xl font-bold text-foreground">Sponsor Portal</h1>
+        <p className="text-sm text-accent text-balance">
           CV-Bank
         </p>
       </div>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <div className="flex items-center text-background">
+          <div className="flex items-center text-foreground">
             <Label htmlFor="password">Password</Label>
           </div>
           <Input 
@@ -54,12 +54,12 @@ export function LoginForm({
           />
           {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
-        <Button type="submit" className="w-full text-foreground bg-background hover:bg-background/80">
+        <Button type="submit" className="w-full cursor-pointer text-foreground bg-background hover:bg-background/80">
           Login
         </Button>
   
       </div>
-      <div className="text-sm text-center text-black">
+      <div className="text-sm text-center text-white/70">
         Want to peek?{" "}
         <a href="#" className="underline underline-offset-4">
           Get in touch
