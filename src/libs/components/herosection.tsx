@@ -1,8 +1,10 @@
 import React from "react";
 import AutoplayCarousel from "./sponsorcarousel";
 import teamImg from "/birk i bil 2.jpg"; 
+import { FlipWords } from "@/components/ui/shadcn-io/flip-words";
 
 export default function HeroSection() {
+  const words = ["Engineers", "Designers", "Innovators", "People"];
   return (
     <div>
       {/* limit section height so the top & bottom of the image are slightly cropped */}
@@ -10,30 +12,37 @@ export default function HeroSection() {
         <img
           src={teamImg}
           alt="Helix team - Formel Student lag"
-          className="absolute inset-0 w-full h-full object-cover brightness-75 transition-opacity duration-700"
+          className="absolute inset-0 object-cover w-full h-full transition-opacity duration-700 brightness-75"
           style={{ objectPosition: '110%' }}
         />
  
         {/* single translucent overlay covering the image for consistent tint */}
         <div
-          className="pointer-events-none absolute inset-0"
+          className="absolute inset-0 pointer-events-none"
           style={{
             backgroundColor: "rgba(0, 0, 122, 0.35)",
           }}
         />
 
-        
-
-        <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6 translate-y-6 md:translate-y-10">
-          <h1 className="text-white/70 text-5xl md:text-7xl lg:text-9xl font-extrabold tracking-tight leading-tight">
-            HELIX NMBU
-          </h1>
-          <p className="mt-4 text-white max-w-2xl text-base md:text-lg">
-            From campus to circuit — building ideas that move
-          </p>
-        </div>  
-       </section>
-
+        <div className="relative z-10 flex items-center h-full">
+          <div className="container px-4 mx-auto md:px-8 lg:px-16">
+            <p className="text-3xl font-bold text-white md:text-5xl lg:text-7xl"> The Future Depends On</p>
+            <div className="overflow-visible text-3xl font-bold leading-tight md:text-5xl lg:text-7xl">
+              Talented
+              <FlipWords
+              words={words}
+              duration={2000}
+              letterDelay={0.05}
+              wordDelay={0.3}
+              className="bg-gradient-to-r from-[#2be2c3] via-[#a3f9eb] to-[#4B32FF] bg-clip-text text-transparent leading-normal"
+              />
+            </div>
+            <div className="flex items-center gap-8 mt-4">
+              <p className="text-xl italic font-light text-white md:text-2xl lg:text-3xl">- We shape them</p>
+            </div>
+          </div>
+        </div>
+      </section>
      </div>
    );
 }
