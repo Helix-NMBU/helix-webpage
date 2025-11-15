@@ -1,6 +1,6 @@
 const about = () => {
     return (
-        <div className="relative text-foreground min-h-[60vh] mt-20">
+        <div className="relative mt-20 text-foreground min-h-svh">
             <img src="/Helixspiral.png" alt="decorative spiral" className="absolute inset-0 object-cover object-top w-full h-full pointer-events-none opacity-12" />
             <div className="relative z-10 px-8 py-12 md:px-12">
                 <div className="mx-auto space-y-6 text-base leading-relaxed max-w-7xl md:text-lg">

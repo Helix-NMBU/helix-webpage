@@ -24,8 +24,8 @@ export default function HeroSection() {
 
         <div className="relative z-10 flex items-center h-full">
           <div className="container px-4 mx-auto md:px-8 lg:px-16">
-            <p className="text-3xl font-bold text-white md:text-5xl lg:text-7xl"> The Future Depends On</p>
-            <div className="overflow-visible text-3xl font-bold leading-tight text-white md:text-5xl lg:text-7xl">
+            <p className="text-3xl font-bold text-white md:text-5xl lg:text-7xl opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.2s_forwards]"> The Future Depends On</p>
+            <div className="overflow-visible text-3xl font-bold leading-tight text-white md:text-5xl lg:text-7xl opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.4s_forwards]">
               Talented{' '}
               <FlipWords
               words={words}
@@ -35,7 +35,7 @@ export default function HeroSection() {
               className="leading-normal text-[#63e4ca]"
               />
             </div>
-            <div className="flex items-center gap-8 mt-4">
+            <div className="flex items-center gap-8 mt-4 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.6s_forwards]">
               <p className="text-xl italic font-light text-white md:text-2xl lg:text-3xl">- We shape them</p>
             </div>
           </div>
