@@ -1,7 +1,7 @@
 import { Button } from "@components//ui/button";
 import { Facebook, Instagram, Linkedin, Mail } from "lucide-react";
 import { ContactForm } from "./ContactForm";
-import { EclipseOverlay } from "@components//navbar/EclipseOverlay";
+import { EclipseOverlay } from "@components//EclipseOverlay";
 import { Link } from "react-router-dom";
 
 export default function Contact() {
