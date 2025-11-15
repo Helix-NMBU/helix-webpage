@@ -6,14 +6,14 @@ const Homepage = () => {
   return (
     <div className="bg-background text-foreground">
       <HeroSection />
-      {/* Sponsor carousel - place content above the gradient */}
+      <Frontpage />
       <section className="relative z-30 pt-20">
-        <div className="max-w mx-auto px-4">
-          <h1 className="mb-6 text-3xl text-center font-bold">Accelerated by our partners</h1>
+        <div className="px-4 mx-auto max-w">
+          <p className="mb-6 text-3xl text-center lg:text-5xl">Driven by passion,</p>
+          <p className="mb-10 text-lg italic font-light text-center lg:text-3xl text-accent">Accelerated by the industry</p>
           <AutoplayCarousel />
         </div>
       </section>
-      <Frontpage />
     </div>
   );
 };

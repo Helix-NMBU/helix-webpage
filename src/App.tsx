@@ -12,7 +12,7 @@ import Footer from './libs/components/footer.tsx'
 
 function AppContent() {
   const location = useLocation();
-  const hideNavbar = location.pathname === '/sponsorportal-login' || location.pathname === '/sponsorportal';
+  const hideNavbar = location.pathname === '/sponsorportal-login' || location.pathname === '/sponsorportal' || location.pathname === '/contact';
 
   return (
     <>
