@@ -1,5 +1,5 @@
 import { EclipseOverlay } from "@components//EclipseOverlay"
-import { LoginForm } from "../../libs/components/login-form"
+import { LoginForm } from "@libs/components/LoginForm"
 import { Link } from "react-router-dom"
 
 export default function SponsorPortalLogin() {

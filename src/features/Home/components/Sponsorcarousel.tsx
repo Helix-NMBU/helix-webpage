@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
-import CarouselItem from "./Carouselitem.tsx";
+import CarouselItem from "@libs/components/Carouselitem.tsx";
 
 type Sponsor = {
   image: string;
