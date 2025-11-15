@@ -6,7 +6,7 @@ const Homepage = () => {
   return (
     <div className="bg-background text-foreground">
       <HeroSection />
-      {/* Sponsor carousel - place content above the gradient */}
+      <Frontpage />
       <section className="relative z-30 pt-20">
         <div className="px-4 mx-auto max-w">
           <p className="mb-6 text-3xl text-center lg:text-5xl">Driven by passion,</p>
@@ -14,7 +14,6 @@ const Homepage = () => {
           <AutoplayCarousel />
         </div>
       </section>
-      <Frontpage />
     </div>
   );
 };

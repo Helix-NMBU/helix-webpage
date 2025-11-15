@@ -1,3 +1,5 @@
+import { useRef, useEffect } from 'react';
+
 interface ImageColumnProps {
   translateY: number;
   hoveredLink: string | null;
@@ -13,6 +15,48 @@ interface ImageConfig {
 }
 
 export const ImageColumn: React.FC<ImageColumnProps> = ({ translateY, hoveredLink, direction, isMenuOpen }) => {
+  const columnRef = useRef<HTMLDivElement>(null);
+  const currentYRef = useRef<number>(0);
+  const targetYRef = useRef<number>(0);
+
+  useEffect(() => {
+    targetYRef.current = translateY;
+  }, [translateY]);
+
+  useEffect(() => {
+    if (!columnRef.current) return;
+
+    let animationFrameId: number;
+
+    const animate = () => {
+      if (!columnRef.current) return;
+
+      // Linear interpolation for smooth movement
+      const lerp = (start: number, end: number, factor: number) => {
+        return start + (end - start) * factor;
+      };
+
+      // Smoothing factor (0.1 = very smooth, 0.3 = responsive)
+      const smoothingFactor = 0.15;
+      
+      currentYRef.current = lerp(currentYRef.current, targetYRef.current, smoothingFactor);
+
+      // Apply the transform
+      columnRef.current.style.transform = `translate3d(0, ${currentYRef.current}px, 0)`;
+
+      // Continue animation loop
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    // Start the animation loop
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [isMenuOpen]); // Only restart loop when menu opens/closes
   const leftImages: ImageConfig[] = [
     {
       src: "/nav_pictures/home.jpg",
@@ -50,8 +94,12 @@ export const ImageColumn: React.FC<ImageColumnProps> = ({ translateY, hoveredLin
 
   return (
     <div 
-      className="flex-col hidden gap-8 transition-transform duration-300 ease-out md:flex"
-      style={{ transform: `translateY(${translateY}px)` }}
+      ref={columnRef}
+      className="flex-col hidden gap-8 md:flex"
+      style={{ 
+        willChange: 'transform',
+        transform: 'translate3d(0, 0, 0)'
+      }}
     >
       {images.map((image) => {
         const motionClass = isMenuOpen

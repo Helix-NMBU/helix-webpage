@@ -61,7 +61,7 @@ export function LoginForm({
       </div>
       <div className="text-sm text-center text-white/70">
         Want to peek?{" "}
-        <a href="#" className="underline underline-offset-4">
+        <a href="/contact" className="underline underline-offset-4">
           Get in touch
         </a>
       </div>
