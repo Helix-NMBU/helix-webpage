@@ -61,8 +61,10 @@ export const ImageColumn: React.FC<ImageColumnProps> = ({ translateY, hoveredLin
         return (
           <div 
             key={image.hoverKey} 
-            className={`relative w-60 h-60 md:w-60 md:h-60 lg:w-90 lg:h-90 ${motionClass}`}
+            className={`relative ${motionClass}`}
             style={{
+              width: 'clamp(100px, 20vw, 360px)',
+              height: 'clamp(100px, 20vw, 360px)',
               transition: "opacity 0.5s ease, transform 0.6s ease",
               transitionDelay: isMenuOpen ? imageDelay : "0s",
             }}

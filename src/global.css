@@ -116,7 +116,7 @@
   --sponsor-bronze: #b7722d;
   --sponsor-service: #ffffff;
   --footer: #00003d;
-  --menu-background: #080843;
+  --menu-background: #00003c;
 }
 
 .dark {
@@ -193,10 +193,10 @@
 
 .carousel-track {
   display: flex;
-  gap: var(--carousel-gap, 50px);
+  gap: var(--carousel-gap, 100px);
   align-items: center;
   /* make sure track is at least twice the visible width because we duplicate items */
-  animation: scroll var(--carousel-speed, 30s) linear infinite;
+  animation: scroll var(--carousel-speed, 60s) linear infinite;
   width: max-content; /* ensure track width equals total content width */
   will-change: transform;
 }

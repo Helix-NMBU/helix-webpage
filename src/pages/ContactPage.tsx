@@ -1,14 +1,24 @@
 import { Button } from "@components//ui/button";
 import { Facebook, Instagram, Linkedin, Mail } from "lucide-react";
 import { ContactForm } from "./ContactForm";
+import { EclipseOverlay } from "@components//navbar/EclipseOverlay";
+import { Link } from "react-router-dom";
 
 export default function Contact() {
   const application_url = import.meta.env.VITE_FORMS_URL;
     return (
-      <section id="contact" className="relative py-24">
+      <section id="contact" className="relative py-24 bg-menu-background min-h-svh">
+        <EclipseOverlay />
+        <Link to="/">
+          <div className="absolute z-10 p-4 border-2 cursor-pointer border-white/60 rounded-2xl top-10 right-10 hover:border-accent">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white transition-colors duration-200 ">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+          </div>
+        </Link> 
         <div className="container px-4 mx-auto">
           <div className="max-w-3xl mx-auto mb-16 text-center opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.1s_forwards]">
-            <h2 className="mb-6 text-3xl font-bold md:text-4xl">Contact Us</h2>
+            <h2 className="mb-6 text-4xl font-bold md:text-6xl">Contact Us</h2>
             <p className="text-accent">
               Have questions or want to learn more about Helix NMBU? We'd love to hear from you!
             </p>
@@ -89,7 +99,7 @@ export default function Contact() {
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-[#482ffe]/20 to-[#67cdbc]/20 rounded-xl p-6 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.5s_forwards]">
+              <div className="bg-gradient-to-r from-[#040076]/90 to-[#040076]/20 rounded-xl p-6 opacity-0 translate-y-8 animate-[fadeInUp_0.8s_ease-out_0.5s_forwards]">
                 <h3 className="mb-4 text-xl font-bold">Join Our Team</h3>
                 <p className="text-[#fff8e6]/80 mb-4">
                   Interested in becoming part of Helix NMBU? We're always looking for passionate students to join our

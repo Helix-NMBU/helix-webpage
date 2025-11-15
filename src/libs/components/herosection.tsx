@@ -1,6 +1,6 @@
 import React from "react";
 import AutoplayCarousel from "./sponsorcarousel";
-import teamImg from "/birk i bil 2.jpg"; 
+import teamImg from "/lagbilde.jpg"; 
 import { FlipWords } from "@/components/ui/shadcn-io/flip-words";
 
 export default function HeroSection() {
@@ -8,19 +8,19 @@ export default function HeroSection() {
   return (
     <div>
       {/* limit section height so the top & bottom of the image are slightly cropped */}
-      <section className="relative w-full h-[89vh] md:h-[50vh] lg:h-[100vh] overflow-hidden pt-0">
+      <section className="relative w-full h-[100vh] overflow-hidden pt-0">
         <img
           src={teamImg}
           alt="Helix team - Formel Student lag"
           className="absolute inset-0 object-cover w-full h-full transition-opacity duration-700 brightness-75"
-          style={{ objectPosition: '110%' }}
+          style={{ objectPosition: '40%' }}
         />
  
         {/* single translucent overlay covering the image for consistent tint */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundColor: "rgba(0, 0, 122, 0.35)",
+            backgroundColor: "rgba(0, 0, 122, 0.60)",
           }}
         />
 

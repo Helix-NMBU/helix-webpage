@@ -82,6 +82,9 @@ export const SponsorGrid = ({
                                     src={sponsor.logo}
                                     alt={sponsor.name}
                                     className={`object-contain max-h-full ${imgExtra}`}
+                                    style={{
+                                        filter: 'sepia(0.3) saturate(1.2) hue-rotate(180deg) brightness(1.1)'
+                                    }}
                                 />
                             ) : (
                                 <h3 className="text-lg font-medium cursor-pointer hover:underline hover:decoration-accent hover:underline-offset-4">
