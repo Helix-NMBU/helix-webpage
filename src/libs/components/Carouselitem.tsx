@@ -1,4 +1,3 @@
-import React from "react";
 
 export default function CarouselItem({image, name}: {image: string; name: string}) {
   return (

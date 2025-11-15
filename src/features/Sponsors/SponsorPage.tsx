@@ -1,4 +1,4 @@
-import { SponsorGrid } from "@libs/components/SponsorGrid";
+import { SponsorGrid } from "@/features/Sponsors/components/SponsorGrid";
 
 
 const SponsorPage = () => {

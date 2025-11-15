@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { MenuButton } from "./MenuButton";
 import { NavLinks } from "./NavLinks";
 import { ImageColumn } from "./ImageColumn";
-import { EclipseOverlay } from "./EclipseOverlay";
+import { EclipseOverlay } from "../EclipseOverlay";
 
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);

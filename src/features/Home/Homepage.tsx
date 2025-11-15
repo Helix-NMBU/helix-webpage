@@ -1,6 +1,6 @@
-import AutoplayCarousel from "../libs/components/sponsorcarousel";
-import HeroSection from "../libs/components/herosection";
-import Frontpage from "@components//Frontpage";
+import AutoplayCarousel from "@libs/components/Sponsorcarousel";
+import HeroSection from "@libs/components/Herosection";
+import Frontpage from "@libs/components/Frontpage";
 import { useRef, useEffect, useState } from "react";
 
 const Homepage = () => {
