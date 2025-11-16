@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 export default function Contact() {
   const application_url = import.meta.env.VITE_FORMS_URL;
     return (
-      <section id="contact" className="relative flex items-center bg-menu-background min-h-svh">
+      <section id="contact" className="relative inset-0 flex items-center bg-menu-background min-h-svh">
         <EclipseOverlay />
           <Link to="/">
             <div className="absolute z-10 flex items-center justify-center w-20 h-20 border-2 cursor-pointer border-white/60 rounded-2xl top-8 right-8 hover:border-accent">

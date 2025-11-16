@@ -4,7 +4,7 @@ import { Link } from "react-router-dom"
 
 export default function SponsorPortalLogin() {
   return (
-    <div className="grid bg-menu-background min-h-svh lg:grid-cols-2">
+    <div className="inset-0 grid bg-menu-background min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <EclipseOverlay /> 
           <Link to="/">
