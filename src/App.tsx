@@ -8,7 +8,7 @@ import Members from './features/Team/Team.tsx'
 import SponsorPortalLogin from './features/SponsorPortal/SponsorportalLogin.tsx'
 import SponsorPortal from './features/SponsorPortal/Sponsorportal.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
-import Footer from './libs/components/Footer.tsx'
+import Footer from '@libs/components/footer.tsx'
 
 function AppContent() {
   const location = useLocation();
