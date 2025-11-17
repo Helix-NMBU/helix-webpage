@@ -64,6 +64,7 @@ export const ContactForm: React.FC = () => {
           emailConfig.templateId,
           {
             from_name: name,
+            from_email: email,
             reply_to: email,
             subject,
             message,
