@@ -106,7 +106,7 @@ export default function Contact() {
                   team!
                 </p>
                 <Button 
-                  className="bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6]"
+                  className="bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6] cursor-pointer"
                   asChild
                 >
                   <a href={application_url}>Apply Now</a>

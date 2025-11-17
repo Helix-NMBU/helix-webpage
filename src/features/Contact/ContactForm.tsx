@@ -151,7 +151,7 @@ export const ContactForm: React.FC = () => {
               </div>
               <Button
                 type="submit"
-                className="w-full bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6]"
+                className="w-full bg-[#482ffe] hover:bg-[#482ffe]/80 text-[#fff8e6] cursor-pointer"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Sending..." : "Send Message"}
