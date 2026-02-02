@@ -68,7 +68,7 @@ const Footer = () => {
             <Linkedin className="transition-transform w-7 h-7 hover:scale-110" />
           </a>
           <div>
-          <img className="object-contain h-32" src="/sponsor_logos/NMBU_logo.png" alt="NMBU logo" />
+          <Link to="https://www.nmbu.no"> <img className="object-contain h-32" src="/sponsor_logos/NMBU_logo.png" alt="NMBU logo" /> </Link>
         </div>
         </div>
       </div>
