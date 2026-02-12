@@ -6,7 +6,7 @@ interface Car {
   image: string;
   stats: {
     focus: string;
-    engine: string;
+    motor: string;
     weight: string;
   };
 }
@@ -27,8 +27,8 @@ const CarInfoCard = ({ car }: { car: Car }) => {
                 <div className="text-xl">{car.stats.focus}</div>
             </div>
             <div className="flex-1 text-center">
-                <h3 className="mb-2 text-2xl font-semibold">Engine</h3>
-                <div className="text-xl">{car.stats.engine}</div>
+                <h3 className="mb-2 text-2xl font-semibold">Motor</h3>
+                <div className="text-xl">{car.stats.motor}</div>
             </div>
             <div className="flex-1 text-center">
                 <h3 className="mb-2 text-2xl font-semibold">Weight</h3>
