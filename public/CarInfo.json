@@ -6,7 +6,7 @@
   "image": "/Børsen (1).png",
   "stats": {
     "focus": "Weight reduction",
-    "engine": "Suzuki, 4 cylinder",
+    "motor": "Suzuki, 4 cylinder",
     "weight": "206 kg"
   }
 },
@@ -18,7 +18,7 @@
   "image": "/Arken1.png",
   "stats": {
     "focus": "Wheel suspension",
-    "engine": "KTM 690, 1 cylinder",
+    "motor": "KTM 6090, 1 cylinder",
     "weight": "223 kg"
   }
 }

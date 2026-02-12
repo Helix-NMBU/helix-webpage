@@ -8,7 +8,7 @@ interface Car {
   image: string;
   stats: {
     focus: string;
-    engine: string;
+    motor: string;
     weight: string;
   };
 }

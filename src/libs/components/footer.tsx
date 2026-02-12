@@ -6,7 +6,7 @@ const Footer = () => {
   <footer className="px-16 py-8 mt-16 font-light bg-footer text-foreground">
       <div className="flex flex-col items-center justify-between md:flex-row">
         <div>
-          <Link to="/"> <img className="h-32" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" /> </Link>
+          <img className="h-32" src="/Helix Logo Hvit.png" alt="Helix NMBU logo" />
             <a
               href="mailto:post@helixnmbu.no"
               className="block mt-2 font-bold hover:underline"
