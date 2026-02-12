@@ -2,63 +2,72 @@
 {
     "id": 1,
   "name": "Necia",
-  "image": "/sponsor_logos/Necia_logo1.png"
-  
+  "image": "/sponsor_logos/Necia_logo1.png",
+  "link": "https://www.necia.no/"
 },
 
 {
     "id": 2,
   "name": "NMBU",
-  "image": "/sponsor_logos/NMBU_logo.png"
+  "image": "/sponsor_logos/NMBU_logo.png",
+  "link": "https://www.nmbu.no/"
   
 },
 
 {
   "id":3,
   "name":"SKF",
-  "image": "/sponsor_logos/SKF_logo.png"
+  "image": "/sponsor_logos/SKF_logo.png",
+  "link": "https://www.skf.com/"
 },
 
 {
   "id":4,
   "name":"K-Tech",
-  "image": "/sponsor_logos/ktech_logo.png"
+  "image": "/sponsor_logos/ktech_logo.png",
+  "link": "https://www.k-tech.no/"
 },
 
 {
   "id":5,
   "name":"NU",
-  "image": "/sponsor_logos/NU_logo.png"
+  "image": "/sponsor_logos/NU_logo.png",
+  "link": "https://www.nunmbu.no/"
 },
 
 {
   "id":6,
   "name":"Norbygg",
-  "image": "/sponsor_logos/Norbygg_logo.png"
+  "image": "/sponsor_logos/Norbygg_logo.png",
+  "link": "https://www.norbygg.no/"
 },
 
 {
   "id":7,
   "name":"Norsk kranpartner",
-  "image": "/sponsor_logos/Kranpartner_logo.png"
+  "image": "/sponsor_logos/Kranpartner_logo.png",
+  "link": "https://www.norskkranpartner.no/"
 },
 
 {
   "id":8,
   "name":"Vulkan engineering",
-  "image": "/sponsor_logos/Vulkan_logo.png"
+  "image": "/sponsor_logos/Vulkan_logo.png",
+  "link": "https://vuleng.no/"
 },
 
 {
   "id":9,
   "name":"MHTech",
-  "image": "/sponsor_logos/MHTech_logo.png"
+  "image": "/sponsor_logos/MHTech_logo.png",
+  "link": "https://www.mhtech.no/"
 },
 
 {
   "id":10,
   "name":"SMT Service",
-  "image": "/sponsor_logos/SMT_logo.png"
+  "image": "/sponsor_logos/SMT_logo.png",
+  "link": ""
 },
 
 {
