@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MenuButton } from "./MenuButton";
 import { NavLinks } from "./NavLinks";
 import { ImageColumn } from "./ImageColumn";
@@ -9,6 +9,8 @@ export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hoveredLink, setHoveredLink] = useState<string | null>(null);
   const [mouseY, setMouseY] = useState(0);
+  const rafRef = useRef<number | null>(null);
+  const lastYRef = useRef(0);
   const location = useLocation();
 
   // Prevent scrolling when menu is open
@@ -29,14 +31,23 @@ export const Navbar = () => {
     if (!isMenuOpen) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      // Normalize mouse Y position to a value between -1 and 1
-      // -1 at top of screen, 1 at bottom
-      const normalizedY = (e.clientY / window.innerHeight) * 2 - 1;
-      setMouseY(normalizedY);
+      lastYRef.current = e.clientY;
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const normalizedY = (lastYRef.current / window.innerHeight) * 2 - 1;
+        setMouseY(normalizedY);
+      });
     };
 
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
   }, [isMenuOpen]);
 
   // Calculate translation values based on mouse position
