@@ -4,13 +4,18 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../libs/lib/utils';
 
 const cvBucket = import.meta.env?.VITE_SUPABASE_CV_BUCKET as string | undefined;
+const CURRENT_SEASON = 'S26';
+const NO_SEASON_ROLE = `No ${CURRENT_SEASON} role`;
+const NO_SEASON_POSITION = `No ${CURRENT_SEASON} position`;
+const DEPARTMENTS = ['Autonomous', 'Marketing', 'Economics', 'Mechanical and Production', 'Electronics', 'The Board'];
 
 interface Member {
-    id: number;
+    id: string;
     name: string;
     fieldOfStudy: string;
     graduationYear: number | 'alumni';
     department: string;
+    position?: string;
     linkedin: string;
     email: string;
     personalEmail?: string;
@@ -26,6 +31,8 @@ export default function SponsorPortalPage() {
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [cvError, setCvError] = useState<string | null>(null);
+    const [usedFallback, setUsedFallback] = useState(false);
+    const [fallbackReason, setFallbackReason] = useState<string | null>(null);
     
     // Filter states
     const [selectedFieldOfStudy, setSelectedFieldOfStudy] = useState<string>('all');
@@ -41,21 +48,27 @@ export default function SponsorPortalPage() {
             }
 
             const data = await response.json();
-                const mapped: Member[] = (data ?? []).map((row: any) => ({
-                    id: row.id,
+            const mapped: Member[] = (data ?? []).map((row: any) => {
+                const department = row.department ?? NO_SEASON_ROLE;
+                const position = row.title ?? row.position ?? NO_SEASON_POSITION;
+                return {
+                    id: String(row.id),
                     name: row.name,
                     fieldOfStudy: row.fieldOfStudy,
                     graduationYear: row.graduation_year ?? row.graduationYear ?? row.yearOfStudy ?? 'alumni',
-                    department: row.department,
-                linkedin: row.linkedin ?? '',
-                email: row.email ?? '',
-                personalEmail: row.personalEmail ?? undefined,
-                personalPhone: row.personalPhone ?? undefined,
-                phone: row.phone ?? '',
-                profileImage: row.profileImage ?? undefined,
-                cvUrl: row.cvUrl ?? undefined,
-            }));
-
+                    department,
+                    position,
+                    linkedin: row.linkedin ?? '',
+                    email: row.email ?? '',
+                    personalEmail: row.personalEmail ?? undefined,
+                    personalPhone: row.personalPhone ?? undefined,
+                    phone: row.phone ?? '',
+                    profileImage: row.profileImage ?? undefined,
+                    cvUrl: row.cvUrl ?? undefined,
+                };
+            });
+            setUsedFallback(true);
+            setFallbackReason(prev => prev ?? 'Supabase utilgjengelig eller feilet; bruker lokal members.json');
             setMembers(mapped);
         };
 
@@ -107,6 +120,7 @@ export default function SponsorPortalPage() {
                 setLoading(true);
 
                 if (!supabase) {
+                    setFallbackReason('Supabase-klient ikke konfigurert (mangler eller ugyldige VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
                     await loadFromStatic();
                     return;
                 }
@@ -118,22 +132,52 @@ export default function SponsorPortalPage() {
 
                 if (supaError) throw supaError;
 
-                const mappedRaw: Member[] = (data ?? []).map((row: any) => ({
-                    id: row.id,
-                    name: row.full_name ?? row.name ?? 'Ukjent navn',
-                    fieldOfStudy: row.field_of_study ?? row.fieldOfStudy ?? 'Ukjent studieretning',
-                    graduationYear: row.graduation_year ?? row.year_of_study ?? 'alumni',
-                    department: row.department ?? 'Ukjent avdeling',
-                    linkedin: row.linkedin ?? '',
-                    email: row.email ?? '',
-                    personalEmail: row.personal_email ?? undefined,
-                    personalPhone: row.personal_phone ?? undefined,
-                    phone: row.phone ?? '',
-                    profileImage: row.profile_image_url ?? row.profileImage ?? undefined,
-                    cvUrl: row.cv_url ?? row.cvUrl ?? undefined,
-                }));
+                // Fetch department + title for current season positions (schema: student_id, title, department_id)
+                const { data: positions, error: posError } = await supabase
+                    .from('positions')
+                    .select('student_id, season, title, department_id, departments(name)')
+                    .eq('season', CURRENT_SEASON);
+                if (posError) throw posError;
+
+                const deptByStudent = new Map<string, string>();
+                const positionByStudent = new Map<string, string>();
+                (positions ?? []).forEach((row: any) => {
+                    const deptName = row?.departments?.name as string | undefined;
+                    if (deptName) {
+                        deptByStudent.set(String(row.student_id), deptName);
+                    }
+                    const positionTitle = row?.title as string | undefined;
+                    if (positionTitle) {
+                        positionByStudent.set(String(row.student_id), positionTitle);
+                    }
+                });
+
+                const mappedRaw: Member[] = (data ?? []).map((row: any) => {
+                    const studentId = String(row.id);
+                    const seasonDept = deptByStudent.get(studentId);
+                    const department = seasonDept ?? NO_SEASON_ROLE;
+                    const seasonPosition = positionByStudent.get(studentId);
+                    const position = seasonPosition ?? NO_SEASON_POSITION;
+                    return {
+                        id: studentId,
+                        name: row.full_name ?? row.name ?? 'Ukjent navn',
+                        fieldOfStudy: row.field_of_study ?? row.fieldOfStudy ?? 'Ukjent studieretning',
+                        graduationYear: row.graduation_year ?? row.year_of_study ?? 'alumni',
+                        department,
+                        position,
+                        linkedin: row.linkedin ?? '',
+                        email: row.email ?? '',
+                        personalEmail: row.personal_email ?? undefined,
+                        personalPhone: row.personal_phone ?? undefined,
+                        phone: row.phone ?? '',
+                        profileImage: row.profile_image_url ?? row.profileImage ?? undefined,
+                        cvUrl: row.cv_url ?? row.cvUrl ?? undefined,
+                    };
+                });
 
                 const mapped = await resolveCvUrls(mappedRaw);
+                setUsedFallback(false);
+                setFallbackReason(null);
                 setMembers(mapped);
             } catch (err) {
                 console.error('Error loading members:', err);
@@ -146,6 +190,7 @@ export default function SponsorPortalPage() {
 
                 // Try fallback to static data when Supabase fails
                 try {
+                    setFallbackReason(message);
                     await loadFromStatic();
                 } catch (fallbackErr) {
                     console.error('Fallback load failed:', fallbackErr);
@@ -172,10 +217,16 @@ export default function SponsorPortalPage() {
         () => Array.from(new Set(members.map(m => m.graduationYear).filter(y => typeof y === 'number'))).sort((a, b) => a - b),
         [members]
     );
-    const uniqueDepartments = useMemo(
-        () => Array.from(new Set(members.map(m => m.department))),
-        [members]
-    );
+    const uniqueDepartments = useMemo(() => {
+        const existing = Array.from(new Set(members.map(m => m.department).filter(Boolean)));
+        const base = [...DEPARTMENTS];
+        existing.forEach(dept => {
+            if (!base.includes(dept)) {
+                base.push(dept);
+            }
+        });
+        return base;
+    }, [members]);
 
     // Filter members based on selected filters (memoized to avoid re-computation)
     const filteredMembers = useMemo(() => members.filter(member => {
@@ -282,6 +333,11 @@ export default function SponsorPortalPage() {
                             {/* Results count */}
                             <div className="pt-4 mt-4 text-sm border-t text-white/70 border-white/10">
                                 Viser {filteredMembers.length} av {members.length} medlemmer
+                                {usedFallback && (
+                                    <p className="mt-2 text-xs text-amber-200">
+                                        Bruker fallback-data fra members.json (Supabase utilgjengelig). {fallbackReason ?? ''}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>

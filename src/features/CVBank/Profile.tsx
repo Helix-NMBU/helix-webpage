@@ -9,6 +9,8 @@ type SaveState = "idle" | "saving" | "saved" | "error" | "supabase-missing";
 type HelixCareerEntry = {
   season: string;
   position: string;
+  departmentId?: string;
+  departmentName?: string;
 };
 
 type ProfileShape = {
@@ -54,8 +56,10 @@ export default function CVBankProfile() {
   const [careerSaveMessage, setCareerSaveMessage] = useState<string | null>(null);
   const [newCareerSeason, setNewCareerSeason] = useState("");
   const [newCareerPosition, setNewCareerPosition] = useState("");
+  const [newCareerDepartment, setNewCareerDepartment] = useState("");
   const [originalCareer, setOriginalCareer] = useState<HelixCareerEntry[]>([]);
   const [showCareerModal, setShowCareerModal] = useState(false);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [profile, setProfile] = useState<ProfileShape>({
     full_name: "",
     email: "",
@@ -82,7 +86,11 @@ export default function CVBankProfile() {
     if (profile.helix_career.length !== originalCareer.length) return true;
     return profile.helix_career.some((entry, idx) => {
       const orig = originalCareer[idx];
-      return entry.season !== orig?.season || entry.position !== orig?.position;
+      return (
+        entry.season !== orig?.season ||
+        entry.position !== orig?.position ||
+        (entry.departmentId ?? "") !== (orig?.departmentId ?? "")
+      );
     });
   }, [profile.helix_career, originalCareer]);
 
@@ -135,7 +143,7 @@ export default function CVBankProfile() {
 
         const { data: positionsData, error: positionsError } = await supabase
           .from("positions")
-          .select("season,title")
+          .select("season,title,department_id,departments(name)")
           .eq("student_id", supaUser.id)
           .order("season", { ascending: false });
         if (positionsError) throw positionsError;
@@ -150,7 +158,12 @@ export default function CVBankProfile() {
           graduation_year: data?.graduation_year ? String(data.graduation_year) : "",
           profile_image_url: data?.profile_image_url ?? "",
           cv_url: data?.cv_url ?? "",
-          helix_career: (positionsData ?? []).map((p) => ({ season: p.season ?? "", position: p.title ?? "" })),
+          helix_career: (positionsData ?? []).map((p) => ({
+            season: p.season ?? "",
+            position: p.title ?? "",
+            departmentId: (p as any).department_id ?? "",
+            departmentName: (p as any).departments?.name ?? "",
+          })),
         };
 
   setProfile(nextProfile);
@@ -168,6 +181,36 @@ export default function CVBankProfile() {
 
     loadProfile();
   }, [user]);
+
+  useEffect(() => {
+    const loadDepartments = async () => {
+      if (!supabaseConfigured || !supabase) return;
+      try {
+        const { data, error } = await supabase
+          .from("departments")
+          .select("id, name")
+          .order("name", { ascending: true });
+        if (error) throw error;
+        const rows = (data ?? [])
+          .map((d: any) => ({ id: String(d.id ?? ""), name: d.name as string }))
+          .filter((d) => d.id && d.name);
+        setDepartments(rows);
+        if (rows.length > 0) {
+          setNewCareerDepartment((prev) => prev || rows[0].id);
+        }
+      } catch (err) {
+        console.warn("Could not load departments", err);
+      }
+    };
+
+    loadDepartments();
+  }, []);
+
+  useEffect(() => {
+    if (departments.length > 0) {
+      setNewCareerDepartment((prev) => prev || departments[0].id);
+    }
+  }, [departments]);
 
   const handleUpload = async (event: FormEvent) => {
     event.preventDefault();
@@ -336,6 +379,7 @@ export default function CVBankProfile() {
           student_id: supaUser.id,
           season: entry.season,
           title: entry.position,
+          department_id: entry.departmentId || null,
         }));
         const { error: insertError } = await supabase.from("positions").insert(rows);
         if (insertError) throw insertError;
@@ -394,6 +438,8 @@ export default function CVBankProfile() {
     const defaultSeason = availableSeasons[0] ?? "";
     setNewCareerSeason(defaultSeason);
     setNewCareerPosition("");
+    const defaultDepartment = departments[0]?.id ?? "";
+    setNewCareerDepartment(defaultDepartment);
     setShowCareerModal(true);
   };
 
@@ -418,9 +464,17 @@ export default function CVBankProfile() {
   const addCareerEntry = () => {
     const season = newCareerSeason.trim();
     const position = newCareerPosition.trim();
+    const departmentId = newCareerDepartment.trim();
+    const departmentName = departments.find((d) => d.id === departmentId)?.name ?? "";
     if (!season || !position) {
       setCareerSaveState("error");
       setCareerSaveMessage("Fyll inn både sesong og rolle før du legger til.");
+      return;
+    }
+
+    if (!departmentId) {
+      setCareerSaveState("error");
+      setCareerSaveMessage("Velg avdeling før du legger til.");
       return;
     }
 
@@ -439,10 +493,11 @@ export default function CVBankProfile() {
 
     setProfile((p) => ({
       ...p,
-      helix_career: [...(p.helix_career ?? []), { season, position }],
+      helix_career: [...(p.helix_career ?? []), { season, position, departmentId, departmentName }],
     }));
     setNewCareerSeason("");
     setNewCareerPosition("");
+    setNewCareerDepartment("");
     setCareerSaveState("idle");
     setCareerSaveMessage(null);
     setShowCareerModal(false);
@@ -530,7 +585,7 @@ export default function CVBankProfile() {
               type="button"
               onClick={handleCloseModal}
               disabled={!modalDismissible}
-              className={`absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/70 transition hover:text-white ${modalDismissible ? "hover:border-white/40" : "opacity-40 cursor-not-allowed"}`}
+              className={`absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-white/20 text-white/80 transition hover:border-red-400 hover:text-red-200 ${modalDismissible ? "" : "opacity-40 cursor-not-allowed"}`}
               aria-label={modalDismissible ? "Close" : "Complete required fields to close"}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -658,7 +713,7 @@ export default function CVBankProfile() {
             <button
               type="button"
               onClick={closeCareerModal}
-              className="absolute inline-flex items-center justify-center transition border rounded-full right-3 top-3 h-9 w-9 border-white/15 text-white/70 hover:text-white hover:border-white/40"
+              className="absolute inline-flex items-center justify-center w-10 h-10 transition border rounded-lg right-3 top-3 border-white/20 text-white/80 hover:border-red-400 hover:text-red-200"
               aria-label="Close"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -695,6 +750,24 @@ export default function CVBankProfile() {
                 </label>
 
                 <label className="flex flex-col gap-1 text-sm">
+                  <span className="text-white/70">Department</span>
+                  <select
+                    className="px-3 py-2 font-light text-white border rounded-lg border-white/20 bg-white/5 focus:border-accent focus:outline-none"
+                    value={newCareerDepartment}
+                    onChange={(e) => setNewCareerDepartment(e.target.value)}
+                  >
+                    <option value="" disabled>
+                      Velg avdeling
+                    </option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1 text-sm md:col-span-2">
                   <span className="text-white/70">Position</span>
                   <input
                     type="text"
@@ -764,7 +837,7 @@ export default function CVBankProfile() {
             <button
               type="button"
               onClick={handleLogout}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition border rounded-xl border-white/20 hover:border-red-400 hover:text-red-100"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition border rounded-lg border-white/20 hover:border-red-400 hover:text-red-100"
             >
               Log out
             </button>
@@ -794,19 +867,6 @@ export default function CVBankProfile() {
                 </div>
 
                 <div className="flex flex-col gap-1 text-sm">
-                  <span className="text-white/70">Personal email</span>
-                  <div className="text-white">
-                    {profile.personal_email ? (
-                      <a href={`mailto:${profile.personal_email}`} className="text-white/90 hover:underline">
-                        {profile.personal_email}
-                      </a>
-                    ) : (
-                      <span className="text-white/60">Not set</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1 text-sm">
                   <span className="text-white/70">LinkedIn</span>
                   <div className="text-white">
                     {profile.linkedin ? (
@@ -817,6 +877,19 @@ export default function CVBankProfile() {
                         className="break-all text-accent hover:underline"
                       >
                         {profile.linkedin}
+                      </a>
+                    ) : (
+                      <span className="text-white/60">Not set</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1 text-sm">
+                  <span className="text-white/70">Personal email</span>
+                  <div className="text-white">
+                    {profile.personal_email ? (
+                      <a href={`mailto:${profile.personal_email}`} className="text-white/90 hover:underline">
+                        {profile.personal_email}
                       </a>
                     ) : (
                       <span className="text-white/60">Not set</span>
@@ -846,7 +919,7 @@ export default function CVBankProfile() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium truncate">{entry.position}</p>
-                          <p className="text-xs text-white/60">Avdeling</p>
+                          <p className="text-xs text-white/60">{entry.departmentName || "Department"}</p>
                         </div>
                       </div>
                       <button
