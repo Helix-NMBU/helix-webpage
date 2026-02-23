@@ -71,7 +71,7 @@ export const SponsorGrid = ({
             >
                 {sponsors.map((sponsor) => {
                     const hasLogo = !!sponsor.logo;
-                    const containerHeightClass = 'h-24';
+                    const containerHeightClass = title === 'Main' ? 'h-64' : 'h-24';
                     const imgExtra = [sponsor.logoSize, sponsor.imgClassName].filter(Boolean).join(' ');
                     
                     const content = hasLogo ? (
@@ -84,7 +84,7 @@ export const SponsorGrid = ({
                             }}
                         />
                     ) : (
-                        <h3 className="text-lg font-medium cursor-pointer hover:underline hover:decoration-accent hover:underline-offset-4">
+                        <h3 className="text-lg font-medium">
                             {sponsor.name}
                         </h3>
                     );
