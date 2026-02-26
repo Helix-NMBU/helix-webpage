@@ -7,13 +7,13 @@ const cvBucket = import.meta.env?.VITE_SUPABASE_CV_BUCKET as string | undefined;
 const CURRENT_SEASON = 'S26';
 const NO_SEASON_ROLE = `No ${CURRENT_SEASON} role`;
 const NO_SEASON_POSITION = `No ${CURRENT_SEASON} position`;
-const DEPARTMENTS = ['Autonomous', 'Marketing', 'Economics', 'Mechanical and Production', 'Electronics', 'The Board'];
+const DEPARTMENTS = ['Autonomous', 'Marketing', 'Economics', 'Mechanical and Production', 'Electronics', 'Software', 'The Board'];
 
 interface Member {
     id: string;
     name: string;
     fieldOfStudy: string;
-    graduationYear: number | 'alumni';
+    graduationYear: number;
     department: string;
     position?: string;
     linkedin: string;
@@ -317,7 +317,7 @@ export default function SponsorPortalPage() {
                                 
                             {/* Department Filter */}
                             <div className="mb-4">
-                                <label className="block mb-2 text-sm font-medium text-white/80">Avdeling</label>
+                                <label className="block mb-2 text-sm font-medium text-white/80">S26 Avdeling</label>
                                 <select
                                     value={selectedDepartment}
                                     onChange={(e) => setSelectedDepartment(e.target.value)}

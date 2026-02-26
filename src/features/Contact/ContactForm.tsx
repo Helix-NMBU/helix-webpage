@@ -21,8 +21,10 @@ export const ContactForm: React.FC = () => {
       const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
       const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
       const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+      const toEmail = import.meta.env.VITE_CONTACT_TO_EMAIL;
+      const fromEmail = import.meta.env.VITE_EMAILJS_FROM_EMAIL || "no-reply@helixnmbu.no";
 
-      return { serviceId, templateId, publicKey };
+      return { serviceId, templateId, publicKey, toEmail, fromEmail };
     }, []);
 
     const handleChange = (
@@ -55,18 +57,34 @@ export const ContactForm: React.FC = () => {
         return;
       }
 
+      if (!emailConfig.toEmail) {
+        setStatus({
+          state: "error",
+          message:
+            "Missing recipient address. Please set VITE_CONTACT_TO_EMAIL to your inbox.",
+        });
+        return;
+      }
+
       setIsSubmitting(true);
       setStatus({ state: "idle" });
 
       try {
+        const subjectWithSender = `${subject} — from ${name} <${email}>`;
         await emailjs.send(
           emailConfig.serviceId,
           emailConfig.templateId,
           {
             from_name: name,
-            from_email: email,
+            // Use a neutral from_email (domain you control) to avoid providers rewriting it; reply_to remains the user's email
+            from_email: emailConfig.fromEmail,
             reply_to: email,
+            user_email: email,
+            to_email: emailConfig.toEmail,
             subject,
+            subject_with_sender: subjectWithSender,
+            sender_name: name,
+            sender_email: email,
             message,
           },
           emailConfig.publicKey
