@@ -30,6 +30,7 @@ export default function SponsorPortalPage() {
     const [loading, setLoading] = useState(true);
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [supabaseError, setSupabaseError] = useState<string | null>(null);
     const [cvError, setCvError] = useState<string | null>(null);
     const [usedFallback, setUsedFallback] = useState(false);
     const [fallbackReason, setFallbackReason] = useState<string | null>(null);
@@ -117,10 +118,12 @@ export default function SponsorPortalPage() {
         const loadMembers = async () => {
             try {
                 setError(null);
+                setSupabaseError(null);
                 setLoading(true);
 
                 if (!supabase) {
                     setFallbackReason('Supabase-klient ikke konfigurert (mangler eller ugyldige VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
+                    setSupabaseError('Supabase-klient ikke konfigurert (mangler eller ugyldige VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
                     await loadFromStatic();
                     return;
                 }
@@ -187,6 +190,8 @@ export default function SponsorPortalPage() {
                         : typeof err === 'object' && err !== null && 'message' in err
                           ? String((err as any).message)
                           : 'Kunne ikke laste medlemmer.';
+
+                setSupabaseError(message);
 
                 // Try fallback to static data when Supabase fails
                 try {
@@ -336,6 +341,11 @@ export default function SponsorPortalPage() {
                                 {usedFallback && (
                                     <p className="mt-2 text-xs text-amber-200">
                                         Bruker fallback-data fra members.json (Supabase utilgjengelig). {fallbackReason ?? ''}
+                                    </p>
+                                )}
+                                {supabaseError && !usedFallback && (
+                                    <p className="mt-2 text-xs text-amber-200">
+                                        Supabase-feil: {supabaseError}
                                     </p>
                                 )}
                             </div>
