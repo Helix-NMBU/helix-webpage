@@ -1,4 +1,4 @@
-import { Dispatch, DragEvent, FormEvent, SetStateAction, useEffect, useMemo, useState } from "react";
+import { Dispatch, DragEvent, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCVBankAuth } from "./auth";
 import { supabase } from "../../libs/lib/utils";
@@ -27,10 +27,12 @@ type ProfileShape = {
 };
 
 const maxFileSizeBytes = 10 * 1024 * 1024; // 10MB
+const maxAvatarSizeBytes = 5 * 1024 * 1024; // 5MB
 const supabaseConfigured = Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY && supabase
 );
 const cvBucket = import.meta.env.VITE_SUPABASE_CV_BUCKET;
+const avatarBucket = import.meta.env.VITE_SUPABASE_PROFILE_BUCKET;
 
 const getFileName = (path: string) => path.split("/").pop() ?? path;
 
@@ -54,6 +56,8 @@ export default function CVBankProfile() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [careerSaveState, setCareerSaveState] = useState<SaveState>("idle");
   const [careerSaveMessage, setCareerSaveMessage] = useState<string | null>(null);
+  const [avatarStatus, setAvatarStatus] = useState<UploadState>("idle");
+  const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   const [newCareerSeason, setNewCareerSeason] = useState("");
   const [newCareerPosition, setNewCareerPosition] = useState("");
   const [newCareerDepartment, setNewCareerDepartment] = useState("");
@@ -73,7 +77,8 @@ export default function CVBankProfile() {
     helix_career: [],
   });
 
-  const avatarFallback = useMemo(() => user?.name?.[0]?.toUpperCase() ?? "H", [user]);
+  const avatarFallback = useMemo(() => user?.name?.[0]?.toUpperCase() ?? "", [user]);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const seasonOptions = useMemo(() => ["S26", "S25", "S24"], []);
   const availableSeasons = useMemo(
     () =>
@@ -116,6 +121,53 @@ export default function CVBankProfile() {
   }, [logout]);
 
   useEffect(() => {
+    const resolveAvatarUrl = async (path: string | null | undefined) => {
+      if (!path) return "";
+      if (!supabase || !avatarBucket) return path;
+
+      // Try to extract the storage object path (strip bucket/public prefixes)
+      const extractStoragePath = (urlString: string) => {
+        let candidate = urlString;
+        try {
+          const url = new URL(urlString);
+          const idx = url.pathname.indexOf("/object/");
+          if (idx >= 0) {
+            candidate = decodeURIComponent(url.pathname.slice(idx + "/object/".length));
+          }
+        } catch {
+          /* ignore */
+        }
+
+        // Remove leading slashes
+        candidate = candidate.replace(/^\/+/, "");
+
+        // Remove optional public/ or bucket prefix so Supabase signing gets the bare object path
+        const bucketPrefix = `${avatarBucket}/`;
+        const publicBucketPrefix = `public/${avatarBucket}/`;
+        if (candidate.startsWith(publicBucketPrefix)) {
+          candidate = candidate.slice(publicBucketPrefix.length);
+        } else if (candidate.startsWith(bucketPrefix)) {
+          candidate = candidate.slice(bucketPrefix.length);
+        }
+
+        return candidate;
+      };
+
+      const needsRenewal = path.includes("token=");
+      const storagePath = extractStoragePath(path);
+
+      const { data, error } = await supabase.storage.from(avatarBucket).createSignedUrl(storagePath, 60 * 60 * 6);
+      if (error) {
+        if (!needsRenewal) {
+          // return original if signing fails but not an expiring token
+          return path;
+        }
+        console.warn("Could not sign avatar URL", error);
+        return path;
+      }
+      return data?.signedUrl ?? path;
+    };
+
     const loadProfile = async () => {
       if (!supabaseConfigured || !supabase) {
         setSaveState("supabase-missing");
@@ -148,6 +200,8 @@ export default function CVBankProfile() {
           .order("season", { ascending: false });
         if (positionsError) throw positionsError;
 
+        const profileImageUrl = await resolveAvatarUrl(data?.profile_image_url ?? "");
+
         const nextProfile: ProfileShape = {
           full_name: data?.full_name ?? supaUser.user_metadata?.full_name ?? user?.name ?? "",
           email: data?.email ?? supaUser.email ?? user?.email ?? "",
@@ -156,7 +210,7 @@ export default function CVBankProfile() {
           linkedin: data?.linkedin ?? "",
           field_of_study: data?.field_of_study ?? "",
           graduation_year: data?.graduation_year ? String(data.graduation_year) : "",
-          profile_image_url: data?.profile_image_url ?? "",
+          profile_image_url: profileImageUrl,
           cv_url: data?.cv_url ?? "",
           helix_career: (positionsData ?? []).map((p) => ({
             season: p.season ?? "",
@@ -268,7 +322,7 @@ export default function CVBankProfile() {
       if (error) throw error;
 
       setStatus("success");
-      setMessage("Upload complete! File stored in Supabase.");
+      setMessage("Upload complete!");
       setProfile((p) => ({ ...p, cv_url: objectPath }));
       setFile(null);
     } catch (err) {
@@ -429,6 +483,73 @@ export default function CVBankProfile() {
     setDragActive(false);
     const dropped = event.dataTransfer.files?.[0];
     handlePickedFile(dropped ?? null);
+  };
+
+  const handlePickedAvatar = async (picked: File | null) => {
+    if (!picked) return;
+
+    if (!picked.type.startsWith("image/")) {
+      setAvatarStatus("error");
+      setAvatarMessage("Only image files are allowed.");
+      return;
+    }
+
+    if (picked.size > maxAvatarSizeBytes) {
+      setAvatarStatus("error");
+      setAvatarMessage("Image is too large. Max 5MB.");
+      return;
+    }
+
+    if (!supabaseConfigured || !supabase) {
+      setAvatarStatus("no-endpoint");
+      setAvatarMessage("Supabase is not configured. Cannot upload avatar.");
+      return;
+    }
+
+    if (!avatarBucket) {
+      setAvatarStatus("no-endpoint");
+      setAvatarMessage("Missing VITE_SUPABASE_PROFILE_BUCKET. Please set the bucket name.");
+      return;
+    }
+
+    try {
+      setAvatarStatus("uploading");
+      setAvatarMessage(null);
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      const supaUser = userData.user;
+      if (!supaUser) throw new Error("No Supabase user session. Please sign in again.");
+
+      const objectPath = `${supaUser.id}/avatar-${Date.now()}-${picked.name}`;
+
+      const { error: uploadError } = await supabase.storage.from(avatarBucket).upload(objectPath, picked, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: picked.type,
+        metadata: { owner: supaUser.id },
+      });
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage.from(avatarBucket).getPublicUrl(objectPath);
+      const storedUrl = publicData?.publicUrl || objectPath; // store stable path/URL
+      const { data: signedData } = await supabase.storage.from(avatarBucket).createSignedUrl(objectPath, 60 * 60 * 6);
+      const displayUrl = signedData?.signedUrl || storedUrl;
+
+      const { error: updateError } = await supabase
+        .from("students")
+        .update({ profile_image_url: storedUrl })
+        .eq("id", supaUser.id);
+      if (updateError) throw updateError;
+
+      setProfile((p) => ({ ...p, profile_image_url: displayUrl }));
+      setAvatarStatus("success");
+      setAvatarMessage("Profile picture updated.");
+    } catch (err) {
+      console.error("Avatar upload error", err);
+      setAvatarStatus("error");
+      setAvatarMessage(err instanceof Error ? err.message : "Could not upload avatar.");
+    }
   };
 
   const openCareerModal = () => {
@@ -808,12 +929,28 @@ export default function CVBankProfile() {
       <div className="w-full max-w-3xl p-8 border shadow-2xl rounded-2xl border-white/10 bg-white/5 backdrop-blur">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center w-16 h-16 overflow-hidden text-2xl font-semibold text-white rounded-full bg-accent/40">
-              {user?.picture ? (
-                <img src={user.picture} alt={user.name ?? user.email} className="object-cover w-full h-full" />
+            <div
+              className="relative flex items-center justify-center w-16 h-16 overflow-hidden text-2xl font-semibold text-white rounded-full cursor-pointer bg-accent/40 group"
+              onClick={() => avatarInputRef.current?.click()}
+              title="Click to upload profile picture"
+            >
+              {profile.profile_image_url ? (
+                <img src={profile.profile_image_url} className="object-cover w-full h-full" />
+              ) : user?.picture ? (
+                <img src={user.picture} className="object-cover w-full h-full" />
               ) : (
                 avatarFallback
               )}
+              <div className="absolute inset-0 items-center justify-center hidden text-xs font-medium text-white/90 bg-black/50 group-hover:flex">
+                Change
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handlePickedAvatar(e.target.files?.[0] ?? null)}
+              />
             </div>
             <div>
               <p className="text-sm uppercase tracking-[0.2em] text-white/60">Signed in</p>
@@ -821,6 +958,20 @@ export default function CVBankProfile() {
               <p className="text-sm text-white/70">{user?.email}</p>
             </div>
           </div>
+
+          {avatarMessage && (
+            <div
+              className={`mt-2 text-xs px-3 py-2 rounded-lg ${
+                avatarStatus === "success"
+                  ? "border border-emerald-300/60 bg-emerald-500/10 text-emerald-100"
+                  : avatarStatus === "no-endpoint"
+                    ? "border border-amber-300/60 bg-amber-500/10 text-amber-100"
+                    : "border border-red-300/60 bg-red-500/10 text-red-100"
+              }`}
+            >
+              {avatarMessage}
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <button
