@@ -1,4 +1,4 @@
-import { cn } from "@libs/lib/utils"
+import { cn, supabase } from "@libs/lib/utils"
 import { Button } from "@libs/components/ui/button"
 import { Input } from "@libs/components/ui/input"
 import { Label } from "@libs/components/ui/label"
@@ -11,23 +11,44 @@ export function LoginForm({
 }: React.ComponentPropsWithoutRef<"form">) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitted");
-    // Get password from environment variable
-    const correctPassword = import.meta.env.VITE_SPONSOR_PASSWORD;
-    
-    if (password === correctPassword) {
-      console.log("Password correct");
-      // Password correct - redirect to sponsor portal
+    setError("");
+
+    const sponsorEmail = import.meta.env.VITE_SPONSOR_EMAIL;
+
+    if (!supabase || !sponsorEmail) {
+      setError("Login is not configured. Missing Supabase or email.");
+      return;
+    }
+
+    if (!password) {
+      setError("Please enter the password.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: sponsorEmail,
+        password,
+      });
+
+      if (authError) {
+        setError("Incorrect password.");
+        setPassword("");
+        return;
+      }
+
       navigate("/sponsorportal");
-      setError("");
-    } else {
-      // Password incorrect - show error
-      setError("Incorrect password");
-      setPassword("");
+    } catch (err) {
+      console.error("Sponsor login error", err);
+      setError("Could not log in. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -55,7 +76,7 @@ export function LoginForm({
           {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
         <Button type="submit" className="w-full cursor-pointer text-foreground bg-background hover:bg-background/80">
-          Login
+          {loading ? "Signing in…" : "Login"}
         </Button>
   
       </div>
