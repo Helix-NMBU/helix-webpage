@@ -877,11 +877,16 @@ export default function CVBankProfile() {
                     value={newCareerDepartment}
                     onChange={(e) => setNewCareerDepartment(e.target.value)}
                   >
-                    <option value="" disabled>
+                    <option value="" disabled style={{ color: "#111827", backgroundColor: "#ffffff" }}>
                       Velg avdeling
                     </option>
                     {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
+                      <option
+                        key={dept.id}
+                        value={dept.id}
+                        className="bg-slate-900 text-white"
+                        style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                      >
                         {dept.name}
                       </option>
                     ))}
