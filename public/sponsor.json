@@ -1,75 +1,190 @@
 [
-{
+  {
     "id": 1,
-  "name": "Necia",
-  "image": "/sponsor_logos/Necia_logo1.png"
-  
-},
-
-{
+    "name": "Necia Tech Cluster",
+    "image": "/sponsor_logos/Necia_logo.png",
+    "link": "https://www.necia.no/",
+    "category": "Main",
+    "logoSize": "lg:scale-100 md:scale-100 scale-50"
+  },
+  {
     "id": 2,
-  "name": "NMBU",
-  "image": "/sponsor_logos/NMBU_logo.png"
-  
-},
-
-{
-  "id":3,
-  "name":"SKF",
-  "image": "/sponsor_logos/SKF_logo.png"
-},
-
-{
-  "id":4,
-  "name":"K-Tech",
-  "image": "/sponsor_logos/ktech_logo.png"
-},
-
-{
-  "id":5,
-  "name":"NU",
-  "image": "/sponsor_logos/NU_logo.png"
-},
-
-{
-  "id":6,
-  "name":"Norbygg",
-  "image": "/sponsor_logos/Norbygg_logo.png"
-},
-
-{
-  "id":7,
-  "name":"Norsk kranpartner",
-  "image": "/sponsor_logos/Kranpartner_logo.png"
-},
-
-{
-  "id":8,
-  "name":"Vulkan engineering",
-  "image": "/sponsor_logos/Vulkan_logo.png"
-},
-
-{
-  "id":9,
-  "name":"MHTech",
-  "image": "/sponsor_logos/MHTech_logo.png"
-},
-
-{
-  "id":10,
-  "name":"SMT Service",
-  "image": "/sponsor_logos/SMT_logo.png"
-},
-
-{
-  "id":11,
-  "name":"Telemetry",
-  "image": "/sponsor_logos/Telemetry_logo.png"
-},
-
-{
-  "id":12,
-  "name":"Biesterfeld",
-  "image": "/sponsor_logos/Biesterfeld.png"
-}
+    "name": "SKF",
+    "image": "/sponsor_logos/SKF_logo.png",
+    "link": "https://www.skf.com/",
+    "category": "Gold",
+    "logoSize": "scale-40 lg:scale-60"
+  },
+  {
+    "id": 3,
+    "name": "K-Tech",
+    "image": "/sponsor_logos/ktech_logo.png",
+    "link": "https://www.k-tech.no/",
+    "category": "Gold",
+    "logoSize": "scale-90 lg:scale-80"
+  },
+  {
+    "id": 4,
+    "name": "NU",
+    "image": "/sponsor_logos/NU_logo.png",
+    "link": "https://www.nunmbu.no/",
+    "category": "Gold",
+    "logoSize": "scale-80 lg:scale-80"
+  },
+  {
+    "id": 5,
+    "name": "Kongsberg gruppen",
+    "image": "/sponsor_logos/Kongsberg_logo.png",
+    "link": "https://www.kongsberg.com/",
+    "category": "Silver",
+    "logoSize": "scale-100 lg:scale-100"
+  },
+  {
+    "id": 6,
+    "name": "Norbygg",
+    "image": "/sponsor_logos/Norbygg_logo.png",
+    "link": "https://www.norbygg.no/",
+    "category": "Silver",
+    "logoSize": "scale-80"
+  },
+  {
+    "id": 7,
+    "name": "Norsk Kranpartner",
+    "image": "/sponsor_logos/Kranpartner_logo.png",
+    "link": "https://www.norskkranpartner.no/",
+    "category": "Silver",
+    "logoSize": "scale-120"
+  },
+  {
+    "id": 8,
+    "name": "Vulkan Engineering",
+    "image": "/sponsor_logos/Vulkan_logo.png",
+    "link": "https://vuleng.no/",
+    "category": "Bronze",
+    "logoSize": "scale-60 lg:scale-60"
+  },
+  {
+    "id": 9,
+    "name": "NMBU",
+    "image": "/sponsor_logos/NMBU_logo.png",
+    "link": "https://www.nmbu.no/",
+    "category": "Bronze",
+    "logoSize": "scale-130 lg:scale-150"
+  },
+  {
+    "id": 10,
+    "name": "MHTech",
+    "image": "/sponsor_logos/MHTech_logo.png",
+    "link": "https://www.mhtech.no/",
+    "category": "Bronze",
+    "logoSize": "scale-50 lg:scale-80 grayscale"
+  },
+  {
+    "id": 11,
+    "name": "SMT Service",
+    "image": "/sponsor_logos/SMT_logo.png",
+    "link": "",
+    "category": "Bronze",
+    "logoSize": "scale-50 lg:scale-80"
+  },
+  {
+    "id": 12,
+    "name": "Seal Engineering",
+    "image": "/sponsor_logos/SEAL_Eng_logo.png",
+    "link": "https://www.sealengineering.no/",
+    "category": "Service"
+  },
+  {
+    "id": 13,
+    "name": "Hellesøe Handel",
+    "category": "Bronze"
+  },
+  {
+    "id": 14,
+    "name": "CF Maskin",
+    "image": "/sponsor_logos/CFMaskin_logo.png",
+    "link": "https://cfmaskin.no/",
+    "category": "Service"
+  },
+  {
+    "id": 15,
+    "name": "Eik Lab",
+    "image": "/sponsor_logos/Eik_lab_logo.png",
+    "link": "https://www.eiklab.no/",
+    "category": "Service",
+    "logoSize": "scale-40 lg:scale-50"
+  },
+  {
+    "id": 16,
+    "name": "3D Connexion",
+    "image": "/sponsor_logos/3DConnexion_logo.png",
+    "link": "https://www.3dconnexion.com/",
+    "category": "Service",
+    "logoSize": "scale-40 lg:scale-50"  
+  },
+  {
+    "id": 17,
+    "name": "Speeding",
+    "image": "/sponsor_logos/Speeding_logo.png",
+    "link": "https://www.speeding.no/",
+    "category": "Service"
+  },
+  {
+    "id": 18,
+    "name": "Asher Racing",
+    "image": "/sponsor_logos/Asher_Racing_logo.png",
+    "link": "https://ascher-racing.com//",
+    "category": "Service",
+    "logoSize": "scale-60 lg:scale-85"
+  },
+  {
+    "id": 19,
+    "name": "Solidworks",
+    "image": "/sponsor_logos/SolidWorks_logo.png",
+    "link": "https://www.solidworks.com/",
+    "category": "Service"
+  },
+  {
+    "id": 20,
+    "name": "Ansys",
+    "image": "/sponsor_logos/Ansys_logo.png",
+    "link": "https://www.ansys.com/",
+    "category": "Service",
+    "logoSize": "scale-55 lg:scale-70"
+  },
+  {
+    "id": 21,
+    "name": "EDR Medeso",
+    "image": "/sponsor_logos/EDR_Medeso_logo.png",
+    "link": "https://www.edrmedeso.com/",
+    "category": "Service",
+    "logoSize": "scale-55 lg:scale-75"
+  },
+  {
+    "id": 22,
+    "name": "IPG",
+    "image": "/sponsor_logos/IPG_logo.png",
+    "link": "https://ipg-automotive.com/",
+    "category": "Service",
+    "logoSize": "scale-50 lg:scale-70"
+  },
+   {
+    "id": 23,
+    "name": "Biesterfeld",
+    "image": "/sponsor_logos/Biesterfeld_logo.png",
+    "link": "https://www.biesterfeld.com/",
+    "category": "Service",
+    "logoSize": "scale-40 lg:scale-55"
+  },
+  {
+    "id": 24,
+    "name": "Servi Group",
+    "category": "Service"
+  },
+  {
+    "id": 25,
+    "name": "Foliekniven",
+    "category": "Service"
+  }
+ 
 ]

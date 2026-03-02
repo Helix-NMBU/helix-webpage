@@ -6,6 +6,7 @@ interface Sponsor {
     logo?: string;
     logoSize?: string;
     imgClassName?: string;
+    link?: string;
 }
 
 interface SponsorGridProps {
@@ -70,26 +71,40 @@ export const SponsorGrid = ({
             >
                 {sponsors.map((sponsor) => {
                     const hasLogo = !!sponsor.logo;
-                    const containerHeightClass = 'h-24';
+                    const containerHeightClass = title === 'Main' ? 'h-64' : 'h-24';
                     const imgExtra = [sponsor.logoSize, sponsor.imgClassName].filter(Boolean).join(' ');
+                    
+                    const content = hasLogo ? (
+                        <img
+                            src={sponsor.logo}
+                            alt={sponsor.name}
+                            className={`object-contain max-h-full ${imgExtra}`}
+                            style={{
+                                filter: 'sepia(0.3) saturate(1.2) hue-rotate(180deg) brightness(1.1)'
+                            }}
+                        />
+                    ) : (
+                        <h3 className="text-lg font-medium">
+                            {sponsor.name}
+                        </h3>
+                    );
+                    
                     return (
                         <div
                             key={sponsor.name}
-                            className={`flex flex-col cursor-pointer items-center justify-center ${hasLogo ? containerHeightClass : textOnlyHeight}`}
+                            className={`flex flex-col items-center justify-center ${hasLogo ? containerHeightClass : textOnlyHeight}`}
                         >
-                            {hasLogo ? (
-                                <img
-                                    src={sponsor.logo}
-                                    alt={sponsor.name}
-                                    className={`object-contain max-h-full ${imgExtra}`}
-                                    style={{
-                                        filter: 'sepia(0.3) saturate(1.2) hue-rotate(180deg) brightness(1.1)'
-                                    }}
-                                />
+                            {sponsor.link ? (
+                                <a 
+                                    href={sponsor.link} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="cursor-pointer transition-transform hover:scale-105"
+                                >
+                                    {content}
+                                </a>
                             ) : (
-                                <h3 className="text-lg font-medium cursor-pointer hover:underline hover:decoration-accent hover:underline-offset-4">
-                                    {sponsor.name}
-                                </h3>
+                                content
                             )}
                         </div>
                     );
