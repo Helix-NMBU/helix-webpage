@@ -855,7 +855,7 @@ export default function CVBankProfile() {
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="text-white/70">Season</span>
                   <select
-                    className="px-3 py-2 text-white border rounded-lg border-white/20 bg-white/5 focus:border-accent focus:outline-none"
+                    className="px-3 py-2 border rounded-lg border-white/20 bg-white/5 focus:border-accent focus:outline-none"
                     value={newCareerSeason}
                     onChange={(e) => setNewCareerSeason(e.target.value)}
                   >
@@ -873,7 +873,7 @@ export default function CVBankProfile() {
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="text-white/70">Department</span>
                   <select
-                    className="px-3 py-2 font-light text-white border rounded-lg border-white/20 bg-white/5 focus:border-accent focus:outline-none"
+                    className="px-3 py-2 font-light border rounded-lg border-white/20 bg-white/5 focus:border-accent focus:outline-none"
                     value={newCareerDepartment}
                     onChange={(e) => setNewCareerDepartment(e.target.value)}
                   >
