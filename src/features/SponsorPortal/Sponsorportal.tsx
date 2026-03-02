@@ -407,7 +407,14 @@ export default function SponsorPortalPage() {
                                 >
                                     <option value="all">Vis alle</option>
                                     {uniqueFieldsOfStudy.map(field => (
-                                        <option key={field} value={field}>{field}</option>
+                                        <option
+                                            key={field}
+                                            value={field}
+                                            className="text-white bg-slate-900"
+                                            style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                                        >
+                                            {field}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -422,7 +429,14 @@ export default function SponsorPortalPage() {
                                 >
                                     <option value="all">Vis alle</option>
                                     {uniqueGraduationYears.map(year => (
-                                        <option key={year} value={year.toString()}>{year}</option>
+                                        <option
+                                            key={year}
+                                            value={year.toString()}
+                                            className="text-white bg-slate-900"
+                                            style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                                        >
+                                            {year}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -437,7 +451,14 @@ export default function SponsorPortalPage() {
                                 >
                                     <option value="all">Vis alle</option>
                                     {uniqueDepartments.map(dept => (
-                                        <option key={dept} value={dept}>{dept}</option>
+                                        <option
+                                            key={dept}
+                                            value={dept}
+                                            className="text-white bg-slate-900"
+                                            style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                                        >
+                                            {dept}
+                                        </option>
                                     ))}
                                 </select>
                             </div>

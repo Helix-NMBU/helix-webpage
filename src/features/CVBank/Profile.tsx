@@ -863,7 +863,12 @@ export default function CVBankProfile() {
                       Select season
                     </option>
                     {availableSeasons.map((season) => (
-                      <option key={season} value={season}>
+                      <option
+                        key={season}
+                        value={season}
+                        className="bg-slate-900 text-white"
+                        style={{ color: "#111827", backgroundColor: "#ffffff" }}
+                      >
                         {season}
                       </option>
                     ))}
