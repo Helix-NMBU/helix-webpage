@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../../libs/lib/utils';
 
 const cvBucket = import.meta.env?.VITE_SUPABASE_CV_BUCKET as string | undefined;
+const avatarBucket = import.meta.env?.VITE_SUPABASE_PROFILE_BUCKET as string | undefined;
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL as string | undefined;
 const CURRENT_SEASON = 'S26';
 const NO_SEASON_ROLE = `No ${CURRENT_SEASON} role`;
 const NO_SEASON_POSITION = `No ${CURRENT_SEASON} position`;
@@ -73,9 +75,45 @@ export default function SponsorPortalPage() {
             setMembers(mapped);
         };
 
+        // Extract storage path from public/signed URLs (removes /object/, bucket prefix, leading slashes)
+        const extractStoragePath = (urlString: string, bucket?: string) => {
+            let candidate = urlString;
+            try {
+                const url = new URL(urlString);
+                const idx = url.pathname.indexOf('/object/');
+                if (idx >= 0) {
+                    candidate = decodeURIComponent(url.pathname.slice(idx + '/object/'.length));
+                }
+            } catch {
+                /* ignore non-URL strings */
+            }
+            candidate = candidate.replace(/^\/+/, '');
+            if (bucket) {
+                const bucketPrefix = `${bucket}/`;
+                const publicBucketPrefix = `public/${bucket}/`;
+                if (candidate.startsWith(publicBucketPrefix)) {
+                    candidate = candidate.slice(publicBucketPrefix.length);
+                } else if (candidate.startsWith(bucketPrefix)) {
+                    candidate = candidate.slice(bucketPrefix.length);
+                }
+            }
+            return candidate;
+        };
+
+        const isSupabaseStorageUrl = (urlString: string) => {
+            if (!urlString.startsWith('http')) return false;
+            if (!supabaseUrl) return urlString.includes('/storage/v1/object/');
+            try {
+                const base = new URL(supabaseUrl);
+                const target = new URL(urlString);
+                return target.host === base.host && target.pathname.includes('/storage/v1/object/');
+            } catch {
+                return urlString.includes('/storage/v1/object/');
+            }
+        };
+
         // Resolve cvUrl paths stored in Supabase to signed URLs for viewing/downloading
         const resolveCvUrls = async (list: Member[]) => {
-            // If bucket or supabase is missing, keep as-is but warn if there are non-HTTP paths
             const needsSigning = list.some(m => m.cvUrl && !m.cvUrl.startsWith('http'));
             if (!supabase || !cvBucket) {
                 if (needsSigning) {
@@ -86,17 +124,23 @@ export default function SponsorPortalPage() {
 
             const rawPaths = list
                 .map(m => m.cvUrl)
-                .filter((url): url is string => typeof url === 'string' && url.length > 0 && !url.startsWith('http'));
+                .filter((url): url is string => typeof url === 'string' && url.length > 0)
+                .map(path => {
+                    if (!path.startsWith('http')) return extractStoragePath(path, cvBucket);
+                    return isSupabaseStorageUrl(path) ? extractStoragePath(path, cvBucket) : path;
+                })
+                .filter(path => !path.startsWith('http'));
 
             const uniquePaths = Array.from(new Set(rawPaths));
             if (!uniquePaths.length) return list;
 
             const { data: signedUrls, error: signError } = await supabase.storage
                 .from(cvBucket)
-                .createSignedUrls(uniquePaths, 60 * 60 * 6); // 6 hours
+                .createSignedUrls(uniquePaths, 60 * 60 * 6);
 
             if (signError) {
                 console.error('Failed to sign CV URLs:', signError);
+                setSupabaseError(prev => prev ?? `Kunne ikke signere CV-URLer: ${signError.message ?? signError}`);
                 return list;
             }
 
@@ -109,9 +153,71 @@ export default function SponsorPortalPage() {
             });
 
             return list.map(member => {
-                if (!member.cvUrl || member.cvUrl.startsWith('http')) return member;
-                const signed = map.get(member.cvUrl);
-                return signed ? { ...member, cvUrl: signed } : member;
+                if (!member.cvUrl) return member;
+                if (member.cvUrl.startsWith('http') && !isSupabaseStorageUrl(member.cvUrl)) return member;
+                const storagePath = extractStoragePath(member.cvUrl, cvBucket);
+                const signed = map.get(storagePath);
+                if (signed) return { ...member, cvUrl: signed };
+                // fallback to public URL if bucket is public
+                if (supabase) {
+                    const { data: publicData } = supabase.storage.from(cvBucket).getPublicUrl(storagePath);
+                    return publicData?.publicUrl ? { ...member, cvUrl: publicData.publicUrl } : member;
+                }
+                return member;
+            });
+        };
+
+        // Resolve profile images to signed URLs if stored as paths
+        const resolveProfileImages = async (list: Member[]) => {
+            const needsSigning = list.some(m => m.profileImage && !m.profileImage.startsWith('http'));
+            if (!supabase || !avatarBucket) {
+                if (needsSigning) {
+                    console.warn('Avatar bucket missing or Supabase not configured; cannot sign profile images.');
+                }
+                return list;
+            }
+
+            const rawPaths = list
+                .map(m => m.profileImage)
+                .filter((url): url is string => typeof url === 'string' && url.length > 0)
+                .map(path => {
+                    if (!path.startsWith('http')) return extractStoragePath(path, avatarBucket);
+                    return isSupabaseStorageUrl(path) ? extractStoragePath(path, avatarBucket) : path;
+                })
+                .filter(path => !path.startsWith('http'));
+
+            const uniquePaths = Array.from(new Set(rawPaths));
+            if (!uniquePaths.length) return list;
+
+            const { data: signedUrls, error: signError } = await supabase.storage
+                .from(avatarBucket)
+                .createSignedUrls(uniquePaths, 60 * 60 * 6);
+
+            if (signError) {
+                console.error('Failed to sign profile images:', signError);
+                setSupabaseError(prev => prev ?? `Kunne ikke signere profilbilder: ${signError.message ?? signError}`);
+                return list;
+            }
+
+            const map = new Map<string, string>();
+            signedUrls?.forEach((item, idx) => {
+                const path = uniquePaths[idx];
+                if (item?.signedUrl) {
+                    map.set(path, item.signedUrl);
+                }
+            });
+
+            return list.map(member => {
+                if (!member.profileImage) return member;
+                if (member.profileImage.startsWith('http') && !isSupabaseStorageUrl(member.profileImage)) return member;
+                const storagePath = extractStoragePath(member.profileImage, avatarBucket);
+                const signed = map.get(storagePath);
+                if (signed) return { ...member, profileImage: signed };
+                if (supabase) {
+                    const { data: publicData } = supabase.storage.from(avatarBucket).getPublicUrl(storagePath);
+                    return publicData?.publicUrl ? { ...member, profileImage: publicData.publicUrl } : member;
+                }
+                return member;
             });
         };
 
@@ -178,7 +284,8 @@ export default function SponsorPortalPage() {
                     };
                 });
 
-                const mapped = await resolveCvUrls(mappedRaw);
+                const withAvatars = await resolveProfileImages(mappedRaw);
+                const mapped = await resolveCvUrls(withAvatars);
                 setUsedFallback(false);
                 setFallbackReason(null);
                 setMembers(mapped);
