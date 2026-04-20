@@ -14,6 +14,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Lexend', 'sans-serif'],
+        archivo: ['Archivo', 'sans-serif'],
       },
       colors: {
         primary: '#03094a',
