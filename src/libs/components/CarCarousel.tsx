@@ -41,7 +41,7 @@ const CarCarousel = ({ cars }: CarCarouselProps) => {
     <div className="relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground overflow-visible">
       {/* full-width wrapper so arrows position relative to viewport width */}
       <div className="relative w-full px-4">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-screen-2xl">
           {/* Car Display (allow overflow so big background text isn't clipped) */}
           <div className="relative overflow-visible">
             <CarInfoCard car={cars[currentIndex]} />

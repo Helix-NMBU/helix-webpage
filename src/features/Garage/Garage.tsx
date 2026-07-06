@@ -1,33 +1,20 @@
 import CarCarousel from "@libs/components/CarCarousel";
 import { useEffect, useState } from "react";
-
-interface Car {
-  id: number;
-  name: string;
-  season: string;
-  image: string;
-  stats: {
-    focus: string;
-    engine: string;
-    weight: string;
-  };
-}
+import { loadCars, type CarRecord } from "../../libs/lib/staticContent";
 
 const Garage = () => {
-  const [cars, setCars] = useState<Car[]>([]);
+  const [cars, setCars] = useState<CarRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/CarInfo.json")
-      .then((res) => res.json())
+    loadCars()
       .then((data) => {
         setCars(data);
-        setLoading(false);
       })
       .catch((error) => {
         console.error("Error loading cars:", error);
-        setLoading(false);
-      });
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {

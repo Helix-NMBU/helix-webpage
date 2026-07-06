@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import CarouselItem from "@libs/components/Carouselitem.tsx";
+import { loadSponsors } from "../../../libs/lib/staticContent";
 
 type Sponsor = {
-  image: string;
+  image?: string;
   name: string;
 };
 
@@ -11,10 +12,8 @@ export default function AutoplayCarousel() {
   const [cards, setCards] = useState<Sponsor[]>([]);
 
   useEffect(() => {
-    // Load sponsors from the public folder at runtime
-    fetch("/sponsor.json")
-      .then((res) => res.json())
-      .then((data: Sponsor[]) => setCards(data || []))
+    loadSponsors()
+      .then((data) => setCards((data || []).filter((s) => s.image)))
       .catch((err) => {
         console.error("Failed to load sponsor.json", err);
       });

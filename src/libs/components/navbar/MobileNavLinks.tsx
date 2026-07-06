@@ -1,5 +1,6 @@
-import { Dispatch, SetStateAction, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { mobilePrimaryNavLinks, mobileSecondaryNavLinks } from "../../lib/routes";
 
 interface MobileNavLinksProps {
   isMenuOpen: boolean;
@@ -11,42 +12,17 @@ type LinkConfig = {
   label: string;
   to: string;
   delay: string;
-  hoverKey?: string;
 };
 
-const primaryLinks: LinkConfig[] = [
-  {
-    label: "Our Journey",
-    to: "/about",
-    delay: "0.4s",
-    hoverKey: "journey",
-  },
-  {
-    label: "The Garage",
-    to: "/garage",
-    delay: "0.5s",
-    hoverKey: "garage",
-  },
-  {
-    label: "Partners",
-    to: "/sponsorpage",
-    delay: "0.6s",
-    hoverKey: "partners",
-  },
-];
+const primaryLinks: LinkConfig[] = mobilePrimaryNavLinks.map((link, index) => ({
+  ...link,
+  delay: `${0.4 + index * 0.1}s`,
+}));
 
-const secondaryLinks: LinkConfig[] = [
-  {
-    label: "Get in Touch",
-    to: "/contact",
-    delay: "0.8s",
-  },
-  {
-    label: "Sponsorportal",
-    to: "/sponsorportal-login",
-    delay: "0.8s",
-  },
-];
+const secondaryLinks: LinkConfig[] = mobileSecondaryNavLinks.map((link) => ({
+  ...link,
+  delay: "0.8s",
+}));
 
 export const MobileNavLinks: React.FC<MobileNavLinksProps> = ({
   isMenuOpen,
@@ -73,7 +49,7 @@ export const MobileNavLinks: React.FC<MobileNavLinksProps> = ({
   );
 
   return (
-    <div className="relative flex items-center justify-center w-full h-full font-['Helvetica_Neue']">
+    <div className="relative flex items-center justify-center w-full h-full font-sans">
       <nav className="flex flex-col items-center justify-center w-full gap-10">
         {primaryLinks.map(({ label, to, delay }) => {
           const isActive = currentPath === to;

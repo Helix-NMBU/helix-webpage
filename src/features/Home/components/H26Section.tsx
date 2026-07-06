@@ -1,24 +1,55 @@
+import { useRef } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Link } from "react-router-dom";
 
-const helvetica: React.CSSProperties = {
-  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-};
+gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 export default function H26Section() {
-  return (
-    <section style={{ backgroundColor: "#00007A", ...helvetica }} className="text-white">
-      <div className="px-16 md:px-32 py-24 grid grid-cols-1 md:grid-cols-2 gap-16 items-end">
+  const containerRef = useRef<HTMLElement>(null);
 
-        {/* Left: text */}
-        <div className="flex flex-col gap-8">
-          <p className="text-xs uppercase tracking-widest text-white/40">Season 2026</p>
+  useGSAP(
+    () => {
+      gsap.from(".h26-left > *", {
+        x: -32,
+        opacity: 0,
+        duration: 0.85,
+        stagger: 0.1,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: "top 78%",
+        },
+      });
+
+      gsap.from(".h26-image", {
+        x: 40,
+        opacity: 0,
+        duration: 1,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: "top 78%",
+        },
+      });
+    },
+    { scope: containerRef }
+  );
+
+  return (
+    <section ref={containerRef} className="text-white">
+      <div className="grid items-end grid-cols-1 gap-16 px-6 py-24 mx-auto max-w-screen-2xl lg:px-12 md:grid-cols-2">
+
+        <div className="h26-left flex flex-col gap-8">
+          <p className="text-xs tracking-widest uppercase text-white/40">Season 2026</p>
           <h2
             className="font-medium"
             style={{ fontSize: "clamp(72px, 12vw, 180px)", lineHeight: 0.9, letterSpacing: "-0.03em" }}
           >
             H26
           </h2>
-          <p className="text-lg text-white/60 max-w-md leading-relaxed">
+          <p className="max-w-md text-lg leading-relaxed text-white/60">
             Our fourteenth car. All-electric, built from scratch by forty engineers
             in the Tower workshop at NMBU. Designed to compete at Formula Student
             Germany 2026.
@@ -31,12 +62,12 @@ export default function H26Section() {
           </Link>
         </div>
 
-        {/* Right: car image */}
         <div className="flex justify-end">
           <img
             src="/lagbilde_2025.JPG"
             alt="H26 race car"
-            className="w-full max-w-lg object-cover opacity-90"
+            className="h26-image object-cover w-full max-w-lg opacity-90"
+            onLoad={() => ScrollTrigger.refresh()}
           />
         </div>
 

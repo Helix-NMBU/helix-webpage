@@ -1,44 +1,13 @@
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
-import { jwtDecode } from "jwt-decode";
 import { useState } from "react";
 import { Link, useNavigate, useLocation, type Location } from "react-router-dom";
 import { useCVBankAuth } from "./auth";
+import { parseGoogleCredential } from "./session";
 import { supabase } from "../../libs/lib/utils";
-
-type GoogleJwtPayload = {
-	email?: string;
-	hd?: string;
-	name?: string;
-	picture?: string;
-	given_name?: string;
-	family_name?: string;
-};
 
 const allowedDomain = (import.meta.env.VITE_GOOGLE_ALLOWED_DOMAIN || "helixnmbu.no").toLowerCase();
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const supabaseConfigured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY && supabase);
-
-function parseCredential(credential: string) {
-	const payload = jwtDecode<GoogleJwtPayload>(credential);
-	const email = payload.email ?? "";
-	const domain = email.split("@")[1]?.toLowerCase() ?? "";
-
-	if (!email) {
-		throw new Error("Could not read email from Google response.");
-	}
-
-	if (domain !== allowedDomain) {
-		throw new Error(`Please sign in with your @${allowedDomain} email.`);
-	}
-
-	return {
-		email,
-		name: payload.name ?? email,
-		picture: payload.picture,
-		givenName: payload.given_name,
-		familyName: payload.family_name,
-	};
-}
 
 export default function CVBankLogin() {
 	const navigate = useNavigate();
@@ -58,7 +27,7 @@ export default function CVBankLogin() {
 			}
 
 			// 1) Parse the Google ID token for local app state
-			const user = parseCredential(response.credential);
+			const user = parseGoogleCredential(response.credential, allowedDomain);
 
 			// 2) Sign into Supabase using the Google ID token so auth.getUser() works
 			const { error: supabaseSignInError } = await supabase.auth.signInWithIdToken({

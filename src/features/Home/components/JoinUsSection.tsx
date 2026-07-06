@@ -1,44 +1,91 @@
+import { useRef } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Link } from "react-router-dom";
 
-const helvetica: React.CSSProperties = {
-  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-};
+gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 export default function JoinUsSection() {
+  const containerRef = useRef<HTMLElement>(null);
+
+  useGSAP(
+    () => {
+      gsap.from(".join-label", {
+        y: 20,
+        opacity: 0,
+        duration: 0.6,
+        ease: "power2.out",
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: "top 80%",
+        },
+      });
+
+      gsap.from(".join-heading", {
+        y: 44,
+        opacity: 0,
+        duration: 0.95,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: containerRef.current,
+          start: "top 75%",
+        },
+      });
+
+      gsap.from(".join-content > *", {
+        y: 30,
+        opacity: 0,
+        duration: 0.8,
+        stagger: 0.14,
+        ease: "power2.out",
+        scrollTrigger: {
+          trigger: ".join-content",
+          start: "top 82%",
+        },
+      });
+    },
+    { scope: containerRef }
+  );
+
   return (
-    <section style={{ backgroundColor: "#00007A", ...helvetica }} className="text-white">
-      <div className="px-16 md:px-32 py-28">
+    <section ref={containerRef} style={{ backgroundColor: "#080808" }} className="text-white">
+      <div className="px-6 mx-auto max-w-screen-2xl lg:px-12 py-28">
 
-        <p className="text-xs uppercase tracking-widest text-white/40 mb-8">Join the team</p>
+        <p className="join-label mb-8 text-xs tracking-widest uppercase text-white/40">
+          Join the team
+        </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
+        <div className="grid items-start grid-cols-1 gap-16 md:grid-cols-2">
 
-          {/* Left: heading */}
           <h2
-            className="font-medium"
+            className="join-heading font-medium"
             style={{ fontSize: "clamp(40px, 5vw, 80px)", lineHeight: 1.0, letterSpacing: "-0.02em" }}
           >
-            Become a part<br />of something<br /><span style={{ color: "#aaebdf", fontStyle: "italic", fontWeight: 300 }}>meaningful.</span>
+            Become a part<br />of something<br />
+            <span style={{ color: "#002EC4", fontStyle: "italic", fontWeight: 400 }}>
+              meaningful.
+            </span>
           </h2>
 
-          {/* Right: paragraph + buttons */}
-          <div className="flex flex-col gap-8 justify-between h-full">
-            <p className="text-lg text-white/60 leading-relaxed">
+          <div className="join-content flex flex-col justify-between h-full gap-8">
+            <p className="text-lg leading-relaxed text-white/80">
               Every autumn we recruit new members across all disciplines — mechanical,
               electrical, software, business, and more. No prior experience required.
               Just the drive to build.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row">
               <Link
                 to="/apply"
-                className="inline-block px-8 py-4 bg-white text-black text-sm uppercase tracking-widest font-medium hover:bg-white/90 transition-colors text-center"
+                onClick={() => window.scrollTo(0, 0)}
+                className="inline-block px-8 py-4 text-sm font-medium tracking-widest text-center uppercase transition-colors border rounded-2xl bg-background text-foreground hover:bg-secondary hover:text-background"
               >
-                Apply to Helix 27
+                Apply to Helix S27
               </Link>
               <Link
                 to="/members"
-                className="inline-block px-8 py-4 border border-white/30 text-white text-sm uppercase tracking-widest font-medium hover:border-white transition-colors text-center"
+                className="inline-block px-8 py-4 text-sm font-medium tracking-widest text-center uppercase transition-colors border rounded-2xl border-secondary text-secondary hover:bg-secondary hover:text-background"
               >
                 Meet the team
               </Link>

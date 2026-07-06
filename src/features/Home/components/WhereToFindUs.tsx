@@ -1,10 +1,6 @@
-const helvetica: React.CSSProperties = {
-  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-};
-
 export default function WhereToFindUs() {
   return (
-    <section className="bg-white text-black" style={helvetica}>
+    <section className="bg-white text-black">
       <div className="px-16 md:px-32 py-24 grid grid-cols-1 md:grid-cols-2 gap-16 items-start">
 
         {/* Left: text */}

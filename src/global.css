@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap');
 
 /* Define Tailwind tokens so utilities like bg-background, text-foreground, border-border work */
 @theme {
@@ -79,44 +78,44 @@
 }
 
 :root {
-  --background:  #00007A;
-  --foreground: oklch(100% 0.00011 271.152);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: #4B32FF;
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: #a3f9eb;
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: #ec7235;
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: #63e4ca;
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #002EC4;
+  --foreground: #FDFDFD;
+  --card: #FDFDFD;
+  --card-foreground: #0C0C0C;
+  --popover: #002EC4;
+  --popover-foreground: #FDFDFD;
+  --primary: #002EC4;
+  --primary-foreground: #FDFDFD;
+  --secondary: #FDFDFD;
+  --secondary-foreground: #03094A;
+  --muted: #002EC4;
+  --muted-foreground: #FDFDFD;
+  --accent: #002EC4;
+  --accent-foreground: #FDFDFD;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: rgba(253, 253, 253, 0.12);
+  --input: rgba(253, 253, 253, 0.08);
+  --ring: #002EC4;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3:  #000052;
+  --chart-3: #002EC4;
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --sponsor-main: #63e4ca;
+  --sidebar: #FDFDFD;
+  --sidebar-foreground: #0C0C0C;
+  --sidebar-primary: #002EC4;
+  --sidebar-primary-foreground: #FDFDFD;
+  --sidebar-accent: #002EC4;
+  --sidebar-accent-foreground: #FDFDFD;
+  --sidebar-border: rgba(253, 253, 253, 0.12);
+  --sidebar-ring: #002EC4;
+  --sponsor-main: #FDFDFD;
   --sponsor-gold: #ffcf21;
   --sponsor-silver: #C0C0C0;
   --sponsor-bronze: #b7722d;
-  --sponsor-service: #ffffff;
-  --footer: #00003d;
-  --menu-background: #00003c;
+  --sponsor-service: #FDFDFD;
+  --footer: #002EC4;
+  --menu-background: #002EC4;
 }
 
 .dark {
@@ -179,8 +178,19 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-family: 'Lexend', sans-serif;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   }
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
 }
 
 /* Carousel styles moved from src/libs/components/autoplaycarousel.scss */

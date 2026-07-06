@@ -1,14 +1,31 @@
-import { cn, supabase } from "@libs/lib/utils"
-import { Button } from "@libs/components/ui/button"
-import { Input } from "@libs/components/ui/input"
-import { Label } from "@libs/components/ui/label"
+import { supabase } from "@libs/lib/utils"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-export function LoginForm({
-  className,
-  ...props
-}: React.ComponentPropsWithoutRef<"form">) {
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  backgroundColor: "rgba(3,9,74,0.03)",
+  border: "1.5px solid rgba(3,9,74,0.18)",
+  borderRadius: "8px",
+  padding: "10px 14px",
+  fontSize: "15px",
+  color: "#0C0C0C",
+  outline: "none",
+  fontFamily: "inherit",
+  transition: "border-color 0.18s ease",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: "6px",
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "rgba(3,9,74,0.5)",
+  fontWeight: 500,
+};
+
+export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,39 +70,58 @@ export function LoginForm({
   };
 
   return (
-    <form className={cn("flex flex-col gap-6", className)} {...props} onSubmit={handleSubmit}>
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-2xl font-bold text-foreground">Sponsor Portal</h1>
-        <p className="text-sm text-accent text-balance">
-          CV-Bank
-        </p>
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      <div>
+        <label htmlFor="password" style={labelStyle}>Password</label>
+        <input
+          id="password"
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={inputStyle}
+          onFocus={(e) => (e.currentTarget.style.borderColor = "#002EC4")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(3,9,74,0.18)")}
+        />
+        {error && (
+          <p style={{ marginTop: "8px", fontSize: "13px", color: "#dc2626" }}>{error}</p>
+        )}
       </div>
-      <div className="grid gap-6">
-        <div className="grid gap-2">
-          <div className="flex items-center text-foreground">
-            <Label htmlFor="password">Password</Label>
-          </div>
-          <Input 
-            id="password" 
-            type="password" 
-            required 
-            className="text-black"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-        </div>
-        <Button type="submit" className="w-full cursor-pointer text-foreground bg-background hover:bg-background/80">
-          {loading ? "Signing in…" : "Login"}
-        </Button>
-  
-      </div>
-      <div className="text-sm text-center text-white/70">
-        Want to peek?{" "}
-        <a href="/contact" className="underline underline-offset-4">
+
+      <button
+        type="submit"
+        disabled={loading}
+        style={{
+          width: "100%",
+          backgroundColor: loading ? "rgba(3,9,74,0.4)" : "#03094A",
+          color: "#FDFDFD",
+          padding: "13px 24px",
+          fontSize: "13px",
+          fontWeight: 500,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          border: "none",
+          borderRadius: "6px",
+          cursor: loading ? "not-allowed" : "pointer",
+          transition: "background-color 0.18s ease",
+          fontFamily: "inherit",
+        }}
+        onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#002EC4"; }}
+        onMouseLeave={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#03094A"; }}
+      >
+        {loading ? "Signing in…" : "Sign in"}
+      </button>
+
+      <p style={{ fontSize: "13px", textAlign: "center", color: "rgba(3,9,74,0.4)" }}>
+        Want to learn more?{" "}
+        <a href="/contact" style={{ color: "#002EC4", textDecoration: "none" }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
+        >
           Get in touch
         </a>
-      </div>
+      </p>
     </form>
-  )
+  );
 }

@@ -7,14 +7,7 @@ import {
   ReactElement,
 } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-
-type CVBankUser = {
-  email: string;
-  name?: string;
-  picture?: string;
-  givenName?: string;
-  familyName?: string;
-};
+import { CVBankUser, readStoredCVBankUser, writeStoredCVBankUser } from "./session";
 
 type CVBankAuthContextValue = {
   user: CVBankUser | null;
@@ -30,22 +23,10 @@ const CVBankAuthContext = createContext<CVBankAuthContextValue | undefined>(
 );
 
 export function CVBankAuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<CVBankUser | null>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? (JSON.parse(stored) as CVBankUser) : null;
-    } catch (err) {
-      console.warn("Failed to read stored CVBank user", err);
-      return null;
-    }
-  });
+  const [user, setUser] = useState<CVBankUser | null>(() => readStoredCVBankUser(localStorage));
 
   useEffect(() => {
-    if (user) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    writeStoredCVBankUser(localStorage, user);
   }, [user]);
 
   const value = useMemo<CVBankAuthContextValue>(

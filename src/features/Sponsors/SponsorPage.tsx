@@ -1,72 +1,165 @@
-import { useEffect, useState } from "react";
-import { SponsorGrid } from "@/features/Sponsors/components/SponsorGrid";
+import { useEffect, useRef, useState } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
+import { loadSponsors, type SponsorRecord } from "../../libs/lib/staticContent";
 
-interface SponsorData {
-    id: number;
-    name: string;
-    image?: string;
-    link?: string;
-    category: 'Main' | 'Gold' | 'Silver' | 'Bronze' | 'Service';
-    logoSize?: string;
-}
+gsap.registerPlugin(ScrollTrigger, useGSAP);
+
+const tierConfig = [
+  { key: "Main"    as const, label: "Main",    itemClass: "w-full",                                                 cardHeight: 200 },
+  { key: "Gold"    as const, label: "Gold",    itemClass: "w-full md:w-[calc(33.333%-2rem)]",                       cardHeight: 150 },
+  { key: "Silver"  as const, label: "Silver",  itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(33.333%-2rem)]",         cardHeight: 120 },
+  { key: "Bronze"  as const, label: "Bronze",  itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(20%-2.4rem)]",           cardHeight: 110 },
+  { key: "Service" as const, label: "Service", itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(20%-2.4rem)]",           cardHeight: 100 },
+];
 
 const SponsorPage = () => {
-    const [sponsors, setSponsors] = useState<SponsorData[]>([]);
+  const [sponsors, setSponsors] = useState<SponsorRecord[]>([]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
-    useEffect(() => {
-        fetch('/sponsor.json')
-            .then(res => res.json())
-            .then(data => setSponsors(data))
-            .catch(err => console.error('Failed to load sponsors:', err));
-    }, []);
+  useEffect(() => {
+    loadSponsors().then(setSponsors).catch(console.error);
+  }, []);
 
-    const getGridLayout = (category: string) => {
-        const layouts: Record<string, { columns: string; rowGap: string }> = {
-            Main: { columns: 'grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1', rowGap: 'gap-y-12' },
-            Gold: { columns: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2', rowGap: 'gap-y-12' },
-            Silver: { columns: 'grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3', rowGap: 'gap-y-6' },
-            Bronze: { columns: 'grid grid-cols-1 md:grid-cols-4 lg:grid-cols-4', rowGap: 'gap-y-6' },
-            Service: { columns: 'grid grid-cols-2 md:grid-cols-5 lg:grid-cols-5', rowGap: 'gap-y-4' }
-        };
-        return layouts[category] || { columns: 'grid grid-cols-2', rowGap: 'gap-y-4' };
-    };
+  // Hero heading — runs once on mount
+  useGSAP(() => {
+    if (!headingRef.current) return;
+    gsap.from(headingRef.current, {
+      y: 50,
+      opacity: 0,
+      duration: 1,
+      ease: "power3.out",
+      delay: 0.1,
+    });
+  }, { scope: containerRef });
 
-    const categories = ['Main', 'Gold', 'Silver', 'Bronze', 'Service'] as const;
+  // Tier + logo animations — reruns after sponsors data arrives
+  useGSAP(() => {
+    if (!sponsors.length) return;
 
-    return (
-        <div className="mx-auto mt-20 max-w-7xl group">
-            <div className="py-12 bg-background text-foreground">
-                <h1 className="text-5xl font-bold text-center">Our Partners</h1> 
-                <p className="text-center text-md text-accent">The ones making it all possible</p>    
-            </div>
+    // Tier headings slide in from left
+    gsap.utils.toArray<HTMLElement>(".tier-heading", containerRef.current).forEach((el) => {
+      gsap.from(el, {
+        x: -24,
+        opacity: 0,
+        duration: 0.6,
+        ease: "power2.out",
+        scrollTrigger: {
+          trigger: el,
+          start: "top 88%",
+          toggleActions: "play none none none",
+        },
+      });
+    });
 
-            {categories.map(category => {
-                const categorySponsors = sponsors
-                    .filter(s => s.category === category)
-                    .map(s => ({
-                        name: s.name,
-                        logo: s.image,
-                        link: s.link,
-                        logoSize: s.logoSize
-                    }));
+    // Dividers grow from left
+    gsap.utils.toArray<HTMLElement>(".tier-divider", containerRef.current).forEach((el) => {
+      gsap.from(el, {
+        scaleX: 0,
+        transformOrigin: "left center",
+        duration: 0.8,
+        ease: "power2.out",
+        scrollTrigger: {
+          trigger: el,
+          start: "top 88%",
+          toggleActions: "play none none none",
+        },
+      });
+    });
 
-                if (categorySponsors.length === 0) return null;
+    // Logos fade + lift in as batches
+    ScrollTrigger.batch(".logo-item", {
+      onEnter: (elements) => {
+        gsap.from(elements, {
+          opacity: 0,
+          y: 24,
+          duration: 0.55,
+          ease: "power2.out",
+          stagger: 0.07,
+          overwrite: true,
+        });
+      },
+      start: "top 92%",
+      once: true,
+    });
+  }, { scope: containerRef, dependencies: [sponsors], revertOnUpdate: true });
 
-                const layout = getGridLayout(category);
-
-                return (
-                    <SponsorGrid
-                        key={category}
-                        title={category}
-                        columns={layout.columns}
-                        rowGap={layout.rowGap}
-                        textOnlyHeight="h-16"
-                        sponsors={categorySponsors}
-                    />
-                );
-            })}
+  return (
+    <div ref={containerRef} style={{ overflowX: 'hidden' }}>
+      {/* Hero header */}
+      <div style={{ backgroundColor: "#002EC4" }} className="text-white pt-36 pb-20">
+        <div className="max-w-screen-2xl mx-auto px-6 lg:px-12">
+          <h1
+            ref={headingRef}
+            className="font-bold"
+            style={{ fontSize: "clamp(40px, 7vw, 110px)", lineHeight: 1, letterSpacing: "-0.02em" }}
+          >
+            Built with our<br />partners.
+          </h1>
         </div>
-    )
-}
+      </div>
+
+      {/* Sponsor tiers */}
+      <div className="bg-white pb-32">
+        <div className="max-w-screen-2xl mx-auto px-6 lg:px-12">
+          {tierConfig.map(({ key, label, itemClass, cardHeight }) => {
+            const tierSponsors = sponsors.filter((s) => s.category === key);
+            if (!tierSponsors.length) return null;
+
+            return (
+              <div key={key} className="pt-20">
+                {/* Tier header */}
+                <div className="flex items-center gap-6 mb-8">
+                  <h2
+                    className="tier-heading font-bold shrink-0"
+                    style={{ fontSize: "clamp(22px, 2.5vw, 40px)", lineHeight: 1, color: "#002EC4" }}
+                  >
+                    {label}
+                  </h2>
+                  <hr className="tier-divider flex-1 border-black/10" />
+                </div>
+
+                {/* Sponsor grid */}
+                <div className="flex flex-wrap justify-center gap-12">
+                  {tierSponsors.map((sponsor) => (
+                    <div
+                      key={sponsor.id}
+                      className={`logo-item flex items-center justify-center ${itemClass}`}
+                      style={{ height: cardHeight }}
+                    >
+                      {sponsor.image ? (
+                        sponsor.link ? (
+                          <a href={sponsor.link} target="_blank" rel="noopener noreferrer" className="transition-opacity hover:opacity-85 flex items-center justify-center w-full h-full">
+                            <img
+                              src={sponsor.image}
+                              alt={sponsor.name}
+                              className={`object-contain w-full h-full ${sponsor.logoSize ?? ""}`}
+                              style={{ filter: "brightness(0)" }}
+                            />
+                          </a>
+                        ) : (
+                          <img
+                            src={sponsor.image}
+                            alt={sponsor.name}
+                            className={`object-contain w-full h-full ${sponsor.logoSize ?? ""}`}
+                            style={{ filter: "brightness(0)" }}
+                          />
+                        )
+                      ) : (
+                        <span className="font-medium text-sm text-center text-black">{sponsor.name}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default SponsorPage;

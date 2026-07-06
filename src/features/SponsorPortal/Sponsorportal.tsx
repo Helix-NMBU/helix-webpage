@@ -1,36 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Linkedin, Mail, User, X, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../../libs/lib/utils';
-
-const cvBucket = import.meta.env?.VITE_SUPABASE_CV_BUCKET as string | undefined;
-const avatarBucket = import.meta.env?.VITE_SUPABASE_PROFILE_BUCKET as string | undefined;
-const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL as string | undefined;
-const CURRENT_SEASON = 'S26';
-const NO_SEASON_ROLE = `No ${CURRENT_SEASON} role`;
-const NO_SEASON_POSITION = `No ${CURRENT_SEASON} position`;
-const DEPARTMENTS = ['Autonomous', 'Marketing', 'Economics', 'Mechanical and Production', 'Electronics', 'Software', 'The Board'];
-
-interface Member {
-    id: string;
-    name: string;
-    fieldOfStudy: string;
-    graduationYear: number;
-    department: string;
-    position?: string;
-    linkedin: string;
-    email: string;
-    personalEmail?: string;
-    personalPhone?: string;
-    phone: string;
-    profileImage?: string;
-    cvUrl?: string;
-}
+import { DEPARTMENTS, loadSponsorPortalMembers, type MemberRecord } from '../../libs/lib/memberCatalog';
 
 export default function SponsorPortalPage() {
-    const [members, setMembers] = useState<Member[]>([]);
+    const [members, setMembers] = useState<MemberRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+    const [selectedMember, setSelectedMember] = useState<MemberRecord | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [supabaseError, setSupabaseError] = useState<string | null>(null);
     const [cvError, setCvError] = useState<string | null>(null);
@@ -44,251 +20,19 @@ export default function SponsorPortalPage() {
     const [searchName, setSearchName] = useState<string>('');
 
     useEffect(() => {
-        const loadFromStatic = async () => {
-            const response = await fetch('/members.json');
-            if (!response.ok) {
-                throw new Error(`Fallback fetch feilet med status ${response.status}`);
-            }
-
-            const data = await response.json();
-            const mapped: Member[] = (data ?? []).map((row: any) => {
-                const department = row.department ?? NO_SEASON_ROLE;
-                const position = row.title ?? row.position ?? NO_SEASON_POSITION;
-                return {
-                    id: String(row.id),
-                    name: row.name,
-                    fieldOfStudy: row.fieldOfStudy,
-                    graduationYear: row.graduation_year ?? row.graduationYear ?? row.yearOfStudy ?? 'alumni',
-                    department,
-                    position,
-                    linkedin: row.linkedin ?? '',
-                    email: row.email ?? '',
-                    personalEmail: row.personalEmail ?? undefined,
-                    personalPhone: row.personalPhone ?? undefined,
-                    phone: row.phone ?? '',
-                    profileImage: row.profileImage ?? undefined,
-                    cvUrl: row.cvUrl ?? undefined,
-                };
-            });
-            setUsedFallback(true);
-            setFallbackReason(prev => prev ?? 'Supabase utilgjengelig eller feilet; bruker lokal members.json');
-            setMembers(mapped);
-        };
-
-        // Extract storage path from public/signed URLs (removes /object/, bucket prefix, leading slashes)
-        const extractStoragePath = (urlString: string, bucket?: string) => {
-            let candidate = urlString;
-            try {
-                const url = new URL(urlString);
-                const idx = url.pathname.indexOf('/object/');
-                if (idx >= 0) {
-                    candidate = decodeURIComponent(url.pathname.slice(idx + '/object/'.length));
-                }
-            } catch {
-                /* ignore non-URL strings */
-            }
-            candidate = candidate.replace(/^\/+/, '');
-            if (bucket) {
-                const bucketPrefix = `${bucket}/`;
-                const publicBucketPrefix = `public/${bucket}/`;
-                if (candidate.startsWith(publicBucketPrefix)) {
-                    candidate = candidate.slice(publicBucketPrefix.length);
-                } else if (candidate.startsWith(bucketPrefix)) {
-                    candidate = candidate.slice(bucketPrefix.length);
-                }
-            }
-            return candidate;
-        };
-
-        const isSupabaseStorageUrl = (urlString: string) => {
-            if (!urlString.startsWith('http')) return false;
-            if (!supabaseUrl) return urlString.includes('/storage/v1/object/');
-            try {
-                const base = new URL(supabaseUrl);
-                const target = new URL(urlString);
-                return target.host === base.host && target.pathname.includes('/storage/v1/object/');
-            } catch {
-                return urlString.includes('/storage/v1/object/');
-            }
-        };
-
-        // Resolve cvUrl paths stored in Supabase to signed URLs for viewing/downloading
-        const resolveCvUrls = async (list: Member[]) => {
-            const needsSigning = list.some(m => m.cvUrl && !m.cvUrl.startsWith('http'));
-            if (!supabase || !cvBucket) {
-                if (needsSigning) {
-                    console.warn('CV bucket missing or Supabase not configured; cannot sign CV URLs.');
-                }
-                return list;
-            }
-
-            const rawPaths = list
-                .map(m => m.cvUrl)
-                .filter((url): url is string => typeof url === 'string' && url.length > 0)
-                .map(path => {
-                    if (!path.startsWith('http')) return extractStoragePath(path, cvBucket);
-                    return isSupabaseStorageUrl(path) ? extractStoragePath(path, cvBucket) : path;
-                })
-                .filter(path => !path.startsWith('http'));
-
-            const uniquePaths = Array.from(new Set(rawPaths));
-            if (!uniquePaths.length) return list;
-
-            const { data: signedUrls, error: signError } = await supabase.storage
-                .from(cvBucket)
-                .createSignedUrls(uniquePaths, 60 * 60 * 6);
-
-            if (signError) {
-                console.error('Failed to sign CV URLs:', signError);
-                setSupabaseError(prev => prev ?? `Kunne ikke signere CV-URLer: ${signError.message ?? signError}`);
-                return list;
-            }
-
-            const map = new Map<string, string>();
-            signedUrls?.forEach((item, idx) => {
-                const path = uniquePaths[idx];
-                if (item?.signedUrl) {
-                    map.set(path, item.signedUrl);
-                }
-            });
-
-            return list.map(member => {
-                if (!member.cvUrl) return member;
-                if (member.cvUrl.startsWith('http') && !isSupabaseStorageUrl(member.cvUrl)) return member;
-                const storagePath = extractStoragePath(member.cvUrl, cvBucket);
-                const signed = map.get(storagePath);
-                if (signed) return { ...member, cvUrl: signed };
-                // fallback to public URL if bucket is public
-                if (supabase) {
-                    const { data: publicData } = supabase.storage.from(cvBucket).getPublicUrl(storagePath);
-                    return publicData?.publicUrl ? { ...member, cvUrl: publicData.publicUrl } : member;
-                }
-                return member;
-            });
-        };
-
-        // Resolve profile images to signed URLs if stored as paths
-        const resolveProfileImages = async (list: Member[]) => {
-            const needsSigning = list.some(m => m.profileImage && !m.profileImage.startsWith('http'));
-            if (!supabase || !avatarBucket) {
-                if (needsSigning) {
-                    console.warn('Avatar bucket missing or Supabase not configured; cannot sign profile images.');
-                }
-                return list;
-            }
-
-            const rawPaths = list
-                .map(m => m.profileImage)
-                .filter((url): url is string => typeof url === 'string' && url.length > 0)
-                .map(path => {
-                    if (!path.startsWith('http')) return extractStoragePath(path, avatarBucket);
-                    return isSupabaseStorageUrl(path) ? extractStoragePath(path, avatarBucket) : path;
-                })
-                .filter(path => !path.startsWith('http'));
-
-            const uniquePaths = Array.from(new Set(rawPaths));
-            if (!uniquePaths.length) return list;
-
-            const { data: signedUrls, error: signError } = await supabase.storage
-                .from(avatarBucket)
-                .createSignedUrls(uniquePaths, 60 * 60 * 6);
-
-            if (signError) {
-                console.error('Failed to sign profile images:', signError);
-                setSupabaseError(prev => prev ?? `Kunne ikke signere profilbilder: ${signError.message ?? signError}`);
-                return list;
-            }
-
-            const map = new Map<string, string>();
-            signedUrls?.forEach((item, idx) => {
-                const path = uniquePaths[idx];
-                if (item?.signedUrl) {
-                    map.set(path, item.signedUrl);
-                }
-            });
-
-            return list.map(member => {
-                if (!member.profileImage) return member;
-                if (member.profileImage.startsWith('http') && !isSupabaseStorageUrl(member.profileImage)) return member;
-                const storagePath = extractStoragePath(member.profileImage, avatarBucket);
-                const signed = map.get(storagePath);
-                if (signed) return { ...member, profileImage: signed };
-                if (supabase) {
-                    const { data: publicData } = supabase.storage.from(avatarBucket).getPublicUrl(storagePath);
-                    return publicData?.publicUrl ? { ...member, profileImage: publicData.publicUrl } : member;
-                }
-                return member;
-            });
-        };
-
         const loadMembers = async () => {
             try {
                 setError(null);
                 setSupabaseError(null);
                 setLoading(true);
+                const result = await loadSponsorPortalMembers();
+                setUsedFallback(result.usedFallback);
+                setFallbackReason(result.fallbackReason);
+                setMembers(result.members);
 
-                if (!supabase) {
-                    setFallbackReason('Supabase-klient ikke konfigurert (mangler eller ugyldige VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
-                    setSupabaseError('Supabase-klient ikke konfigurert (mangler eller ugyldige VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).');
-                    await loadFromStatic();
-                    return;
+                if (result.usedFallback && result.fallbackReason) {
+                    setSupabaseError(result.fallbackReason);
                 }
-
-                const { data, error: supaError } = await supabase
-                    .from('students')
-                    .select('*')
-                    .order('full_name', { ascending: true });
-
-                if (supaError) throw supaError;
-
-                // Fetch department + title for current season positions (schema: student_id, title, department_id)
-                const { data: positions, error: posError } = await supabase
-                    .from('positions')
-                    .select('student_id, season, title, department_id, departments(name)')
-                    .eq('season', CURRENT_SEASON);
-                if (posError) throw posError;
-
-                const deptByStudent = new Map<string, string>();
-                const positionByStudent = new Map<string, string>();
-                (positions ?? []).forEach((row: any) => {
-                    const deptName = row?.departments?.name as string | undefined;
-                    if (deptName) {
-                        deptByStudent.set(String(row.student_id), deptName);
-                    }
-                    const positionTitle = row?.title as string | undefined;
-                    if (positionTitle) {
-                        positionByStudent.set(String(row.student_id), positionTitle);
-                    }
-                });
-
-                const mappedRaw: Member[] = (data ?? []).map((row: any) => {
-                    const studentId = String(row.id);
-                    const seasonDept = deptByStudent.get(studentId);
-                    const department = seasonDept ?? NO_SEASON_ROLE;
-                    const seasonPosition = positionByStudent.get(studentId);
-                    const position = seasonPosition ?? NO_SEASON_POSITION;
-                    return {
-                        id: studentId,
-                        name: row.full_name ?? row.name ?? 'Ukjent navn',
-                        fieldOfStudy: row.field_of_study ?? row.fieldOfStudy ?? 'Ukjent studieretning',
-                        graduationYear: row.graduation_year ?? row.year_of_study ?? 'alumni',
-                        department,
-                        position,
-                        linkedin: row.linkedin ?? '',
-                        email: row.email ?? '',
-                        personalEmail: row.personal_email ?? undefined,
-                        personalPhone: row.personal_phone ?? undefined,
-                        phone: row.phone ?? '',
-                        profileImage: row.profile_image_url ?? row.profileImage ?? undefined,
-                        cvUrl: row.cv_url ?? row.cvUrl ?? undefined,
-                    };
-                });
-
-                const withAvatars = await resolveProfileImages(mappedRaw);
-                const mapped = await resolveCvUrls(withAvatars);
-                setUsedFallback(false);
-                setFallbackReason(null);
-                setMembers(mapped);
             } catch (err) {
                 console.error('Error loading members:', err);
                 const message =
@@ -299,19 +43,7 @@ export default function SponsorPortalPage() {
                           : 'Kunne ikke laste medlemmer.';
 
                 setSupabaseError(message);
-
-                // Try fallback to static data when Supabase fails
-                try {
-                    setFallbackReason(message);
-                    await loadFromStatic();
-                } catch (fallbackErr) {
-                    console.error('Fallback load failed:', fallbackErr);
-                    const fallbackMessage =
-                        fallbackErr instanceof Error
-                            ? fallbackErr.message
-                            : 'Kunne ikke laste medlemmer.';
-                    setError(`Kunne ikke laste medlemmer. Supabase: ${message}. Fallback: ${fallbackMessage}`);
-                }
+                setError(message);
             } finally {
                 setLoading(false);
             }
@@ -349,7 +81,7 @@ export default function SponsorPortalPage() {
         return true;
     }), [members, selectedDepartment, selectedFieldOfStudy, selectedGraduationYear, searchName]);
 
-    const handleDownloadCV = (member: Member) => {
+    const handleDownloadCV = (member: MemberRecord) => {
         if (member.cvUrl) {
             const link = document.createElement('a');
             link.href = member.cvUrl;
