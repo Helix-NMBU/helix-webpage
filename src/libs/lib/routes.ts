@@ -36,15 +36,20 @@ export const knownRoutes = new Set([
   "/garage",
   "/members",
   "/apply",
+  "/apply/form",
   "/sponsorportal-login",
   "/sponsorportal",
   "/cv-bank",
   "/cv-bank/login",
   "/cv-bank/profile",
+  "/recruitment",
+  "/recruitment/login",
 ]);
 
 const hiddenChromePaths = new Set([
   "/sponsorportal",
+  "/recruitment",
+  "/recruitment/login",
   "/cv-bank",
   "/cv-bank/login",
   "/cv-bank/profile",

@@ -13,9 +13,12 @@ import Contact from './features/Contact/ContactPage.tsx'
 import Garage from './features/Garage/Garage.tsx'
 import Members from './features/Team/Team.tsx'
 import ApplyPage from './features/Apply/ApplyPage.tsx'
+import ApplicationFormPage from './features/Apply/ApplicationFormPage.tsx'
 import SponsorPortalLogin from './features/SponsorPortal/SponsorportalLogin.tsx'
 import SponsorPortal from './features/SponsorPortal/Sponsorportal.tsx'
 import CVBankLogin from './features/CVBank/Login.tsx'
+import RecruitmentLogin from './features/Recruitment/RecruitmentLogin.tsx'
+import RecruitmentPortal from './features/Recruitment/RecruitmentPortal.tsx'
 import CVBankProfile from './features/CVBank/Profile.tsx'
 import { RequireCVBankAuth } from './features/CVBank/auth.tsx'
 import NotFound from './features/NotFound/NotFound.tsx'
@@ -42,8 +45,11 @@ function AppContent() {
         <Route path="/garage" element={<Garage />} />
         <Route path="/members" element={<Members />} />
         <Route path="/apply" element={<ApplyPage />} />
+        <Route path="/apply/form" element={<ApplicationFormPage />} />
         <Route path="/sponsorportal-login" element={<SponsorPortalLogin />} />
         <Route path="/sponsorportal" element={<SponsorPortal />} />
+        <Route path="/recruitment/login" element={<RecruitmentLogin />} />
+        <Route path="/recruitment" element={<RecruitmentPortal />} />
         <Route path="/cv-bank" element={<Navigate to="/cv-bank/login" replace />} />
         <Route path="/cv-bank/login" element={<CVBankLogin />} />
         <Route

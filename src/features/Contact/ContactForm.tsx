@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import emailjs from "@emailjs/browser";
+import { useState } from "react";
 
 type FormStatus =
   | { state: "idle" }
@@ -39,15 +38,6 @@ export const ContactForm: React.FC = () => {
   const [status, setStatus] = useState<FormStatus>({ state: "idle" });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const emailConfig = useMemo(() => {
-    const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-    const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-    const toEmail = import.meta.env.VITE_CONTACT_TO_EMAIL;
-    const fromEmail = import.meta.env.VITE_EMAILJS_FROM_EMAIL || "no-reply@helixnmbu.no";
-    return { serviceId, templateId, publicKey, toEmail, fromEmail };
-  }, []);
-
   const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target;
     setFormValues((prev) => ({ ...prev, [name]: value }));
@@ -62,37 +52,20 @@ export const ContactForm: React.FC = () => {
       setStatus({ state: "error", message: "Please fill in every field before sending." });
       return;
     }
-    if (!emailConfig.serviceId || !emailConfig.templateId || !emailConfig.publicKey) {
-      setStatus({ state: "error", message: "Email service credentials are missing." });
-      return;
-    }
-    if (!emailConfig.toEmail) {
-      setStatus({ state: "error", message: "Missing recipient address. Please set VITE_CONTACT_TO_EMAIL." });
-      return;
-    }
 
     setIsSubmitting(true);
     setStatus({ state: "idle" });
 
     try {
-      const subjectWithSender = `${subject} — from ${name} <${email}>`;
-      await emailjs.send(
-        emailConfig.serviceId,
-        emailConfig.templateId,
-        {
-          from_name: name,
-          from_email: emailConfig.fromEmail,
-          reply_to: email,
-          user_email: email,
-          to_email: emailConfig.toEmail,
-          subject,
-          subject_with_sender: subjectWithSender,
-          sender_name: name,
-          sender_email: email,
-          message,
-        },
-        emailConfig.publicKey
-      );
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, subject, message }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || "Something went wrong.");
+      }
       setStatus({ state: "success", message: "Message sent! We'll get back to you shortly." });
       setFormValues({ name: "", email: "", subject: "", message: "" });
     } catch (error) {

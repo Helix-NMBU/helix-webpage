@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -397,10 +398,8 @@ export default function ApplyPage() {
                             </a>
                           </div>
 
-                          <a
-                            href={pos.applyUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Link
+                            to={`/apply/form?position=${pos.id}`}
                             style={{
                               display: "block",
                               textAlign: "center",
@@ -420,7 +419,7 @@ export default function ApplyPage() {
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
                           >
                             Apply for this position
-                          </a>
+                          </Link>
                         </div>
                       </div>
                     </motion.div>
@@ -533,16 +532,14 @@ export default function ApplyPage() {
                             <p style={{ fontWeight: 500, color: "#0C0C0C", fontSize: "15px", marginBottom: "4px" }}>{pos.contact.name}</p>
                             <a href={`mailto:${pos.contact.email}`} style={{ display: "block", fontSize: "14px", color: "#002EC4", textDecoration: "none" }}>{pos.contact.email}</a>
                           </div>
-                          <a
-                            href={pos.applyUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Link
+                            to={`/apply/form?position=${pos.id}`}
                             style={{ display: "block", textAlign: "center", backgroundColor: "#03094A", color: "#FDFDFD", padding: "14px 24px", fontSize: "13px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none", borderRadius: "6px", transition: "background-color 0.18s ease", fontFamily: "inherit" }}
                             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
                           >
                             Send open application
-                          </a>
+                          </Link>
                         </div>
                       </div>
                     </motion.div>

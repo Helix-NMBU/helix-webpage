@@ -38,17 +38,19 @@ export function writeStoredCVBankUser(storage: Storage, user: CVBankUser | null)
 	storage.removeItem(CVBANK_STORAGE_KEY);
 }
 
-export function parseGoogleCredential(credential: string, allowedDomain: string): CVBankUser {
+export function parseGoogleCredential(credential: string, allowedDomain?: string): CVBankUser {
 	const payload = jwtDecode<GoogleJwtPayload>(credential);
 	const email = payload.email ?? "";
-	const domain = email.split("@")[1]?.toLowerCase() ?? "";
 
 	if (!email) {
 		throw new Error("Could not read email from Google response.");
 	}
 
-	if (domain !== allowedDomain) {
-		throw new Error(`Please sign in with your @${allowedDomain} email.`);
+	if (allowedDomain) {
+		const domain = email.split("@")[1]?.toLowerCase() ?? "";
+		if (domain !== allowedDomain) {
+			throw new Error(`Please sign in with your @${allowedDomain} email.`);
+		}
 	}
 
 	return {
