@@ -55,6 +55,14 @@ const hiddenChromePaths = new Set([
   "/cv-bank/profile",
 ]);
 
-export function hideChrome(pathname: string): boolean {
+const hiddenNavbarOnlyPaths = new Set([
+  "/about",
+]);
+
+export function hideFooter(pathname: string): boolean {
   return hiddenChromePaths.has(pathname);
+}
+
+export function hideNavbar(pathname: string): boolean {
+  return hiddenChromePaths.has(pathname) || hiddenNavbarOnlyPaths.has(pathname);
 }

@@ -67,10 +67,10 @@ export default function UpcomingEvents() {
 
   return (
     <section ref={containerRef} className="bg-white text-black">
-      <div className="max-w-screen-2xl mx-auto px-6 lg:px-12 py-24">
+      <div className="px-6 py-24 mx-auto max-w-screen-2xl lg:px-12">
 
-        <div className="events-header mb-16">
-          <p className="text-xs uppercase tracking-widest text-black/40 mb-4">Upcoming events</p>
+        <div className="mb-16 events-header">
+          <p className="mb-4 text-xs tracking-widest uppercase text-black/40">Upcoming events</p>
           <h2
             className="font-medium"
             style={{ fontSize: "clamp(36px, 4vw, 64px)", lineHeight: 1.05 }}
@@ -86,13 +86,13 @@ export default function UpcomingEvents() {
               to={`/events/${id}`}
               className="event-row group flex items-center gap-8 py-8 border-b border-black/10 transition-colors duration-200 hover:bg-black/[0.02] -mx-4 px-4"
             >
-              <span className="text-xs uppercase tracking-widest text-black/35 w-20 shrink-0">
+              <span className="w-20 text-xs tracking-widest uppercase text-black/35 shrink-0">
                 {date}
               </span>
 
-              <div className="flex flex-col gap-1 flex-1">
+              <div className="flex flex-col flex-1 gap-1">
                 <span
-                  className="font-medium transition-colors duration-200 group-hover:text-[#00007A]"
+                  className="font-medium transition-colors duration-200 group-hover:text-black/50"
                   style={{ fontSize: "clamp(18px, 2vw, 28px)" }}
                 >
                   {title}
@@ -100,11 +100,11 @@ export default function UpcomingEvents() {
                 <span className="text-sm text-black/40">{location}</span>
               </div>
 
-              <p className="hidden md:block text-sm text-black/40 leading-relaxed max-w-xs">
+              <p className="hidden max-w-xs text-sm leading-relaxed md:block text-black/40">
                 {description}
               </p>
 
-              <span className="text-black/20 group-hover:text-[#00007A] group-hover:translate-x-1 transition-all duration-200 text-lg shrink-0">
+              <span className="text-black/20 group-hover:text-black/50 group-hover:translate-x-1 transition-all duration-200 text-lg shrink-0">
                 →
               </span>
             </Link>

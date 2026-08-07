@@ -2,6 +2,7 @@ import { useLocation, Link } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
+import { ArrowUp } from "lucide-react";
 import { appCtaLinks, desktopNavLinks } from "../../lib/routes";
 
 gsap.registerPlugin(useGSAP);
@@ -16,14 +17,48 @@ const NavLink = ({ to, label, isActive, onClick }: { to: string; label: string; 
   </Link>
 );
 
+const DesktopNavLink = ({
+  to,
+  label,
+  isActive,
+  dark,
+}: {
+  to: string;
+  label: string;
+  isActive: boolean;
+  dark: boolean;
+}) => {
+  const color = dark
+    ? isActive
+      ? "text-white"
+      : "text-white hover:text-white/50"
+    : isActive
+    ? "text-[#00007A]"
+    : "text-gray-800 hover:text-gray-400";
+  return (
+    <Link
+      to={to}
+      className={`text-base lg:text-lg transition-colors whitespace-nowrap ${
+        isActive ? "font-semibold" : "font-medium"
+      } ${color}`}
+    >
+      {label}
+    </Link>
+  );
+};
+
 const PILL_BACKDROP = "blur(20px) saturate(1.8)";
-const getPillBg = (_darkBg: boolean) => "rgba(255,255,255,0.95)";
-const getPillFg = (_darkBg: boolean) => "#000000";
-const getPillShadow = (darkBg: boolean) =>
-  darkBg ? "inset 0 0 0 1.5px rgba(0,0,0,0.85)" : "none";
+// `brightBg` is true when the page behind the pill is bright/light (see
+// getBackgroundLuminance below) — glass tint flips to stay legible either way.
+const getPillBg = (brightBg: boolean) =>
+  brightBg ? "rgba(0,46,196,0.10)" : "rgba(255,255,255,0.15)";
+const getPillFg = (brightBg: boolean) => (brightBg ? "#00007A" : "#ffffff");
+const getPillShadow = (brightBg: boolean) =>
+  brightBg ? "inset 0 0 0 1.5px rgba(0,46,196,0.25)" : "inset 0 0 0 1.5px rgba(255,255,255,0.35)";
 
 const SIDEBAR_WIDTH = 420;
-const MOBILE_BP = 768;
+// Matches the xl: breakpoint below — everything under it uses the hamburger drawer.
+const MOBILE_BP = 1280;
 
 const getSidebarPos = () => {
   const isMobile = window.innerWidth < MOBILE_BP;
@@ -125,14 +160,23 @@ export const Navbar = () => {
       setNavVisible(window.scrollY < 60);
       setIsDarkBackground(getBackgroundLuminance());
     };
-    setIsDarkBackground(getBackgroundLuminance());
+    // Navbar lives outside <Routes> and never remounts on client-side navigation, so
+    // recompute on every route change too — otherwise contrast goes stale between pages
+    // until the next scroll/resize. The rAF lets the new route's content paint first.
+    const raf = requestAnimationFrame(() => setIsDarkBackground(getBackgroundLuminance()));
+    // The full-bleed PageLoader curtain sits over everything while it plays, so a sample
+    // taken before it lifts reads the curtain's own color, not the page underneath.
+    const onPageRevealed = () => setIsDarkBackground(getBackgroundLuminance());
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
+    window.addEventListener("helix:page-revealed", onPageRevealed);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      window.removeEventListener("helix:page-revealed", onPageRevealed);
     };
-  }, []);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (drawerOpen) {
@@ -187,37 +231,98 @@ export const Navbar = () => {
       .to(morphRef.current, { x: sidebar.width, duration: 0.5, ease: "power3.inOut" }, 0.1);
   };
 
+  const ctaLink = desktopNavLinks[desktopNavLinks.length - 1];
+  const mainLinks = desktopNavLinks.slice(0, -1);
+  const leftPaths = ["/", "/about", "/garage", "/members"];
+  const leftLinks = leftPaths
+    .map((path) => mainLinks.find((link) => link.to === path))
+    .filter((link) => link !== undefined);
+  const rightLinks = mainLinks.filter((link) => !leftPaths.includes(link.to));
+  // getBackgroundLuminance() returns true when the sampled page background is bright,
+  // so "needs light/white nav text" is the inverse of isDarkBackground.
+  const linksOnDarkBg = !isDarkBackground;
+
   return (
     <>
       <div
         data-navbar-ref
-        className="fixed top-0 left-0 right-0 z-50 pt-6 px-4 lg:px-6 font-sans"
+        className={`fixed top-0 left-0 right-0 z-50 pt-2 px-4 lg:px-6 font-sans transition-opacity duration-300 ${
+          navVisible && !drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
       >
-        {/* Unified header: logo centred + pill anchor right */}
-        <div className="flex items-center px-6 md:px-12 py-5 md:py-6 relative">
-          <div className="flex-1" />
-          <Link to="/" className="absolute left-1/2 -translate-x-1/2">
+        {/* Unified header: logo centred + pill anchor right (hamburger) / inline links (xl+) */}
+        <div className="flex items-center px-6 md:px-12 py-3 md:py-4 relative">
+          {/* Left cluster */}
+          <div className="flex-1 xl:hidden" />
+          <div className="hidden xl:flex flex-1 items-center gap-8">
+            {leftLinks.map((link) => (
+              <DesktopNavLink
+                key={link.to}
+                to={link.to}
+                label={link.label}
+                isActive={location.pathname === link.to}
+                dark={linksOnDarkBg}
+              />
+            ))}
+          </div>
+
+          <Link to="/" className="hidden xl:block absolute left-1/2 -translate-x-1/2">
             <img
               src="/Helixspiral.png"
               alt="Helix"
-              className={`h-8 md:h-10 w-auto transition-all duration-500 ${navVisible && !drawerOpen ? "opacity-100 hover:opacity-80" : "opacity-0 pointer-events-none"}`}
+              className="h-8 md:h-10 w-auto opacity-100 transition-opacity hover:opacity-80"
             />
           </Link>
-          <div className="flex flex-1 justify-end">
-            {/* Invisible anchor — GSAP reads position/size from this */}
+
+          {/* Right cluster (hamburger breakpoints): invisible anchor — GSAP reads position/size from this */}
+          <div className="flex flex-1 justify-end xl:hidden">
             <div
               ref={pillAnchorRef}
-              className="w-12 h-12 md:w-14 md:h-14 rounded-xl invisible"
+              className="w-14 h-14 rounded-xl invisible"
               aria-hidden="true"
             />
+          </div>
+
+          {/* Right cluster (xl+) — every entry always visible once we're out of hamburger territory */}
+          <div className="hidden xl:flex flex-1 items-center justify-end gap-8">
+            {rightLinks.map((link) => (
+              <DesktopNavLink
+                key={link.to}
+                to={link.to}
+                label={link.label}
+                isActive={location.pathname === link.to}
+                dark={linksOnDarkBg}
+              />
+            ))}
+            {appCtaLinks.map((cta) => (
+              <DesktopNavLink
+                key={cta.to}
+                to={cta.to}
+                label={cta.label}
+                isActive={location.pathname === cta.to}
+                dark={linksOnDarkBg}
+              />
+            ))}
+            <Link
+              to={ctaLink.to}
+              className={`whitespace-nowrap rounded-sm px-5 py-2 text-base font-medium backdrop-blur-md backdrop-saturate-150 border transition-colors ${
+                linksOnDarkBg
+                  ? "bg-white/10 border-white/25 text-white hover:bg-white/20"
+                  : "bg-[#00007A]/10 border-[#00007A]/20 text-[#00007A] hover:bg-[#00007A]/15"
+              }`}
+            >
+              {ctaLink.label}
+            </Link>
           </div>
         </div>
       </div>
 
-      {/* The single morphing element — pill when closed, card when open */}
+      {/* The single morphing element — pill when closed, card when open (hamburger breakpoints only) */}
       <div
         ref={morphRef}
-        className="fixed z-50 overflow-hidden"
+        className={`fixed z-50 overflow-hidden xl:hidden transition-opacity duration-300 ${
+          drawerOpen || navVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
         style={{ visibility: "hidden" }}
       >
         <span
@@ -225,7 +330,7 @@ export const Navbar = () => {
           onClick={openDrawer}
           className="absolute inset-0 flex items-center justify-center select-none cursor-pointer"
         >
-          <svg width="24" height="17" viewBox="0 0 24 17" fill="none" aria-hidden="true">
+          <svg width="28" height="20" viewBox="0 0 24 17" fill="none" aria-hidden="true">
             <line x1="0" y1="1"   x2="24" y2="1"   stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             <line x1="0" y1="8.5" x2="24" y2="8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             <line x1="0" y1="16"  x2="24" y2="16"  stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -285,11 +390,22 @@ export const Navbar = () => {
 
       {drawerOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm xl:hidden"
           onClick={closeDrawer}
         />
       )}
 
+      {/* Scroll-to-top FAB — shows once the navbar has hidden itself, so there's
+          always a way back to the top (and back to a visible navbar). */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Scroll to top"
+        className={`fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--background)] text-white shadow-lg transition-opacity duration-300 hover:brightness-110 ${
+          !navVisible && !drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <ArrowUp className="h-5 w-5" />
+      </button>
     </>
   );
 };

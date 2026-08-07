@@ -1,129 +1,122 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { Link } from "react-router-dom";
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
-const metrics = [
-  { value: "50", label: "Members", sub: "Across all of NMBU" },
-  { value: "7", label: "Subteams", sub: "From aero to electronics" },
-  { value: "1", label: "Mission", sub: "Build a car. Win a race." },
+const carouselImages = [
+  { src: "/P1010055 1.png", alt: "Race day" },
+  { src: "/peder.png", alt: "Garage" },
+  { src: "/tilt.png", alt: "Helix car" },
+  { src: "/cost.png", alt: "Cost event" },
 ];
+
+const CYCLE_MS = 4000;
+
+function ImageCarousel() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % carouselImages.length);
+    }, CYCLE_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="intro-carousel relative w-full aspect-[4/5] overflow-hidden rounded-2xl bg-black/5">
+      {carouselImages.map((img, i) => (
+        <img
+          key={img.src}
+          src={img.src}
+          alt={img.alt}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out ${
+            i === index ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      ))}
+
+      <div className="absolute bottom-5 left-5 flex gap-1.5">
+        {carouselImages.map((img, i) => (
+          <span
+            key={img.src}
+            className={`h-1.5 rounded-full transition-all duration-500 ${
+              i === index ? "w-6 bg-white" : "w-1.5 bg-white/40"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function IntroSection() {
   const containerRef = useRef<HTMLElement>(null);
-  const numRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
   useGSAP(
     () => {
-      gsap.from(".intro-headline", {
-        y: 40,
+      gsap.from(".intro-carousel", {
         opacity: 0,
-        duration: 0.9,
+        scale: 0.96,
+        duration: 1,
         ease: "power3.out",
         scrollTrigger: {
-          trigger: ".intro-headline",
+          trigger: ".intro-carousel",
           start: "top 85%",
         },
       });
 
-      gsap.from(".intro-para", {
+      gsap.from(".intro-text > *", {
         y: 30,
         opacity: 0,
         duration: 0.8,
-        stagger: 0.18,
+        stagger: 0.15,
         ease: "power2.out",
         scrollTrigger: {
           trigger: ".intro-text",
           start: "top 82%",
         },
       });
-
-      gsap.from(".intro-metrics", {
-        y: 30,
-        opacity: 0,
-        duration: 0.8,
-        ease: "power2.out",
-        scrollTrigger: {
-          trigger: ".intro-metrics",
-          start: "top 85%",
-        },
-      });
-
-      numRefs.current.forEach((el, i) => {
-        if (!el) return;
-        const target = parseInt(metrics[i].value, 10);
-        el.textContent = "0";
-        const counter = { val: 0 };
-        gsap.to(counter, {
-          val: target,
-          duration: 1.6,
-          ease: "power2.out",
-          snap: { val: 1 },
-          onUpdate() {
-            if (el) el.textContent = String(Math.round(counter.val));
-          },
-          scrollTrigger: {
-            trigger: ".intro-metrics",
-            start: "top 85%",
-          },
-        });
-      });
     },
     { scope: containerRef }
   );
 
   return (
-    <section ref={containerRef} className="bg-white text-black">
-      <div className="max-w-screen-2xl mx-auto px-6 lg:px-12 pt-42 pb-42">
-        <h1
-          className="intro-headline font-medium"
-          style={{ fontSize: "clamp(36px, 4vw, 64px)", lineHeight: 1.1 }}
-        >
-          One year. One car.<br />
-          Fifty students, working non-stop.
-        </h1>
+    <section ref={containerRef} className="text-black bg-white">
+      <div className="px-6 py-24 mx-auto max-w-screen-2xl lg:px-12 md:py-32">
+        <div className="grid items-center grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-20">
+          <ImageCarousel />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-end mt-16">
-          <div className="intro-text text-lg leading-relaxed flex flex-col gap-4 max-w-prose">
-            <p className="intro-para text-black/60">
+          <div className="flex flex-col gap-6 intro-text max-w-prose">
+            <p className="text-xs tracking-widest uppercase text-black/40">
+              What is Helix
+            </p>
+            <h2
+              className="font-medium"
+              style={{ fontSize: "clamp(32px, 3.4vw, 52px)", lineHeight: 1.1 }}
+            >
+              One year. One car.<br />
+              Fifty students, working non-stop.
+            </h2>
+            <p className="text-lg leading-relaxed text-black/60">
               Helix NMBU was founded in 2012 by a small group of students who wanted
               to build, not just study. Fourteen seasons later, we run a full-scale
               Formula Student program out of the Tower workshop at NMBU — an
               all-electric, student-built race car, rebuilt from scratch every year.
             </p>
-            <p className="intro-para text-black/35">
+            <p className="text-lg leading-relaxed text-black/35">
               We compete against 100+ teams from universities worldwide at Formula
               Student Germany, judged on engineering design, cost, business case, and
               four dynamic events including endurance and autocross.
             </p>
-          </div>
-
-          <div className="intro-metrics flex justify-end">
-            {metrics.map(({ value, label }, i) => (
-              <div
-                key={label}
-                className={`flex flex-col justify-between px-10 py-2 ${
-                  i !== 0 ? "border-l border-black/15" : ""
-                }`}
-              >
-                <div className="flex items-end gap-3">
-                  <span
-                    ref={(el) => {
-                      numRefs.current[i] = el;
-                    }}
-                    className="text-7xl md:text-8xl font-medium"
-                    style={{ letterSpacing: "-0.03em", color: "#00007A" }}
-                  >
-                    {value}
-                  </span>
-                  <span className="text-xs text-black/50 uppercase tracking-widest leading-tight mb-2">
-                    {label}
-                  </span>
-                </div>
-              </div>
-            ))}
+            <Link
+              to="/about"
+              className="w-fit text-sm uppercase tracking-widest border-b border-black/30 pb-0.5 hover:border-black transition-colors"
+            >
+              Our story →
+            </Link>
           </div>
         </div>
       </div>

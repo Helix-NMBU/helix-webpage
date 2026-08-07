@@ -2,19 +2,17 @@ import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { Link } from "react-router-dom";
-import { FlipWords } from "@/components/ui/shadcn-io/flip-words";
 
 gsap.registerPlugin(useGSAP);
 
 const heading: React.CSSProperties = {
   fontWeight: 600,
-  fontSize: "clamp(24px, 15vw, 150px)",
-  lineHeight: 0.9,
+  fontSize: "clamp(26px, 9vw, 104px)",
+  lineHeight: 0.95,
 };
 
 export default function HeroText() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const words = ["engineers", "innovators", "creators"];
 
   useGSAP(
     () => {
@@ -41,43 +39,34 @@ export default function HeroText() {
   );
 
   return (
-    <div ref={containerRef} className="relative z-10 flex items-center h-full">
-      <div className="max-w-screen-2xl mx-auto px-6 lg:px-12 w-full pb-16 pt-8">
-        <p className="hero-line text-left text-white whitespace-nowrap" style={heading}>
+    <div ref={containerRef} className="relative z-10 h-full">
+      {/* Headline — anchored a little below center */}
+      <div
+        className="absolute inset-x-0 px-6 mx-auto lg:px-12 max-w-screen-2xl"
+        style={{ top: "52%", transform: "translateY(-50%)" }}
+      >
+        <p className="text-left text-white hero-line" style={heading}>
           Accelerating the
         </p>
-        <p className="hero-line text-left text-white whitespace-nowrap" style={heading}>
+        <p className="text-left text-white hero-line" style={heading}>
           next generation
         </p>
-        <div
-          className="hero-line overflow-visible text-left text-white whitespace-nowrap"
-          style={heading}
-        >
-          of{" "}
-          <FlipWords
-            words={words}
-            duration={5000}
-            letterDelay={0.02}
-            wordDelay={0.1}
-            style={{ color: "#aaebdf", fontStyle: "italic", fontWeight: 300 }}
-          />
-        </div>
-        <p className="hero-sub text-left text-white/80 mt-10 max-w-2xl text-base sm:text-lg font-normal">
-          Helix is NMBU's Formula Student team. Every year, students design, build and
-          race a single-seat race car. - from a blank sheet to the grid.
+        <p className="text-left text-white hero-line" style={heading}>
+          of engineers
         </p>
-        <div className="hero-cta flex gap-4 mt-10">
+      </div>
+
+      {/* Secondary copy + CTAs — tucked into the bottom-right corner */}
+      <div className="absolute right-6 lg:right-12 bottom-10 lg:bottom-14 max-w-[260px] sm:max-w-sm text-left">
+        <p className="text-sm font-normal text-white hero-sub sm:text-base">
+          NMBU's Formula Student team — blank sheet to the grid, every year.
+        </p>
+        <div className="mt-7 hero-cta">
           <Link
             to="/about"
-            className="px-6 py-3 bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
+            className="inline-block rounded-sm px-6 py-3 bg-[var(--background)] text-white text-lg font-regular hover:brightness-110 transition-[filter] text-center"
           >
-            Explore our Mission
-          </Link>
-          <Link
-            to="/contact"
-            className="px-6 py-3 border border-white text-white text-sm font-medium hover:bg-white/10 transition-colors"
-          >
-            Get in Touch
+            Explore
           </Link>
         </div>
       </div>

@@ -52,23 +52,23 @@ export default function JoinUsSection() {
     <section ref={containerRef} style={{ backgroundColor: "#080808" }} className="text-white">
       <div className="px-6 mx-auto max-w-screen-2xl lg:px-12 py-28">
 
-        <p className="join-label mb-8 text-xs tracking-widest uppercase text-white/40">
+        <p className="mb-8 text-xs tracking-widest uppercase join-label text-white/40">
           Join the team
         </p>
 
         <div className="grid items-start grid-cols-1 gap-16 md:grid-cols-2">
 
           <h2
-            className="join-heading font-medium"
+            className="font-medium join-heading"
             style={{ fontSize: "clamp(40px, 5vw, 80px)", lineHeight: 1.0, letterSpacing: "-0.02em" }}
           >
-            Become a part<br />of something<br />
-            <span style={{ color: "#002EC4", fontStyle: "italic", fontWeight: 400 }}>
-              meaningful.
+            Become a part<br />of the&nbsp;
+            <span style={{ color: "#002EC4", fontStyle: "italic", fontWeight: 500 }}>
+              team.
             </span>
           </h2>
 
-          <div className="join-content flex flex-col justify-between h-full gap-8">
+          <div className="flex flex-col justify-between h-full gap-8 join-content">
             <p className="text-lg leading-relaxed text-white/80">
               Every autumn we recruit new members across all disciplines — mechanical,
               electrical, software, business, and more. No prior experience required.

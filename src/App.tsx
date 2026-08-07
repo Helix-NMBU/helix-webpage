@@ -24,18 +24,26 @@ import { RequireCVBankAuth } from './features/CVBank/auth.tsx'
 import NotFound from './features/NotFound/NotFound.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
 import Footer from '@libs/components/footer.tsx'
-import { hideChrome, knownRoutes } from './libs/lib/routes'
+import { hideNavbar as shouldHideNavbar, hideFooter as shouldHideFooter, knownRoutes } from './libs/lib/routes'
 import { PageLoader } from './libs/components/PageLoader.tsx'
 
 function AppContent() {
   const location = useLocation();
-  const hideNavbar = hideChrome(location.pathname);
+  const hideNavbar = shouldHideNavbar(location.pathname);
+  const hideFooter = shouldHideFooter(location.pathname);
   const [loaderDone, setLoaderDone] = useState(() => !knownRoutes.has(location.pathname));
 
   return (
     <>
       <ScrollToTop />
-      {!loaderDone && <PageLoader onComplete={() => setLoaderDone(true)} />}
+      {!loaderDone && (
+        <PageLoader
+          onComplete={() => {
+            setLoaderDone(true);
+            window.dispatchEvent(new CustomEvent('helix:page-revealed'));
+          }}
+        />
+      )}
       {!hideNavbar && <Navbar />}
       <Routes>
         <Route path="/" element={<HomePage />} />
@@ -62,7 +70,7 @@ function AppContent() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {!hideNavbar && <Footer />}
+      {!hideFooter && <Footer />}
     </>
   );
 }

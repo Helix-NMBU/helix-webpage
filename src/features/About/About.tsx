@@ -1,20 +1,22 @@
 import { useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { Flip } from 'gsap/Flip'
+import { ArrowLeft } from 'lucide-react'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger, Flip)
 
 const PHOTOS = [
-  { src: '/birk i bil 2.jpg',         alt: 'In the cockpit' },
-  { src: '/lagbilde.jpg',             alt: 'Team photo' },
-  { src: '/Silverstone.webp',          alt: 'Silverstone 2025' },
-  { src: '/P1010055 1.webp',           alt: 'Race day' },
-  { src: '/P1010366 1.webp',           alt: 'On track' },
-  { src: '/birk i bil.webp',           alt: 'Cockpit' },
-  { src: '/nav_pictures/garage.jpg',  alt: 'The garage' },
-  { src: '/nav_pictures/journey.jpg', alt: 'Our journey' },
+  { src: '/tilt.png',        alt: 'Tilt test' },
+  { src: '/lagbilde.jpg',    alt: 'Team photo' },
+  { src: '/Silverstone.webp', alt: 'Silverstone 2025' },
+  { src: '/P1010055 1.png',  alt: 'Race day' },
+  { src: '/P1010366 1.png',  alt: 'On track' },
+  { src: '/birk i bil.webp', alt: 'Cockpit' },
+  { src: '/peder.png',       alt: 'In the garage' },
+  { src: '/cost.png',        alt: 'Cost event judging' },
 ]
 
 const EPIGRAPH_LINES = [
@@ -50,6 +52,9 @@ const CSS = `
   background-size: cover;
   flex: none;
   position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .gallery__item img {
   object-fit: cover;
@@ -58,9 +63,11 @@ const CSS = `
 }
 .gallery--bento {
   display: grid;
-  gap: 1vh;
-  grid-template-columns: repeat(3, 32.5vw);
-  grid-template-rows: repeat(4, 23vh);
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
   justify-content: center;
   align-content: center;
 }
@@ -220,6 +227,10 @@ export default function AboutPage() {
         const items = galleryEl.querySelectorAll<HTMLElement>('.gallery__item')
         flipCtxRef.current?.revert()
         galleryEl.classList.remove('gallery--final')
+        // Force a clean transform baseline — otherwise, if this runs before the
+        // appear-in tween above has settled, Flip bakes its random entrance
+        // offset into the "from" state and re-exposes it on every scroll-back.
+        gsap.set(items, { y: 0, scale: 1 })
         flipCtxRef.current = gsap.context(() => {
           galleryEl.classList.add('gallery--final')
           const flipState = Flip.getState(items)
@@ -232,6 +243,7 @@ export default function AboutPage() {
               end: '+=100%',
               scrub: true,
               pin: wrapEl,
+              onLeaveBack: () => gsap.set(items, { clearProps: 'all' }),
             },
           }).add(flip)
           return () => gsap.set(items, { clearProps: 'all' })
@@ -386,6 +398,31 @@ export default function AboutPage() {
           It's about shaping the people who will<br />
           design the future.
         </p>
+
+        <Link
+          to="/"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            marginTop: "56px",
+            backgroundColor: "#03094A",
+            color: "#FDFDFD",
+            padding: "14px 28px",
+            fontSize: "13px",
+            fontWeight: 500,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            textDecoration: "none",
+            borderRadius: "6px",
+            transition: "background-color 0.18s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
+        >
+          <ArrowLeft size={14} />
+          Back to Home
+        </Link>
 
       </section>
     </div>
