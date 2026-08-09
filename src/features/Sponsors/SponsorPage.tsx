@@ -7,11 +7,11 @@ import { loadSponsors, type SponsorRecord } from "../../libs/lib/staticContent";
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const tierConfig = [
-  { key: "Main"    as const, label: "Main",    itemClass: "w-full",                                                 cardHeight: 200 },
-  { key: "Gold"    as const, label: "Gold",    itemClass: "w-full md:w-[calc(33.333%-2rem)]",                       cardHeight: 150 },
-  { key: "Silver"  as const, label: "Silver",  itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(33.333%-2rem)]",         cardHeight: 120 },
-  { key: "Bronze"  as const, label: "Bronze",  itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(20%-2.4rem)]",           cardHeight: 110 },
-  { key: "Service" as const, label: "Service", itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(20%-2.4rem)]",           cardHeight: 100 },
+  { key: "Main"    as const, label: "Main",    itemClass: "w-full",                                                 cardHeightClass: "h-[140px] md:h-[200px]" },
+  { key: "Gold"    as const, label: "Gold",    itemClass: "w-full md:w-[calc(33.333%-2rem)]",                       cardHeightClass: "h-[150px]" },
+  { key: "Silver"  as const, label: "Silver",  itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(33.333%-2rem)]",         cardHeightClass: "h-[120px]" },
+  { key: "Bronze"  as const, label: "Bronze",  itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(20%-2.4rem)]",           cardHeightClass: "h-[110px]" },
+  { key: "Service" as const, label: "Service", itemClass: "w-[calc(50%-1.5rem)] md:w-[calc(20%-2.4rem)]",           cardHeightClass: "h-[100px]" },
 ];
 
 const SponsorPage = () => {
@@ -104,7 +104,7 @@ const SponsorPage = () => {
       {/* Sponsor tiers */}
       <div className="bg-white pb-32">
         <div className="max-w-screen-2xl mx-auto px-6 lg:px-12">
-          {tierConfig.map(({ key, label, itemClass, cardHeight }) => {
+          {tierConfig.map(({ key, label, itemClass, cardHeightClass }) => {
             const tierSponsors = sponsors.filter((s) => s.category === key);
             if (!tierSponsors.length) return null;
 
@@ -126,8 +126,7 @@ const SponsorPage = () => {
                   {tierSponsors.map((sponsor) => (
                     <div
                       key={sponsor.id}
-                      className={`logo-item flex items-center justify-center ${itemClass}`}
-                      style={{ height: cardHeight }}
+                      className={`logo-item flex items-center justify-center ${itemClass} ${cardHeightClass}`}
                     >
                       {sponsor.image ? (
                         sponsor.link ? (

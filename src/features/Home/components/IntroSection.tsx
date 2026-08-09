@@ -97,25 +97,23 @@ export default function IntroSection() {
               className="font-medium"
               style={{ fontSize: "clamp(32px, 3.4vw, 52px)", lineHeight: 1.1 }}
             >
-              One year. One car.<br />
-              Fifty students.
+              A new car,<br />
+              built from scratch, every year.
             </h2>
             <p className="text-lg leading-relaxed text-black/60">
               Helix NMBU was founded in 2022. We run a full-scale Formula Student
-              program out of the Tower workshop at NMBU, designing and building an
-              all-electric race car from scratch every season.
+              program, designing and building a new race car every season.
             </p>
             <p className="text-lg leading-relaxed text-black/35">
               Every summer we take the car to Formula Student events across Europe,
               including Silverstone and Meppen, competing against other university
-              teams on engineering, cost, business case, and dynamic events like
-              endurance and autocross.
+              teams across engineering, cost, and business case.
             </p>
             <Link
-              to="/garage"
+              to="/members"
               className="w-fit text-sm uppercase tracking-widest border-b border-black/30 pb-0.5 hover:border-black transition-colors"
             >
-              Our story →
+              Meet the team →
             </Link>
           </div>
         </div>

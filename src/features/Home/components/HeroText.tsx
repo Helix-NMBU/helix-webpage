@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { Link } from "react-router-dom";
 
 gsap.registerPlugin(useGSAP);
 
@@ -16,24 +15,14 @@ export default function HeroText() {
 
   useGSAP(
     () => {
-      const tl = gsap.timeline({ delay: 0.2 });
-      tl.from(".hero-line", {
+      gsap.from(".hero-line", {
         y: 60,
         opacity: 0,
         duration: 1,
         stagger: 0.15,
         ease: "power3.out",
-      })
-        .from(
-          ".hero-sub",
-          { y: 24, opacity: 0, duration: 0.85, ease: "power2.out" },
-          "-=0.5"
-        )
-        .from(
-          ".hero-cta",
-          { y: 16, opacity: 0, duration: 0.7, ease: "power2.out" },
-          "-=0.45"
-        );
+        delay: 0.2,
+      });
     },
     { scope: containerRef }
   );
@@ -54,21 +43,6 @@ export default function HeroText() {
         <p className="text-left text-white hero-line" style={heading}>
           of engineers
         </p>
-      </div>
-
-      {/* Secondary copy + CTAs — tucked into the bottom-right corner */}
-      <div className="absolute right-6 lg:right-12 bottom-10 lg:bottom-14 max-w-[260px] sm:max-w-sm text-left">
-        <p className="text-sm font-normal text-white hero-sub sm:text-base">
-          NMBU's Formula Student team: blank sheet to the grid, every year.
-        </p>
-        <div className="mt-7 hero-cta">
-          <Link
-            to="/garage"
-            className="inline-block rounded-sm px-6 py-3 bg-[var(--background)] text-white text-lg font-regular hover:brightness-110 transition-[filter] text-center"
-          >
-            Explore
-          </Link>
-        </div>
       </div>
     </div>
   );
