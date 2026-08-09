@@ -140,14 +140,14 @@ export default function CompetitionResults() {
                   onMouseLeave={() => setActiveIndex(0)}
                   className="flex items-center gap-4 px-4 py-6 -mx-4 transition-colors duration-200 border-b result-row sm:gap-8 border-foreground/10 hover:bg-white/10"
                 >
-                  <span className="w-12 text-xs tracking-widest text-white uppercase sm:w-16 sm:text-sm shrink-0">
+                  <span className="w-12 text-sm tracking-widest text-white uppercase sm:w-16 sm:text-sm shrink-0">
                     {row.year}
                   </span>
 
                   <div className="flex flex-col flex-1 gap-0.5 min-w-0">
                     <span
                       className="flex items-center gap-3 font-bold text-white uppercase truncate"
-                      style={{ fontSize: "clamp(16px, 2.2vw, 28px)" }}
+                      style={{ fontSize: "clamp(20px, 4.5vw, 28px)" }}
                     >
                       {row.event}
                       <img
@@ -156,7 +156,7 @@ export default function CompetitionResults() {
                         className="h-[0.7em] w-auto rounded-[2px] shrink-0"
                       />
                     </span>
-                    <span className="text-xs text-white sm:text-sm md:hidden">
+                    <span className="text-sm text-white sm:text-sm md:hidden">
                       {row.location}
                     </span>
                   </div>
