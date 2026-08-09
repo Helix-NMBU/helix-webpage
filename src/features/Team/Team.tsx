@@ -240,10 +240,10 @@ export default function Members() {
           const roles = DEPT_ROLES[mappedDept] ?? ['Team Member']
           const position = m.position?.trim() || roles[deptCounters[mappedDept] % roles.length]
           deptCounters[mappedDept]++
-          // TODO: the_stig_male.png is a temporary stand-in for everyone; swap back to
+          // TODO: the_stig_male.webp is a temporary stand-in for everyone; swap back to
           // per-member `/portrettbilder/{firstname}_{lastname}.webp` (see git history for
           // the removed slugifyName helper) once it's ready to become the missing-photo fallback.
-          const photo = '/portrettbilder/the_stig_male.png'
+          const photo = '/portrettbilder/the_stig_male.webp'
           return { ...m, position, photo, mappedDept }
         })
         setMembers(enriched)

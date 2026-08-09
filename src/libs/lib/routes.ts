@@ -5,7 +5,6 @@ export type NavLinkConfig = {
 
 export const desktopNavLinks: NavLinkConfig[] = [
   { label: "Home", to: "/" },
-  { label: "Our Mission", to: "/about" },
   { label: "The Garage", to: "/garage" },
   { label: "The Team", to: "/members" },
   { label: "Partners", to: "/sponsorpage" },
@@ -13,7 +12,6 @@ export const desktopNavLinks: NavLinkConfig[] = [
 ];
 
 export const mobilePrimaryNavLinks: NavLinkConfig[] = [
-  { label: "Our Mission", to: "/about" },
   { label: "The Garage", to: "/garage" },
   { label: "Partners", to: "/sponsorpage" },
 ];
@@ -29,7 +27,6 @@ export const appCtaLinks: NavLinkConfig[] = [
 export const knownRoutes = new Set([
   "/",
   "/sponsorpage",
-  "/about",
   "/garage",
   "/members",
   "/apply",
@@ -52,9 +49,7 @@ const hiddenChromePaths = new Set([
   "/cv-bank/profile",
 ]);
 
-const hiddenNavbarOnlyPaths = new Set([
-  "/about",
-]);
+const hiddenNavbarOnlyPaths = new Set<string>([]);
 
 export function hideFooter(pathname: string): boolean {
   return hiddenChromePaths.has(pathname);

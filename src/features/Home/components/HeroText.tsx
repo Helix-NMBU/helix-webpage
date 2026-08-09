@@ -59,11 +59,11 @@ export default function HeroText() {
       {/* Secondary copy + CTAs — tucked into the bottom-right corner */}
       <div className="absolute right-6 lg:right-12 bottom-10 lg:bottom-14 max-w-[260px] sm:max-w-sm text-left">
         <p className="text-sm font-normal text-white hero-sub sm:text-base">
-          NMBU's Formula Student team — blank sheet to the grid, every year.
+          NMBU's Formula Student team: blank sheet to the grid, every year.
         </p>
         <div className="mt-7 hero-cta">
           <Link
-            to="/about"
+            to="/garage"
             className="inline-block rounded-sm px-6 py-3 bg-[var(--background)] text-white text-lg font-regular hover:brightness-110 transition-[filter] text-center"
           >
             Explore

@@ -9,7 +9,6 @@ gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const explore = [
   { to: "/", label: "Home" },
-  { to: "/about", label: "About" },
   { to: "/garage", label: "Garage" },
 ];
 

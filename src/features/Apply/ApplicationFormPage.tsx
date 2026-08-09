@@ -278,7 +278,7 @@ export default function ApplicationFormPage() {
     if (Object.keys(allErrors).length > 0) return;
 
     if (!supabase) {
-      setStatus({ state: "error", message: "The application service isn't configured. Please try again later or contact us." });
+      setStatus({ state: "error", message: "The application service isn't configured. Please try again later." });
       return;
     }
 
@@ -405,7 +405,7 @@ export default function ApplicationFormPage() {
                 application and will get back to you once the recruitment round closes.
               </p>
               <p style={{ fontSize: "14px", color: "rgba(3,9,74,0.45)", lineHeight: 1.7, marginBottom: "32px" }}>
-                You can submit one application per season — if anything changes, reach out to post@helixnmbu.no.
+                You can submit one application per season. If anything changes, reach out to post@helixnmbu.no.
               </p>
               <Link
                 to="/apply"
@@ -549,7 +549,7 @@ export default function ApplicationFormPage() {
                     {currentStep.key === "studyProgram" && (
                       <>
                         <label htmlFor="studyProgram" style={questionStyle}>{currentStep.question}</label>
-                        <p style={hintStyle}>Pick the closest match — or "{OTHER_PROGRAM}" if yours is missing.</p>
+                        <p style={hintStyle}>Pick the closest match, or "{OTHER_PROGRAM}" if yours is missing.</p>
                         <select
                           id="studyProgram"
                           autoFocus
@@ -617,7 +617,7 @@ export default function ApplicationFormPage() {
                     {currentStep.key === "yearOfStudy" && (
                       <>
                         <label htmlFor="yearOfStudy" style={questionStyle}>{currentStep.question}</label>
-                        <p style={hintStyle}>Count from the start of your degree — 5-year programs go all the way to 5th.</p>
+                        <p style={hintStyle}>Count from the start of your degree. 5-year programs go all the way to 5th.</p>
                         <select
                           id="yearOfStudy"
                           autoFocus
@@ -677,7 +677,7 @@ export default function ApplicationFormPage() {
                     {currentStep.key === "interested" && (
                       <>
                         <p style={questionStyle}>{currentStep.question}</p>
-                        <p style={hintStyle}>Optional — check any other departments and we'll consider you for those too.</p>
+                        <p style={hintStyle}>Optional: check any other departments and we'll consider you for those too.</p>
                         {departmentChoices.length > 0 ? (
                           <div className="flex flex-col" style={{ gap: "12px" }}>
                             {departmentChoices.map((dept) => {
@@ -724,7 +724,7 @@ export default function ApplicationFormPage() {
                           </div>
                         ) : (
                           <p style={{ fontSize: "14px", color: "rgba(3,9,74,0.4)" }}>
-                            No other departments to choose from — just continue.
+                            No other departments to choose from, just continue.
                           </p>
                         )}
                       </>
@@ -733,7 +733,7 @@ export default function ApplicationFormPage() {
                     {currentStep.key === "motivation" && (
                       <>
                         <label htmlFor="motivation" style={questionStyle}>{currentStep.question}</label>
-                        <p style={hintStyle}>A couple of sentences is plenty — max {MAX_MOTIVATION_CHARS} characters.</p>
+                        <p style={hintStyle}>A couple of sentences is plenty, max {MAX_MOTIVATION_CHARS} characters.</p>
                         <textarea
                           id="motivation"
                           rows={4}
@@ -784,7 +784,7 @@ export default function ApplicationFormPage() {
                     {currentStep.key === "photo" && (
                       <>
                         <p style={questionStyle}>{currentStep.question}</p>
-                        <p style={hintStyle}>Optional — JPG, PNG or WebP, max 10 MB. It helps us put a face to your name.</p>
+                        <p style={hintStyle}>Optional: JPG, PNG or WebP, max 10 MB. It helps us put a face to your name.</p>
                         <FileDropField
                           accept="image/jpeg,image/png,image/webp"
                           hint="JPG, PNG or WebP, max 10 MB"
@@ -923,7 +923,11 @@ export default function ApplicationFormPage() {
                 </p>
               )}
               {status.state === "error" && (
-                <p style={{ ...errorTextStyle, marginTop: "16px" }}>{status.message}</p>
+                <p style={{ ...errorTextStyle, marginTop: "16px" }}>
+                  {status.message} Your application has not gone through — if this keeps happening, please email
+                  your CV and a few lines about yourself to{" "}
+                  <a href="mailto:post@helixnmbu.no" style={{ color: "#002EC4" }}>post@helixnmbu.no</a> instead.
+                </p>
               )}
             </motion.form>
           )}

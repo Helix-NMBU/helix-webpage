@@ -13,7 +13,7 @@ export default function WhereToFindUs() {
             We work out of<br />the Tower.
           </h2>
           <p className="text-lg text-black/60 leading-relaxed max-w-md">
-            Our workshop is on the NMBU campus in Ås — a 45-minute train ride from
+            Our workshop is on the NMBU campus in Ås, a 45-minute train ride from
             Oslo. The Tower is where the car is designed, welded, wired, and tested,
             year after year.
           </p>

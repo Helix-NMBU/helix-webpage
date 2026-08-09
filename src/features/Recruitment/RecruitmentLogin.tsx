@@ -85,11 +85,11 @@ export default function RecruitmentLogin() {
         >
           {!googleClientId ? (
             <p style={{ fontSize: "14px", color: "#dc2626" }}>
-              VITE_GOOGLE_CLIENT_ID is missing — set it in .env and restart the dev server.
+              VITE_GOOGLE_CLIENT_ID is missing. Set it in .env and restart the dev server.
             </p>
           ) : !supabase ? (
             <p style={{ fontSize: "14px", color: "#dc2626" }}>
-              Supabase is not configured — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+              Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
             </p>
           ) : (
             <GoogleLogin

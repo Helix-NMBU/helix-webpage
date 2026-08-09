@@ -5,7 +5,7 @@
     "department": "Logistics",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
-    "about": "As Head of Logistics you will own all operational planning for the team — from workshop management to getting the car and people to competition. You will coordinate across departments to keep build timelines on track and ensure the team is always ready to perform.",
+    "about": "As Head of Logistics you will own all operational planning for the team, from workshop management to getting the car and people to competition. You will coordinate across departments to keep build timelines on track and ensure the team is always ready to perform.",
     "tasks": [
       "Plan and execute transport of the car, equipment and team to competition events",
       "Manage workshop scheduling, tool inventory and consumables",
@@ -25,9 +25,9 @@
     "department": "Logistics",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
-    "about": "As Logistics & Operations Coordinator you will keep the machinery around the car running — the workshop, the equipment, the travel and the plans that get a full race team to the start line. You will work closely with the Head of Logistics and every department to remove friction so the engineers can build.",
+    "about": "As Logistics & Operations Coordinator you will keep the machinery around the car running: the workshop, the equipment, the travel and the plans that get a full race team to the start line. You will work closely with the Head of Logistics and every department to remove friction so the engineers can build.",
     "tasks": [
-      "Coordinate workshop logistics — tools, materials, consumables and ordering",
+      "Coordinate workshop logistics: tools, materials, consumables and ordering",
       "Help plan and execute transport of the car, equipment and team to events",
       "Organise travel, accommodation and practical arrangements for team activities",
       "Keep inventory, packing lists and operational documentation up to date",
@@ -36,7 +36,7 @@
     "achieve": [
       "A competition campaign that runs on rails because of your planning",
       "Practical project coordination experience in a technical organisation",
-      "Insight into everything it takes to field a race team — beyond the car itself"
+      "Insight into everything it takes to field a race team, beyond the car itself"
     ]
   },
   {
@@ -65,17 +65,17 @@
     "department": "Mechanical & Production",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
-    "about": "As a Mechanical Engineer on the Helix team you will design, analyse and manufacture the physical components that make up the car — from chassis and suspension to drivetrain and aerodynamics. You will take parts from concept to CAD to a finished component on a competition vehicle, learning practical engineering skills no lecture can teach.",
+    "about": "As a Mechanical Engineer on the Helix team you will design, analyse and manufacture the physical components that make up the car, from chassis and suspension to drivetrain and aerodynamics. You will take parts from concept to a finished component on a competition vehicle, learning practical engineering skills no lecture can teach.",
     "tasks": [
-      "Design components and assemblies in CAD as part of a sub-system group",
-      "Run FEM analyses and simulations to validate designs against load cases",
-      "Manufacture parts hands-on through machining, composites work and 3D printing",
+      "Design components and assemblies as part of a sub-system group",
+      "Run analyses and simulations to validate designs against load cases",
+      "Manufacture parts hands-on using a range of workshop techniques",
       "Test, iterate and document your components through the build season",
       "Collaborate with the electrical and software teams on system integration"
     ],
     "achieve": [
       "Parts you designed and built driving on a real race car at competition",
-      "Hands-on manufacturing experience with metals, composites and rapid prototyping",
+      "Hands-on manufacturing experience across a range of materials and methods",
       "A complete design-to-production engineering cycle on your CV"
     ]
   },
@@ -85,18 +85,18 @@
     "department": "Electrical",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
-    "about": "As an Electrical Engineer on the Helix team you will design and build the systems that power and control the car — PCBs, wiring harnesses, sensors and battery systems. You will work across low voltage and high voltage under experienced guidance, and see your hardware come alive on a competition EV.",
+    "about": "As an Electrical Engineer on the Helix team you will design and build the embedded electronics that control and monitor the car: circuit boards, wiring harnesses and sensors. You will work under experienced guidance and see your hardware come alive on a competition car.",
     "tasks": [
-      "Design, assemble and test PCBs for control, sensing and power distribution",
-      "Build and route wiring harnesses to automotive and FSAE standards",
+      "Design, assemble and test electronics for control, sensing and power distribution",
+      "Build and route wiring harnesses to relevant safety standards",
       "Integrate sensors and validate signals together with the software team",
-      "Contribute to accumulator and BMS work under HV safety supervision",
+      "Contribute to embedded system design and testing under experienced supervision",
       "Document designs and participate in reviews with the electrical sub-team"
     ],
     "achieve": [
-      "Your own hardware running on a competition electric race car",
+      "Your own hardware running on a competition race car",
       "Practical electronics experience from schematic to soldered, tested board",
-      "Working knowledge of EV architecture and high voltage safety practice"
+      "Working knowledge of vehicle electrical architecture and embedded systems"
     ]
   },
   {
@@ -105,17 +105,17 @@
     "department": "Software",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Jørgen Asmundvåg", "email": "jorgen.asmundvaag@helixnmbu.no", "linkedin": "https://linkedin.com/in/jorgen-asmundvaag" },
-    "about": "As a Software Engineer on the Helix team you will build and maintain the software systems that make the car move autonomously and intelligently. You will work across the full stack — from low-level control and sensor integration to high-level planning and simulation — in a collaborative, fast-moving engineering environment.",
+    "about": "As a Software Engineer on the Helix team you will build and maintain the software systems that make the car smarter and more capable. You will work across the stack, from low-level control and sensor integration to higher-level planning and simulation, in a collaborative, fast-moving engineering environment.",
     "tasks": [
-      "Develop and maintain software modules within the ROS 2 autonomous driving stack",
+      "Develop and maintain software modules within the team's autonomy and software stack",
       "Implement algorithms for perception, path planning or vehicle control",
-      "Write clean, testable C++ or Python code in a collaborative codebase",
+      "Write clean, testable code in a collaborative codebase",
       "Integrate and validate software on the physical car and in simulation",
       "Participate in code reviews and contribute to technical documentation"
     ],
     "achieve": [
-      "Production code running on a real autonomous vehicle at competition",
-      "Hands-on experience with ROS 2, embedded systems and real-time software",
+      "Production code running on a real competition vehicle",
+      "Hands-on experience with embedded systems and real-time software",
       "A strong foundation in robotics and autonomous systems development"
     ]
   },
@@ -125,7 +125,7 @@
     "department": "Business & Marketing",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
-    "about": "You will be responsible for securing the financial foundation of the team — identifying prospects, building relationships and closing sponsorship agreements that fund our season. This is a sales and relationship-driven role that combines strategic thinking with persistence and strong communication skills.",
+    "about": "You will be responsible for securing the financial foundation of the team: identifying prospects, building relationships and closing sponsorship agreements that fund our season. This is a sales and relationship-driven role that combines strategic thinking with persistence and strong communication skills.",
     "tasks": [
       "Research, identify and approach potential sponsors across industries",
       "Prepare tailored proposals, pitch decks and partnership packages",
@@ -145,7 +145,7 @@
     "department": "Economics",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Oskar Gabrielsen", "email": "oskar.gabrielsen@helixnmbu.no" },
-    "about": "As Finance Coordinator you will keep the team's economy healthy and transparent — budgets, accounting and the financial planning that turns sponsorship into a season. You will work closely with the Head of Business and department leads to make sure every krone is tracked and well spent.",
+    "about": "As Finance Coordinator you will keep the team's economy healthy and transparent: budgets, accounting and the financial planning that turns sponsorship into a season. You will work closely with the Head of Business and department leads to make sure every penny is tracked and well spent.",
     "tasks": [
       "Maintain the team budget and track spending across departments",
       "Handle invoicing, reimbursements and day-to-day bookkeeping",
@@ -165,7 +165,7 @@
     "department": "Business & Marketing",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
-    "about": "As Communication & Content Manager you will own how Helix tells its story — planning and running our communication across social media, the website and press. You will set the content strategy, keep the publishing rhythm going through the season and make sure sponsors, students and the FSAE community see what we're building.",
+    "about": "As Communication & Content Manager you will own how Helix tells its story: planning and running our communication across social media, the website and press. You will set the content strategy, keep the publishing rhythm going through the season and make sure sponsors, students and the FSAE community see what we're building.",
     "tasks": [
       "Own the content calendar and publishing across our social channels",
       "Set the tone and visual direction together with the design profile",
@@ -185,7 +185,7 @@
     "department": "Business & Marketing",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
-    "about": "As a Content Creator you will capture the build, the people and the competition — photo, video and graphics that bring the Helix story to life. Workshop nights, track days and everything in between become your raw material, with creative freedom to shape how it's told.",
+    "about": "As a Content Creator you will capture the build, the people and the competition: photo, video and graphics that bring the Helix story to life. Workshop nights, track days and everything in between become your raw material, with creative freedom to shape how it's told.",
     "tasks": [
       "Shoot photo and video in the workshop, at events and at competition",
       "Edit short-form video and reels for social media",

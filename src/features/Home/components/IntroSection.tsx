@@ -26,7 +26,7 @@ function ImageCarousel() {
   }, []);
 
   return (
-    <div className="intro-carousel relative w-full aspect-[4/5] overflow-hidden rounded-2xl bg-black/5">
+    <div className="intro-carousel relative w-full max-w-lg mx-auto lg:mx-0 aspect-[4/5] overflow-hidden rounded-2xl bg-black/5">
       {carouselImages.map((img, i) => (
         <img
           key={img.src}
@@ -86,7 +86,7 @@ export default function IntroSection() {
   return (
     <section ref={containerRef} className="text-black bg-white">
       <div className="px-6 py-24 mx-auto max-w-screen-2xl lg:px-12 md:py-32">
-        <div className="grid items-center grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-20">
+        <div className="grid items-center grid-cols-1 gap-12 lg:grid-cols-[0.85fr_1fr] lg:gap-20">
           <ImageCarousel />
 
           <div className="flex flex-col gap-6 intro-text max-w-prose">
@@ -98,21 +98,21 @@ export default function IntroSection() {
               style={{ fontSize: "clamp(32px, 3.4vw, 52px)", lineHeight: 1.1 }}
             >
               One year. One car.<br />
-              Fifty students, working non-stop.
+              Fifty students.
             </h2>
             <p className="text-lg leading-relaxed text-black/60">
-              Helix NMBU was founded in 2012 by a small group of students who wanted
-              to build, not just study. Fourteen seasons later, we run a full-scale
-              Formula Student program out of the Tower workshop at NMBU — an
-              all-electric, student-built race car, rebuilt from scratch every year.
+              Helix NMBU was founded in 2022. We run a full-scale Formula Student
+              program out of the Tower workshop at NMBU, designing and building an
+              all-electric race car from scratch every season.
             </p>
             <p className="text-lg leading-relaxed text-black/35">
-              We compete against 100+ teams from universities worldwide at Formula
-              Student Germany, judged on engineering design, cost, business case, and
-              four dynamic events including endurance and autocross.
+              Every summer we take the car to Formula Student events across Europe,
+              including Silverstone and Meppen, competing against other university
+              teams on engineering, cost, business case, and dynamic events like
+              endurance and autocross.
             </p>
             <Link
-              to="/about"
+              to="/garage"
               className="w-fit text-sm uppercase tracking-widest border-b border-black/30 pb-0.5 hover:border-black transition-colors"
             >
               Our story →

@@ -457,7 +457,7 @@ export default function RecruitmentPortal() {
                                 ))}
                               </div>
                             ) : (
-                              <p style={{ fontSize: "14px", color: "rgba(3,9,74,0.35)" }}>—</p>
+                              <p style={{ fontSize: "14px", color: "rgba(3,9,74,0.35)" }}>None</p>
                             )}
                           </div>
                         </div>

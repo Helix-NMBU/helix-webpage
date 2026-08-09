@@ -26,9 +26,9 @@ const EPIGRAPH_LINES = [
 ]
 
 const PARAGRAPHS = [
-  "Helix started with a question: what if students didn't just study engineering — but built it? In 2022, a group of NMBU students decided that textbooks weren't enough. They wanted real problems, real constraints, and something real to show for it.",
-  "Building a Formula Student car demands everything — late nights in the garage, arguments over suspension geometry, moments where nothing works and you have to figure out why. That pressure, that responsibility, is exactly the point. It is where engineers are made.",
-  "Today, Helix is 30+ students from mechanical, electrical, and computer engineering — designing every component from scratch, competing at Formula Student events across Europe, and proving that a student team from NMBU belongs on the world stage.",
+  "Helix started with a question: what if students didn't just study engineering, but built it? In 2022, a group of NMBU students decided that textbooks weren't enough. They wanted real problems, real constraints, and something real to show for it.",
+  "Building a Formula Student car demands everything: late nights in the garage, arguments over suspension geometry, moments where nothing works and you have to figure out why. That pressure, that responsibility, is exactly the point. It is where engineers are made.",
+  "Today, Helix is 30+ students from mechanical, electrical, and computer engineering, designing every component from scratch, competing at Formula Student events across Europe, and proving that a student team from NMBU belongs on the world stage.",
 ]
 
 const CSS = `

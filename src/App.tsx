@@ -8,7 +8,6 @@ function ScrollToTop() {
 }
 import HomePage  from './features/Home/Homepage.tsx'
 import SponsorsPage from './features/Sponsors/SponsorPage.tsx'
-import About from './features/About/About.tsx'
 import Garage from './features/Garage/Garage.tsx'
 import Members from './features/Team/Team.tsx'
 import ApplyPage from './features/Apply/ApplyPage.tsx'
@@ -47,7 +46,6 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/sponsorpage" element={<SponsorsPage />} />
-        <Route path="/about" element={<About />} />
         <Route path="/garage" element={<Garage />} />
         <Route path="/members" element={<Members />} />
         <Route path="/apply" element={<ApplyPage />} />

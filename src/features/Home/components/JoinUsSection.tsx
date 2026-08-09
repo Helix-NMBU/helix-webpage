@@ -70,7 +70,7 @@ export default function JoinUsSection() {
 
           <div className="flex flex-col justify-between h-full gap-8 join-content">
             <p className="text-lg leading-relaxed text-white/80">
-              Every autumn we recruit new members across all disciplines — mechanical,
+              Every autumn we recruit new members across all disciplines: mechanical,
               electrical, software, business, and more. No prior experience required.
               Just the drive to build.
             </p>
