@@ -11,6 +11,8 @@ export type CarRecord = {
   id: number;
   name: string;
   season: string;
+  class: string;
+  description: string;
   images: string[];
   stats: {
     focus: string;

@@ -1,9 +1,25 @@
 [
 {
+    "id": 3,
+  "name": "Casino",
+  "season": "25/26",
+  "class": "CV",
+  "description": "Casino is the car that finally broke through. After two seasons of hard-earned lessons, it became the first Helix car to ever pass scrutineering and take the green flag in the endurance race — a milestone the team had been chasing since day one. Built for Formula Future and engineered around doing more with less, Casino is proof that the long game pays off.",
+  "images": ["/cars/Casino.png"],
+  "stats": {
+    "focus": "Cost efficiency",
+    "engine": "KTM 690, 1 cylinder",
+    "weight": "191.5 kg"
+  }
+},
+
+{
     "id": 2,
   "name": "Børsen",
   "season": "24/25",
-  "images": ["/Børsen.png", "/Børsen (1).png"],
+  "class": "CV",
+  "description": "Børsen was built on everything Arken taught the team the hard way. Every unnecessary gram got hunted down and cut, shaving the car all the way to 206 kg and making it the sharpest, most agile machine Helix had built yet. It carried the team back to Formula Student UK for round two, lighter and considerably more confident.",
+  "images": ["/cars/Børsen.png"],
   "stats": {
     "focus": "Weight reduction",
     "engine": "Suzuki, 4 cylinder",
@@ -15,23 +31,13 @@
     "id": 1,
   "name": "Arken",
   "season": "23/24",
-  "images": ["/Arken1.png"],
+  "class": "CV",
+  "description": "Every team has a first car, and this was ours. Built from scratch by a team with more ambition than experience, Arken took Helix to Formula Student UK and proved the whole idea could actually work.",
+  "images": ["/cars/Arken.png"],
   "stats": {
     "focus": "Wheel suspension",
     "engine": "KTM 690, 1 cylinder",
     "weight": "223 kg"
-  }
-},
-
-{
-    "id": 3,
-  "name": "Casino",
-  "season": "25/26",
-  "images": [],
-  "stats": {
-    "focus": "Cost efficiency",
-    "engine": "KTM 690, 1 cylinder",
-    "weight": "191.5 kg"
   }
 }
 ]
