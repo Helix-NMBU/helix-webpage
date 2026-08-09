@@ -9,6 +9,7 @@ type RawMember = {
   id: number
   name: string
   department: string
+  position?: string
   fieldOfStudy: string
   yearOfStudy: number | string
   seasonsInHelix: number
@@ -19,52 +20,25 @@ type Member = RawMember & { position: string; photo: string; mappedDept: string 
 // ─── Departments (same order as Apply page) ───────────────────────────────────
 
 const DEPARTMENTS = [
+  'The Board',
   'Mechanical & Production',
-  'Electrical',
+  'Electronics',
   'Business & Marketing',
   'Economics',
   'Software',
-  'Logistics',
 ] as const
 
 // ─── Positions per department ─────────────────────────────────────────────────
 
 const DEPT_ROLES: Record<string, string[]> = {
   'Mechanical & Production': ['Mechanical Lead', 'Structural Engineer', 'Manufacturing Engineer', 'Composites Engineer', 'Systems Engineer', 'Suspension Engineer', 'Chassis Engineer'],
-  'Electrical':              ['Electrical Lead', 'PCB Design Engineer', 'BMS Engineer', 'Wiring Harness Engineer', 'Power Electronics Engineer', 'HV Systems Engineer'],
+  'Electronics':             ['Electrical Lead', 'PCB Design Engineer', 'BMS Engineer', 'Wiring Harness Engineer', 'Power Electronics Engineer', 'HV Systems Engineer'],
   'Business & Marketing':    ['Head of Business', 'Brand Manager', 'Social Media Manager', 'Content Creator', 'Partner Relations', 'Communications Officer'],
   'Economics':               ['CFO', 'Financial Controller', 'Budget Analyst', 'Sponsorship Manager', 'Finance Officer', 'Treasurer'],
   'Software':                ['Autonomous Systems Lead', 'ML Engineer', 'Computer Vision Engineer', 'Lead Developer', 'Full-Stack Engineer', 'Backend Developer', 'Data Engineer'],
   'Logistics':               ['Head of Logistics', 'Competition Coordinator', 'Workshop Manager', 'Travel Coordinator', 'Operations Officer'],
+  'The Board':               ['President', 'Vice President', 'Board Member'],
 }
-
-// ─── Distribute mock members across the 6 departments ─────────────────────────
-// members.json IDs 1-47 → split evenly by ID range
-
-function remapDept(id: number): string {
-  if (id <= 8)  return 'Software'
-  if (id <= 16) return 'Mechanical & Production'
-  if (id <= 22) return 'Electrical'
-  if (id <= 30) return 'Business & Marketing'
-  if (id <= 38) return 'Economics'
-  return 'Logistics'
-}
-
-// ─── Portrait pool ────────────────────────────────────────────────────────────
-
-const PORTRAITS = [
-  'Ane-portrett.webp', 'Birk-portrett.webp', 'Brede.A-portrett.webp',
-  'Dat-portrett.webp', 'Eileen.G-portrett.webp', 'Eira.B-portrett.webp',
-  'Elina.A-portrett.webp', 'Eva-portrett.webp', 'Fredrik.S-portrett.webp',
-  'Henrik.E-portrett.webp', 'Henrikke-portrett.webp', 'Isak.K-portrett.webp',
-  'Jonas.S-portrett.webp', 'Jørgen.A-portrett.webp', 'Leander-portrett.webp',
-  'Lukas.T-portrett.webp', 'Margrete.M-portrett.webp', 'Mariamawit.N-portrett.webp',
-  'Martin.H-portrett.webp', 'Martin.T-portrett.webp', 'Matheo.S-portrett.webp',
-  'Max.S-portrett.webp', 'Morten-portrett.webp', 'Oliver.O-portrett.webp',
-  'Oskar.S-portrett.webp', 'Peder-portrett.webp', 'Philip.V-portrett.webp',
-  'Selma.W-portrett.webp', 'Sivert.S-portrett.webp', 'Tage.K-portrett.webp',
-  'Vetle.W-portrett.webp',
-]
 
 const DEPT_META = { color: '#111827', bg: '#F3F4F6' }
 
@@ -260,13 +234,16 @@ export default function Members() {
       .then(r => r.json())
       .then((data: RawMember[]) => {
         const deptCounters: Record<string, number> = {}
-        const enriched: Member[] = data.map((m, globalIndex) => {
-          const mappedDept = remapDept(m.id)
+        const enriched: Member[] = data.map((m) => {
+          const mappedDept = m.department
           deptCounters[mappedDept] = deptCounters[mappedDept] ?? 0
           const roles = DEPT_ROLES[mappedDept] ?? ['Team Member']
-          const position = roles[deptCounters[mappedDept] % roles.length]
+          const position = m.position?.trim() || roles[deptCounters[mappedDept] % roles.length]
           deptCounters[mappedDept]++
-          const photo = '/portrettbilder/' + PORTRAITS[globalIndex % PORTRAITS.length]
+          // TODO: the_stig_male.png is a temporary stand-in for everyone; swap back to
+          // per-member `/portrettbilder/{firstname}_{lastname}.webp` (see git history for
+          // the removed slugifyName helper) once it's ready to become the missing-photo fallback.
+          const photo = '/portrettbilder/the_stig_male.png'
           return { ...m, position, photo, mappedDept }
         })
         setMembers(enriched)
@@ -275,8 +252,22 @@ export default function Members() {
 
   const filtered = activeFilter === 'All' ? members : members.filter(m => m.mappedDept === activeFilter)
 
+  const BOARD_ORDER = ['Project Manager', 'Deputy Project Manager', 'Chair of the Board']
+
+  function rank(dept: string, position: string) {
+    if (dept === 'The Board') {
+      const i = BOARD_ORDER.indexOf(position)
+      return i === -1 ? BOARD_ORDER.length : i
+    }
+    return position.startsWith('Head of') ? 0 : 1
+  }
+
   const byDept = DEPARTMENTS.reduce<Record<string, Member[]>>((acc, dept) => {
-    acc[dept] = filtered.filter(m => m.mappedDept === dept)
+    // Leadership titles lead their department's section; sort is stable so
+    // everyone else keeps their existing relative order.
+    acc[dept] = filtered
+      .filter(m => m.mappedDept === dept)
+      .sort((a, b) => rank(dept, a.position) - rank(dept, b.position))
     return acc
   }, {})
 
@@ -285,6 +276,7 @@ export default function Members() {
 
       {/* ── Header ── */}
       <div style={{ backgroundColor: "#002EC4" }} className="pb-20 text-white pt-36">
+
         <div className="px-6 mx-auto max-w-screen-2xl lg:px-12">
           <h1
             className="font-bold team-title"

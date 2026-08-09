@@ -3,7 +3,7 @@
     "id": 2,
   "name": "Børsen",
   "season": "24/25",
-  "image": "/Børsen (1).png",
+  "images": ["/Børsen.png", "/Børsen (1).png"],
   "stats": {
     "focus": "Weight reduction",
     "engine": "Suzuki, 4 cylinder",
@@ -15,11 +15,23 @@
     "id": 1,
   "name": "Arken",
   "season": "23/24",
-  "image": "/Arken1.png",
+  "images": ["/Arken1.png"],
   "stats": {
     "focus": "Wheel suspension",
     "engine": "KTM 690, 1 cylinder",
     "weight": "223 kg"
+  }
+},
+
+{
+    "id": 3,
+  "name": "Casino",
+  "season": "25/26",
+  "images": [],
+  "stats": {
+    "focus": "Cost efficiency",
+    "engine": "KTM 690, 1 cylinder",
+    "weight": "191.5 kg"
   }
 }
 ]

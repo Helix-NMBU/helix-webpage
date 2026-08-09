@@ -20,6 +20,14 @@ const TRACKS = {
   },
 };
 
+const GRID_LINES = `
+  linear-gradient(rgba(253,253,253,0.16) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(253,253,253,0.16) 1px, transparent 1px),
+  linear-gradient(rgba(253,253,253,0.06) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(253,253,253,0.06) 1px, transparent 1px)
+`;
+const GRID_SIZE = "120px 120px, 120px 120px, 20px 20px, 20px 20px";
+
 // Tracks lie flat (rotateX) then spin around their own vertical axis (rotateZ,
 // applied inside that tilted frame) — a turntable, not a flipping card.
 const CSS = `
@@ -99,15 +107,15 @@ export default function CompetitionResults() {
   );
 
   return (
-    <section ref={containerRef} className="bg-background text-foreground overflow-hidden">
+    <section ref={containerRef} className="relative overflow-hidden bg-background text-foreground">
       <style>{CSS}</style>
-      <div className="px-6 py-24 mx-auto max-w-screen-2xl lg:px-12">
+      <div className="relative px-6 py-24 mx-auto max-w-screen-2xl lg:px-12">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-16">
           {/* Table */}
-          <div className="w-full lg:w-1/2 min-w-0">
+          <div className="w-full min-w-0 lg:w-1/2">
             {/* Header — matches the label + heading style used across the other sections */}
             <div className="mb-16 results-header">
-              <p className="mb-4 text-xs tracking-widest uppercase text-white">
+              <p className="mb-4 text-xs tracking-widest text-white uppercase">
                 Competition history
               </p>
               <h2
@@ -118,7 +126,7 @@ export default function CompetitionResults() {
               </h2>
             </div>
 
-            <div className="hidden md:flex items-center gap-8 pb-4 border-b border-foreground/10 text-xs tracking-widest uppercase text-white">
+            <div className="items-center hidden gap-8 pb-4 text-xs tracking-widest text-white uppercase border-b md:flex border-foreground/10">
               <span className="w-16 shrink-0">Year</span>
               <span className="flex-1">Event</span>
               <span className="w-40 shrink-0">Location</span>
@@ -130,15 +138,15 @@ export default function CompetitionResults() {
                   key={i}
                   onMouseEnter={() => setActiveIndex(i)}
                   onMouseLeave={() => setActiveIndex(0)}
-                  className="result-row flex items-center gap-4 py-6 sm:gap-8 border-b border-foreground/10 -mx-4 px-4 transition-colors duration-200 hover:bg-white/10"
+                  className="flex items-center gap-4 px-4 py-6 -mx-4 transition-colors duration-200 border-b result-row sm:gap-8 border-foreground/10 hover:bg-white/10"
                 >
-                  <span className="w-12 sm:w-16 text-xs sm:text-sm tracking-widest uppercase text-white shrink-0">
+                  <span className="w-12 text-xs tracking-widest text-white uppercase sm:w-16 sm:text-sm shrink-0">
                     {row.year}
                   </span>
 
                   <div className="flex flex-col flex-1 gap-0.5 min-w-0">
                     <span
-                      className="flex items-center gap-3 font-bold uppercase truncate text-white"
+                      className="flex items-center gap-3 font-bold text-white uppercase truncate"
                       style={{ fontSize: "clamp(16px, 2.2vw, 28px)" }}
                     >
                       {row.event}
@@ -148,12 +156,12 @@ export default function CompetitionResults() {
                         className="h-[0.7em] w-auto rounded-[2px] shrink-0"
                       />
                     </span>
-                    <span className="text-xs sm:text-sm text-white md:hidden">
+                    <span className="text-xs text-white sm:text-sm md:hidden">
                       {row.location}
                     </span>
                   </div>
 
-                  <span className="hidden md:block w-40 shrink-0 text-sm text-white">
+                  <span className="hidden w-40 text-sm text-white md:block shrink-0">
                     {row.location}
                   </span>
                 </div>
@@ -163,7 +171,7 @@ export default function CompetitionResults() {
 
           {/* Circuit stage — a card that fills the column, revealing the track outline + stats on row hover */}
           <div
-            className="relative hidden lg:flex flex-1 items-center justify-center rounded-2xl border border-white/10 bg-white/5 overflow-hidden"
+            className="relative items-center justify-center flex-1 hidden overflow-hidden border lg:flex rounded-2xl border-white/10 bg-white/5"
             style={{ perspective: "1200px" }}
           >
             {results.map((row, i) => (
@@ -172,7 +180,7 @@ export default function CompetitionResults() {
                 className="absolute flex flex-col items-center gap-10 transition-opacity duration-500"
                 style={{ opacity: activeIndex === i ? 1 : 0 }}
               >
-                <div className="h-48 flex items-center justify-center" style={{ transformStyle: "preserve-3d" }}>
+                <div className="flex items-center justify-center h-48" style={{ transformStyle: "preserve-3d" }}>
                   <div style={{ transformStyle: "preserve-3d", transform: "rotateX(62deg)" }}>
                     <div className="turntable-spin" style={{ transformStyle: "preserve-3d" }}>
                       <svg viewBox={row.track.viewBox} width="240" height="240">
@@ -191,7 +199,7 @@ export default function CompetitionResults() {
 
                 <div className="flex gap-12">
                   <div className="text-center">
-                    <p className="mb-1 text-xs tracking-widest uppercase text-white">
+                    <p className="mb-1 text-xs tracking-widest text-white uppercase">
                       Overall score
                     </p>
                     <p className="text-3xl font-medium" style={{ letterSpacing: "-0.02em" }}>
@@ -199,7 +207,7 @@ export default function CompetitionResults() {
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="mb-1 text-xs tracking-widest uppercase text-white">
+                    <p className="mb-1 text-xs tracking-widest text-white uppercase">
                       Overall placing
                     </p>
                     <p className="text-3xl font-medium" style={{ letterSpacing: "-0.02em" }}>

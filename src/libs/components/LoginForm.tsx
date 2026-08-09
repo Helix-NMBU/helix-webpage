@@ -4,12 +4,12 @@ import { useNavigate } from "react-router-dom"
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  backgroundColor: "rgba(3,9,74,0.03)",
-  border: "1.5px solid rgba(3,9,74,0.18)",
+  backgroundColor: "rgba(253,253,253,0.08)",
+  border: "1.5px solid rgba(253,253,253,0.25)",
   borderRadius: "8px",
   padding: "10px 14px",
   fontSize: "15px",
-  color: "#0C0C0C",
+  color: "var(--foreground)",
   outline: "none",
   fontFamily: "inherit",
   transition: "border-color 0.18s ease",
@@ -21,7 +21,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: "12px",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
-  color: "rgba(3,9,74,0.5)",
+  color: "rgba(253,253,253,0.55)",
   fontWeight: 500,
 };
 
@@ -81,11 +81,11 @@ export function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           style={inputStyle}
-          onFocus={(e) => (e.currentTarget.style.borderColor = "#002EC4")}
-          onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(3,9,74,0.18)")}
+          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--foreground)")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "rgba(253,253,253,0.25)")}
         />
         {error && (
-          <p style={{ marginTop: "8px", fontSize: "13px", color: "#dc2626" }}>{error}</p>
+          <p style={{ marginTop: "8px", fontSize: "13px", color: "#f87171" }}>{error}</p>
         )}
       </div>
 
@@ -94,8 +94,8 @@ export function LoginForm() {
         disabled={loading}
         style={{
           width: "100%",
-          backgroundColor: loading ? "rgba(3,9,74,0.4)" : "#03094A",
-          color: "#FDFDFD",
+          backgroundColor: loading ? "rgba(253,253,253,0.5)" : "var(--foreground)",
+          color: "var(--background)",
           padding: "13px 24px",
           fontSize: "13px",
           fontWeight: 500,
@@ -104,18 +104,18 @@ export function LoginForm() {
           border: "none",
           borderRadius: "6px",
           cursor: loading ? "not-allowed" : "pointer",
-          transition: "background-color 0.18s ease",
+          transition: "opacity 0.18s ease",
           fontFamily: "inherit",
         }}
-        onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#002EC4"; }}
-        onMouseLeave={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#03094A"; }}
+        onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.opacity = "0.85"; }}
+        onMouseLeave={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
       >
         {loading ? "Signing in…" : "Sign in"}
       </button>
 
-      <p style={{ fontSize: "13px", textAlign: "center", color: "rgba(3,9,74,0.4)" }}>
+      <p style={{ fontSize: "13px", textAlign: "center", color: "rgba(253,253,253,0.5)" }}>
         Want to learn more?{" "}
-        <a href="/contact" style={{ color: "#002EC4", textDecoration: "none" }}
+        <a href="mailto:post@helixnmbu.no" style={{ color: "var(--foreground)", textDecoration: "none" }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline")}
           onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.textDecoration = "none")}
         >

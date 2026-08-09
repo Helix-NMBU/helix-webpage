@@ -19,12 +19,10 @@ export const mobilePrimaryNavLinks: NavLinkConfig[] = [
 ];
 
 export const mobileSecondaryNavLinks: NavLinkConfig[] = [
-  { label: "Get in Touch", to: "/contact" },
   { label: "Sponsorportal", to: "/sponsorportal-login" },
 ];
 
 export const appCtaLinks: NavLinkConfig[] = [
-  { label: "Get in Touch", to: "/contact" },
   { label: "Sponsorportal", to: "/sponsorportal-login" },
 ];
 
@@ -32,7 +30,6 @@ export const knownRoutes = new Set([
   "/",
   "/sponsorpage",
   "/about",
-  "/contact",
   "/garage",
   "/members",
   "/apply",

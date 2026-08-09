@@ -40,26 +40,6 @@
     ]
   },
   {
-    "id": "electrical-head",
-    "title": "Head of Electrical",
-    "department": "Electrical",
-    "applyUrl": "https://form.typeform.com/to/placeholder",
-    "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
-    "about": "As Head of Electrical you will lead the electrical sub-team responsible for the car's entire electrical system — from high voltage accumulator and power electronics to low voltage control and sensing. You will define the architecture, guide the team technically and ensure all systems meet FSAE safety and performance standards.",
-    "tasks": [
-      "Define and own the electrical architecture across HV and LV systems",
-      "Lead design reviews and sign off on PCB layouts, wiring harnesses and BMS design",
-      "Ensure compliance with FSAE EV rules and coordinate with scrutineers",
-      "Mentor team members in circuit design, embedded systems and safe HV practices",
-      "Manage integration between electrical systems and the software and mechanical teams"
-    ],
-    "achieve": [
-      "A fully certified, competition-legal electrical system on the car",
-      "Leadership experience guiding a multi-person engineering sub-team",
-      "Deep expertise in EV powertrain design and automotive electronics"
-    ]
-  },
-  {
     "id": "business-head",
     "title": "Head of Business",
     "department": "Business & Marketing",

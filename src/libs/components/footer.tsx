@@ -16,7 +16,6 @@ const explore = [
 const getInvolved = [
   { to: "/members", label: "Members" },
   { to: "/sponsorpage", label: "Sponsors" },
-  { to: "/contact", label: "Contact" },
 ];
 
 const socials = [
@@ -29,7 +28,7 @@ const MAX_ROWS = 3;
 
 const LinkColumn = ({ heading, links }: { heading: string; links: { to: string; label: string }[] }) => (
   <div className="flex flex-col gap-3">
-    <p className="footer-row-head mb-1 text-xs tracking-widest uppercase text-white/40">{heading}</p>
+    <p className="mb-1 text-xs tracking-widest uppercase footer-row-head text-white/40">{heading}</p>
     {links.map(({ to, label }, i) => (
       <Link key={to} to={to} className={`footer-row-${i} text-base transition-colors text-white/80 hover:text-white w-fit`}>
         {label}
@@ -89,7 +88,7 @@ const Footer = () => {
       <div className="max-w-screen-2xl mx-auto px-6 lg:px-12 py-12 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-12 items-start">
 
         {/* Brand */}
-        <div className="footer-brand flex flex-col max-w-xs gap-4">
+        <div className="flex flex-col max-w-xs gap-4 footer-brand">
           <div className="text-sm leading-relaxed text-white/60">
             <a href="mailto:post@helixnmbu.no" className="block transition-colors hover:text-white">
               post@helixnmbu.no
@@ -109,7 +108,7 @@ const Footer = () => {
 
           {/* Socials column */}
           <div className="flex flex-col gap-3">
-            <p className="footer-row-head mb-1 text-xs tracking-widest uppercase text-white/40">Socials</p>
+            <p className="mb-1 text-xs tracking-widest uppercase footer-row-head text-white/40">Socials</p>
             {socials.map(({ href, label, Icon }, i) => (
               <a
                 key={label}
@@ -127,9 +126,9 @@ const Footer = () => {
       </div>
 
       {/* Bottom bar */}
-      <div className="footer-bottom border-t border-white/10">
+      <div className="border-t footer-bottom border-white/10">
         <div className="px-6 py-4 mx-auto text-xs max-w-screen-2xl lg:px-12 text-white/40">
-          &copy; {new Date().getFullYear()} Helix NMBU. All rights reserved. · Designed & built in Ås · Powered by Passion and immense amounts of coffee
+          &copy; {new Date().getFullYear()} Helix NMBU. All rights reserved. · Designed & built in Ås · Powered by passion and immense amounts of caffeine
         </div>
       </div>
     </footer>

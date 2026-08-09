@@ -405,7 +405,7 @@ export default function ApplicationFormPage() {
                 application and will get back to you once the recruitment round closes.
               </p>
               <p style={{ fontSize: "14px", color: "rgba(3,9,74,0.45)", lineHeight: 1.7, marginBottom: "32px" }}>
-                You can submit one application per season — if anything changes, reach out via the contact page.
+                You can submit one application per season — if anything changes, reach out to post@helixnmbu.no.
               </p>
               <Link
                 to="/apply"
@@ -919,7 +919,7 @@ export default function ApplicationFormPage() {
               {status.state === "duplicate" && (
                 <p style={{ ...errorTextStyle, marginTop: "16px" }}>
                   It looks like you've already submitted an application this season. If you'd like to change
-                  something, please <Link to="/contact" style={{ color: "#002EC4" }}>get in touch</Link>.
+                  something, please <a href="mailto:post@helixnmbu.no" style={{ color: "#002EC4" }}>get in touch</a>.
                 </p>
               )}
               {status.state === "error" && (
