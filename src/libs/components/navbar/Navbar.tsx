@@ -268,7 +268,7 @@ export const Navbar = () => {
 
           <Link to="/" className="hidden xl:block absolute left-1/2 -translate-x-1/2">
             <img
-              src="/Helixspiral.png"
+              src="/Vector.png"
               alt="Helix"
               className="h-8 md:h-10 w-auto opacity-100 transition-opacity hover:opacity-80"
             />
@@ -344,7 +344,7 @@ export const Navbar = () => {
         >
           <div className="flex items-center justify-between px-8 pt-6 pb-3 md:pt-8 md:pb-4 shrink-0">
             <Link to="/" onClick={closeDrawer}>
-              <img src="/Helixspiral.png" alt="Helix" className="h-8 w-auto opacity-70 hover:opacity-100 transition-opacity" />
+              <img src="/Vector.png" alt="Helix" className="h-8 w-auto opacity-70 hover:opacity-100 transition-opacity" />
             </Link>
             <button
               onClick={closeDrawer}
