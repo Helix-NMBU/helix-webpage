@@ -11,7 +11,7 @@ const NavLink = ({ to, label, isActive, onClick }: { to: string; label: string; 
   <Link
     to={to}
     onClick={onClick}
-    className={`font-medium text-5xl py-4 transition-colors ${isActive ? "text-[#00007A]" : "text-gray-900 hover:text-[#00007A]"}`}
+    className={`font-medium text-4xl sm:text-5xl py-4 transition-colors ${isActive ? "text-[#00007A]" : "text-gray-900 hover:text-[#00007A]"}`}
   >
     {label}
   </Link>
