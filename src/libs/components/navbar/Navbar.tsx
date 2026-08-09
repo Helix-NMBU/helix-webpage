@@ -11,7 +11,7 @@ const NavLink = ({ to, label, isActive, onClick }: { to: string; label: string; 
   <Link
     to={to}
     onClick={onClick}
-    className={`font-medium text-3xl md:text-4xl py-2 md:py-4 transition-colors ${isActive ? "text-[#00007A]" : "text-gray-900 hover:text-[#00007A]"}`}
+    className={`font-medium text-5xl py-4 transition-colors ${isActive ? "text-[#00007A]" : "text-gray-900 hover:text-[#00007A]"}`}
   >
     {label}
   </Link>
@@ -330,7 +330,7 @@ export const Navbar = () => {
           onClick={openDrawer}
           className="absolute inset-0 flex items-center justify-center select-none cursor-pointer"
         >
-          <svg width="28" height="20" viewBox="0 0 24 17" fill="none" aria-hidden="true">
+          <svg width="34" height="24" viewBox="0 0 24 17" fill="none" aria-hidden="true">
             <line x1="0" y1="1"   x2="24" y2="1"   stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             <line x1="0" y1="8.5" x2="24" y2="8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             <line x1="0" y1="16"  x2="24" y2="16"  stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -342,21 +342,15 @@ export const Navbar = () => {
           className="absolute inset-0 flex flex-col bg-white"
           style={{ opacity: 0, pointerEvents: "none" }}
         >
-          <div className="flex items-center justify-between px-8 pt-6 pb-3 md:pt-8 md:pb-4 shrink-0">
-            <Link to="/" onClick={closeDrawer}>
-              <img src="/Vector.png" alt="Helix" className="h-8 w-auto opacity-70 hover:opacity-100 transition-opacity" />
-            </Link>
+          <div className="flex items-center justify-end px-8 pt-6 pb-3 md:pt-8 md:pb-4 shrink-0">
             <button
               onClick={closeDrawer}
-              className="flex items-center gap-3 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors cursor-pointer group"
+              className="flex items-center justify-center text-[#00007A] hover:opacity-70 transition-opacity cursor-pointer"
               aria-label="Close menu"
             >
-              <span className="tracking-wide">close</span>
-              <span className="flex items-center justify-center w-12 h-12 rounded-full bg-[#00007A] group-hover:bg-[#0000a8] transition-colors duration-200">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 17L17 7M7 7l10 10" />
-                </svg>
-              </span>
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 17L17 7M7 7l10 10" />
+              </svg>
             </button>
           </div>
 

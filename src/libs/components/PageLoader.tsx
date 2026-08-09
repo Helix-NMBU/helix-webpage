@@ -57,8 +57,8 @@ export function PageLoader({ onComplete }: PageLoaderProps) {
         ref={logoRef}
         src="/Vector.png"
         alt="Helix"
+        className="w-[100px] sm:w-[140px]"
         style={{
-          width: "min(140px, 30vw)",
           opacity: 0,
           willChange: "transform, opacity",
           userSelect: "none",
