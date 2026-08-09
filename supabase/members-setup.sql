@@ -79,7 +79,7 @@ create policy "recruiters can delete application files"
 -- ── Manage members ──────────────────────────────────────────────────────
 -- Add members (email must match their Google login; repeat per person):
 insert into public.members (full_name, email, status, has_recruitment_access) values
-  ('Henrik Engdal', 'henrik.engdal@helixnmbu.no', 'active', true);
+  ('Admin User', 'admin@helixnmbu.no', 'active', true);
 
 -- Grant or revoke recruitment access:
 -- update public.members set has_recruitment_access = true  where email = 'someone@helixnmbu.no';
