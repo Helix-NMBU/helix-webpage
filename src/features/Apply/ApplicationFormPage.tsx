@@ -34,8 +34,7 @@ const OTHER_PROGRAM = "Not listed / other";
 const STUDY_YEARS = ["1st year", "2nd year", "3rd year", "4th year", "5th year"];
 
 const MAX_MOTIVATION_CHARS = 250;
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // mirrors the bucket's file_size_limit
-const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_CV_BYTES = 500 * 1024; // 500 KB
 
 const STEPS = [
   { key: "position", title: "Position", question: "Which position are you applying for?" },
@@ -46,7 +45,6 @@ const STEPS = [
   { key: "yearOfStudy", title: "Study year", question: "Please select your current year of study" },
   { key: "motivation", title: "Motivation", question: "Why do you want to join Helix?" },
   { key: "cv", title: "Your CV", question: "Upload your CV" },
-  { key: "photo", title: "Photo", question: "Upload a photo of you" },
   { key: "interested", title: "Other departments", question: "Any other departments you would like to be considered for?" },
   { key: "consent", title: "Consent", question: "One last thing" },
 ] as const;
@@ -140,7 +138,6 @@ export default function ApplicationFormPage() {
   const [interested, setInterested] = useState<string[]>([]);
   const [consent, setConsent] = useState(false);
   const [cvFile, setCvFile] = useState<File | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<SubmitStatus>({ state: "idle" });
 
@@ -232,13 +229,7 @@ export default function ApplicationFormPage() {
       case "cv":
         if (!cvFile) next.cv = "Please upload your CV as a PDF.";
         else if (cvFile.type !== "application/pdf") next.cv = "Your CV must be a PDF file.";
-        else if (cvFile.size > MAX_FILE_BYTES) next.cv = "Your CV must be smaller than 10 MB.";
-        break;
-      case "photo":
-        if (photoFile) {
-          if (!PHOTO_TYPES.includes(photoFile.type)) next.photo = "The photo must be a JPG, PNG or WebP image.";
-          else if (photoFile.size > MAX_FILE_BYTES) next.photo = "The photo must be smaller than 10 MB.";
-        }
+        else if (cvFile.size > MAX_CV_BYTES) next.cv = "Your CV must be smaller than 500 KB.";
         break;
       case "consent":
         if (!consent) next.consent = "We need your consent to store your application.";
@@ -294,16 +285,6 @@ export default function ApplicationFormPage() {
         .upload(cvPath, cvFile!, { contentType: "application/pdf", upsert: false });
       if (cvError) throw cvError;
 
-      let photoPath: string | null = null;
-      if (photoFile) {
-        const ext = photoFile.type === "image/png" ? "png" : photoFile.type === "image/webp" ? "webp" : "jpg";
-        photoPath = `${season}/${applicationId}/photo.${ext}`;
-        const { error: photoError } = await supabase.storage
-          .from("applications")
-          .upload(photoPath, photoFile, { contentType: photoFile.type, upsert: false });
-        if (photoError) throw photoError;
-      }
-
       const { error: insertError } = await supabase.from("applications").insert({
         id: applicationId,
         season,
@@ -318,7 +299,6 @@ export default function ApplicationFormPage() {
         position_title: selectedPosition?.title ?? values.positionId,
         interested_departments: interested.filter((d) => d !== selectedPosition?.department),
         cv_path: cvPath,
-        photo_path: photoPath,
         consent: true,
       });
 
@@ -767,32 +747,15 @@ export default function ApplicationFormPage() {
                     {currentStep.key === "cv" && (
                       <>
                         <p style={questionStyle}>{currentStep.question}</p>
-                        <p style={hintStyle}>PDF, max 10 MB.</p>
+                        <p style={hintStyle}>PDF, max 500 KB.</p>
                         <FileDropField
                           accept="application/pdf"
-                          hint="PDF, max 10 MB"
+                          hint="PDF, max 500 KB"
                           file={cvFile}
                           error={errors.cv}
                           onSelect={(file) => {
                             setCvFile(file);
                             setErrors((prev) => { const n = { ...prev }; delete n.cv; return n; });
-                          }}
-                        />
-                      </>
-                    )}
-
-                    {currentStep.key === "photo" && (
-                      <>
-                        <p style={questionStyle}>{currentStep.question}</p>
-                        <p style={hintStyle}>Optional: JPG, PNG or WebP, max 10 MB. It helps us put a face to your name.</p>
-                        <FileDropField
-                          accept="image/jpeg,image/png,image/webp"
-                          hint="JPG, PNG or WebP, max 10 MB"
-                          file={photoFile}
-                          error={errors.photo}
-                          onSelect={(file) => {
-                            setPhotoFile(file);
-                            setErrors((prev) => { const n = { ...prev }; delete n.photo; return n; });
                           }}
                         />
                       </>
@@ -839,8 +802,8 @@ export default function ApplicationFormPage() {
                             style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
                           />
                           <span style={{ fontSize: "14px", color: "rgba(12,12,12,0.7)", lineHeight: 1.6 }}>
-                            I consent to Helix NMBU storing the information in this application, including my CV
-                            {" "}and photo, for recruitment purposes during the current season.
+                            I consent to Helix NMBU storing the information in this application, including my CV,
+                            {" "}for recruitment purposes during the current season.
                           </span>
                         </label>
                         {errors.consent && <p style={errorTextStyle}>{errors.consent}</p>}
