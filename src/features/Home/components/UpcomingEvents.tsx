@@ -23,12 +23,12 @@ const events = [
       "Curious about Helix? Join us for at our projects, and what it takes to build a Formula Student team from the ground up.",
   },
   {
-    id: "spring-recruitment-deadline-2026",
+    id: "fall-recruitment-deadline-2026",
     date: "1 Sep 2026",
-    title: "Spring Recruitment Deadline",
+    title: "Fall Recruitment Deadline",
     location: "NMBU, Ås",
     description:
-      "Last call to apply for the Spring recruitment. Get your application in before the deadline to be considered.",
+      "Last call to apply for the Fall recruitment. Get your application in before the deadline to be considered.",
   },
 ];
 

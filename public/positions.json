@@ -104,7 +104,7 @@
     "title": "Software Engineer",
     "department": "Software",
     "applyUrl": "https://form.typeform.com/to/placeholder",
-    "contact": { "name": "Jørgen Asmundvåg", "email": "jorgen.asmundvaag@helixnmbu.no", "linkedin": "https://linkedin.com/in/jorgen-asmundvaag" },
+    "contact": { "name": "Jørgen Asmundvaag", "email": "jorgen.asmundvaag@helixnmbu.no", "linkedin": "https://linkedin.com/in/jorgen-asmundvaag" },
     "about": "As a Software Engineer on the Helix team you will build and maintain the software systems that make the car smarter and more capable. You will work across the stack, from low-level control and sensor integration to higher-level planning and simulation, in a collaborative, fast-moving engineering environment.",
     "tasks": [
       "Develop and maintain software modules within the team's autonomy and software stack",
