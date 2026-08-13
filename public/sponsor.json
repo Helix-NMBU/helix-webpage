@@ -189,5 +189,14 @@
     "id": 25,
     "name": "Foliekniven",
     "category": "Service"
+  }, 
+  {
+    "id": 26,
+    "name": "Addinor",
+    "image": "/sponsor_logos/Addinor_logo.webp",
+    "link": "https://addinor.no/",
+    "category": "Bronze" ,
+    "logoSize": "scale-75 lg:scale-100"
+
   }
 ]
