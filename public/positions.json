@@ -45,9 +45,9 @@
     "department": "Business & Marketing",
     "applyUrl": "https://form.typeform.com/to/placeholder",
     "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
-    "about": "As Head of Business you will lead the business and marketing department, overseeing sponsorship, communications, content and economics. You will be the external face of Helix for sponsors and partners, and work closely with the team lead to ensure the organisation runs professionally and sustainably.",
+    "about": "As Head of Business you will lead the business and marketing department, overseeing sponsorship, communications, content and finance. You will be the external face of Helix for sponsors and partners, and work closely with the team lead to ensure the organisation runs professionally and sustainably.",
     "tasks": [
-      "Lead and coordinate the business department across sponsorship, marketing and economics",
+      "Lead and coordinate the business department across sponsorship, marketing and finance",
       "Own sponsor relationships and ensure all partner commitments are delivered",
       "Set the communications strategy across social media, website and press",
       "Report on financial and commercial performance to the board and team lead",
@@ -140,23 +140,26 @@
     ]
   },
   {
-    "id": "finance-coordinator",
-    "title": "Finance Coordinator",
-    "department": "Economics",
+    "id": "cost-analyst",
+    "title": "Cost Analyst",
+    "department": "Finance",
     "applyUrl": "https://form.typeform.com/to/placeholder",
-    "contact": { "name": "Oskar Gabrielsen", "email": "oskar.gabrielsen@helixnmbu.no" },
-    "about": "As Finance Coordinator you will keep the team's economy healthy and transparent: budgets, accounting and the financial planning that turns sponsorship into a season. You will work closely with the Head of Business and department leads to make sure every penny is tracked and well spent.",
+    "contact": {
+      "name": "Oskar Gabrielsen",
+      "email": "oskar.gabrielsen@helixnmbu.no"
+    },
+    "about": "As Cost Analyst you will work with the financial and manufacturing side of the race car, helping the team understand what it costs to design and build each system. You will work closely with the technical departments to analyse components, materials and manufacturing processes, and contribute to the team's Formula Student cost documentation and competition preparation.",
     "tasks": [
-      "Maintain the team budget and track spending across departments",
-      "Handle invoicing, reimbursements and day-to-day bookkeeping",
-      "Prepare financial reports for the board, team lead and sponsors",
-      "Support funding applications and manage payment follow-up with partners",
-      "Help department leads plan purchases within their budgets"
+      "Analyse the cost of components, materials and manufacturing processes across the car",
+      "Work with technical departments to collect and structure cost and production data",
+      "Maintain cost documentation and support preparation for the Formula Student Cost & Manufacturing event",
+      "Identify cost drivers and explore opportunities for more cost-effective engineering solutions",
+      "Help communicate and justify the team's design and manufacturing decisions from an economic perspective"
     ],
     "achieve": [
-      "Hands-on experience running the finances of a real organisation",
-      "Practical skills in budgeting, accounting and financial reporting",
-      "A key role in making an entire competition season financially possible"
+      "Hands-on experience with cost analysis in a real engineering project",
+      "A practical understanding of how engineering, manufacturing and finance influence each other",
+      "Experience presenting and defending cost and manufacturing decisions in a Formula Student competition"
     ]
   },
   {
@@ -198,6 +201,54 @@
       "Hands-on experience in media production from capture to post",
       "Front-row access to every milestone of a competition season"
     ]
+  },
+  {
+  "id": "photo-videographer",
+  "title": "Photo & Videographer",
+  "department": "Business & Marketing",
+  "applyUrl": "https://form.typeform.com/to/placeholder",
+  "contact": {
+    "name": "Selma Woldseth",
+    "email": "selma.woldseth@helixnmbu.no",
+    "linkedin": "https://linkedin.com/in/selma-w-040660363"
+  },
+  "about": "As Photo & Videographer you will document the team's work throughout the season and create photo and video material for social media, the website and sponsor content. You will capture the people, progress and key moments that tell the story of Helix, from workshop milestones to events and competitions.",
+  "tasks": [
+    "Capture photo and video during important milestones, events and competitions",
+    "Produce visual material for social media, the website and sponsor content",
+    "Document the team's development and activities throughout the season",
+    "Organize and maintain a shared library of photo and video material",
+    "Train and coordinate other team members who can cover events when you are unavailable"
+  ],
+  "achieve": [
+    "A strong portfolio of motorsport, event and team photography and video",
+    "Hands-on experience producing content in fast-paced real-world environments",
+    "Experience coordinating media coverage across a full Formula Student season"
+  ]
+},
+{
+  "id": "graphic-designer",
+  "title": "Graphic Designer",
+  "department": "Business & Marketing",
+  "applyUrl": "https://form.typeform.com/to/placeholder",
+  "contact": {
+    "name": "Selma Woldseth",
+    "email": "selma.woldseth@helixnmbu.no",
+    "linkedin": "https://linkedin.com/in/selma-w-040660363"
+  },
+  "about": "As Graphic Designer you will help shape and develop Helix NMBU's visual identity in close collaboration with the Head of Marketing. You will turn the team's ideas, projects and achievements into clear and engaging visual communication across digital and physical channels.",
+  "tasks": [
+    "Develop graphics and visual assets for social media",
+    "Create layouts and visual material for presentations and sponsor content",
+    "Design merchandise and other branded materials",
+    "Maintain and further develop the team's visual identity",
+    "Work closely with the marketing team to keep communication visually consistent"
+  ],
+  "achieve": [
+    "A portfolio of published design work across digital and physical media",
+    "Real experience developing and maintaining a brand identity",
+    "Creative ownership of how a Formula Student team presents itself visually"
+  ]
   },
   {
     "id": "open-application",

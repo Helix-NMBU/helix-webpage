@@ -7,7 +7,7 @@ const NO_SEASON_POSITION = `No ${CURRENT_SEASON} position`;
 export const DEPARTMENTS = [
   "Autonomous",
   "Marketing",
-  "Economics",
+  "Finance",
   "Mechanical and Production",
   "Electronics",
   "Software",

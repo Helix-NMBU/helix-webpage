@@ -221,8 +221,8 @@
     "id": 31,
     "name": "Oskar Rändel Gabrielsen",
     "fieldOfStudy": "Industriell økonomi",
-    "department": "Economics",
-    "position": "Head of Economics",
+    "department": "Finance",
+    "position": "Head of Finance",
     "email": "oskar.gabrielsen@helixnmbu.no"
   },
   {
@@ -262,7 +262,7 @@
     "id": 36,
     "name": "Simon Sivertsen",
     "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Economics",
+    "department": "Finance",
     "position": "Finance Coordinator",
     "email": "simon.sivertsen@helixnmbu.no"
   },
@@ -270,7 +270,7 @@
     "id": 37,
     "name": "Sohaib Anjem",
     "fieldOfStudy": "Økonomi ledelse og IT",
-    "department": "Economics",
+    "department": "Finance",
     "position": "Finance Coordinator",
     "email": "sohaib.anjem@helixnmbu.no"
   },

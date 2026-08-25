@@ -10,7 +10,7 @@ const subteams = [
   { name: "Autonomous & Software", members: 10 },
   { name: "Business & Marketing", members: 7 },
   { name: "Electronics", members: 8 },
-  { name: "Economics", members: 5 },
+  { name: "Finance", members: 5 },
   { name: "Logistics", members: 4 },
 ];
 

@@ -22,7 +22,7 @@ const DEPARTMENTS = [
   "Mechanical & Production",
   "Electrical",
   "Business & Marketing",
-  "Economics",
+  "Finance",
   "Software",
   "Logistics",
 ];
