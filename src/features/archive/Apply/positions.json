@@ -1,0 +1,272 @@
+[
+  {
+    "id": "logistics-head",
+    "title": "Head of Logistics",
+    "department": "Logistics",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
+    "about": "As Head of Logistics you will own all operational planning for the team, from workshop management to getting the car and people to competition. You will coordinate across departments to keep build timelines on track and ensure the team is always ready to perform.",
+    "tasks": [
+      "Plan and execute transport of the car, equipment and team to competition events",
+      "Manage workshop scheduling, tool inventory and consumables",
+      "Coordinate travel, accommodation and travel budgets for the full team",
+      "Maintain team documentation, meeting structures and internal communication",
+      "Support the team lead with planning and cross-departmental coordination"
+    ],
+    "achieve": [
+      "A smooth, well-organised competition campaign from build to podium",
+      "Tangible project management experience in a fast-moving technical team",
+      "A reputation as the person who makes everything possible"
+    ]
+  },
+  {
+    "id": "logistics-operations-coordinator",
+    "title": "Logistics & Operations Coordinator",
+    "department": "Logistics",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
+    "about": "As Logistics & Operations Coordinator you will keep the machinery around the car running: the workshop, the equipment, the travel and the plans that get a full race team to the start line. You will work closely with the Head of Logistics and every department to remove friction so the engineers can build.",
+    "tasks": [
+      "Coordinate workshop logistics: tools, materials, consumables and ordering",
+      "Help plan and execute transport of the car, equipment and team to events",
+      "Organise travel, accommodation and practical arrangements for team activities",
+      "Keep inventory, packing lists and operational documentation up to date",
+      "Support cross-departmental planning and day-to-day team operations"
+    ],
+    "achieve": [
+      "A competition campaign that runs on rails because of your planning",
+      "Practical project coordination experience in a technical organisation",
+      "Insight into everything it takes to field a race team, beyond the car itself"
+    ]
+  },
+  {
+    "id": "business-head",
+    "title": "Head of Business",
+    "department": "Business & Marketing",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
+    "about": "As Head of Business you will lead the business and marketing department, overseeing sponsorship, communications, content and finance. You will be the external face of Helix for sponsors and partners, and work closely with the team lead to ensure the organisation runs professionally and sustainably.",
+    "tasks": [
+      "Lead and coordinate the business department across sponsorship, marketing and finance",
+      "Own sponsor relationships and ensure all partner commitments are delivered",
+      "Set the communications strategy across social media, website and press",
+      "Report on financial and commercial performance to the board and team lead",
+      "Represent Helix at industry events and build the team's professional reputation"
+    ],
+    "achieve": [
+      "A fully funded season with a strong, active sponsor portfolio",
+      "Leadership experience running a multi-function business team",
+      "A professional network spanning Norwegian engineering, tech and industry"
+    ]
+  },
+  {
+    "id": "mechanical-engineer",
+    "title": "Mechanical Engineer",
+    "department": "Mechanical & Production",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
+    "about": "As a Mechanical Engineer on the Helix team you will design, analyse and manufacture the physical components that make up the car, from chassis and suspension to drivetrain and aerodynamics. You will take parts from concept to a finished component on a competition vehicle, learning practical engineering skills no lecture can teach.",
+    "tasks": [
+      "Design components and assemblies as part of a sub-system group",
+      "Run analyses and simulations to validate designs against load cases",
+      "Manufacture parts hands-on using a range of workshop techniques",
+      "Test, iterate and document your components through the build season",
+      "Collaborate with the electrical and software teams on system integration"
+    ],
+    "achieve": [
+      "Parts you designed and built driving on a real race car at competition",
+      "Hands-on manufacturing experience across a range of materials and methods",
+      "A complete design-to-production engineering cycle on your CV"
+    ]
+  },
+  {
+    "id": "electrical-engineer",
+    "title": "Electrical Engineer",
+    "department": "Electrical",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no", "linkedin": "https://linkedin.com/in/niclas-karlsen" },
+    "about": "As an Electrical Engineer on the Helix team you will design and build the embedded electronics that control and monitor the car: circuit boards, wiring harnesses and sensors. You will work under experienced guidance and see your hardware come alive on a competition car.",
+    "tasks": [
+      "Design, assemble and test electronics for control, sensing and power distribution",
+      "Build and route wiring harnesses to relevant safety standards",
+      "Integrate sensors and validate signals together with the software team",
+      "Contribute to embedded system design and testing under experienced supervision",
+      "Document designs and participate in reviews with the electrical sub-team"
+    ],
+    "achieve": [
+      "Your own hardware running on a competition race car",
+      "Practical electronics experience from schematic to soldered, tested board",
+      "Working knowledge of vehicle electrical architecture and embedded systems"
+    ]
+  },
+  {
+    "id": "software-engineer",
+    "title": "Software Engineer",
+    "department": "Software",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Jørgen Asmundvaag", "email": "jorgen.asmundvaag@helixnmbu.no", "linkedin": "https://linkedin.com/in/jorgen-asmundvaag" },
+    "about": "As a Software Engineer on the Helix team you will build and maintain the software systems that make the car smarter and more capable. You will work across the stack, from low-level control and sensor integration to higher-level planning and simulation, in a collaborative, fast-moving engineering environment.",
+    "tasks": [
+      "Develop and maintain software modules within the team's autonomy and software stack",
+      "Implement algorithms for perception, path planning or vehicle control",
+      "Write clean, testable code in a collaborative codebase",
+      "Integrate and validate software on the physical car and in simulation",
+      "Participate in code reviews and contribute to technical documentation"
+    ],
+    "achieve": [
+      "Production code running on a real competition vehicle",
+      "Hands-on experience with embedded systems and real-time software",
+      "A strong foundation in robotics and autonomous systems development"
+    ]
+  },
+  {
+    "id": "business-partnerships",
+    "title": "Partner Relations Coordinator",
+    "department": "Business & Marketing",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
+    "about": "You will be responsible for securing the financial foundation of the team: identifying prospects, building relationships and closing sponsorship agreements that fund our season. This is a sales and relationship-driven role that combines strategic thinking with persistence and strong communication skills.",
+    "tasks": [
+      "Research, identify and approach potential sponsors across industries",
+      "Prepare tailored proposals, pitch decks and partnership packages",
+      "Lead meetings and negotiations with companies at various levels",
+      "Manage the pipeline of prospects and maintain accurate records of outreach",
+      "Work with the Head of Business to ensure sponsor deliverables are met"
+    ],
+    "achieve": [
+      "A secured sponsor portfolio that meaningfully funds the season",
+      "Real experience in B2B sales, negotiation and account management",
+      "Lasting professional relationships in the Norwegian engineering and tech industry"
+    ]
+  },
+  {
+    "id": "cost-analyst",
+    "title": "Cost Analyst",
+    "department": "Finance",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": {
+      "name": "Oskar Gabrielsen",
+      "email": "oskar.gabrielsen@helixnmbu.no"
+    },
+    "about": "As Cost Analyst you will work with the financial and manufacturing side of the race car, helping the team understand what it costs to design and build each system. You will work closely with the technical departments to analyse components, materials and manufacturing processes, and contribute to the team's Formula Student cost documentation and competition preparation.",
+    "tasks": [
+      "Analyse the cost of components, materials and manufacturing processes across the car",
+      "Work with technical departments to collect and structure cost and production data",
+      "Maintain cost documentation and support preparation for the Formula Student Cost & Manufacturing event",
+      "Identify cost drivers and explore opportunities for more cost-effective engineering solutions",
+      "Help communicate and justify the team's design and manufacturing decisions from an economic perspective"
+    ],
+    "achieve": [
+      "Hands-on experience with cost analysis in a real engineering project",
+      "A practical understanding of how engineering, manufacturing and finance influence each other",
+      "Experience presenting and defending cost and manufacturing decisions in a Formula Student competition"
+    ]
+  },
+  {
+    "id": "communication-content-manager",
+    "title": "Communication & Content Manager",
+    "department": "Business & Marketing",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Selma Woldseth", "email": "selma.woldseth@helixnmbu.no", "linkedin": "https://linkedin.com/in/selma-w-040660363" },
+    "about": "As Communication & Content Manager you will own how Helix tells its story: planning and running our communication across social media, the website and press. You will set the content strategy, keep the publishing rhythm going through the season and make sure sponsors, students and the FSAE community see what we're building.",
+    "tasks": [
+      "Own the content calendar and publishing across our social channels",
+      "Set the tone and visual direction together with the design profile",
+      "Coordinate content creators and photographers around builds and events",
+      "Produce sponsor visibility content and ensure partner commitments are delivered",
+      "Track engagement and use it to sharpen the communication strategy"
+    ],
+    "achieve": [
+      "A visible, growing brand you shaped and ran through a full season",
+      "Real experience in communication strategy, publishing and analytics",
+      "A portfolio of campaigns tied to a race car people care about"
+    ]
+  },
+  {
+    "id": "content-creator",
+    "title": "Content Creator",
+    "department": "Business & Marketing",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Selma Woldseth", "email": "selma.woldseth@helixnmbu.no", "linkedin": "https://linkedin.com/in/selma-w-040660363" },
+    "about": "As a Content Creator you will capture the build, the people and the competition: photo, video and graphics that bring the Helix story to life. Workshop nights, track days and everything in between become your raw material, with creative freedom to shape how it's told.",
+    "tasks": [
+      "Shoot photo and video in the workshop, at events and at competition",
+      "Edit short-form video and reels for social media",
+      "Create graphics for announcements, sponsor features and recruitment",
+      "Build and maintain the team's shared media library",
+      "Work with the Communication & Content Manager on campaigns and deadlines"
+    ],
+    "achieve": [
+      "A published portfolio of real work seen by thousands",
+      "Hands-on experience in media production from capture to post",
+      "Front-row access to every milestone of a competition season"
+    ]
+  },
+  {
+  "id": "photo-videographer",
+  "title": "Photo & Videographer",
+  "department": "Business & Marketing",
+  "applyUrl": "https://form.typeform.com/to/placeholder",
+  "contact": {
+    "name": "Selma Woldseth",
+    "email": "selma.woldseth@helixnmbu.no",
+    "linkedin": "https://linkedin.com/in/selma-w-040660363"
+  },
+  "about": "As Photo & Videographer you will document the team's work throughout the season and create photo and video material for social media, the website and sponsor content. You will capture the people, progress and key moments that tell the story of Helix, from workshop milestones to events and competitions.",
+  "tasks": [
+    "Capture photo and video during important milestones, events and competitions",
+    "Produce visual material for social media, the website and sponsor content",
+    "Document the team's development and activities throughout the season",
+    "Organize and maintain a shared library of photo and video material",
+    "Train and coordinate other team members who can cover events when you are unavailable"
+  ],
+  "achieve": [
+    "A strong portfolio of motorsport, event and team photography and video",
+    "Hands-on experience producing content in fast-paced real-world environments",
+    "Experience coordinating media coverage across a full Formula Student season"
+  ]
+},
+{
+  "id": "graphic-designer",
+  "title": "Graphic Designer",
+  "department": "Business & Marketing",
+  "applyUrl": "https://form.typeform.com/to/placeholder",
+  "contact": {
+    "name": "Selma Woldseth",
+    "email": "selma.woldseth@helixnmbu.no",
+    "linkedin": "https://linkedin.com/in/selma-w-040660363"
+  },
+  "about": "As Graphic Designer you will help shape and develop Helix NMBU's visual identity in close collaboration with the Head of Marketing. You will turn the team's ideas, projects and achievements into clear and engaging visual communication across digital and physical channels.",
+  "tasks": [
+    "Develop graphics and visual assets for social media",
+    "Create layouts and visual material for presentations and sponsor content",
+    "Design merchandise and other branded materials",
+    "Maintain and further develop the team's visual identity",
+    "Work closely with the marketing team to keep communication visually consistent"
+  ],
+  "achieve": [
+    "A portfolio of published design work across digital and physical media",
+    "Real experience developing and maintaining a brand identity",
+    "Creative ownership of how a Formula Student team presents itself visually"
+  ]
+  },
+  {
+    "id": "open-application",
+    "title": "Open Application",
+    "department": "Open",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Niclas Karlsen", "email": "niclas.karlsen@helixnmbu.no" },
+    "about": "Don't see a role that fits you exactly? We're always interested in hearing from talented, motivated students who share our passion for engineering and innovation. Tell us who you are, what you bring to the table and how you think you can contribute to Helix NMBU.",
+    "tasks": [
+      "Tell us about yourself and your background",
+      "Describe the skills and experience you'd bring to the team",
+      "Let us know which area of the car or organisation interests you most",
+      "Share examples of projects, coursework or work you're proud of"
+    ],
+    "achieve": [
+      "A place on a passionate, high-performing student team",
+      "Hands-on experience in your area of interest",
+      "A network spanning engineering, business and design at NMBU and beyond"
+    ]
+  }
+]
