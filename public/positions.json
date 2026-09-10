@@ -17,5 +17,25 @@
       "Hands-on experience in your area of interest",
       "A network spanning engineering, business and design at NMBU and beyond"
     ]
+  },
+  {
+    "id": "business-partnerships",
+    "title": "Partner Relations Coordinator",
+    "department": "Business & Marketing",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Henrik Engdal", "email": "henrik.engdal@helixnmbu.no", "linkedin": "https://linkedin.com/in/henrik-engdal" },
+    "about": "You will be responsible for securing the financial foundation of the team: identifying prospects, building relationships and closing sponsorship agreements that fund our season. This is a sales and relationship-driven role that combines strategic thinking with persistence and strong communication skills.",
+    "tasks": [
+      "Research, identify and approach potential sponsors across industries",
+      "Prepare tailored proposals, pitch decks and partnership packages",
+      "Lead meetings and negotiations with companies at various levels",
+      "Manage the pipeline of prospects and maintain accurate records of outreach",
+      "Work with the Head of Business to ensure sponsor deliverables are met"
+    ],
+    "achieve": [
+      "A secured sponsor portfolio that meaningfully funds the season",
+      "Real experience in B2B sales, negotiation and account management",
+      "Lasting professional relationships in the Norwegian engineering and tech industry"
+    ]
   }
 ]
