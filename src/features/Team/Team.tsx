@@ -23,9 +23,11 @@ const DEPARTMENTS = [
   'The Board',
   'Mechanical & Production',
   'Electronics',
-  'Business & Marketing',
+  'Business',
+  'Marketing',
   'Finance',
-  'Software',
+  'Software and Autonomous',
+  'Logistics',
 ] as const
 
 // ─── Positions per department ─────────────────────────────────────────────────
@@ -33,9 +35,10 @@ const DEPARTMENTS = [
 const DEPT_ROLES: Record<string, string[]> = {
   'Mechanical & Production': ['Mechanical Lead', 'Structural Engineer', 'Manufacturing Engineer', 'Composites Engineer', 'Systems Engineer', 'Suspension Engineer', 'Chassis Engineer'],
   'Electronics':             ['Electrical Lead', 'PCB Design Engineer', 'BMS Engineer', 'Wiring Harness Engineer', 'Power Electronics Engineer', 'HV Systems Engineer'],
-  'Business & Marketing':    ['Head of Business', 'Brand Manager', 'Social Media Manager', 'Content Creator', 'Partner Relations', 'Communications Officer'],
+  'Business ':     ['Head of Business', 'Brand Manager', 'Social Media Manager', 'Content Creator', 'Partner Relations', 'Communications Officer'],
+   'marketing':    [],
   'Finance':               ['CFO', 'Financial Controller', 'Budget Analyst', 'Sponsorship Manager', 'Finance Officer', 'Treasurer'],
-  'Software':                ['Autonomous Systems Lead', 'ML Engineer', 'Computer Vision Engineer', 'Lead Developer', 'Full-Stack Engineer', 'Backend Developer', 'Data Engineer'],
+  'Software & autonomous':   ['Autonomous Systems Lead', 'Software Engineer','ML Engineer', 'Computer Vision Engineer', 'Lead Developer', 'Full-Stack Engineer', 'Backend Developer', 'Data Engineer'],
   'Logistics':               ['Head of Logistics', 'Competition Coordinator', 'Workshop Manager', 'Travel Coordinator', 'Operations Officer'],
   'The Board':               ['President', 'Vice President', 'Board Member'],
 }

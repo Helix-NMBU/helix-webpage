@@ -24,6 +24,7 @@ import { Navbar } from './libs/components/navbar/Navbar.tsx'
 import Footer from '@libs/components/footer.tsx'
 import { hideNavbar as shouldHideNavbar, hideFooter as shouldHideFooter, knownRoutes } from './libs/lib/routes'
 import { PageLoader } from './libs/components/PageLoader.tsx'
+import  Contactside  from './Contactside.tsx'
 
 function AppContent() {
   const location = useLocation();
@@ -56,6 +57,7 @@ function AppContent() {
         <Route path="/recruitment" element={<RecruitmentPortal />} />
         <Route path="/cv-bank" element={<Navigate to="/cv-bank/login" replace />} />
         <Route path="/cv-bank/login" element={<CVBankLogin />} />
+        <Route path="/Contactside"  element={<Contactside />} />
         <Route
           path="/cv-bank/profile"
           element={

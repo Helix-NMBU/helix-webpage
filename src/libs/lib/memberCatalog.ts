@@ -5,13 +5,15 @@ const NO_SEASON_ROLE = `No ${CURRENT_SEASON} role`;
 const NO_SEASON_POSITION = `No ${CURRENT_SEASON} position`;
 
 export const DEPARTMENTS = [
-  "Autonomous",
   "Marketing",
   "Finance",
-  "Mechanical and Production",
+  "buisness",
+  "Mechanical & Production",
   "Electronics",
-  "Software",
+  "Software & Autonomous",
+  "Logistics",
   "The Board",
+  "Sponsor department",
 ];
 
 export interface MemberRecord {
