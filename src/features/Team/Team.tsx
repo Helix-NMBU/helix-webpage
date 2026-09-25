@@ -76,24 +76,9 @@ function MemberCard({ member, index, navReady }: { member: Member; index: number
   const delay = (index % 4) * 70
   const showSkeleton = !imgLoaded && !imgError
 
-  const onCardEnter = () => {
-    if (!ref.current) return
-    gsap.to(ref.current, { y: -6, scale: 1.02, duration: 0.28, ease: 'power2.out', overwrite: true })
-  }
-  const onCardLeave = () => {
-    if (!ref.current) return
-    gsap.to(ref.current, { y: 0, scale: 1, duration: 0.32, ease: 'power2.inOut', overwrite: true })
-  }
-
   return (
     // Wrapper is always visible so the skeleton shows immediately
-    <div
-      ref={ref}
-      className="flex flex-col"
-      style={{ willChange: 'transform', cursor: 'default' }}
-      onMouseEnter={onCardEnter}
-      onMouseLeave={onCardLeave}
-    >
+    <div ref={ref} className="flex flex-col">
       {/* Photo */}
       <div className="relative overflow-hidden bg-gray-100 rounded-md" style={{ aspectRatio: '3/4' }}>
         {showSkeleton && <div className="absolute inset-0 skeleton-shimmer" />}
