@@ -80,7 +80,7 @@ function MemberCard({ member, index, navReady }: { member: Member; index: number
     // Wrapper is always visible so the skeleton shows immediately
     <div ref={ref} className="flex flex-col">
       {/* Photo */}
-      <div className="relative overflow-hidden bg-gray-100 rounded-md" style={{ aspectRatio: '3/4' }}>
+      <div className="relative overflow-hidden bg-gray-100 rounded-lg" style={{ aspectRatio: '3/4' }}>
         {showSkeleton && <div className="absolute inset-0 skeleton-shimmer" />}
 
         {!imgError ? (
