@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { FileText, Handshake, Home, LogOut, Mail, Users } from "lucide-react";
+import { FileText, Handshake, Home, LogOut, Users } from "lucide-react";
 import { usePortalAuth } from "./PortalAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@libs/components/ui/avatar";
 import {
@@ -33,7 +33,7 @@ export function PortalShell({ section, onSectionChange, children }: { section: P
   const { context, isPreview, signOut } = usePortalAuth();
   const organizationName = context?.organizationName ?? "Sponsor organization";
   return (
-    <SidebarProvider open onOpenChange={() => undefined} className="portal-root portal-shell-root" style={{ "--sidebar-width": "calc(var(--spacing) * 72)" } as CSSProperties}>
+    <SidebarProvider open onOpenChange={() => undefined} className="portal-root portal-shell-root h-svh overflow-hidden" style={{ "--sidebar-width": "calc(var(--spacing) * 72)" } as CSSProperties}>
       <Sidebar variant="inset" collapsible="offcanvas">
         <SidebarContent>
           <SidebarGroup>
@@ -72,11 +72,6 @@ export function PortalShell({ section, onSectionChange, children }: { section: P
                     <span>Resources</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Contact">
-                    <a href="mailto:sponsorships@helixnmbu.no"><Mail /><span>Contact</span></a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -92,8 +87,9 @@ export function PortalShell({ section, onSectionChange, children }: { section: P
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="min-w-0 overflow-hidden bg-background">
-        <div className="portal-content">{children}</div>
+      {/* The page itself never scrolls: the inset has a fixed height and scrolls on its own, and pages can pin headers by using a .portal-scroll-region. */}
+      <SidebarInset className="min-h-0 min-w-0 overflow-hidden bg-background">
+        <div className="portal-content flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -298,7 +298,11 @@ begin
     'organization_logo_url', o.logo_url,
     'tier', a.tier,
     'agreement_id', a.id,
+    'agreement_starts_at', a.starts_at,
     'agreement_ends_at', a.ends_at,
+    -- Drive the status messages on the portal overview: welcome vs welcome back, and whether a renewal is already signed.
+    'is_returning_sponsor', exists(select 1 from public.sponsorship_agreements prev where prev.organization_id = o.id and prev.starts_at < a.starts_at),
+    'has_upcoming_agreement', exists(select 1 from public.sponsorship_agreements nxt where nxt.organization_id = o.id and nxt.starts_at > current_date),
     'talent_directory', coalesce(a.talent_directory, false),
     'thesis_credits', case when a.tier = 'Main' then null else
       (select count(*) from public.proposal_credits pc where pc.organization_id = o.id and pc.consumed_at is null)

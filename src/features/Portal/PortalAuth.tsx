@@ -30,7 +30,10 @@ function mapContext(raw: Record<string, unknown>, session: Session): PortalConte
     organizationLogoUrl: typeof raw.organization_logo_url === "string" ? raw.organization_logo_url : null,
     tier: (raw.tier as PortalContext["tier"]) ?? null,
     agreementId: typeof raw.agreement_id === "string" ? raw.agreement_id : null,
+    agreementStartsAt: typeof raw.agreement_starts_at === "string" ? raw.agreement_starts_at : null,
     agreementEndsAt: typeof raw.agreement_ends_at === "string" ? raw.agreement_ends_at : null,
+    isReturningSponsor: Boolean(raw.is_returning_sponsor),
+    hasUpcomingAgreement: Boolean(raw.has_upcoming_agreement),
     talentDirectory: Boolean(raw.talent_directory),
     thesisCredits: typeof raw.thesis_credits === "number" ? raw.thesis_credits : null,
   };

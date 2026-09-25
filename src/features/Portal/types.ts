@@ -11,7 +11,10 @@ export type PortalContext = {
   organizationLogoUrl: string | null;
   tier: SponsorTier | null;
   agreementId: string | null;
+  agreementStartsAt: string | null;
   agreementEndsAt: string | null;
+  isReturningSponsor: boolean;
+  hasUpcomingAgreement: boolean;
   talentDirectory: boolean;
   thesisCredits: number | null;
 };
@@ -52,6 +55,22 @@ export type MemberOpportunity = {
   sponsor_organizations?: { name: string } | null;
 };
 
+/** Row shape of the `list_sponsor_responses()` RPC; contact fields are null unless the member chose to share them. */
+export type SponsorResponse = {
+  id: string;
+  opportunity_id: string;
+  status: "interested" | "contacted" | "withdrawn" | "closed";
+  note: string;
+  created_at: string;
+  full_name: string | null;
+  field_of_study: string | null;
+  graduation_year: number | null;
+  profile_image_url: string | null;
+  email: string | null;
+  phone: string | null;
+  cv_url: string | null;
+};
+
 export type HelixEngagement = {
   id: string;
   created_at: string;
@@ -65,4 +84,10 @@ export type HelixEngagement = {
   budget: string | null;
   quote_amount: number | null;
   quote_currency: string | null;
+};
+
+export type DirectoryMember = {
+  id: string; full_name: string; email: string | null; personal_email: string | null; personal_phone: string | null;
+  linkedin: string | null; field_of_study: string | null; graduation_year: number | null;
+  profile_image_url: string | null; cv_url: string | null; share_cv: boolean; share_email: boolean; share_phone: boolean;
 };

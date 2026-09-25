@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@libs/lib/utils";
-import { Alert, AlertDescription } from "@libs/components/ui/alert";
-import { Button } from "@libs/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
-import { Input } from "@libs/components/ui/input";
-import { Label } from "@libs/components/ui/label";
 import { usePortalAuth } from "./PortalAuth";
 import "./portal.css";
 
@@ -58,26 +54,35 @@ export default function SponsorLogin() {
           WebkitMaskImage: "radial-gradient(ellipse at center, rgba(0,0,0,0.9) 0%, transparent 75%)",
         }}
       />
-      <Card className="portal-login-card gap-0 overflow-hidden py-0">
-        <CardHeader className="px-8 pb-5 pt-8">
-          <p className="portal-eyebrow">Helix Sponsor Portal</p>
-          <CardTitle className="text-[42px] leading-none tracking-[-.045em]">Welcome back.</CardTitle>
-          <CardDescription className="pt-2 text-base leading-relaxed">Use the email address Helix invited. We will send you a secure one-time sign-in link.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-8 pb-8">
-          {sent ? (
-            <Alert><AlertDescription>Check <strong>{email}</strong> for your sign-in link.</AlertDescription></Alert>
-          ) : (
-            <form className="grid gap-4" onSubmit={submit}>
-              <div className="grid gap-2"><Label htmlFor="sponsor-email">Work email</Label><Input id="sponsor-email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
-              {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-              <Button disabled={loading}>{loading ? "Sending…" : "Email me a sign-in link"}</Button>
-            </form>
-          )}
-          {import.meta.env.DEV && <div className="mt-4"><Button className="w-full" variant="outline" type="button" onClick={enterPreview}>Preview with sample data</Button><p className="mt-2 text-center text-xs text-muted-foreground">Local preview only. Nothing is saved or emailed.</p></div>}
-          <Button asChild variant="link" className="mt-4 h-auto px-0 text-muted-foreground"><Link to="/">Back to helixnmbu.no</Link></Button>
-        </CardContent>
-      </Card>
+      <div className="portal-login-panel">
+        <p className="portal-login-title">Sponsor portal</p>
+        {sent ? (
+          <p className="portal-login-message">Check <strong>{email}</strong> for your sign-in link.</p>
+        ) : (
+          <form className="portal-login-form" onSubmit={submit}>
+            <label htmlFor="sponsor-email" className="sr-only">Work email</label>
+            <input
+              id="sponsor-email"
+              type="email"
+              placeholder="your-company@email.no"
+              required
+              autoComplete="email"
+              className="portal-login-input"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            {error && <p className="portal-login-error">{error}</p>}
+            <button type="submit" disabled={loading} className="portal-login-submit">
+              {loading ? "Sending…" : "Request login info"} <ArrowRight aria-hidden />
+            </button>
+          </form>
+        )}
+        {import.meta.env.DEV && (
+          <div className="portal-login-foot">
+            <button type="button" className="portal-login-muted-link" onClick={enterPreview}>Preview with sample data</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
