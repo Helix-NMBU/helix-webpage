@@ -1,10 +1,11 @@
-import { CircleAlert, CircleCheck, CircleDashed, CircleMinus, Loader, MessageSquare, MoreVertical, Users, type LucideIcon } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleDashed, CircleMinus, CircleX, Clock3, Loader, MessageSquare, MoreVertical, Send, Users, type LucideIcon } from "lucide-react";
 import { cn } from "@libs/lib/utils";
 import { Badge } from "@libs/components/ui/badge";
 import { Button } from "@libs/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { InterestAvatars } from "./InterestDialog";
+import { getRequestStatus, type RequestStatusKey, type RequestStatusTone } from "./requestStatus";
 import type { SponsorResponse } from "./types";
 
 export type RequestRow = {
@@ -16,33 +17,37 @@ export type RequestRow = {
   createdAt: string;
 };
 
-type StatusStyle = { icon: LucideIcon; iconClass: string };
+type StatusStyle = { icon: LucideIcon; iconClass?: string };
 
-const done: StatusStyle = { icon: CircleCheck, iconClass: "fill-emerald-500 text-white" };
-const working: StatusStyle = { icon: Loader, iconClass: "text-muted-foreground" };
-const needsYou: StatusStyle = { icon: CircleAlert, iconClass: "fill-amber-500 text-white" };
-const fresh: StatusStyle = { icon: CircleDashed, iconClass: "text-muted-foreground" };
-const ended: StatusStyle = { icon: CircleMinus, iconClass: "text-muted-foreground" };
-
-const statusStyles: Record<string, StatusStyle> = {
-  completed: done, published: done, fulfilled: done, approved: done,
-  in_progress: working, scheduled: working, quoting: working, under_review: working,
-  waiting_for_sponsor: needsYou, changes_requested: needsYou,
-  submitted: fresh, requested: fresh, draft: fresh,
-  closed: ended, cancelled: ended,
+const statusStyles: Record<RequestStatusKey, StatusStyle> = {
+  draft: { icon: CircleDashed },
+  submitted: { icon: Send },
+  under_review: { icon: Loader },
+  input_needed: { icon: CircleAlert, iconClass: "fill-amber-500 text-white" },
+  approved: { icon: CircleCheck, iconClass: "fill-emerald-500 text-white" },
+  scheduled: { icon: Clock3 },
+  published: { icon: CircleCheck, iconClass: "fill-emerald-500 text-white" },
+  in_progress: { icon: Loader },
+  completed: { icon: CircleCheck, iconClass: "fill-emerald-500 text-white" },
+  closed: { icon: CircleMinus },
+  cancelled: { icon: CircleX },
 };
 
-export const statusLabel = (status: string) => {
-  const text = status.replace(/_/g, " ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+const toneClasses: Record<RequestStatusTone, string> = {
+  neutral: "border-border bg-background text-muted-foreground",
+  info: "border-blue-200 bg-blue-50 text-blue-700",
+  attention: "border-amber-200 bg-amber-50 text-amber-800",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  danger: "border-red-200 bg-red-50 text-red-700",
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const { icon: Icon, iconClass } = statusStyles[status] ?? ended;
+  const meta = getRequestStatus(status);
+  const { icon: Icon, iconClass } = statusStyles[meta.key];
   return (
-    <Badge variant="outline" className="gap-1 whitespace-nowrap px-1.5 font-normal text-muted-foreground">
+    <Badge variant="outline" className={cn("gap-1 whitespace-nowrap px-1.5 font-normal", toneClasses[meta.tone])}>
       <Icon className={cn("size-3.5", iconClass)} />
-      {statusLabel(status)}
+      {meta.label}
     </Badge>
   );
 }

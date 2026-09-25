@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@libs/lib/utils";
 import { usePortalAuth } from "./PortalAuth";
@@ -60,7 +59,7 @@ export default function SponsorLogin() {
           <p className="portal-login-message">Check <strong>{email}</strong> for your sign-in link.</p>
         ) : (
           <form className="portal-login-form" onSubmit={submit}>
-            <label htmlFor="sponsor-email" className="sr-only">Work email</label>
+            <label htmlFor="sponsor-email" className="portal-login-label">Work email</label>
             <input
               id="sponsor-email"
               type="email"
@@ -73,15 +72,16 @@ export default function SponsorLogin() {
             />
             {error && <p className="portal-login-error">{error}</p>}
             <button type="submit" disabled={loading} className="portal-login-submit">
-              {loading ? "Sending…" : "Request login info"} <ArrowRight aria-hidden />
+              {loading ? "Sending…" : "Send login link"}
             </button>
           </form>
         )}
-        {import.meta.env.DEV && (
-          <div className="portal-login-foot">
+        <div className="portal-login-foot">
+          <p className="portal-login-contact">Want to learn more? <a href="mailto:sponsorships@helixnmbu.no">Get in touch</a></p>
+          {import.meta.env.DEV && (
             <button type="button" className="portal-login-muted-link" onClick={enterPreview}>Preview with sample data</button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

@@ -10,7 +10,8 @@ import { upcomingSponsorEvents } from "../Portal/sponsorEvents";
 import { EventsCalendar } from "../Portal/EventsCalendar";
 import { InterestDialog } from "../Portal/InterestDialog";
 import { TeamContactCard } from "../Portal/TeamContactCard";
-import { RequestsTable, statusLabel, type RequestRow } from "../Portal/RequestsTable";
+import { RequestsTable, type RequestRow } from "../Portal/RequestsTable";
+import { getRequestStatus, requestStatusOrder, requestStatuses, type RequestStatusKey } from "../Portal/requestStatus";
 import { MemberCard, MemberProfileDialog, downloadCvs, hasSharedCv } from "../Portal/TalentProfile";
 import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
@@ -205,13 +206,16 @@ function ToolbarSearch({ id, value, onChange, placeholder }: { id: string; value
 function CollaborationWorkspace({ rows, interest, onNewRequest, onOpenThread, onViewInterest }: { rows: RequestRow[]; interest: Map<string, SponsorResponse[]>; onNewRequest: () => void; onOpenThread: (row: RequestRow) => void; onViewInterest: (row: RequestRow) => void }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState<"all" | RequestStatusKey>("all");
   const types = useMemo(() => [...new Set(rows.map((row) => row.type))].sort(), [rows]);
-  const statuses = useMemo(() => [...new Set(rows.map((row) => row.status))].sort(), [rows]);
+  const statuses = useMemo(() => {
+    const available = new Set(rows.map((row) => getRequestStatus(row.status).key));
+    return requestStatusOrder.filter((key) => available.has(key));
+  }, [rows]);
   const filtered = useMemo(() => rows
     .filter((row) => row.title.toLowerCase().includes(query.trim().toLowerCase()))
     .filter((row) => type === "all" || row.type === type)
-    .filter((row) => status === "all" || row.status === status), [query, rows, status, type]);
+    .filter((row) => status === "all" || getRequestStatus(row.status).key === status), [query, rows, status, type]);
   const hasFilters = Boolean(query || type !== "all" || status !== "all");
   const clearFilters = () => { setQuery(""); setType("all"); setStatus("all"); };
 
@@ -224,7 +228,7 @@ function CollaborationWorkspace({ rows, interest, onNewRequest, onOpenThread, on
       <Label htmlFor="request-type" className="sr-only">Type</Label>
       <Select value={type} onValueChange={setType}><SelectTrigger id="request-type" className={toolbarSelectClass}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All types</SelectItem>{types.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
       <Label htmlFor="request-status" className="sr-only">Status</Label>
-      <Select value={status} onValueChange={setStatus}><SelectTrigger id="request-status" className={toolbarSelectClass}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{statuses.map((value) => <SelectItem key={value} value={value}>{statusLabel(value)}</SelectItem>)}</SelectContent></Select>
+      <Select value={status} onValueChange={(value) => setStatus(value as "all" | RequestStatusKey)}><SelectTrigger id="request-status" className={toolbarSelectClass}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{statuses.map((value) => <SelectItem key={value} value={value}>{requestStatuses[value].label}</SelectItem>)}</SelectContent></Select>
       <div className="ml-auto flex items-center gap-2">
         {hasFilters && <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground" onClick={clearFilters}>Reset <X /></Button>}
         <span className="whitespace-nowrap text-sm text-muted-foreground">{filtered.length} of {rows.length} requests</span>
