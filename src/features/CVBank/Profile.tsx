@@ -1,7 +1,9 @@
 import { Dispatch, DragEvent, FormEvent, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCVBankAuth } from "./auth";
 import { supabase } from "../../libs/lib/utils";
+import { currentSeason } from "../../libs/lib/season";
+import "../Portal/portal.css";
 
 type UploadState = "idle" | "uploading" | "success" | "error" | "no-endpoint" | "deleting";
 type SaveState = "idle" | "saving" | "saved" | "error" | "supabase-missing";
@@ -23,6 +25,10 @@ type ProfileShape = {
   graduation_year: string;
   profile_image_url: string;
   cv_url: string;
+  visible_to_sponsors: boolean;
+  share_cv: boolean;
+  share_email: boolean;
+  share_phone: boolean;
   helix_career: HelixCareerEntry[];
 };
 
@@ -31,8 +37,8 @@ const maxAvatarSizeBytes = 5 * 1024 * 1024; // 5MB
 const supabaseConfigured = Boolean(
   import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY && supabase
 );
-const cvBucket = import.meta.env.VITE_SUPABASE_CV_BUCKET;
-const avatarBucket = import.meta.env.VITE_SUPABASE_PROFILE_BUCKET;
+const cvBucket = import.meta.env.VITE_SUPABASE_CV_BUCKET || "member-cvs";
+const avatarBucket = import.meta.env.VITE_SUPABASE_PROFILE_BUCKET || "member-profiles";
 
 const getFileName = (path: string) => path.split("/").pop() ?? path;
 
@@ -74,12 +80,19 @@ export default function CVBankProfile() {
     graduation_year: "",
     profile_image_url: "",
     cv_url: "",
+    visible_to_sponsors: false,
+    share_cv: false,
+    share_email: false,
+    share_phone: false,
     helix_career: [],
   });
 
   const avatarFallback = useMemo(() => user?.name?.[0]?.toUpperCase() ?? "", [user]);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
-  const seasonOptions = useMemo(() => ["S26", "S25", "S24"], []);
+  const seasonOptions = useMemo(() => {
+    const current = Number(currentSeason().slice(1));
+    return Array.from({ length: 4 }, (_, index) => `S${String((current - index + 100) % 100).padStart(2, "0")}`);
+  }, []);
   const availableSeasons = useMemo(
     () =>
       seasonOptions.filter(
@@ -98,27 +111,6 @@ export default function CVBankProfile() {
       );
     });
   }, [profile.helix_career, originalCareer]);
-
-  useEffect(() => {
-    let hasLoggedOut = false;
-
-    const performLogout = () => {
-      if (hasLoggedOut) return;
-      hasLoggedOut = true;
-      logout();
-    };
-
-    const handleBeforeUnload = () => performLogout();
-    const handlePageHide = () => performLogout();
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("pagehide", handlePageHide);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, [logout]);
 
   useEffect(() => {
     const resolveAvatarUrl = async (path: string | null | undefined) => {
@@ -187,7 +179,7 @@ export default function CVBankProfile() {
         const { data, error } = await supabase
           .from("students")
           .select(
-            "full_name,email,personal_email,personal_phone,linkedin,field_of_study,graduation_year,profile_image_url,cv_url"
+            "full_name,email,personal_email,personal_phone,linkedin,field_of_study,graduation_year,profile_image_url,cv_url,visible_to_sponsors,share_cv,share_email,share_phone"
           )
           .eq("id", supaUser.id)
           .maybeSingle();
@@ -212,6 +204,10 @@ export default function CVBankProfile() {
           graduation_year: data?.graduation_year ? String(data.graduation_year) : "",
           profile_image_url: profileImageUrl,
           cv_url: data?.cv_url ?? "",
+          visible_to_sponsors: data?.visible_to_sponsors ?? false,
+          share_cv: data?.share_cv ?? false,
+          share_email: data?.share_email ?? false,
+          share_phone: data?.share_phone ?? false,
           helix_career: (positionsData ?? []).map((p) => ({
             season: p.season ?? "",
             position: p.title ?? "",
@@ -662,6 +658,10 @@ export default function CVBankProfile() {
         graduation_year: nextProfile.graduation_year ? Number(nextProfile.graduation_year) : null,
         profile_image_url: nextProfile.profile_image_url || null,
         cv_url: nextProfile.cv_url || null,
+        visible_to_sponsors: nextProfile.visible_to_sponsors,
+        share_cv: nextProfile.share_cv,
+        share_email: nextProfile.share_email,
+        share_phone: nextProfile.share_phone,
       };
 
       const { error } = await supabase.from("students").upsert(updates);
@@ -698,7 +698,7 @@ export default function CVBankProfile() {
         : "border border-red-300/60 bg-red-500/10 text-red-100";
 
   return (
-    <div className="flex items-center justify-center px-4 py-12 text-white min-h-svh bg-menu-background">
+    <div className="member-profile-v2 flex items-center justify-center px-4 py-12 text-white min-h-svh bg-menu-background">
       {mustCompleteProfile && !profileLoading && !profileError && (
         <div className="fixed inset-0 z-30 flex items-center justify-center px-4 py-6 bg-black/80">
           <div className="relative w-full max-w-2xl p-6 text-white border shadow-2xl rounded-2xl border-amber-200/40 bg-slate-900">
@@ -984,6 +984,12 @@ export default function CVBankProfile() {
           )}
 
           <div className="flex items-center gap-3">
+            <Link
+              to="/member/opportunities"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition border rounded-lg border-white/20 hover:border-accent hover:text-accent"
+            >
+              Opportunities
+            </Link>
             <button
               type="button"
               onClick={openEditModal}
@@ -1059,6 +1065,34 @@ export default function CVBankProfile() {
                 </div>  
               </div>
             )}
+          </div>
+
+          <div className="h-px bg-white/10 md:col-span-2" />
+
+          <div className="space-y-4 md:col-span-2">
+            <div>
+              <h2 className="text-lg font-semibold">Sponsor visibility</h2>
+              <p className="mt-1 text-sm text-white/65">You decide whether approved sponsors can find your profile and which details they receive.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex items-start gap-3 p-4 border rounded-xl border-white/15 bg-white/5">
+                <input type="checkbox" className="mt-1" checked={profile.visible_to_sponsors} onChange={(e) => setProfile((p) => ({ ...p, visible_to_sponsors: e.target.checked }))} />
+                <span><strong className="block">Visible to sponsors</strong><span className="text-sm text-white/65">Publish this profile in the Talent Directory.</span></span>
+              </label>
+              <label className="flex items-start gap-3 p-4 border rounded-xl border-white/15 bg-white/5">
+                <input type="checkbox" className="mt-1" checked={profile.share_cv} onChange={(e) => setProfile((p) => ({ ...p, share_cv: e.target.checked }))} />
+                <span><strong className="block">Share CV</strong><span className="text-sm text-white/65">Allow authorized sponsors to open the current CV.</span></span>
+              </label>
+              <label className="flex items-start gap-3 p-4 border rounded-xl border-white/15 bg-white/5">
+                <input type="checkbox" className="mt-1" checked={profile.share_email} onChange={(e) => setProfile((p) => ({ ...p, share_email: e.target.checked }))} />
+                <span><strong className="block">Share email</strong><span className="text-sm text-white/65">Show your personal email when available.</span></span>
+              </label>
+              <label className="flex items-start gap-3 p-4 border rounded-xl border-white/15 bg-white/5">
+                <input type="checkbox" className="mt-1" checked={profile.share_phone} onChange={(e) => setProfile((p) => ({ ...p, share_phone: e.target.checked }))} />
+                <span><strong className="block">Share phone</strong><span className="text-sm text-white/65">Show your personal phone number when available.</span></span>
+              </label>
+            </div>
+            <button type="button" className="px-4 py-2 text-sm font-semibold transition border rounded-xl border-white/20 hover:border-accent hover:text-accent" onClick={() => void upsertProfile(profile, setSaveState, setSaveMessage, "Sponsor visibility updated.")}>Save visibility</button>
           </div>
 
           <div className="h-px bg-white/10 md:col-span-2" />
@@ -1254,4 +1288,3 @@ export default function CVBankProfile() {
     </div>
   );
 }
-

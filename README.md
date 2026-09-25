@@ -1,5 +1,9 @@
 # Helix Webpage
 
+## Sponsor Portal v2
+
+The new sponsor workspace uses named magic-link accounts, agreement-based tier access, a member-controlled Talent Directory, Sponsor Requests, Member Opportunities, Helix Engagements, and a protected administration area. See [the setup guide](docs/sponsor-portal-setup.md) for the fresh Supabase database, authentication, Resend, and deployment configuration.
+
 ## CV-Bank Google Login
 
 The CV-Bank flow uses Google OAuth and restricts sign-ins to `@helixnmbu.no` accounts. Configure the following environment variables in `.env`:
@@ -21,4 +25,3 @@ The contact form and recruitment rejection emails are sent server-side via [Rese
 Sending only works once `helixnmbu.no` is verified in Resend (DNS records added and propagated). `api/reject.ts` also requires the caller to be an authenticated, active recruiter (checked via Supabase's `is_recruiter()`), so it can't be used to email arbitrary addresses.
 
 Local testing of the `api/*` functions requires `vercel dev` (or `npx vercel dev`) instead of `npm run dev`, since plain Vite doesn't run Vercel serverless functions.
-
