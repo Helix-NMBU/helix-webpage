@@ -95,7 +95,7 @@ function MemberCard({ member, index, navReady }: { member: Member; index: number
       onMouseLeave={onCardLeave}
     >
       {/* Photo */}
-      <div className="relative overflow-hidden bg-gray-100 rounded" style={{ aspectRatio: '3/4' }}>
+      <div className="relative overflow-hidden bg-gray-100 rounded-md" style={{ aspectRatio: '3/4' }}>
         {showSkeleton && <div className="absolute inset-0 skeleton-shimmer" />}
 
         {!imgError ? (
