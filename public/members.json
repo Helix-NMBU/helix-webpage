@@ -1,317 +1,290 @@
 [
   {
-    "id": 1,
-    "name": "Anastasia Misko",
-    "fieldOfStudy": "Enkelt emner",
-    "department": "Business & Marketing",
-    "position": "Content Creator",
-    "email": "anastasia.misko@helixnmbu.no"
+    "name": "Kiki Beumer",
+    "fieldOfStudy": "Data Science (Datavitenskap)",
+    "department": "Marketing",
+    "position": "Design"
   },
   {
-    "id": 2,
-    "name": "Ane Byrkjeland",
-    "fieldOfStudy": "By og regionsplanlegging",
-    "department": "Business & Marketing",
-    "position": "Content Creator",
-    "email": "ane.byrkjeland@helixnmbu.no"
-  },
-  {
-    "id": 3,
-    "name": "Benjamin Andersen",
-    "fieldOfStudy": "Miljøfysikk og fornybar energi",
+    "name": "Martin Ellingsen Tømmerstigen",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
     "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "benjamin.andersen@helixnmbu.no"
+    "position": "Spindler"
   },
   {
-    "id": 4,
-    "name": "Birk Sveberg",
-    "fieldOfStudy": "Teknologi og produktutvikling",
+    "name": "Peder Johan Rønnevik",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
     "department": "The Board",
-    "position": "Project Manager",
-    "email": "birk.sveberg@helixnmbu.no"
+    "position": "Mekanikk og produksjonsleder"
   },
   {
-    "id": 5,
     "name": "Brede Aasen",
-    "fieldOfStudy": "Teknologi og produktutvikling",
+    "fieldOfStudy": "Robotikk",
     "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "brede.aasen@helixnmbu.no"
+    "position": "Turbo"
   },
   {
-    "id": 6,
-    "name": "Dat Thien Bui",
-    "fieldOfStudy": "Byggeteknikk og arkitektur",
-    "department": "Business & Marketing",
-    "position": "Logistics Coordinator",
-    "email": "dat.bui@helixnmbu.no"
-  },
-  {
-    "id": 9,
-    "name": "Erlend Devold Refsum",
-    "fieldOfStudy": "Miljøfysikk og fornybar energi",
-    "department": "Electronics",
-    "position": "Electronics Engineer",
-    "email": "erlend.refsum@helixnmbu.no"
-  },
-  {
-    "id": 10,
-    "name": "Fredrik Skyum",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "fredrik.skyum@helixnmbu.no"
-  },
-  {
-    "id": 11,
-    "name": "Georg Dahl-Steinvik",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "georg.dahl-steinvik@helixnmbu.no"
-  },
-  {
-    "id": 12,
-    "name": "Henrik Engdal",
+    "name": "Eivind Kristiansen",
     "fieldOfStudy": "Industriell økonomi",
+    "department": "Marketing",
+    "position": "Kommunikasjonsansvarlig"
+  },
+  {
+    "name": "Birk Sveberg",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
     "department": "The Board",
-    "position": "Board Member",
-    "linkedin": "https://linkedin.com/in/henrik-engdal",
-    "email": "henrik.engdal@helixnmbu.no",
-    "cvUrl": "public/cvs/CV Henrik Engdal 2025.pdf"
+    "position": "Prosjektleder"
   },
   {
-    "id": 14,
-    "name": "Herman Middelthon-Heggheim",
-    "fieldOfStudy": "Industriell økonomi",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "herman.middelthon-heggheim@helixnmbu.no"
-  },
-  {
-    "id": 15,
-    "name": "Isak Kjos",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "isak.kjos@helixnmbu.no"
-  },
-  {
-    "id": 16,
     "name": "Jonas Skarvang",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "jonas.skarvang@helixnmbu.no"
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Electronics",
+    "position": "Ratt"
   },
   {
-    "id": 17,
-    "name": "Jørgen Asmundvaag",
+    "name": "Espen Carlsen Unander",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Chainguard"
+  },
+  {
+    "name": "Fredrik Dahle Skyum",
     "fieldOfStudy": "Anvendt robotikk",
-    "department": "Software",
-    "position": "Head of Software & Autonomous",
-    "email": "jorgen.asmundvaag@helixnmbu.no"
-  },
-  {
-    "id": 18,
-    "name": "Leander Bakke-Hegli",
-    "fieldOfStudy": "Teknologi og produktutvikling",
     "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "leander.bakke-hegli@helixnmbu.no"
+    "position": "Frontvinge"
   },
   {
-    "id": 19,
-    "name": "Lukas Fuica Tenorio",
-    "fieldOfStudy": "Kjemi og bioteknologi",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "lukas.tenorio@helixnmbu.no"
-  },
-  {
-    "id": 20,
-    "name": "Lukas Thorsrud",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "lukas.thorsrud@helixnmbu.no"
-  },
-  {
-    "id": 21,
-    "name": "Margrete Magnussen",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "margrete.magnussen@helixnmbu.no"
-  },
-  {
-    "id": 22,
-    "name": "Mariamawit Natnael",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Software",
-    "position": "Software Engineer",
-    "email": "mariamawit.natnael@helixnmbu.no"
-  },
-  {
-    "id": 23,
-    "name": "Martin Kristoffer Hansen",
-    "fieldOfStudy": "Industriell økonomi",
-    "department": "Business & Marketing",
-    "position": "Partner Relations Coordinator",
-    "email": "martin.hansen@helixnmbu.no"
-  },
-  {
-    "id": 24,
-    "name": "Martin Tømmerstigen",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "martin.tommerstigen@helixnmbu.no"
-  },
-  {
-    "id": 25,
-    "name": "Matheo Skaalvoll",
-    "fieldOfStudy": "Industriell økonomi",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "matheo.skaalvoll@helixnmbu.no"
-  },
-  {
-    "id": 26,
-    "name": "Max Solodden",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "max.solodden@helixnmbu.no"
-  },
-  {
-    "id": 27,
-    "name": "Morten Wiik",
-    "fieldOfStudy": "Byggeteknikk og arkitektur",
-    "department": "Business & Marketing",
-    "position": "Partner Relations Coordinator",
-    "email": "morten.wiik@helixnmbu.no"
-  },
-  {
-    "id": 28,
     "name": "Niclas Karlsen",
     "fieldOfStudy": "Industriell økonomi",
     "department": "The Board",
-    "position": "Deputy Project Manager",
-    "email": "niclas.karlsen@helixnmbu.no"
+    "position": "Nestleder"
   },
   {
-    "id": 29,
-    "name": "Oline Wold Johansen",
-    "fieldOfStudy": "Økonomi og administrasjon",
-    "department": "Business & Marketing",
-    "position": "Content Creator",
-    "email": "oline.johansen@helixnmbu.no"
+    "name": "Selma Woldseth",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "The Board",
+    "position": "Markedsføringsleder"
   },
   {
-    "id": 30,
-    "name": "Oliver Svarva Olsen",
-    "fieldOfStudy": "Byggeteknikk og arkitektur",
-    "department": "Business & Marketing",
-    "position": "Logistics Coordinator",
-    "email": "oliver.olsen@helixnmbu.no"
-  },
-  {
-    "id": 31,
-    "name": "Oskar Rändel Gabrielsen",
-    "fieldOfStudy": "Industriell økonomi",
-    "department": "Finance",
-    "position": "Head of Finance",
-    "email": "oskar.gabrielsen@helixnmbu.no"
-  },
-  {
-    "id": 32,
-    "name": "Oskar Støre",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Software",
-    "position": "Software Engineer",
-    "email": "oskar.store@helixnmbu.no"
-  },
-  {
-    "id": 33,
-    "name": "Peder Rønnevik",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Head of Mechanical & Production",
-    "email": "peder.ronnevik@helixnmbu.no"
-  },
-  {
-    "id": 34,
-    "name": "Philip Amadeus Fiske Vassal",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Electronics",
-    "position": "Electronics Engineer",
-    "email": "philip.vassal@helixnmbu.no"
-  },
-  {
-    "id": 35,
-    "name": "Selma Elise Woldseth",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Business & Marketing",
-    "position": "Head of Marketing",
-    "linkedin": "www.linkedin.com/in/selma-w-040660363",
-    "email": "selma.woldseth@helixnmbu.no"
-  },
-  {
-    "id": 36,
-    "name": "Simon Sivertsen",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Finance",
-    "position": "Finance Coordinator",
-    "email": "simon.sivertsen@helixnmbu.no"
-  },
-  {
-    "id": 37,
-    "name": "Sohaib Anjem",
-    "fieldOfStudy": "Økonomi ledelse og IT",
-    "department": "Finance",
-    "position": "Finance Coordinator",
-    "email": "sohaib.anjem@helixnmbu.no"
-  },
-  {
-    "id": 38,
-    "name": "Tage Krans",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "Electronics",
-    "position": "Head of Electronics",
-    "email": "tage.krans@helixnmbu.no"
-  },
-  {
-    "id": 39,
     "name": "Varagan Konesan",
-    "fieldOfStudy": "Industriell økonomi",
+    "fieldOfStudy": "Industriell Økonomi",
     "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "varagan.konesan@helixnmbu.no"
+    "position": "Body and nose"
   },
   {
-    "id": 40,
+    "name": "Matheo Skaalvoll",
+    "fieldOfStudy": "Industriell Økonomi",
+    "department": "Mechanical & Production",
+    "position": "Gulv og sidepods"
+  },
+  {
+    "name": "Leander Bakke-Hegli",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Pedalboks"
+  },
+  {
+    "name": "Jørgen Asmundvaag",
+    "fieldOfStudy": "Anvendt robotikk",
+    "department": "Software & Autonomous",
+    "position": "Leder for software og AI"
+  },
+  {
+    "name": "Tuva Berntsen",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Brannmur, gulv og belte"
+  },
+  {
+    "name": "Talha Salam Bhat",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Eksos"
+  },
+  {
+    "name": "Jesper Bakke-Hegli",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Pedalboks"
+  },
+  {
+    "name": "Karl Mattis Klöck",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Motor- og diffbrakett, drev"
+  },
+  {
+    "name": "Ulrik A. Rønning",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Innsug"
+  },
+  {
+    "name": "Jacob Wærsten",
+    "fieldOfStudy": "Anvendt robotikk",
+    "department": "Software & Autonomous",
+    "position": "Software Engineer"
+  },
+  {
+    "name": "Tage Krans",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "The Board",
+    "position": "Leder for Elektronikk"
+  },
+  {
+    "name": "Aslan Yelli",
+    "fieldOfStudy": "",
+    "department": "Business",
+    "position": "Head of Business"
+  },
+  {
+    "name": "Gabriel Finstad",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Quickjack og Pushbar"
+  },
+  {
+    "name": "Sofia Bagdasaryan",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Aero bakvinge"
+  },
+  {
     "name": "Vetle Walhovd",
-    "fieldOfStudy": "Teknologi og produktutvikling",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Electronics",
+    "position": "Dashboard"
+  },
+  {
+    "name": "Andreas Achita Huseby",
+    "fieldOfStudy": "Anvendt robotikk",
+    "department": "Logistics",
+    "position": "Logistikk"
+  },
+  {
+    "name": "Daniel Fikre Yesus Debesay",
+    "fieldOfStudy": "Datavitenskap",
+    "department": "Electronics",
+    "position": "Giring"
+  },
+  {
+    "name": "Roland Patrick Fiksdal",
+    "fieldOfStudy": "Anvendt Robotikk",
+    "department": "Electronics",
+    "position": "Shutdown Circuit"
+  },
+  {
+    "name": "Hogne Hildeskor",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
     "department": "Mechanical & Production",
-    "position": "Mechanical Engineer",
-    "email": "vetle.walhovd@helixnmbu.no"
+    "position": "Aero gulv og sidepods"
   },
   {
-    "id": 41,
-    "name": "André Hellne Rasen",
-    "fieldOfStudy": "Teknologi og produktutvikling",
-    "department": "The Board",
-    "position": "Chair of the Board",
-    "email": "andre.rasen@helixnmbu.no"
+    "name": "Tom Harald Sjøli",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Ramme"
   },
   {
-    "id": 42,
-    "name": "Kornelia Rapp",
-    "fieldOfStudy": "Byggeteknikk og arkitektur",
+    "name": "Joel Emil Herman Anderberg",
+    "fieldOfStudy": "Vann og miljøteknikk",
+    "department": "Mechanical & Production",
+    "position": "Ramme"
+  },
+  {
+    "name": "Stian Larsen",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Sete og Hodepute"
+  },
+  {
+    "name": "Lukas Pedersen Thorsrud",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Styresystem"
+  },
+  {
+    "name": "Sheida Alizadeh",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Kjøle- og bensinsystem"
+  },
+  {
+    "name": "Andrius Kontrimas",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Motor"
+  },
+  {
+    "name": "Andreas Lindberg",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Nav"
+  },
+  {
+    "name": "Marie Røyne-Olsen",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Bremsesystem og bremseskiver"
+  },
+  {
+    "name": "Tarald Reibekk",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Dempesystem"
+  },
+  {
+    "name": "Daniel Filtvedt",
+    "fieldOfStudy": "Teknologi og Produktutvikling",
+    "department": "Mechanical & Production",
+    "position": "Bærearmer"
+  },
+  {
+    "name": "Didrik Wang Berthinsen",
+    "fieldOfStudy": "Indøk",
+    "department": "Finance",
+    "position": "Kostnadsanalytiker"
+  },
+  {
+    "name": "Theodor Furuseth",
+    "fieldOfStudy": "Indøk",
+    "department": "Finance",
+    "position": "Kostnadsanalytiker"
+  },
+  {
+    "name": "Ans Zubair",
+    "fieldOfStudy": "Indøk",
+    "department": "Finance",
+    "position": "Regnskapsfører"
+  },
+  {
+    "name": "Adyan Ali",
+    "fieldOfStudy": "Indøk",
+    "department": "Business",
+    "position": ""
+  },
+  {
+    "name": "Linus Hanevik",
+    "fieldOfStudy": "Fornybar energi",
+    "department": "Business",
+    "position": ""
+  },
+  {
+    "name": "Oskar Rändel Gabrielsen",
+    "fieldOfStudy": "Indøk",
     "department": "The Board",
-    "position": "Board Member",
-    "email": "kornelia.rapp@helixnmbu.no"
+    "position": "Økonomileder"
+  },
+  {
+    "name": "Adyan Ali",
+    "fieldOfStudy": "Indøk",
+    "department": "Sponsor department",
+    "position": ""
+  },
+  {
+    "name": "Linus Hanevik",
+    "fieldOfStudy": "Fornybar energi",
+    "department": "Sponsor department",
+    "position": ""
   }
 ]
