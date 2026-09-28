@@ -11,7 +11,7 @@ const Homepage = () => {
       <HeroSection />
       <IntroSection />
       <CompetitionResults />
-      <UpcomingEvents />
+      {/*<UpcomingEvents />*/}
       <SponsorsSection />
       <JoinUsSection />
     </div>
