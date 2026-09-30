@@ -1,290 +1,622 @@
 [
   {
     "name": "Kiki Beumer",
-    "fieldOfStudy": "Data Science (Datavitenskap)",
-    "department": "Marketing",
-    "position": "Design"
+    "fieldOfStudy": [
+      "Data Science"
+    ],
+    "department": [
+      "Marketing"
+    ],
+    "position": [
+      "Design"
+    ]
   },
   {
     "name": "Martin Ellingsen Tømmerstigen",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Spindler"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Spindles"
+    ]
   },
   {
     "name": "Peder Johan Rønnevik",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "The Board",
-    "position": "Mekanikk og produksjonsleder"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Executive Team",
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Mechanical and Production Lead"
+    ]
   },
   {
     "name": "Brede Aasen",
-    "fieldOfStudy": "Robotikk",
-    "department": "Mechanical & Production",
-    "position": "Turbo"
+    "fieldOfStudy": [
+      "Robotics"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Turbo"
+    ]
   },
   {
     "name": "Eivind Kristiansen",
-    "fieldOfStudy": "Industriell økonomi",
-    "department": "Marketing",
-    "position": "Kommunikasjonsansvarlig"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Marketing"
+    ],
+    "position": [
+      "Communications Officer"
+    ]
   },
   {
     "name": "Birk Sveberg",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "The Board",
-    "position": "Prosjektleder"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "The Board",
+      "Executive Team"
+    ],
+    "position": [
+      "Project Manager"
+    ]
   },
   {
     "name": "Jonas Skarvang",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Electronics",
-    "position": "Ratt"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Electronics"
+    ],
+    "position": [
+      "Steering Wheel"
+    ]
   },
   {
     "name": "Espen Carlsen Unander",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Chainguard"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Chainguard"
+    ]
   },
   {
     "name": "Fredrik Dahle Skyum",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Mechanical & Production",
-    "position": "Frontvinge"
+    "fieldOfStudy": [
+      "Applied Robotics"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Front Wing"
+    ]
   },
   {
     "name": "Niclas Karlsen",
-    "fieldOfStudy": "Industriell økonomi",
-    "department": "The Board",
-    "position": "Nestleder"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "The Board",
+      "Executive Team"
+    ],
+    "position": [
+      "Vice President"
+    ]
   },
   {
     "name": "Selma Woldseth",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "The Board",
-    "position": "Markedsføringsleder"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Executive Team",
+      "Marketing"
+    ],
+    "position": [
+      "Marketing Lead"
+    ]
   },
   {
     "name": "Varagan Konesan",
-    "fieldOfStudy": "Industriell Økonomi",
-    "department": "Mechanical & Production",
-    "position": "Body and nose"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Body and nose"
+    ]
   },
   {
     "name": "Matheo Skaalvoll",
-    "fieldOfStudy": "Industriell Økonomi",
-    "department": "Mechanical & Production",
-    "position": "Gulv og sidepods"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Floor and Sidepods"
+    ]
   },
   {
     "name": "Leander Bakke-Hegli",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Pedalboks"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Pedal Box"
+    ]
   },
   {
     "name": "Jørgen Asmundvaag",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Software & Autonomous",
-    "position": "Leder for software og AI"
+    "fieldOfStudy": [
+      "Applied Robotics"
+    ],
+    "department": [
+      "Executive Team",
+      "Software & Autonomous"
+    ],
+    "position": [
+      "Head of Software and AI"
+    ]
   },
   {
     "name": "Tuva Berntsen",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Brannmur, gulv og belte"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Firewall, Floor and Belt"
+    ]
   },
   {
     "name": "Talha Salam Bhat",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Eksos"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Exhaust"
+    ]
   },
   {
     "name": "Jesper Bakke-Hegli",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Pedalboks"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Pedal Box"
+    ]
   },
   {
     "name": "Karl Mattis Klöck",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Motor- og diffbrakett, drev"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Engine and Differential Bracket, Gears"
+    ]
   },
   {
     "name": "Ulrik A. Rønning",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Innsug"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Intake"
+    ]
   },
   {
     "name": "Jacob Wærsten",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Software & Autonomous",
-    "position": "Software Engineer"
+    "fieldOfStudy": [
+      "Applied Robotics"
+    ],
+    "department": [
+      "Software & Autonomous"
+    ],
+    "position": [
+      "Software Engineer"
+    ]
   },
   {
     "name": "Tage Krans",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "The Board",
-    "position": "Leder for Elektronikk"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Executive Team",
+      "Electronics"
+    ],
+    "position": [
+      "Head of Electronics"
+    ]
   },
   {
     "name": "Aslan Yelli",
-    "fieldOfStudy": "",
-    "department": "Business",
-    "position": "Head of Business"
+    "fieldOfStudy": [
+      ""
+    ],
+    "department": [
+      "Executive Team",
+      "Business"
+    ],
+    "position": [
+      "Head of Business"
+    ]
   },
   {
     "name": "Gabriel Finstad",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Quickjack og Pushbar"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Quickjack and Pushbar"
+    ]
   },
   {
     "name": "Sofia Bagdasaryan",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Aero bakvinge"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Rear Wing Aero"
+    ]
   },
   {
     "name": "Vetle Walhovd",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Electronics",
-    "position": "Dashboard"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Electronics"
+    ],
+    "position": [
+      "Dashboard"
+    ]
   },
   {
     "name": "Andreas Achita Huseby",
-    "fieldOfStudy": "Anvendt robotikk",
-    "department": "Logistics",
-    "position": "Logistikk"
+    "fieldOfStudy": [
+      "Applied Robotics"
+    ],
+    "department": [
+      "Logistics"
+    ],
+    "position": [
+      "Logistics"
+    ]
   },
   {
     "name": "Daniel Fikre Yesus Debesay",
-    "fieldOfStudy": "Datavitenskap",
-    "department": "Electronics",
-    "position": "Giring"
+    "fieldOfStudy": [
+      "Datavitenskap"
+    ],
+    "department": [
+      "Electronics"
+    ],
+    "position": [
+      "Shifting"
+    ]
   },
   {
     "name": "Roland Patrick Fiksdal",
-    "fieldOfStudy": "Anvendt Robotikk",
-    "department": "Electronics",
-    "position": "Shutdown Circuit"
+    "fieldOfStudy": [
+      "Applied Robotics"
+    ],
+    "department": [
+      "Electronics"
+    ],
+    "position": [
+      "Shutdown Circuit"
+    ]
   },
   {
     "name": "Hogne Hildeskor",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Aero gulv og sidepods"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Floor and Sidepod Aero"
+    ]
   },
   {
     "name": "Tom Harald Sjøli",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Ramme"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Frame"
+    ]
   },
   {
     "name": "Joel Emil Herman Anderberg",
-    "fieldOfStudy": "Vann og miljøteknikk",
-    "department": "Mechanical & Production",
-    "position": "Ramme"
+    "fieldOfStudy": [
+      "Water and Environmental Engineering"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Frame"
+    ]
   },
   {
     "name": "Stian Larsen",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Sete og Hodepute"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Seat and Headrest"
+    ]
   },
   {
     "name": "Lukas Pedersen Thorsrud",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Styresystem"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Steering System"
+    ]
   },
   {
     "name": "Sheida Alizadeh",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Kjøle- og bensinsystem"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Cooling and Fuel System"
+    ]
   },
   {
     "name": "Andrius Kontrimas",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Motor"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Motor"
+    ]
   },
   {
     "name": "Andreas Lindberg",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Nav"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Nav"
+    ]
   },
   {
     "name": "Marie Røyne-Olsen",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Bremsesystem og bremseskiver"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Brake System and Brake Discs"
+    ]
   },
   {
     "name": "Tarald Reibekk",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Dempesystem"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Suspension System"
+    ]
   },
   {
     "name": "Daniel Filtvedt",
-    "fieldOfStudy": "Teknologi og Produktutvikling",
-    "department": "Mechanical & Production",
-    "position": "Bærearmer"
+    "fieldOfStudy": [
+      "Technology and Product Development"
+    ],
+    "department": [
+      "Mechanical & Production"
+    ],
+    "position": [
+      "Control Arms"
+    ]
   },
   {
     "name": "Didrik Wang Berthinsen",
-    "fieldOfStudy": "Indøk",
-    "department": "Finance",
-    "position": "Kostnadsanalytiker"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Finance"
+    ],
+    "position": [
+      "Cost Analyst"
+    ]
   },
   {
     "name": "Theodor Furuseth",
-    "fieldOfStudy": "Indøk",
-    "department": "Finance",
-    "position": "Kostnadsanalytiker"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Finance"
+    ],
+    "position": [
+      "Cost Analyst"
+    ]
   },
   {
     "name": "Ans Zubair",
-    "fieldOfStudy": "Indøk",
-    "department": "Finance",
-    "position": "Regnskapsfører"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Finance"
+    ],
+    "position": [
+      "Accountant"
+    ]
   },
   {
     "name": "Adyan Ali",
-    "fieldOfStudy": "Indøk",
-    "department": "Business",
-    "position": ""
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Business"
+    ],
+    "position": [
+      ""
+    ]
   },
   {
     "name": "Linus Hanevik",
-    "fieldOfStudy": "Fornybar energi",
-    "department": "Business",
-    "position": ""
+    "fieldOfStudy": [
+      "Renewable Energy"
+    ],
+    "department": [
+      "Business"
+    ],
+    "position": [
+      ""
+    ]
   },
   {
     "name": "Oskar Rändel Gabrielsen",
-    "fieldOfStudy": "Indøk",
-    "department": "The Board",
-    "position": "Økonomileder"
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Executive Team",
+      "Finance"
+    ],
+    "position": [
+      "Finance Lead"
+    ]
   },
   {
     "name": "Adyan Ali",
-    "fieldOfStudy": "Indøk",
-    "department": "Sponsor department",
-    "position": ""
+    "fieldOfStudy": [
+      "Industrial Economics"
+    ],
+    "department": [
+      "Executive Team",
+      "Sponsor department"
+    ],
+    "position": [
+      ""
+    ]
   },
   {
     "name": "Linus Hanevik",
-    "fieldOfStudy": "Fornybar energi",
-    "department": "Sponsor department",
-    "position": ""
+    "fieldOfStudy": [
+      "Renewable Energy"
+    ],
+    "department": [
+      "Sponsor department"
+    ],
+    "position": [
+      ""
+    ]
+  },
+  {
+    "fieldOfStudy": [
+      "Indøk"
+    ],
+    "department": [
+      "Sponsor department"
+    ],
+    "position": [
+      ""
+    ]
+  },
+  {
+    "name": "Linus Hanevik",
+    "fieldOfStudy": [
+      "Fornybar energi"
+    ],
+    "department": [
+      "Sponsor department"
+    ],
+    "position": [
+      ""
+    ]
+  },
+  {
+    "name": "Adyan Ali",
+    "fieldOfStudy": ["Industrial finance"],
+    "department": ["Sponsor department"],
+    "position": [""]
+  },
+  {
+    "name": "Linus Hanevik",
+    "fieldOfStudy": ["renewable energy"],
+    "department": ["Sponsor department"],
+    "position": [""]
   }
 ]
