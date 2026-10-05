@@ -40,6 +40,7 @@
     "@types/react-dom": "^19.1.7",
     "@types/react-router-dom": "^5.3.3",
     "@types/react-slick": "^0.23.13",
+    "@vercel/node": "^13.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.33.0",
@@ -51,5 +52,6 @@
     "tailwindcss": "^4.1.12",
     "typescript": "^5.9.2",
     "vite": "^7.1.2"
-  }
+  },
+  "packageManager": "pnpm@12.9.1+sha512.06b055fff5cd20dc12781de173ced3310ce0951bf2ec620211a16045d5444d5c93a663210764ef29a653a610459ba0368f0e74f84d80c54723cf95aae7bc0d6d"
 }

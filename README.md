@@ -8,7 +8,7 @@ The CV-Bank flow uses Google OAuth and restricts sign-ins to `@helixnmbu.no` acc
 - `VITE_GOOGLE_ALLOWED_DOMAIN` — Allowed email domain (defaults to `helixnmbu.no`).
 - `VITE_CVBANK_UPLOAD_URL` — Optional API endpoint to receive CV uploads (expects `multipart/form-data` with `file`, `email`, and `name`).
 
-After setting the variables, run `npm install` (to add Google auth dependencies) and `npm run dev` to start the site.
+After setting the variables, run `pnpm install` and `pnpm run dev` to start the site.
 
 ## Email (Resend)
 
@@ -20,5 +20,5 @@ The contact form and recruitment rejection emails are sent server-side via [Rese
 
 Sending only works once `helixnmbu.no` is verified in Resend (DNS records added and propagated). `api/reject.ts` also requires the caller to be an authenticated, active recruiter (checked via Supabase's `is_recruiter()`), so it can't be used to email arbitrary addresses.
 
-Local testing of the `api/*` functions requires `vercel dev` (or `npx vercel dev`) instead of `npm run dev`, since plain Vite doesn't run Vercel serverless functions.
+Local testing of the `api/*` functions requires `pnpm exec vercel dev` instead of `pnpm run dev`, since plain Vite doesn't run Vercel serverless functions.
 

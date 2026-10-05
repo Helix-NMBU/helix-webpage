@@ -8,24 +8,27 @@ gsap.registerPlugin(useGSAP)
 type RawMember = {
   id: number
   name: string
-  department: string
-  position?: string
-  fieldOfStudy: string
+  fieldOfStudy: string | string[]
+  department: string | string[]
+  position?: string | string[]
   yearOfStudy: number | string
   seasonsInHelix: number
 }
 
-type Member = RawMember & { position: string; photo: string; mappedDept: string }
+type Member = RawMember & { position: string; photo: string; mappedDepts: string[] }
 
 // ─── Departments (same order as Apply page) ───────────────────────────────────
 
 const DEPARTMENTS = [
   'The Board',
+  'Executive Team',
   'Mechanical & Production',
   'Electronics',
-  'Business & Marketing',
+  'Business',
+  'Marketing',
   'Finance',
-  'Software',
+  'Software & Autonomous',
+  'Logistics',
 ] as const
 
 // ─── Positions per department ─────────────────────────────────────────────────
@@ -33,11 +36,13 @@ const DEPARTMENTS = [
 const DEPT_ROLES: Record<string, string[]> = {
   'Mechanical & Production': ['Mechanical Lead', 'Structural Engineer', 'Manufacturing Engineer', 'Composites Engineer', 'Systems Engineer', 'Suspension Engineer', 'Chassis Engineer'],
   'Electronics':             ['Electrical Lead', 'PCB Design Engineer', 'BMS Engineer', 'Wiring Harness Engineer', 'Power Electronics Engineer', 'HV Systems Engineer'],
-  'Business & Marketing':    ['Head of Business', 'Brand Manager', 'Social Media Manager', 'Content Creator', 'Partner Relations', 'Communications Officer'],
+  'Business ':     ['Head of Business', 'Brand Manager', 'Social Media Manager', 'Content Creator', 'Partner Relations', 'Communications Officer'],
+  'marketing':    [],
   'Finance':               ['CFO', 'Financial Controller', 'Budget Analyst', 'Sponsorship Manager', 'Finance Officer', 'Treasurer'],
-  'Software':                ['Autonomous Systems Lead', 'ML Engineer', 'Computer Vision Engineer', 'Lead Developer', 'Full-Stack Engineer', 'Backend Developer', 'Data Engineer'],
+  'Software & autonomous':   ['Autonomous Systems Lead', 'Software Engineer','ML Engineer', 'Computer Vision Engineer', 'Lead Developer', 'Full-Stack Engineer', 'Backend Developer', 'Data Engineer'],
   'Logistics':               ['Head of Logistics', 'Competition Coordinator', 'Workshop Manager', 'Travel Coordinator', 'Operations Officer'],
-  'The Board':               ['President', 'Vice President', 'Board Member'],
+  'Executive Team':               ['President', 'Vice President'],
+  'The board':           ['President', 'Vice President', 'Board member'],
 }
 
 const DEPT_META = { color: '#111827', bg: '#F3F4F6' }
@@ -49,6 +54,22 @@ function getInitials(name: string) {
   return parts.length === 1
     ? parts[0].slice(0, 2).toUpperCase()
     : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0]?.trim() ?? '' : value?.trim() ?? ''
+}
+
+function isBoardMember(member: Member) {
+  return member.mappedDepts.includes('The Board')
+    && ['Project Manager', 'Deputy Project Manager',"Chair of the Board","Board Member"].includes(firstValue(member.position))
+}
+
+function isExecutiveMember(member: Member) {
+  const position = firstValue(member.position)
+  return member.mappedDepts.includes('Executive Team')
+    || /^head of\b/i.test(position)
+    || /lead|leder|cfo|project manager|deputy project manager/i.test(position)
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -220,39 +241,44 @@ export default function Members() {
       .then((data: RawMember[]) => {
         const deptCounters: Record<string, number> = {}
         const enriched: Member[] = data.map((m) => {
-          const mappedDept = m.department
-          deptCounters[mappedDept] = deptCounters[mappedDept] ?? 0
-          const roles = DEPT_ROLES[mappedDept] ?? ['Team Member']
-          const position = m.position?.trim() || roles[deptCounters[mappedDept] % roles.length]
-          deptCounters[mappedDept]++
+          const mappedDepts = Array.isArray(m.department) ? m.department : [m.department]
+          const roleDept = mappedDepts.find(dept => !['The Board', 'Executive Team'].includes(dept)) ?? mappedDepts[0]
+          deptCounters[roleDept] = deptCounters[roleDept] ?? 0
+          const roles = DEPT_ROLES[roleDept] ?? ['Team Member']
+          const position = firstValue(m.position) || roles[deptCounters[roleDept] % roles.length]
+          deptCounters[roleDept]++
           // TODO: the_stig_male.webp is a temporary stand-in for everyone; swap back to
           // per-member `/portrettbilder/{firstname}_{lastname}.webp` (see git history for
           // the removed slugifyName helper) once it's ready to become the missing-photo fallback.
           const photo = '/portrettbilder/the_stig_male.webp'
-          return { ...m, position, photo, mappedDept }
+          return { ...m, position, photo, mappedDepts }
         })
         setMembers(enriched)
       })
   }, [])
 
-  const filtered = activeFilter === 'All' ? members : members.filter(m => m.mappedDept === activeFilter)
+  const filtered = activeFilter === 'All'
+    ? members
+    : activeFilter === 'Executive Team'
+      ? members.filter(isExecutiveMember)
+      : members.filter(m => m.mappedDepts.includes(activeFilter))
 
-  const BOARD_ORDER = ['Project Manager', 'Deputy Project Manager', 'Chair of the Board']
+  const LEADERSHIP_ORDER = ['André Hellne Rasen', 'Niclas Karlsen', 'Birk Sveberg']
 
-  function rank(dept: string, position: string) {
-    if (dept === 'The Board') {
-      const i = BOARD_ORDER.indexOf(position)
-      return i === -1 ? BOARD_ORDER.length : i
-    }
-    return position.startsWith('Head of') ? 0 : 1
+  function rank(dept: string, member: Member) {
+    const leadershipRank = LEADERSHIP_ORDER.indexOf(firstValue(member.name))
+    if (leadershipRank !== -1) return leadershipRank
+
+    if (dept === 'The Board') return LEADERSHIP_ORDER.length
+    return LEADERSHIP_ORDER.length + (member.position.startsWith('Head of') ? 0 : 1)
   }
 
   const byDept = DEPARTMENTS.reduce<Record<string, Member[]>>((acc, dept) => {
     // Leadership titles lead their department's section; sort is stable so
     // everyone else keeps their existing relative order.
     acc[dept] = filtered
-      .filter(m => m.mappedDept === dept)
-      .sort((a, b) => rank(dept, a.position) - rank(dept, b.position))
+      .filter(m => dept === 'The Board' ? isBoardMember(m) : m.mappedDepts.includes(dept))
+      .sort((a, b) => rank(dept, a) - rank(dept, b))
     return acc
   }, {})
 
@@ -294,7 +320,16 @@ export default function Members() {
 
       {/* ── Content ── */}
       <div className="max-w-screen-xl px-6 pb-8 mx-auto mt-8 lg:px-12">
-        {DEPARTMENTS.map(dept => (
+        {(activeFilter === 'All' || activeFilter === 'Executive Team') && (
+          <DeptSection
+            dept="Executive Team"
+            members={members
+              .filter(isExecutiveMember)
+              .sort((a, b) => rank('Executive Team', a) - rank('Executive Team', b))}
+            navReady={navReady}
+          />
+        )}
+        {DEPARTMENTS.filter(dept => dept !== 'Executive Team' && activeFilter !== 'Executive Team').map(dept => (
           <DeptSection key={dept} dept={dept} members={byDept[dept] ?? []} navReady={navReady} />
         ))}
       </div>
