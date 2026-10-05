@@ -1,5 +1,6 @@
 [
   {
+    "id": 1,
     "name": "Kiki Beumer",
     "fieldOfStudy": [
       "Data Science"
@@ -12,6 +13,7 @@
     ]
   },
   {
+    "id": 2,
     "name": "Martin Ellingsen Tømmerstigen",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -24,6 +26,7 @@
     ]
   },
   {
+    "id": 3,
     "name": "Peder Johan Rønnevik",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -37,6 +40,7 @@
     ]
   },
   {
+    "id": 4,
     "name": "Brede Aasen",
     "fieldOfStudy": [
       "Robotics"
@@ -49,6 +53,7 @@
     ]
   },
   {
+    "id": 5,
     "name": "Eivind Kristiansen",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -61,6 +66,7 @@
     ]
   },
   {
+    "id": 6,
     "name": "Birk Sveberg",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -74,6 +80,7 @@
     ]
   },
   {
+    "id": 7,
     "name": "Jonas Skarvang",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -86,6 +93,7 @@
     ]
   },
   {
+    "id": 8,
     "name": "Espen Carlsen Unander",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -98,6 +106,7 @@
     ]
   },
   {
+    "id": 9,
     "name": "Fredrik Dahle Skyum",
     "fieldOfStudy": [
       "Applied Robotics"
@@ -110,6 +119,7 @@
     ]
   },
   {
+    "id": 10,
     "name": "Niclas Karlsen",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -119,10 +129,11 @@
       "Executive Team"
     ],
     "position": [
-      "Vice President"
+      "Deputy Project Manager "
     ]
   },
   {
+    "id": 11,
     "name": "Selma Woldseth",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -136,6 +147,7 @@
     ]
   },
   {
+    "id": 12,
     "name": "Varagan Konesan",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -148,6 +160,7 @@
     ]
   },
   {
+    "id": 13,
     "name": "Matheo Skaalvoll",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -160,6 +173,7 @@
     ]
   },
   {
+    "id": 14,
     "name": "Leander Bakke-Hegli",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -172,6 +186,7 @@
     ]
   },
   {
+    "id": 15,
     "name": "Jørgen Asmundvaag",
     "fieldOfStudy": [
       "Applied Robotics"
@@ -185,6 +200,7 @@
     ]
   },
   {
+    "id": 16,
     "name": "Tuva Berntsen",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -197,6 +213,7 @@
     ]
   },
   {
+    "id": 17,
     "name": "Talha Salam Bhat",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -209,6 +226,7 @@
     ]
   },
   {
+    "id": 18,
     "name": "Jesper Bakke-Hegli",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -221,6 +239,7 @@
     ]
   },
   {
+    "id": 19,
     "name": "Karl Mattis Klöck",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -233,6 +252,7 @@
     ]
   },
   {
+    "id": 20,
     "name": "Ulrik A. Rønning",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -245,6 +265,7 @@
     ]
   },
   {
+    "id": 21,
     "name": "Jacob Wærsten",
     "fieldOfStudy": [
       "Applied Robotics"
@@ -257,6 +278,7 @@
     ]
   },
   {
+    "id": 22,
     "name": "Tage Krans",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -270,6 +292,7 @@
     ]
   },
   {
+    "id": 23,
     "name": "Aslan Yelli",
     "fieldOfStudy": [
       ""
@@ -283,6 +306,7 @@
     ]
   },
   {
+    "id": 24,
     "name": "Gabriel Finstad",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -295,6 +319,7 @@
     ]
   },
   {
+    "id": 25,
     "name": "Sofia Bagdasaryan",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -307,6 +332,7 @@
     ]
   },
   {
+    "id": 26,
     "name": "Vetle Walhovd",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -319,6 +345,7 @@
     ]
   },
   {
+    "id": 27,
     "name": "Andreas Achita Huseby",
     "fieldOfStudy": [
       "Applied Robotics"
@@ -331,6 +358,7 @@
     ]
   },
   {
+    "id": 28,
     "name": "Daniel Fikre Yesus Debesay",
     "fieldOfStudy": [
       "Datavitenskap"
@@ -343,6 +371,7 @@
     ]
   },
   {
+    "id": 29,
     "name": "Roland Patrick Fiksdal",
     "fieldOfStudy": [
       "Applied Robotics"
@@ -355,6 +384,7 @@
     ]
   },
   {
+    "id": 30,
     "name": "Hogne Hildeskor",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -367,6 +397,7 @@
     ]
   },
   {
+    "id": 31,
     "name": "Tom Harald Sjøli",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -379,6 +410,7 @@
     ]
   },
   {
+    "id": 32,
     "name": "Joel Emil Herman Anderberg",
     "fieldOfStudy": [
       "Water and Environmental Engineering"
@@ -391,6 +423,7 @@
     ]
   },
   {
+    "id": 33,
     "name": "Stian Larsen",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -403,6 +436,7 @@
     ]
   },
   {
+    "id": 34,
     "name": "Lukas Pedersen Thorsrud",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -415,6 +449,7 @@
     ]
   },
   {
+    "id": 35,
     "name": "Sheida Alizadeh",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -427,6 +462,7 @@
     ]
   },
   {
+    "id": 36,
     "name": "Andrius Kontrimas",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -439,6 +475,7 @@
     ]
   },
   {
+    "id": 37,
     "name": "Andreas Lindberg",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -451,6 +488,7 @@
     ]
   },
   {
+    "id": 38,
     "name": "Marie Røyne-Olsen",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -463,6 +501,7 @@
     ]
   },
   {
+    "id": 39,
     "name": "Tarald Reibekk",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -475,6 +514,7 @@
     ]
   },
   {
+    "id": 40,
     "name": "Daniel Filtvedt",
     "fieldOfStudy": [
       "Technology and Product Development"
@@ -487,6 +527,7 @@
     ]
   },
   {
+    "id": 41,
     "name": "Didrik Wang Berthinsen",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -499,6 +540,7 @@
     ]
   },
   {
+    "id": 42,
     "name": "Theodor Furuseth",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -511,6 +553,7 @@
     ]
   },
   {
+    "id": 43,
     "name": "Ans Zubair",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -523,30 +566,34 @@
     ]
   },
   {
+    "id": 44,
     "name": "Adyan Ali",
     "fieldOfStudy": [
       "Industrial Economics"
     ],
     "department": [
-      "Business"
+      "Sponsor department"
     ],
     "position": [
-      ""
+      "Partnership Cordinator "
     ]
   },
   {
+    "id": 45,
     "name": "Linus Hanevik",
     "fieldOfStudy": [
       "Renewable Energy"
     ],
     "department": [
-      "Business"
+      
+      "Sponsor department"
     ],
     "position": [
-      ""
+      "Partnership Cordinator "
     ]
   },
   {
+    "id": 46,
     "name": "Oskar Rändel Gabrielsen",
     "fieldOfStudy": [
       "Industrial Economics"
@@ -560,63 +607,32 @@
     ]
   },
   {
-    "name": "Adyan Ali",
-    "fieldOfStudy": [
-      "Industrial Economics"
-    ],
-    "department": [
-      "Executive Team",
-      "Sponsor department"
-    ],
-    "position": [
-      ""
-    ]
+    "id": 47,
+    "name": ["André Hellne Rasen"],
+    "fieldOfStudy": ["Teknologi og produktutvikling"],
+    "department": ["The Board"],
+    "position": ["Chair of the Board"],
+    "email": ["andre.rasen@helixnmbu.no"]
   },
   {
-    "name": "Linus Hanevik",
-    "fieldOfStudy": [
-      "Renewable Energy"
-    ],
-    "department": [
-      "Sponsor department"
-    ],
-    "position": [
-      ""
-    ]
+    "id": 48,
+    "name": ["Kornelia Rapp"],
+    "fieldOfStudy": ["Byggeteknikk og arkitektur"],
+    "department": ["The Board"],
+    "position": ["Board Member"],
+    "email": ["kornelia.rapp@helixnmbu.no"]
   },
   {
-    "fieldOfStudy": [
-      "Indøk"
-    ],
-    "department": [
-      "Sponsor department"
-    ],
-    "position": [
-      ""
-    ]
-  },
-  {
-    "name": "Linus Hanevik",
-    "fieldOfStudy": [
-      "Fornybar energi"
-    ],
-    "department": [
-      "Sponsor department"
-    ],
-    "position": [
-      ""
-    ]
-  },
-  {
-    "name": "Adyan Ali",
-    "fieldOfStudy": ["Industrial finance"],
-    "department": ["Sponsor department"],
-    "position": [""]
-  },
-  {
-    "name": "Linus Hanevik",
-    "fieldOfStudy": ["renewable energy"],
-    "department": ["Sponsor department"],
-    "position": [""]
+    "id": 49,
+    "name": ["Henrik Engdal"],
+    "fieldOfStudy": ["Industriell økonomi"],
+    "department": ["The Board"],
+    "position": ["Board Member"],
+    "linkedin": ["https://linkedin.com/in/henrik-engdal"],
+    "email": ["henrik.engdal@helixnmbu.no"],
+    "cvUrl": ["public/cvs/CV Henrik Engdal 2025.pdf"]
   }
 ]
+
+
+  

@@ -42,7 +42,7 @@ const DEPT_ROLES: Record<string, string[]> = {
   'Software & autonomous':   ['Autonomous Systems Lead', 'Software Engineer','ML Engineer', 'Computer Vision Engineer', 'Lead Developer', 'Full-Stack Engineer', 'Backend Developer', 'Data Engineer'],
   'Logistics':               ['Head of Logistics', 'Competition Coordinator', 'Workshop Manager', 'Travel Coordinator', 'Operations Officer'],
   'Executive Team':               ['President', 'Vice President'],
-  'The board':           ['President', 'Vice President'],
+  'The board':           ['President', 'Vice President', 'Board member'],
 }
 
 const DEPT_META = { color: '#111827', bg: '#F3F4F6' }
@@ -62,13 +62,12 @@ function firstValue(value: string | string[] | undefined) {
 
 function isBoardMember(member: Member) {
   return member.mappedDepts.includes('The Board')
-    && ['Project Manager', 'Vice President'].includes(firstValue(member.position))
+    && ['Project Manager', 'Deputy Project Manager',"Chair of the Board","Board Member"].includes(firstValue(member.position))
 }
 
 function isExecutiveMember(member: Member) {
   const position = firstValue(member.position)
   return member.mappedDepts.includes('Executive Team')
-    || member.mappedDepts.includes('The Board')
     || /^head of\b/i.test(position)
     || /lead|leder|cfo|project manager|deputy project manager/i.test(position)
 }
@@ -279,14 +278,14 @@ export default function Members() {
       ? members.filter(isExecutiveMember)
       : members.filter(m => m.mappedDepts.includes(activeFilter))
 
-  const BOARD_ORDER = ['Prosjektleder', 'Nestleder']
+  const LEADERSHIP_ORDER = ['André Hellne Rasen', 'Niclas Karlsen', 'Birk Sveberg']
 
-  function rank(dept: string, position: string) {
-    if (dept === 'The Board') {
-      const i = BOARD_ORDER.indexOf(position)
-      return i === -1 ? BOARD_ORDER.length : i
-    }
-    return position.startsWith('Head of') ? 0 : 1
+  function rank(dept: string, member: Member) {
+    const leadershipRank = LEADERSHIP_ORDER.indexOf(firstValue(member.name))
+    if (leadershipRank !== -1) return leadershipRank
+
+    if (dept === 'The Board') return LEADERSHIP_ORDER.length
+    return LEADERSHIP_ORDER.length + (member.position.startsWith('Head of') ? 0 : 1)
   }
 
   const byDept = DEPARTMENTS.reduce<Record<string, Member[]>>((acc, dept) => {
@@ -294,7 +293,7 @@ export default function Members() {
     // everyone else keeps their existing relative order.
     acc[dept] = filtered
       .filter(m => dept === 'The Board' ? isBoardMember(m) : m.mappedDepts.includes(dept))
-      .sort((a, b) => rank(dept, a.position) - rank(dept, b.position))
+      .sort((a, b) => rank(dept, a) - rank(dept, b))
     return acc
   }, {})
 
@@ -339,7 +338,9 @@ export default function Members() {
         {(activeFilter === 'All' || activeFilter === 'Executive Team') && (
           <DeptSection
             dept="Executive Team"
-            members={members.filter(isExecutiveMember)}
+            members={members
+              .filter(isExecutiveMember)
+              .sort((a, b) => rank('Executive Team', a) - rank('Executive Team', b))}
             navReady={navReady}
           />
         )}
