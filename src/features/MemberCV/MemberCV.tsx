@@ -16,7 +16,7 @@ import {
   CvRequestError,
 } from "./repository";
 import type { CvData, CvEnvelope, CvMutation, CvSharing } from "./types";
-import { createPrivateAutosave, cvSnapshotKey, type CvAutosaveState } from "./autosave";
+import { classifyCvRequestFailure, createPrivateAutosave, cvSnapshotKey, type CvAutosaveState } from "./autosave";
 import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
@@ -560,7 +560,9 @@ export default function MemberCV() {
     const controller = autosave.current;
     if (!controller) return;
     controller.setBlocked(Boolean(busy) || ended || Boolean(confirmation));
+    const wasValidationPaused = controller.getState().paused === "validation";
     if (draft) controller.update(draft, sharing);
+    if (wasValidationPaused && controller.getState().paused === null) setError(null);
   }, [draft, sharing, busy, ended, confirmation]);
 
   useEffect(() => {
@@ -677,9 +679,7 @@ export default function MemberCV() {
     } catch (failure) {
       if (generation.current !== current) return;
       if (failure instanceof CvRequestError) {
-        controller?.pause(failure.status === 400 ? "validation"
-          : failure.status === 409 ? "conflict"
-            : failure.status === 401 || failure.status === 403 ? "session" : "uncertain");
+        controller?.pause(classifyCvRequestFailure(failure));
       } else if (!controller?.getState().paused) {
         controller?.pause(submittedRequest ? "uncertain" : "validation");
       }
