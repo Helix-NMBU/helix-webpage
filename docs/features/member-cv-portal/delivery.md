@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 6. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 adds the section overview.
+Spec: spec.md revision 6. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 adds collapsible sections and familiar profile inputs.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -147,3 +147,26 @@ Status: local T-08 CLOSED after all criteria passed at remote 2234070ec1af3dc8a7
 ## Collapsible sections and familiar input follow-up
 
 Spec revision 6 adds F-12/F-13 and local T-09 on explicit user request. Reconciled clean integration/remote at c0c96267ba353c6df54a8bcb5fec63d739e60f0c, existing PR #57 open/non-draft against sponsor-portal-v2. Prior tickets remain closed. Root adds installed shadcn Collapsible primitive/dependency, docs and integration. Reuse isolated /root/editor for UI/collapse/navigation/date/proficiency controls and locale; /root/backend for additive optional string fields in types/model, errors, meaningful compatibility/roundtrip tests and PDF representation. No SQL/auth changes. Root owns browser/runtime verification and current remote gates; fresh affected-code review required. Field contract: education fieldOfStudy/grade/activities optional strings; experience employmentType/location/locationType optional strings; projects startDate/endDate optional strings. Ongoing roles/projects use existing endDate text marker Present. Existing dates/custom language levels remain intact unless edited. Skills text is retained as the stated default; no tags are introduced.
+
+
+T-09 integration: optional-field/PDF worker a6111b0 integrated as 24fcbed; editor 1a9c68e integrated as 2b13e3b; root added only the missing @radix-ui/react-collapsible primitive and shadcn wrapper in a47e941. npm lock additions are limited to that primitive's dependency graph. Old omitted JSON fields stay omitted; no SQL/data migration or authentication change.
+
+Coordinator full checks at 5822203 passed 222 tests in 17 files, frontend/API/Node runtime typechecks, lint, production build and diff checks. Existing chunk-size warning remains. Four-page application-generated fictional PDF /private/tmp/helix-member-cv-forms.pdf was rendered and every page inspected: new education/experience/project fields are readable, long activities and repeated experience paginate without clipping, Nordic characters and page footers are intact, and unshared email/phone are absent. This is local PDF evidence; final CV document styling remains deferred.
+
+## Standards
+
+Independent /root/review_standards_forms reviewed the full follow-up against c0c9626. Initial 2b13e3b report: zero documented-standard breaches, one nonblocking possible Duplicated Code judgement call in row-field updates. Shared functional changeRowField resolves the duplication. Final report at 5822203: zero hard breaches and zero outstanding suggestions.
+
+## Spec
+
+Independent /root/review_spec_forms reviewed revision 6 against c0c9626. Initial 2b13e3b report: one P2 F-13 finding, education endDate=Present hid its date editor without a current-role checkbox. Isolated worker repair 09e1ee0 integrated as 5822203 keeps this legacy education date visible and editable. No missing requirements or scope creep remain; final Spec report is bound to 5822203.
+
+Standards total: 0 outstanding findings; Spec total: 0 outstanding findings. Reviewed feature commit: 5822203d264bdb882c53b2a7215d6fb8a384e39d.
+
+Independent complete-code /root/review_correctness reproduced the same P2 using React rendering, independently ran 60 relevant tests after repair and confirmed it resolved. No material finding remains in collapse mounting, navigation, optional-field validation/roundtrip, PDF privacy, or the functional row updater. This report supplements the earlier complete-feature reviews for unchanged code.
+
+Browser verification on integrated code: 1280x1000 desktop, 390x844 mobile and 320x740 narrow mobile, both interface languages. Initially only Contact is open; each of nine sections has localized aria-expanded controls, closed fields are hidden from keyboard/accessibility, and Enter/click in the overview opens the destination before heading focus and scrolling. Partial year 202 with selected August survives collapse/reopen/language switch and disables month selection until the year is complete. Existing Native and custom proficiency text remain editable; canonical proficiency/employment/location choices show localized labels without rewriting stored content. Menu uses Helvetica Neue/Helvetica/Arial, white background and min-height 0. Current experience toggle restores exact Summer 2028 after collapse/reopen; projects preserve current-period choice. The repaired saved education Present date is visible/editable and was changed back to 2028.
+
+All CV sections closed while invalid contact email failed saving with a visible localized error and preserved input; correcting it then saved all new fields at private revision 18. HTML preview included grade/activities/study field, employment/location and project periods, without unshared email/phone. Publication produced revision 20; a closed-section private grade edit saved draft 21 while published 20 remained unchanged, then withdrawal/reload produced private 22. Original fictional CV values and sharing choices were restored via ordinary controls and saved at unpublished revision 23, all sharing off; added optional blank keys may remain but content is unchanged. No horizontal overflow at tested widths. Local demo only; no live Google/Supabase/Storage claim. Console checks follow before handoff.
+
+Before /private/tmp/member-cv-forms-before.png; after /private/tmp/member-cv-forms-desktop.png, /private/tmp/member-cv-forms-collapsed.png, /private/tmp/member-cv-forms-mobile.png, /private/tmp/member-cv-forms-mobile-menu.png and /private/tmp/member-cv-forms-narrow.png. Screenshots are local verification artifacts, outside the repository. T-09 locally verified; current-commit remote checks are pending before closure. Existing PR #57 stays open/unmerged, reviewer joasmund requested, dependency PR #46 unchanged/open/draft at f99939d, parent #51 open. No merge, auto-merge, manual deployment or live database mutation.
