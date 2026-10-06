@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 1, selected for implementation through user `$deliver` invocation.
+Spec: spec.md revision 2. Revision 1 was delivered through user `$deliver`; revision 2 adds the user-approved website design follow-up.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: human review of PR #57 and prerequisite PR #46. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: push the verified design follow-up to existing PR #57 and verify its current checks. Then human review of PR #57 and prerequisite PR #46. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -46,7 +46,7 @@ Reports remain distinct. The initial clean Standards report does not settle the 
 
 - Backend repair: worker 2665bde integrated as 2cb5807. Upload paths are durable before Storage writes; registration, publication and settlement use the document lock. Cleanup failures preserve successful state through `cleanupPending`; uncertain uploads retain a deferred deletion window. Coordinator integrated verification passed 103 tests in 11 files, including 13 PostgreSQL scenarios and four production adapter fault cases. Frontend/API typechecks, lint, production build and diff checks passed at 2cb5807. The complete-feature reviewer independently reran 48 relevant tests and confirmed both P2 findings and the warning fix are resolved with no new material finding. Setup was updated with the lease, settlement, deferred cleanup and nonblocking response behavior before PR creation.
 
-## Current delivery state
+## Initial delivery handoff, before design follow-up
 
 Reconciled on 2026-10-06 after the verified ready-for-review transition. T-00 #52, T-01 #53, T-02 #54, T-03 #55 and T-04 #56 are closed with evidence. Parent #51 remains open until merge. PR #57 is open, non-draft and unmerged, targeting sponsor-portal-v2. Reviewer joasmund is requested; no human approval is claimed. PR #46 remains unchanged and draft at f99939d.
 
@@ -81,3 +81,19 @@ The next automatic preview for remote 9eadbc3 reported the accessible helix-nmbu
 Worker 575934b removed only pnpm-lock.yaml, integrated as 97f2940. README, Vercel commands and CI already use npm. Official Vercel detection changed from pnpm lock version 9 to npm lock version 3. The npm dependency graph and versions are unchanged. Root npm ci succeeded; full revalidation passed 103 tests in 11 files, all three typechecks, lint, build and diff checks. Independent review of 97f2940 confirmed that every manifest dependency matches the retained npm lock and found no material issue.
 
 The old diagnostic request is no longer needed. The subsequent automatic preview and GitHub checks passed at 9d8dabb. PR #57 is now ready for review and T-04 is closed. Parent #51 remains open until merge.
+
+## Website design follow-up
+
+User requested the same design system as the website after the initial delivery. This adds F-08 in spec revision 2. Existing T-00 through T-04 remain closed; this is a new presentation requirement recorded as local T-05, not an invalidation of their verified workflow criteria.
+
+At follow-up start, integration and remote PR #57 were clean at 642c4786d3075cebc183164985ccdc29793ffb5f. PR remained open/non-draft against sponsor-portal-v2. No new branch or PR is needed. Reused worker /root/editor in /private/tmp/helix-member-cv-editor, codex/member-cv-editor, merged the verified integration base. Assigned only MemberCV presentation, CSS and dependent Login theme. Existing form/auth/publication/PDF behavior stays within revision 1 requirements.
+
+Source and browser inspection confirmed global.css provides Helvetica Neue/Helvetica/Arial and primary #002EC4; public homepage uses white sections, medium headings and rounded corners. Existing Button/Input/Textarea components provide shared focus and disabled styles. Before screenshot: /private/tmp/member-cv-design-before.jpg. Live Google/Supabase/Storage rollout gaps remain unchanged.
+
+Worker 0b303e1 integrated as 6c06c85. Existing Button/Input/Textarea/Card primitives, portal light tokens, inherited website font and actual /Vector.png logo now render the member editor and login. Business logic and generated CV document styling are unchanged. Browser inspection found an oversized vertical logo; worker a0f5ae7 integrated as d0133a3 constrains its height to 40px desktop and 32px mobile.
+
+Coordinator verification at 6c06c85 passed frontend typecheck, lint, all 103 tests in 11 files, build and diff checks. The logo-only CSS correction passed worker and coordinator build/diff checks and final rendered inspection. Independent reviewer /root/review_correctness inspected all three changed files against 642c478, independently ran 16 repository/lifecycle tests, then rechecked the logo correction and bound the final clean review to d0133a3. No material finding remains.
+
+Browser verification on final code: 1280px desktop and 390px mobile; exact Helvetica body inheritance, white background and rgb(0,46,196) header; logo loads and respects aspect ratio. Both viewports have no horizontal overflow. Saved Nordic input at revision 6, previewed redacted contact data, published at 7, withdrew at 8, signed out and checked the readable missing-config login state, then reopened the persistent fictional draft. Keyboard Tab produced a visible 2px Helix-blue outline. Mobile preview fits the viewport with accessible close control. Before /private/tmp/member-cv-design-before.jpg; after /private/tmp/member-cv-design-desktop.jpg and /private/tmp/member-cv-design-mobile.jpg; dependent login /private/tmp/member-cv-design-login-mobile.jpg.
+
+Status: local T-05 verified except current remote delivery gate. Existing PR #57 will receive the reviewed change; re-read its current-commit checks before final handoff. No new PR, automatic merge or manual deployment.
