@@ -29,6 +29,20 @@ import {
 } from "@libs/components/ui/card";
 import { Label } from "@libs/components/ui/label";
 import { Checkbox } from "@libs/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@libs/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
+import { ChoiceInput, PeriodInputs } from "./ProfileInputs";
+import {
+  employmentTypes,
+  locationTypes,
+  languageLevels,
+  months,
+  readableProfileDate,
+} from "./profile-inputs";
 import { Alert, AlertDescription, AlertTitle } from "@libs/components/ui/alert";
 import { Badge } from "@libs/components/ui/badge";
 import {
@@ -54,24 +68,28 @@ import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
 import "./member-cv.css";
 
-type Row = { id: string; [key: string]: string };
+type Row = { id: string; [key: string]: string | undefined };
 type FieldDefinition = {
   key: string;
   label: StaticMemberCopyKey;
   multiline?: boolean;
   maxLength?: number;
   placeholder?: StaticMemberCopyKey;
+  choices?: readonly StaticMemberCopyKey[];
+  date?: boolean;
 };
 const period: FieldDefinition[] = [
   {
     key: "startDate",
-    label: "Start",
+    label: "Start date",
+    date: true,
     maxLength: 30,
     placeholder: "2024 or Sep 2024",
   },
   {
     key: "endDate",
     label: "End or expected end",
+    date: true,
     maxLength: 30,
     placeholder: "2028 or Present",
   },
@@ -89,7 +107,10 @@ const definitions: {
     fields: [
       { key: "institution", label: "Institution" },
       { key: "degree", label: "Degree or programme" },
+      { key: "fieldOfStudy", label: "Field of study" },
       ...period,
+      { key: "grade", label: "Grade", maxLength: 100 },
+      { key: "activities", label: "Activities and societies", multiline: true },
       { key: "description", label: "Description", multiline: true },
     ],
   },
@@ -98,8 +119,15 @@ const definitions: {
     title: "Experience",
     singular: "experience",
     fields: [
-      { key: "organization", label: "Employer or organisation" },
-      { key: "title", label: "Role" },
+      { key: "title", label: "Job title" },
+      { key: "organization", label: "Company or organisation" },
+      {
+        key: "employmentType",
+        label: "Employment type",
+        choices: employmentTypes,
+      },
+      { key: "location", label: "Location" },
+      { key: "locationType", label: "Location type", choices: locationTypes },
       ...period,
       { key: "description", label: "Description", multiline: true },
     ],
@@ -112,6 +140,7 @@ const definitions: {
       { key: "name", label: "Project or department" },
       { key: "role", label: "Your role" },
       { key: "season", label: "Season", maxLength: 30 },
+      ...period,
       {
         key: "url",
         label: "Project link",
@@ -127,7 +156,12 @@ const definitions: {
     singular: "language",
     fields: [
       { key: "name", label: "Language", maxLength: 100 },
-      { key: "level", label: "Level in your own words", maxLength: 100 },
+      {
+        key: "level",
+        label: "Proficiency",
+        maxLength: 100,
+        choices: languageLevels,
+      },
     ],
   },
   {
@@ -195,32 +229,67 @@ function Section({
   title,
   hint,
   children,
+  open,
+  onOpenChange,
+  locale,
 }: {
   id: string;
   title: string;
   hint?: string;
   children: ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  locale: MemberLocale;
 }) {
   return (
-    <section
-      className="mcv-section"
-      id={`mcv-${id}`}
-      aria-labelledby={`mcv-${id}-title`}
-    >
-      <Card className="mcv-card">
-        <CardHeader className="mcv-card-header">
-          <CardTitle>
-            <h2 id={`mcv-${id}-title`} tabIndex={-1}>
-              {title}
-            </h2>
-          </CardTitle>
-          {hint && (
-            <CardDescription className="mcv-hint">{hint}</CardDescription>
-          )}
-        </CardHeader>
-        <CardContent className="mcv-card-content">{children}</CardContent>
-      </Card>
-    </section>
+    <Collapsible open={open} onOpenChange={onOpenChange} asChild>
+      <section
+        className="mcv-section mcv-collapsible"
+        id={`mcv-${id}`}
+        aria-labelledby={`mcv-${id}-title`}
+      >
+        <Card className="mcv-card">
+          <CardHeader className="mcv-card-header">
+            <CardTitle>
+              <h2 id={`mcv-${id}-title`} tabIndex={-1}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    className="mcv-section-trigger"
+                    variant="ghost"
+                    type="button"
+                    aria-label={memberText(
+                      locale,
+                      open ? "Collapse {section}" : "Expand {section}",
+                      { section: title },
+                    )}
+                  >
+                    <span>{title}</span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={open ? "mcv-nav-chevron-open" : ""}
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+              </h2>
+            </CardTitle>
+          </CardHeader>
+          <CollapsibleContent
+            className="mcv-section-content"
+            forceMount
+            aria-hidden={!open}
+          >
+            <CardContent className="mcv-card-content">
+              {hint && (
+                <CardDescription className="mcv-hint mcv-section-hint">
+                  {hint}
+                </CardDescription>
+              )}
+              {children}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </section>
+    </Collapsible>
   );
 }
 
@@ -253,7 +322,18 @@ function DemoPreview({
                     (field) =>
                       row[field.key] && (
                         <p className="mcv-preserve" key={field.key}>
-                          {row[field.key]}
+                          {field.date
+                            ? row[field.key] === "Present"
+                              ? t("Present")
+                              : readableProfileDate(
+                                  row[field.key] ?? "",
+                                  (index) => t(months[index]),
+                                )
+                            : field.choices?.includes(
+                                  row[field.key] as StaticMemberCopyKey,
+                                )
+                              ? t(row[field.key] as StaticMemberCopyKey)
+                              : row[field.key]}
                         </p>
                       ),
                   )}
@@ -280,6 +360,18 @@ export default function MemberCV() {
     import.meta.env.DEV &&
     new URLSearchParams(location.search).get("demo") === "1";
   const sharingId = useId();
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    contact: true,
+  });
+  function sectionProps(id: string) {
+    return {
+      id,
+      locale,
+      open: openSections[id] ?? false,
+      onOpenChange: (open: boolean) =>
+        setOpenSections((previous) => ({ ...previous, [id]: open })),
+    };
+  }
   const boundUserId = useRef<string | null>(null);
   const previewOpener = useRef<HTMLElement | null>(null);
   const previewClose = useRef<HTMLButtonElement | null>(null);
@@ -719,6 +811,7 @@ export default function MemberCV() {
               </div>
             </div>
             <form
+              noValidate
               onSubmit={(event) => {
                 event.preventDefault();
                 void run("save");
@@ -727,6 +820,12 @@ export default function MemberCV() {
               <div className="mcv-layout">
                 <SectionNavigation
                   locale={locale}
+                  onNavigate={(key) =>
+                    setOpenSections((previous) => ({
+                      ...previous,
+                      [key]: true,
+                    }))
+                  }
                   statuses={getSectionStatuses(
                     draft,
                     sharing,
@@ -739,7 +838,7 @@ export default function MemberCV() {
                 >
                   <div className="mcv-editor">
                     <Section
-                      id="contact"
+                      {...sectionProps("contact")}
                       title={t("Contact and introduction")}
                       hint={t(
                         "Your Workspace login address stays linked to your account. Contact details below are shared only when you choose.",
@@ -803,7 +902,7 @@ export default function MemberCV() {
                     {definitions.map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}
-                        id={key}
+                        {...sectionProps(key)}
                         title={t(title)}
                         hint={
                           key === "education"
@@ -840,29 +939,68 @@ export default function MemberCV() {
                               </Button>
                             </div>
                             <div className="mcv-grid">
-                              {fields.map((field) => (
-                                <Field
-                                  {...field}
-                                  key={field.key}
-                                  label={t(field.label)}
-                                  placeholder={
-                                    field.placeholder
-                                      ? t(field.placeholder)
-                                      : undefined
-                                  }
-                                  value={row[field.key]}
-                                  onChange={(value) =>
-                                    edit(
-                                      key,
-                                      (draft[key] as Row[]).map((entry) =>
-                                        entry.id === row.id
-                                          ? { ...entry, [field.key]: value }
-                                          : entry,
-                                      ) as CvData[typeof key],
-                                    )
-                                  }
-                                />
-                              ))}
+                              {fields.map((field) => {
+                                if (field.date)
+                                  return field.key === "startDate" ? (
+                                    <PeriodInputs
+                                      key="period"
+                                      startDate={row.startDate ?? ""}
+                                      endDate={row.endDate ?? ""}
+                                      locale={locale}
+                                      disabled={Boolean(busy) || ended}
+                                      ongoingLabel={
+                                        key === "experience"
+                                          ? t("I currently work here")
+                                          : key === "projects"
+                                            ? t("This project is ongoing")
+                                            : undefined
+                                      }
+                                      onChange={(dateKey, value) =>
+                                        edit(
+                                          key,
+                                          (draft[key] as Row[]).map((entry) =>
+                                            entry.id === row.id
+                                              ? { ...entry, [dateKey]: value }
+                                              : entry,
+                                          ) as CvData[typeof key],
+                                        )
+                                      }
+                                    />
+                                  ) : null;
+                                const change = (value: string) =>
+                                  edit(
+                                    key,
+                                    (draft[key] as Row[]).map((entry) =>
+                                      entry.id === row.id
+                                        ? { ...entry, [field.key]: value }
+                                        : entry,
+                                    ) as CvData[typeof key],
+                                  );
+                                return field.choices ? (
+                                  <ChoiceInput
+                                    key={field.key}
+                                    label={t(field.label)}
+                                    value={row[field.key] ?? ""}
+                                    onChange={change}
+                                    options={field.choices}
+                                    locale={locale}
+                                    disabled={Boolean(busy) || ended}
+                                  />
+                                ) : (
+                                  <Field
+                                    {...field}
+                                    key={field.key}
+                                    label={t(field.label)}
+                                    placeholder={
+                                      field.placeholder
+                                        ? t(field.placeholder)
+                                        : undefined
+                                    }
+                                    value={row[field.key] ?? ""}
+                                    onChange={change}
+                                  />
+                                );
+                              })}
                             </div>
                           </div>
                         ))}
@@ -885,7 +1023,7 @@ export default function MemberCV() {
                       </Section>
                     ))}
                     <Section
-                      id="skills"
+                      {...sectionProps("skills")}
                       title={t("Skills")}
                       hint={t("Enter one skill per line. Use up to 50 skills.")}
                     >
@@ -899,7 +1037,7 @@ export default function MemberCV() {
                       />
                     </Section>
                     <Section
-                      id="sharing"
+                      {...sectionProps("sharing")}
                       title={t("Share with sponsors")}
                       hint={t(
                         "These choices apply when you publish. Email and phone choices also apply inside the generated CV.",
@@ -934,7 +1072,7 @@ export default function MemberCV() {
                       </p>
                     </Section>
                     <Section
-                      id="publication"
+                      {...sectionProps("publication")}
                       title={t("Preview and publication")}
                     >
                       <p className="mcv-hint">

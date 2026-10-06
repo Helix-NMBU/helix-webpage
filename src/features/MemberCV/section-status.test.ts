@@ -184,3 +184,22 @@ describe("CV section content and acknowledged-save status", () => {
     expect({ draft, sharing, saved }).toEqual(before);
   });
 });
+
+
+describe("additive profile field progress", () => {
+  it("includes optional education detail edits without making those fields required for filled content", () => {
+    const draft = emptyCv();
+    draft.education = [{id:"education",institution:"NMBU",degree:"Master",startDate:"",endDate:"",description:""}];
+    const saved = record(draft);
+    expect(getSectionStatuses(draft, privateSharing, saved).education).toEqual({content:"filled",dirty:false});
+    draft.education[0].activities = "Student society";
+    expect(getSectionStatuses(draft, privateSharing, saved).education).toEqual({content:"filled",dirty:true});
+  });
+  it("recognizes content and changes in newly added optional project dates", () => {
+    const draft = emptyCv();
+    draft.projects = [{id:"project",name:"",role:"",season:"",description:"",url:""}];
+    const saved = record(draft);
+    draft.projects[0].startDate = "2024-09";
+    expect(getSectionStatuses(draft, privateSharing, saved).projects).toEqual({content:"started",dirty:true});
+  });
+});

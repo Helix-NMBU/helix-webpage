@@ -38,13 +38,16 @@ const contentLabels = {
 export function SectionNavigation({
   locale,
   statuses,
+  onNavigate,
 }: {
   locale: MemberLocale;
   statuses: ReturnType<typeof getSectionStatuses>;
+  onNavigate: (key: SectionKey) => void;
 }) {
   const id = useId();
   const [expanded, setExpanded] = useState(false);
   const [current, setCurrent] = useState<SectionKey>("contact");
+  const [pending, setPending] = useState<SectionKey | null>(null);
   const t = (key: StaticMemberCopyKey) => memberText(locale, key);
 
   useEffect(() => {
@@ -70,7 +73,14 @@ export function SectionNavigation({
     update();
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(schedule)
+        : null;
+    const editor = document.querySelector(".mcv-editor");
+    if (editor) observer?.observe(editor);
     return () => {
+      observer?.disconnect();
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       cancelAnimationFrame(frame);
@@ -78,18 +88,32 @@ export function SectionNavigation({
   }, []);
 
   function goTo(key: SectionKey) {
-    const section = document.getElementById(`mcv-${key}`);
-    const heading = document.getElementById(`mcv-${key}-title`);
-    if (!section || !heading) return;
-    heading.focus({ preventScroll: true });
-    section.scrollIntoView({
-      block: "start",
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
-    });
-    setCurrent(key);
+    onNavigate(key);
+    setPending(key);
   }
+
+  useEffect(() => {
+    if (!pending) return;
+    const frame = requestAnimationFrame(() => {
+      const key = pending;
+      const section = document.getElementById(`mcv-${key}`);
+      const heading = document.getElementById(`mcv-${key}-title`);
+      if (!section || !heading) {
+        setPending(null);
+        return;
+      }
+      heading.focus({ preventScroll: true });
+      section.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+      });
+      setCurrent(key);
+      setPending(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pending]);
 
   return (
     <aside className="mcv-section-overview" aria-label={t("Section overview")}>
@@ -144,7 +168,7 @@ export function SectionNavigation({
                       >
                         <span className="mcv-nav-label">{t(title)}</span>
                         {status && (
-                          <span className="mcv-nav-indicators">
+                          <div className="mcv-nav-indicators">
                             <Badge
                               variant="secondary"
                               className="mcv-nav-content"
@@ -163,7 +187,7 @@ export function SectionNavigation({
                             >
                               {status.dirty ? t("Unsaved") : t("Saved")}
                             </Badge>
-                          </span>
+                          </div>
                         )}
                       </a>
                     </Button>

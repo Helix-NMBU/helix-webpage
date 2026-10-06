@@ -851,3 +851,91 @@
     grid-template-columns: 1fr;
   }
 }
+
+.mcv-profile-menu.portal-root {
+  min-height: 0;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  max-width: calc(100vw - 32px);
+}
+.mcv-profile-menu {
+  z-index: 60;
+  border-radius: 12px;
+}
+.mcv-page .mcv-profile-select {
+  min-height: 44px;
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--input);
+  font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+}
+.mcv-profile-select > span {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.mcv-date-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+.mcv-date-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mcv-period {
+  min-width: 0;
+}
+.mcv-current-choice {
+  margin-bottom: 20px;
+}
+.mcv-page .mcv-date-mode {
+  align-self: flex-start;
+  color: var(--primary);
+  font-size: 12px;
+  padding: 4px 8px;
+  margin-left: -8px;
+}
+.mcv-date-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+.mcv-page .mcv-section-trigger {
+  width: 100%;
+  padding: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  color: var(--foreground);
+  border-radius: 8px;
+}
+.mcv-section-trigger > span {
+  flex: 1;
+}
+.mcv-section-trigger > svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+.mcv-section-trigger:hover {
+  background: transparent;
+  color: var(--primary);
+}
+.mcv-section-content[data-state="closed"] {
+  display: none;
+}
+.mcv-collapsible[data-state="closed"] .mcv-card-header {
+  margin-bottom: 0;
+}
+.mcv-section-hint {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
