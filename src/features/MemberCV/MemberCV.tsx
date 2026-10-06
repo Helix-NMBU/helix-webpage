@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../libs/lib/utils";
 import { createDemoRepository, fictionalCv } from "./demo";
@@ -12,7 +20,27 @@ import type { CvData, CvEnvelope, CvMutation, CvSharing } from "./types";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Textarea } from "@libs/components/ui/textarea";
-import { Card } from "@libs/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@libs/components/ui/card";
+import { Label } from "@libs/components/ui/label";
+import { Checkbox } from "@libs/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@libs/components/ui/alert";
+import { Badge } from "@libs/components/ui/badge";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@libs/components/ui/dialog";
+import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
 import {
   useMemberLocale,
   memberText,
@@ -133,11 +161,13 @@ function Field({
   placeholder?: string;
   type?: string;
 }) {
+  const id = useId();
   return (
-    <label className={multiline ? "mcv-field mcv-full" : "mcv-field"}>
-      <span>{label}</span>
+    <div className={multiline ? "mcv-field mcv-full" : "mcv-field"}>
+      <Label htmlFor={id}>{label}</Label>
       {multiline ? (
         <Textarea
+          id={id}
           rows={4}
           value={value}
           maxLength={maxLength === 500 ? 8000 : maxLength}
@@ -146,6 +176,7 @@ function Field({
         />
       ) : (
         <Input
+          id={id}
           type={type}
           value={value}
           maxLength={maxLength}
@@ -153,7 +184,7 @@ function Field({
           onChange={(event) => onChange(event.target.value)}
         />
       )}
-    </label>
+    </div>
   );
 }
 
@@ -169,9 +200,15 @@ function Section({
   return (
     <section className="mcv-section">
       <Card className="mcv-card">
-        <h2>{title}</h2>
-        {hint && <p className="mcv-hint">{hint}</p>}
-        {children}
+        <CardHeader className="mcv-card-header">
+          <CardTitle>
+            <h2>{title}</h2>
+          </CardTitle>
+          {hint && (
+            <CardDescription className="mcv-hint">{hint}</CardDescription>
+          )}
+        </CardHeader>
+        <CardContent className="mcv-card-content">{children}</CardContent>
       </Card>
     </section>
   );
@@ -232,7 +269,33 @@ export default function MemberCV() {
   const demo =
     import.meta.env.DEV &&
     new URLSearchParams(location.search).get("demo") === "1";
+  const sharingId = useId();
   const boundUserId = useRef<string | null>(null);
+  const previewOpener = useRef<HTMLElement | null>(null);
+  const previewClose = useRef<HTMLButtonElement | null>(null);
+  const confirmationCancel = useRef<HTMLButtonElement | null>(null);
+  const confirmationOpener = useRef<HTMLElement | null>(null);
+  const pendingFocus = useRef<HTMLElement | null>(null);
+  const [confirmation, setConfirmation] = useState<UnsavedAction | null>(null);
+  const unsavedConfirmation = useMemo(
+    () => createUnsavedConfirmation(setConfirmation),
+    [],
+  );
+  const restoreOpener = useCallback((opener: HTMLElement | null) => {
+    if (opener?.isConnected) {
+      if (opener.matches(":disabled")) {
+        pendingFocus.current = opener;
+        return;
+      }
+      pendingFocus.current = null;
+      opener.focus();
+    } else {
+      pendingFocus.current = null;
+      document
+        .querySelector<HTMLElement>(".mcv-header .mcv-language-trigger")
+        ?.focus();
+    }
+  }, []);
   const repository = useMemo(
     () =>
       demo
@@ -294,6 +357,7 @@ export default function MemberCV() {
     const current = ++generation.current;
     let active = true;
     boundUserId.current = null;
+    unsavedConfirmation.resolve(false);
     setBusy("load");
     setEnded(false);
     setEnvelope(null);
@@ -335,6 +399,7 @@ export default function MemberCV() {
             session.user.id !== boundUserId.current)
         ) {
           generation.current++;
+          unsavedConfirmation.resolve(false);
           setEnded(true);
           setBusy(null);
           if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
@@ -345,11 +410,12 @@ export default function MemberCV() {
     return () => {
       active = false;
       generation.current++;
+      unsavedConfirmation.dispose();
       if (subscription) subscription.data.subscription.unsubscribe();
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = null;
     };
-  }, [demo, navigate, repository]);
+  }, [demo, navigate, repository, unsavedConfirmation]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -359,9 +425,34 @@ export default function MemberCV() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  async function run(action: CvMutation["action"], download = false) {
+  useEffect(() => {
+    if (!busy && !confirmation && !preview && pendingFocus.current) {
+      restoreOpener(pendingFocus.current);
+    }
+  }, [busy, confirmation, preview, restoreOpener]);
+
+  function confirmUnsaved(action: UnsavedAction, opener?: HTMLElement) {
+    confirmationOpener.current =
+      opener ??
+      (document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null);
+    return unsavedConfirmation.request(action);
+  }
+
+  async function run(
+    action: CvMutation["action"],
+    download = false,
+    opener?: HTMLElement,
+  ) {
     if (!draft || !envelope || busy || ended) return;
     const current = generation.current;
+    if (action === "preview" && !download)
+      previewOpener.current =
+        opener ??
+        (document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null);
     setBusy(action);
     setError(null);
     setNotice("");
@@ -430,17 +521,11 @@ export default function MemberCV() {
       if (generation.current === current) setBusy(null);
     }
   }
-  async function reload() {
-    if (
-      dirty &&
-      !window.confirm(
-        t(
-          "Reloading replaces your unsaved input with the saved draft. Continue?",
-        ),
-      )
-    )
-      return;
+  async function reload(opener?: HTMLElement) {
+    if (busy || ended) return;
     const current = generation.current;
+    if (dirty && !(await confirmUnsaved("reload", opener))) return;
+    if (generation.current !== current) return;
     setBusy("load");
     setError(null);
     try {
@@ -465,12 +550,11 @@ export default function MemberCV() {
       if (generation.current === current) setBusy(null);
     }
   }
-  async function logout() {
-    if (
-      dirty &&
-      !window.confirm(t("Your latest changes are not saved. Sign out anyway?"))
-    )
-      return;
+  async function logout(opener?: HTMLElement) {
+    if (busy) return;
+    const current = generation.current;
+    if (dirty && !(await confirmUnsaved("logout", opener))) return;
+    if (generation.current !== current) return;
     setBusy("logout");
     if (!demo) {
       const result = await supabase?.auth.signOut();
@@ -505,7 +589,7 @@ export default function MemberCV() {
             variant="outline"
             className="mcv-header-button"
             type="button"
-            onClick={() => void logout()}
+            onClick={(event) => void logout(event.currentTarget)}
             disabled={Boolean(busy)}
           >
             {t("Sign out")}
@@ -514,14 +598,14 @@ export default function MemberCV() {
       </header>
       <div className="mcv-container">
         {demo && (
-          <div className="mcv-demo-banner">
-            <strong>{t("Fictional local demo")}</strong>
-            <p>
+          <Alert className="mcv-demo-banner" role="status">
+            <AlertTitle>{t("Fictional local demo")}</AlertTitle>
+            <AlertDescription>
               {t(
                 "This demo saves only in this browser. It does not verify Google, Supabase or sponsor access. PDF generation is replaced by an HTML preview.",
               )}
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
         <div className="mcv-intro">
           <p className="mcv-eyebrow">{t("Your member profile")}</p>
@@ -533,86 +617,96 @@ export default function MemberCV() {
           </p>
         </div>
         {ended && (
-          <div className="mcv-error" role="alert">
-            {t("Your session has ended. Editing is locked.")}{" "}
-            <Link to="/member/login" state={{ from: "/member/profile" }}>
-              {t("Sign in again")}
-            </Link>
-            .
-          </div>
+          <Alert className="mcv-error" variant="destructive">
+            <AlertDescription>
+              {t("Your session has ended. Editing is locked.")}{" "}
+              <Link to="/member/login" state={{ from: "/member/profile" }}>
+                {t("Sign in again")}
+              </Link>
+              .
+            </AlertDescription>
+          </Alert>
         )}
         {error && (
-          <div className="mcv-error" role="alert">
-            {localizeCvError(error, locale)}
+          <Alert className="mcv-error" variant="destructive">
+            <AlertDescription>
+              {localizeCvError(error, locale)}
+            </AlertDescription>
             {!ended && (
               <Button
                 variant="outline"
                 type="button"
-                onClick={() => void reload()}
+                onClick={(event) => void reload(event.currentTarget)}
                 disabled={Boolean(busy)}
               >
                 {t("Reload saved draft")}
               </Button>
             )}
-          </div>
+          </Alert>
         )}
         {envelope &&
           !ended &&
           "cleanupPending" in envelope &&
           envelope.cleanupPending === true && (
-            <div className="mcv-cleanup-warning" role="status">
-              <p>
+            <Alert className="mcv-cleanup-warning" role="status">
+              <AlertDescription>
                 {t(
                   "Your latest CV operation succeeded, but deletion of a retired CV file is still pending. Your saved revision and directory visibility are up to date.",
                 )}
-              </p>
+              </AlertDescription>
               <Button
                 variant="outline"
                 type="button"
                 disabled={Boolean(busy)}
-                onClick={() => void reload()}
+                onClick={(event) => void reload(event.currentTarget)}
               >
                 {t("Reload saved draft to retry cleanup")}
               </Button>
-            </div>
+            </Alert>
           )}
         {notice && (
-          <div className="mcv-notice" role="status">
-            {t(notice)}
-          </div>
+          <Alert className="mcv-notice" role="status">
+            <AlertDescription>{t(notice)}</AlertDescription>
+          </Alert>
         )}
         {ended ? null : !draft || !envelope ? (
-          <p role="status">
-            {busy
-              ? t("Loading your private CV…")
-              : t("Your CV could not be opened.")}
-          </p>
+          <Alert role="status" className="mcv-notice">
+            <AlertDescription>
+              {busy
+                ? t("Loading your private CV…")
+                : t("Your CV could not be opened.")}
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
             <div className="mcv-status" aria-live="polite">
-              <span>
-                <strong>
+              <div>
+                <Badge variant="outline" className="mcv-status-badge">
                   {dirty ? t("Unsaved changes") : t("Private draft saved")}
-                </strong>
-                <br />
-                {t("Draft revision {revision}", {
-                  revision: envelope.document.revision,
-                })}
-              </span>
-              <span>
-                <strong>
+                </Badge>
+
+                <p className="mcv-status-detail">
+                  {t("Draft revision {revision}", {
+                    revision: envelope.document.revision,
+                  })}
+                </p>
+              </div>
+              <div>
+                <Badge variant="outline" className="mcv-status-badge">
                   {envelope.document.publishedRevision === null
                     ? t("Not published")
                     : t("Published in Talent Directory")}
-                </strong>
-                <br />
-                {envelope.document.publishedRevision === null
-                  ? t("Only you can access this draft.")
-                  : t(
-                      "Published version {revision}. Draft changes stay private until republished.",
-                      { revision: envelope.document.publishedRevision },
-                    )}
-              </span>
+                </Badge>
+
+                <p className="mcv-status-detail">
+                  {envelope.document.publishedRevision === null
+                    ? t("Only you can access this draft.")
+                    : t(
+                        "Published version {revision}. Draft changes stay private until republished.",
+                        { revision: envelope.document.publishedRevision },
+                      )}
+                </p>
+              </div>
             </div>
             <form
               onSubmit={(event) => {
@@ -792,25 +886,26 @@ export default function MemberCV() {
                       )}
                     >
                       {(["cv", "email", "phone"] as const).map((key) => (
-                        <label className="mcv-checkbox" key={key}>
-                          <input
-                            type="checkbox"
+                        <div className="mcv-checkbox" key={key}>
+                          <Checkbox
+                            id={`${sharingId}-${key}`}
+                            disabled={Boolean(busy) || ended}
                             checked={sharing[key]}
-                            onChange={(event) =>
+                            onCheckedChange={(checked) =>
                               setSharing((previous) => ({
                                 ...previous,
-                                [key]: event.target.checked,
+                                [key]: checked === true,
                               }))
                             }
                           />
-                          <span>
+                          <Label htmlFor={`${sharingId}-${key}`}>
                             {key === "cv"
                               ? t("Share generated CV")
                               : key === "email"
                                 ? t("Share contact email")
                                 : t("Share phone number")}
-                          </span>
-                        </label>
+                          </Label>
+                        </div>
                       ))}
                       <p className="mcv-hint">
                         {t(
@@ -833,7 +928,9 @@ export default function MemberCV() {
                         <Button
                           variant="outline"
                           type="button"
-                          onClick={() => void run("preview")}
+                          onClick={(event) =>
+                            void run("preview", false, event.currentTarget)
+                          }
                         >
                           {busy === "preview"
                             ? t("Generating…")
@@ -900,53 +997,49 @@ export default function MemberCV() {
           </>
         )}
       </div>
-      {preview && (
-        <div
-          className="mcv-modal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("CV preview")}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") clearPreview();
-            if (event.key === "Tab") {
-              const controls =
-                event.currentTarget.querySelectorAll<HTMLElement>(
-                  "button, select, a[href], iframe",
-                );
-              const first = controls[0];
-              const last = controls[controls.length - 1];
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last?.focus();
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first?.focus();
-              }
-            }
-          }}
-        >
-          <div className="mcv-preview-panel">
-            <header>
-              <h2>{demo ? t("Demo CV preview") : t("Generated CV preview")}</h2>
-              <div className="mcv-preview-controls">
-                <LanguageSwitcher locale={locale} onChange={setLocale} />
-                <Button
-                  variant="outline"
-                  autoFocus
-                  type="button"
-                  onClick={clearPreview}
-                >
-                  {t("Close preview")}
-                </Button>
+      <Dialog
+        open={Boolean(preview)}
+        onOpenChange={(open) => {
+          if (!open) clearPreview();
+        }}
+      >
+        {preview && (
+          <DialogContent
+            className="portal-root mcv-dialog mcv-preview-panel"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              previewClose.current?.focus();
+            }}
+            lang={locale}
+            showCloseButton={false}
+            overlayClassName="mcv-dialog-overlay"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              restoreOpener(previewOpener.current);
+            }}
+          >
+            <DialogHeader className="mcv-preview-header">
+              <div className="mcv-preview-title-row">
+                <DialogTitle className="mcv-dialog-title">
+                  {demo ? t("Demo CV preview") : t("Generated CV preview")}
+                </DialogTitle>
+                <div className="mcv-preview-controls">
+                  <LanguageSwitcher locale={locale} onChange={setLocale} />
+                  <DialogClose asChild>
+                    <Button ref={previewClose} variant="outline" type="button">
+                      {t("Close preview")}
+                    </Button>
+                  </DialogClose>
+                </div>
               </div>
-            </header>
-            <p className="mcv-preview-caption">
-              {t(
-                "This preview follows your current email and phone sharing choices.",
-              )}
-              {!sharing.cv &&
-                ` ${t("CV download is currently off for sponsors.")}`}
-            </p>
+              <DialogDescription className="mcv-preview-caption">
+                {t(
+                  "This preview follows your current email and phone sharing choices.",
+                )}
+                {!sharing.cv &&
+                  ` ${t("CV download is currently off for sponsors.")}`}
+              </DialogDescription>
+            </DialogHeader>
             {preview.url ? (
               <>
                 <Button
@@ -967,9 +1060,61 @@ export default function MemberCV() {
                 locale={locale}
               />
             )}
-          </div>
-        </div>
-      )}
+          </DialogContent>
+        )}
+      </Dialog>
+      <Dialog
+        open={confirmation !== null}
+        onOpenChange={(open) => {
+          if (!open) unsavedConfirmation.resolve(false);
+        }}
+      >
+        <DialogContent
+          className="portal-root mcv-dialog mcv-confirm-panel"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            confirmationCancel.current?.focus();
+          }}
+          lang={locale}
+          showCloseButton={false}
+          overlayClassName="mcv-dialog-overlay"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            restoreOpener(confirmationOpener.current);
+          }}
+        >
+          <DialogHeader className="mcv-confirm-header">
+            <div className="mcv-preview-title-row">
+              <DialogTitle className="mcv-dialog-title">
+                {t("Unsaved changes")}
+              </DialogTitle>
+              <LanguageSwitcher locale={locale} onChange={setLocale} />
+            </div>
+            <DialogDescription>
+              {confirmation === "reload"
+                ? t(
+                    "Reloading replaces your unsaved input with the saved draft. Continue?",
+                  )
+                : t("Your latest changes are not saved. Sign out anyway?")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mcv-confirm-actions">
+            <DialogClose asChild>
+              <Button ref={confirmationCancel} variant="outline" type="button">
+                {t("Cancel")}
+              </Button>
+            </DialogClose>
+            <Button
+              type="button"
+              onClick={() => unsavedConfirmation.resolve(true)}
+            >
+              {confirmation === "reload"
+                ? t("Reload saved draft")
+                : t("Sign out")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
