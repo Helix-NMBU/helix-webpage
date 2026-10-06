@@ -13,7 +13,8 @@ export interface CvServices {
   read(userId: string): Promise<StoredCv>;
   commit(userId: string, change: CvCommit): Promise<StoredCv>;
   upload(path: string, bytes: Uint8Array): Promise<void>;
-  remove(path: string): Promise<void>;
+  prepareUpload(userId: string, path: string, expectedRevision: number): Promise<void>;
+  settleUpload(userId: string, path: string | null, uploadUncertain?: boolean): Promise<StoredCv>;
   cleanup(userId: string): Promise<void>;
   newPath(userId: string): string;
 }
@@ -66,41 +67,47 @@ export function supabaseCvServices(clients = serverClients()): CvServices {
       }
       return record(data as Record<string, unknown>);
     },
+    async prepareUpload(userId, path, expectedRevision) {
+      const { error } = await admin.rpc("prepare_member_cv_upload", { p_user_id: userId, p_path: path, p_expected_revision: expectedRevision });
+      if (error?.code === "40001") throw new MemberCvError(409, "This CV changed in another session. Reload the saved version before trying again.");
+      if (error) throw new MemberCvError(503, "Could not prepare the generated file. Publication has not changed.");
+    },
+    async settleUpload(userId, path, uploadUncertain = false) {
+      // This RPC takes the same document lock as publication. It either observes
+      // a finished commit or cancels this candidate before a queued commit starts.
+      const { data, error } = await admin.rpc("settle_member_cv_upload", { p_user_id: userId, p_path: path, p_upload_uncertain: uploadUncertain });
+      if (error || !data) throw new MemberCvError(503, "The publication result could not be confirmed. Reload your CV before retrying. Its generated file remains tracked.");
+      return record(data as Record<string, unknown>);
+    },
     async upload(path, bytes) {
       const { error } = await admin.storage.from("member-cvs").upload(path, bytes, { contentType: "application/pdf", upsert: false });
-      if (error) {
-        // Even an uncertain storage rejection cannot leave an accessible orphan.
-        await enqueueRemoval(admin, path);
-        throw new MemberCvError(503, "Could not store the generated CV. Publication has not changed.");
-      }
-    },
-    async remove(path) {
-      // A failed compensation must survive the current HTTP request.
-      const userId = path.split("/")[0];
-      const { data: current, error: currentError } = await admin.from("member_cv_documents").select("published_path").eq("user_id", userId).single();
-      if (currentError) throw new MemberCvError(503, "Could not confirm PDF cleanup. The generated file has been preserved.");
-      if (current?.published_path === path) return;
-      await enqueueRemoval(admin, path);
-      await removeStoredCv(admin, path);
-      await admin.from("member_cv_file_cleanup").delete().eq("path", path);
+      if (error) throw new MemberCvError(503, "Could not store the generated CV. Publication has not changed.");
     },
     async cleanup(userId) {
-      const { data, error } = await admin.from("member_cv_file_cleanup").select("path").eq("user_id", userId);
-      if (error) throw new MemberCvError(503, "Could not check retired CV files. Try again.");
+      // Expired abandoned candidates are settled under the publication lock.
+      // Currently running uploads keep their lease and cannot be retired here.
+      const { error: settlementError } = await admin.rpc("settle_member_cv_upload", { p_user_id: userId, p_path: null });
+      if (settlementError) throw new MemberCvError(503, "CV file cleanup is pending.");
+      const { data, error } = await admin.from("member_cv_file_cleanup").select("path,not_before").eq("user_id", userId);
+      if (error) throw new MemberCvError(503, "CV file cleanup is pending.");
+      let deferred = false;
       for (const item of data ?? []) {
+        if (Date.parse(item.not_before) > Date.now()) { deferred = true; continue; }
         const { data: current, error: currentError } = await admin.from("member_cv_documents").select("published_path").eq("user_id", userId).single();
         const { data: projection, error: projectionError } = await admin.from("students").select("cv_url").eq("id", userId).maybeSingle();
         if (currentError || projectionError) throw new MemberCvError(503, "Could not verify retired CV cleanup. The files have been preserved.");
         if (current?.published_path === item.path || projection?.cv_url === item.path) {
-          // A stale compensation queue can never destroy the active version.
           const { error: retireError } = await admin.from("member_cv_file_cleanup").delete().eq("user_id", userId).eq("path", item.path);
-          if (retireError) throw new MemberCvError(503, "Could not reconcile CV cleanup. Reload your CV.");
+          if (retireError) throw new MemberCvError(503, "CV file cleanup is pending.");
           continue;
         }
         await removeStoredCv(admin, item.path);
+        const { error: candidateError } = await admin.from("member_cv_upload_candidates").update({ status: "deleted" }).eq("user_id", userId).eq("path", item.path).eq("status", "retired");
+        if (candidateError) throw new MemberCvError(503, "CV file cleanup is pending.");
         const { error: deleteError } = await admin.from("member_cv_file_cleanup").delete().eq("user_id", userId).eq("path", item.path);
-        if (deleteError) throw new MemberCvError(503, "Retired CV deletion needs a retry. Reload your CV.");
+        if (deleteError) throw new MemberCvError(503, "CV file cleanup is pending.");
       }
+      if (deferred) throw new MemberCvError(503, "CV file cleanup is pending while an uncertain upload settles.");
     },
     newPath(userId) { return `${userId}/${randomUUID()}.pdf`; },
   };
@@ -108,10 +115,4 @@ export function supabaseCvServices(clients = serverClients()): CvServices {
 async function removeStoredCv(admin: SupabaseClient, path: string) {
   const { error } = await admin.storage.from("member-cvs").remove([path]);
   if (error) throw new MemberCvError(503, "Publication visibility has changed, but retired file deletion is pending. Reload your CV to retry cleanup.");
-}
-
-async function enqueueRemoval(admin: SupabaseClient, path: string) {
-  const userId = path.split("/")[0];
-  const { error } = await admin.from("member_cv_file_cleanup").upsert({ path, user_id: userId }, { onConflict: "path" });
-  if (error) throw new MemberCvError(503, "Retired CV cleanup could not be queued. Contact the portal administrator.");
 }

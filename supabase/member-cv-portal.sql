@@ -32,8 +32,24 @@ create table public.member_cv_publications (
 create table public.member_cv_file_cleanup (
   path text primary key,
   user_id uuid not null references public.member_workspace_identities(user_id) on delete cascade,
+  not_before timestamptz not null default clock_timestamp(),
   created_at timestamptz not null default now()
 );
+
+-- Every candidate is recorded before upload, so an interrupted HTTP request
+-- cannot lose its path. A pending candidate has a bounded publication lease.
+create table public.member_cv_upload_candidates (
+  path text primary key,
+  user_id uuid not null references public.member_workspace_identities(user_id) on delete cascade,
+  expected_revision integer not null,
+  status text not null default 'pending' check (status in ('pending', 'current', 'retired', 'deleted')),
+  expires_at timestamptz not null default clock_timestamp() + interval '15 minutes',
+  cleanup_after timestamptz not null default clock_timestamp(),
+  created_at timestamptz not null default clock_timestamp()
+);
+alter table public.member_cv_upload_candidates enable row level security;
+revoke all on public.member_cv_upload_candidates from anon, authenticated;
+grant all on public.member_cv_upload_candidates to service_role;
 
 alter table public.member_workspace_identities enable row level security;
 alter table public.member_cv_documents enable row level security;
@@ -81,6 +97,52 @@ $$;
 revoke all on function public.onboard_member_cv(uuid, text, text, text, jsonb, jsonb) from public, anon, authenticated;
 grant execute on function public.onboard_member_cv(uuid, text, text, text, jsonb, jsonb) to service_role;
 
+-- Register before Storage upload. Paths can never be reused after settlement.
+create or replace function public.prepare_member_cv_upload(p_user_id uuid, p_path text, p_expected_revision integer)
+returns void language plpgsql security definer set search_path = public as $$
+declare item public.member_cv_documents%rowtype;
+begin
+  select * into item from public.member_cv_documents where user_id = p_user_id for update;
+  if item.user_id is null then raise exception 'Member profile not found' using errcode = '42501'; end if;
+  if p_expected_revision is null or p_expected_revision <> item.revision then raise exception 'Revision conflict' using errcode = '40001'; end if;
+  if p_path is null or p_path !~ ('^' || p_user_id::text || '/[0-9a-f-]{36}[.]pdf$') then raise exception 'Invalid generated PDF path' using errcode = '22023'; end if;
+  insert into public.member_cv_upload_candidates(path,user_id,expected_revision)
+    values(p_path,p_user_id,p_expected_revision);
+end
+$$;
+revoke all on function public.prepare_member_cv_upload(uuid,text,integer) from public,anon,authenticated;
+grant execute on function public.prepare_member_cv_upload(uuid,text,integer) to service_role;
+
+-- Settle an uncertain upload/publication using the SAME row lock as commit.
+-- If commit already ran, preserve its current path. If commit is queued behind
+-- settlement, retiring its candidate makes that later commit fail atomically.
+-- With no explicit path, only expired pending or superseded current candidates
+-- are retired. Concurrent active uploads keep their publication lease.
+create or replace function public.settle_member_cv_upload(p_user_id uuid, p_path text default null, p_upload_uncertain boolean default false)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare item public.member_cv_documents%rowtype;
+begin
+  select * into item from public.member_cv_documents where user_id = p_user_id for update;
+  if item.user_id is null then raise exception 'Member profile not found' using errcode = '42501'; end if;
+  update public.member_cv_upload_candidates c set status = 'retired',
+    cleanup_after = case when p_upload_uncertain then greatest(c.expires_at, clock_timestamp() + interval '15 minutes') else c.cleanup_after end
+    where c.user_id = p_user_id and c.status in ('pending','current')
+      and c.path is distinct from item.published_path
+      and (c.path = p_path or (p_path is null and (c.status = 'current' or c.expires_at <= clock_timestamp())));
+  -- An uncertain Storage upload may finish after its HTTP error. Cancel its
+  -- publication now, but preserve cleanup for a full settlement window.
+  insert into public.member_cv_file_cleanup(path,user_id,not_before)
+    select c.path,c.user_id,c.cleanup_after from public.member_cv_upload_candidates c
+    where c.user_id = p_user_id and c.status = 'retired'
+      and c.path is distinct from item.published_path
+    on conflict (path) do update set not_before = greatest(public.member_cv_file_cleanup.not_before, excluded.not_before);
+  delete from public.member_cv_file_cleanup where user_id = p_user_id and path = item.published_path;
+  return to_jsonb(item);
+end
+$$;
+revoke all on function public.settle_member_cv_upload(uuid,text,boolean) from public,anon,authenticated;
+grant execute on function public.settle_member_cv_upload(uuid,text,boolean) to service_role;
+
 -- Publication and the existing Talent Directory projection commit atomically.
 create or replace function public.commit_member_cv(p_user_id uuid, p_action text, p_expected_revision integer, p_draft jsonb default null, p_sharing jsonb default null, p_path text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -120,6 +182,10 @@ begin
     if (p_sharing->>'cv')::boolean then
       if p_path is null or p_path !~ ('^' || p_user_id::text || '/[0-9a-f-]{36}[.]pdf$') or p_path = item.published_path
         then raise exception 'Invalid generated PDF path' using errcode = '22023'; end if;
+      if not exists(select 1 from public.member_cv_upload_candidates c
+        where c.path = p_path and c.user_id = p_user_id and c.expected_revision = p_expected_revision
+          and c.status = 'pending' and c.expires_at > clock_timestamp())
+        then raise exception 'Upload candidate cancelled or expired' using errcode = '40001'; end if;
     elsif p_path is not null then raise exception 'CV sharing disabled' using errcode = '22023'; end if;
     snapshot := p_draft || jsonb_build_object(
       'contactEmail', case when (p_sharing->>'email')::boolean then p_draft->>'contactEmail' else '' end,
@@ -148,6 +214,7 @@ begin
       select distinct p_user_id, coalesce(nullif(p->>'season', ''), 'Helix'), p->>'role'
       from jsonb_array_elements(snapshot->'projects') p where coalesce(p->>'role','') <> '';
     update public.member_cv_documents set published_revision = next_revision, published_at = now(), published_path = p_path where user_id = p_user_id;
+    update public.member_cv_upload_candidates set status = 'current' where user_id = p_user_id and path = p_path;
   elsif p_action = 'withdraw' then
     update public.students set visible_to_sponsors = false, share_cv = false, share_email = false, share_phone = false,
       personal_email = null, personal_phone = null, email = p_user_id::text || '@profile.invalid', cv_url = null, updated_at = now() where id = p_user_id;

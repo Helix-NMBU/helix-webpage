@@ -22,6 +22,7 @@ function fixture() {
   let snapshot: CvData | null = null;
   const stored = new Map<string, Uint8Array>();
   const retired = new Set<string>();
+  const candidates = new Map<string, "pending" | "current" | "retired" | "deleted">();
   let pathIndex = 0;
   const services: CvServices = {
     authenticate: vi.fn(async (token) => { if (token !== "member-token") throw new MemberCvError(401, "Invalid session."); return { userId, googleSub: "google-sub", email: "ase@helixnmbu.no", name: "Åse" }; }),
@@ -29,12 +30,14 @@ function fixture() {
     commit: vi.fn(async (id, change) => {
       expect(id).toBe(userId);
       if (change.expectedRevision !== state.revision) throw new MemberCvError(409, "Revision conflict.");
+      if (change.path && candidates.get(change.path) !== "pending") throw new MemberCvError(409, "Upload candidate cancelled.");
       if (change.draft) state.draft = structuredClone(change.draft);
       if (change.sharing) state.sharing = structuredClone(change.sharing);
       state.revision++;
       if (change.action !== "save") {
         if (state.publishedPath) retired.add(state.publishedPath);
         state.publishedPath = change.path ?? null;
+        if (change.path) candidates.set(change.path, "current");
         state.publishedRevision = change.action === "publish" ? state.revision : null;
         state.publishedAt = change.action === "publish" ? "2026-10-06" : null;
         snapshot = change.action === "publish" ? structuredClone(change.draft!) : null;
@@ -42,8 +45,21 @@ function fixture() {
       return structuredClone(state);
     }),
     upload: vi.fn(async (path, bytes) => { stored.set(path, bytes); }),
-    remove: vi.fn(async (path) => { stored.delete(path); }),
-    cleanup: vi.fn(async (id) => { expect(id).toBe(userId); for (const path of retired) stored.delete(path); retired.clear(); }),
+    prepareUpload: vi.fn(async (id, path, revision) => {
+      expect(id).toBe(userId);
+      if (revision !== state.revision) throw new MemberCvError(409, "Revision conflict.");
+      candidates.set(path, "pending");
+    }),
+    settleUpload: vi.fn(async (id, path) => {
+      expect(id).toBe(userId);
+      if (path && state.publishedPath !== path) { candidates.set(path, "retired"); retired.add(path); }
+      return structuredClone(state);
+    }),
+    cleanup: vi.fn(async (id) => {
+      expect(id).toBe(userId);
+      for (const path of retired) { stored.delete(path); candidates.set(path, "deleted"); }
+      retired.clear();
+    }),
     newPath: () => `${userId}/${++pathIndex}.pdf`,
   };
   const render = vi.fn(async () => new Uint8Array([37, 80, 68, 70]));
@@ -53,7 +69,7 @@ function fixture() {
     await handler({ method, body, headers: token ? { authorization: `Bearer ${token}` } : {} } as VercelRequest, res.res);
     return res.result();
   }
-  return { request, services, render, stored, state: () => state, snapshot: () => snapshot };
+  return { request, services, render, stored, candidates, state: () => state, snapshot: () => snapshot };
 }
 
 describe("member CV handler", () => {
@@ -119,9 +135,14 @@ describe("member CV handler", () => {
   });
   it("removes a newly generated PDF when a stale publication loses its revision race", async () => {
     const f = fixture();
-    await f.request({ action: "save", draft: emptyCv(), sharing: privateChoices, expectedRevision: 0 });
+    const upload = vi.mocked(f.services.upload).getMockImplementation()!;
+    vi.mocked(f.services.upload).mockImplementationOnce(async (path, bytes) => {
+      // Another editor saves after this request registered its upload candidate.
+      await f.services.commit(userId, { action: "save", expectedRevision: 0, draft: emptyCv(), sharing: privateChoices });
+      await upload(path, bytes);
+    });
     expect((await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 })).status).toBe(409);
-    expect(f.services.remove).toHaveBeenCalled();
+    expect(f.services.settleUpload).toHaveBeenCalled();
     expect(f.stored.size).toBe(0);
     expect(f.state().revision).toBe(1);
     expect(f.snapshot()).toBeNull();
@@ -134,12 +155,14 @@ describe("member CV handler", () => {
     expect((await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 })).status).toBe(503);
     expect(f.state().revision).toBe(0);
     expect(f.services.commit).not.toHaveBeenCalled();
+    expect(f.services.settleUpload).toHaveBeenCalledWith(userId, expect.any(String), true);
   });
   it("reports post-commit cleanup failure and allows subsequent cleanup retry without undoing visibility", async () => {
     const f = fixture();
-    vi.mocked(f.services.cleanup).mockResolvedValueOnce().mockRejectedValueOnce(new MemberCvError(503, "Retired file deletion is pending."));
+    vi.mocked(f.services.cleanup).mockRejectedValueOnce(new MemberCvError(503, "Retired file deletion is pending."));
     const result = await f.request({ action: "publish", draft: publishedData(), sharing: privateChoices, expectedRevision: 0 });
-    expect(result.status).toBe(503);
+    expect(result.status).toBe(200);
+    expect(result.body).toHaveProperty("cleanupPending", true);
     expect(f.state().publishedRevision).toBe(1);
     expect((await f.request()).status).toBe(200);
   });
@@ -151,11 +174,11 @@ describe("member CV handler", () => {
       throw new MemberCvError(503, "RPC transport failed after commit.");
     });
     // PostgreSQL JSONB readback orders object keys differently from the input.
-    vi.mocked(f.services.read).mockImplementationOnce(async () => ({ ...structuredClone(f.state()), draft: Object.fromEntries(Object.entries(f.state().draft).reverse()) as CvData, sharing: { phone: false, email: false, cv: true } }));
+    vi.mocked(f.services.settleUpload).mockImplementationOnce(async () => ({ ...structuredClone(f.state()), draft: Object.fromEntries(Object.entries(f.state().draft).reverse()) as CvData, sharing: { phone: false, email: false, cv: true } }));
     const result = await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 });
     expect(result.status).toBe(200);
     expect(f.stored.has(f.state().publishedPath!)).toBe(true);
-    expect(f.services.remove).not.toHaveBeenCalled();
+    expect(f.services.settleUpload).toHaveBeenCalled();
   });
   it("preserves uploaded bytes when an uncertain RPC and readback both fail", async () => {
     const f = fixture();
@@ -164,12 +187,13 @@ describe("member CV handler", () => {
       await originalCommit(id, change);
       throw new MemberCvError(503, "Unknown publication result.");
     });
-    vi.mocked(f.services.read).mockRejectedValueOnce(new MemberCvError(503, "Read unavailable."));
+    vi.mocked(f.services.settleUpload).mockRejectedValueOnce(new MemberCvError(503, "Settlement unavailable."));
     const result = await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 });
     expect(result.status).toBe(503);
     expect(result.body).toEqual({ error: expect.stringContaining("result could not be confirmed") });
-    expect(f.services.remove).not.toHaveBeenCalled();
+    expect(f.services.settleUpload).toHaveBeenCalled();
     expect(f.stored.has(f.state().publishedPath!)).toBe(true);
+    expect(f.candidates.get(f.state().publishedPath!)).toBe("current");
     expect((await f.request()).status).toBe(200);
   });
   it("cleans a definitely unused upload when readback confirms the publication did not apply", async () => {
@@ -178,6 +202,38 @@ describe("member CV handler", () => {
     expect((await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 })).status).toBe(503);
     expect(f.stored.size).toBe(0);
     expect(f.state().revision).toBe(0);
+  });
+  it("allows GET, draft save and visibility withdrawal during a retired-file Storage outage", async () => {
+    const f = fixture();
+    await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 });
+    const publishedPath = f.state().publishedPath!;
+    vi.mocked(f.services.cleanup).mockRejectedValue(new MemberCvError(503, "Storage unavailable."));
+    const get = await f.request();
+    expect(get.status).toBe(200);
+    expect(get.body).toHaveProperty("cleanupPending", true);
+    const save = await f.request({ action: "save", draft: { ...publishedData(), fullName: "New private draft" }, sharing: privateChoices, expectedRevision: 1 });
+    expect(save.status).toBe(200);
+    expect(save.body).toHaveProperty("document.revision", 2);
+    const withdraw = await f.request({ action: "withdraw", expectedRevision: 2 });
+    expect(withdraw.status).toBe(200);
+    expect(withdraw.body).toHaveProperty("cleanupPending", true);
+    expect(f.state().publishedPath).toBeNull();
+    expect(f.state().publishedRevision).toBeNull();
+    expect(f.state().draft.fullName).toBe("New private draft");
+    expect(f.stored.has(publishedPath)).toBe(true);
+  });
+  it("persists the upload candidate before any bytes are sent and tracks failed settlement", async () => {
+    const f = fixture();
+    vi.mocked(f.services.upload).mockImplementationOnce(async (path, bytes) => {
+      expect(f.candidates.get(path)).toBe("pending");
+      f.stored.set(path, bytes);
+      throw new MemberCvError(503, "Upload response lost.");
+    });
+    vi.mocked(f.services.settleUpload).mockRejectedValueOnce(new MemberCvError(503, "Database unavailable."));
+    expect((await f.request({ action: "publish", draft: publishedData(), sharing: { ...privateChoices, cv: true }, expectedRevision: 0 })).status).toBe(503);
+    expect(f.state().revision).toBe(0);
+    expect(f.stored.size).toBe(1);
+    expect([...f.candidates.values()]).toEqual(["pending"]);
   });
   it("never trusts client-provided PDF bytes", async () => {
     const f = fixture();

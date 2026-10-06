@@ -17,7 +17,19 @@ let db: PGlite;
 
 async function commit(action: string, revision: number, data: CvData | null = cv, flags = sharing, path: string | null = null) {
   await asUser(db, member, "ase@helixnmbu.no", "service_role");
+  if (action === "publish" && path) await db.query("select public.prepare_member_cv_upload($1,$2,$3)", [member, path, revision]);
+  return rawCommit(action, revision, data, flags, path);
+}
+async function rawCommit(action: string, revision: number, data: CvData | null = cv, flags = sharing, path: string | null = null) {
   return db.query("select public.commit_member_cv($1,$2,$3,$4::jsonb,$5::jsonb,$6) as saved", [member, action, revision, data === null ? null : JSON.stringify(data), JSON.stringify(flags), path]);
+}
+async function prepare(path: string, revision = 0) {
+  await asUser(db, member, "ase@helixnmbu.no", "service_role");
+  await db.query("select public.prepare_member_cv_upload($1,$2,$3)", [member, path, revision]);
+}
+async function settle(path: string | null = null) {
+  await asUser(db, member, "ase@helixnmbu.no", "service_role");
+  return db.query<{ settled: { published_path: string | null } }>("select public.settle_member_cv_upload($1,$2) as settled", [member, path]);
 }
 async function directory() { return (await db.query("select * from public.list_sponsor_members()")).rows; }
 async function files() { return (await db.query("select name from storage.objects where bucket_id='member-cvs'")).rows; }
@@ -106,4 +118,66 @@ describe("member CV SQL authorization and publication", () => {
     await asUser(db, member, "ase@helixnmbu.no");
     expect((await db.query("select * from public.member_cv_documents")).rows).toEqual([]);
   });
+  it("settles before a delayed commit and rejects publication of its retired candidate", async () => {
+    await prepare(path1);
+    expect((await settle(path1)).rows[0].settled.published_path).toBeNull();
+    expect((await db.query("select status from public.member_cv_upload_candidates where path=$1", [path1])).rows).toEqual([{ status: "retired" }]);
+    expect((await db.query("select path from public.member_cv_file_cleanup")).rows).toEqual([{ path: path1 }]);
+    await db.exec("savepoint delayed_commit");
+    await expect(rawCommit("publish", 0, cv, sharing, path1)).rejects.toThrow("Upload candidate cancelled or expired");
+    await db.exec("rollback to savepoint delayed_commit");
+    expect((await db.query("select revision,published_path from public.member_cv_documents where user_id=$1", [member])).rows).toEqual([{ revision: 0, published_path: null }]);
+  });
+  it("settles after a finished commit and preserves its current PDF without queuing deletion", async () => {
+    await prepare(path1);
+    await rawCommit("publish", 0, cv, sharing, path1);
+    expect((await settle(path1)).rows[0].settled.published_path).toBe(path1);
+    expect((await db.query("select status from public.member_cv_upload_candidates where path=$1", [path1])).rows).toEqual([{ status: "current" }]);
+    expect((await db.query("select path from public.member_cv_file_cleanup")).rows).toEqual([]);
+    await asUser(db, sponsor, "sponsor@example.no");
+    expect(await files()).toEqual([{ name: path1 }]);
+  });
+  it("keeps active candidates private and leased, then durably retires abandoned uploads after expiry", async () => {
+    await prepare(path1);
+    await settle();
+    expect((await db.query("select status from public.member_cv_upload_candidates where path=$1", [path1])).rows).toEqual([{ status: "pending" }]);
+    expect((await db.query("select path from public.member_cv_file_cleanup")).rows).toEqual([]);
+    await asUser(db, sponsor, "sponsor@example.no");
+    expect(await files()).toEqual([]);
+    await asOwner(db);
+    await db.query("update public.member_cv_upload_candidates set expires_at=clock_timestamp()-interval '1 second' where path=$1", [path1]);
+    await settle();
+    expect((await db.query("select status from public.member_cv_upload_candidates where path=$1", [path1])).rows).toEqual([{ status: "retired" }]);
+    expect((await db.query("select path from public.member_cv_file_cleanup")).rows).toEqual([{ path: path1 }]);
+    await expect(rawCommit("publish", 0, cv, sharing, path1)).rejects.toThrow("Upload candidate cancelled or expired");
+  });
+  it("withdraws visibility while retired objects still exist and later draft saves remain available", async () => {
+    await commit("publish", 0, cv, sharing, path1);
+    await commit("withdraw", 1, null);
+    await settle();
+    // Storage deletion can fail independently; its object and durable queue remain.
+    expect((await db.query("select path from public.member_cv_file_cleanup")).rows).toEqual([{ path: path1 }]);
+    await asUser(db, sponsor, "sponsor@example.no");
+    expect(await directory()).toEqual([]);
+    expect(await files()).toEqual([]);
+    await commit("save", 2, { ...cv, fullName: "Private edit during storage outage" });
+    await asUser(db, member, "ase@helixnmbu.no");
+    expect((await db.query("select revision,draft from public.member_cv_documents")).rows[0]).toMatchObject({ revision: 3, draft: { fullName: "Private edit during storage outage" } });
+  });
+  it("restricts durable upload tracking and settlement RPCs to the service role", async () => {
+    await asUser(db, member, "ase@helixnmbu.no");
+    expect((await db.query("select has_table_privilege('authenticated','public.member_cv_upload_candidates','SELECT') as can_read, has_function_privilege('authenticated','public.prepare_member_cv_upload(uuid,text,integer)','EXECUTE') as can_prepare, has_function_privilege('authenticated','public.settle_member_cv_upload(uuid,text,boolean)','EXECUTE') as can_settle")).rows[0]).toEqual({ can_read: false, can_prepare: false, can_settle: false });
+  });
+
+  it("cancels uncertain uploads immediately but defers their durable deletion until late Storage writes settle", async () => {
+    await prepare(path1);
+    await db.query("select public.settle_member_cv_upload($1,$2,true)", [member, path1]);
+    expect((await db.query("select status from public.member_cv_upload_candidates where path=$1", [path1])).rows).toEqual([{ status: "retired" }]);
+    expect((await db.query("select not_before > clock_timestamp()+interval '14 minutes' as deferred from public.member_cv_file_cleanup where path=$1", [path1])).rows).toEqual([{ deferred: true }]);
+    // A later normal cleanup pass must not shorten the settlement window.
+    await settle();
+    expect((await db.query("select not_before > clock_timestamp()+interval '14 minutes' as deferred from public.member_cv_file_cleanup where path=$1", [path1])).rows).toEqual([{ deferred: true }]);
+    await expect(rawCommit("publish", 0, cv, sharing, path1)).rejects.toThrow("Upload candidate cancelled or expired");
+  });
+
 });

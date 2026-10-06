@@ -11,8 +11,13 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       const token = bearer(req.headers.authorization);
       const services = getServices();
       const identity = await services.authenticate(token);
-      await services.cleanup(identity.userId);
-      if (req.method === "GET") return res.status(200).json(envelope(await services.read(identity.userId), identity));
+      const respond = async (document: Awaited<ReturnType<CvServices["read"]>>) => {
+        const result = envelope(document, identity);
+        try { await services.cleanup(identity.userId); }
+        catch { result.cleanupPending = true; }
+        return res.status(200).json(result);
+      };
+      if (req.method === "GET") return respond(await services.read(identity.userId));
       const body = parseMutation(req.body);
       if (body.action === "preview") {
         const draft = parseData(body.draft);
@@ -26,31 +31,31 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       const expectedRevision = body.expectedRevision as number;
       if (body.action === "withdraw") {
         const saved = await services.commit(identity.userId, { action: "withdraw", expectedRevision });
-        await services.cleanup(identity.userId);
-        return res.status(200).json(envelope(saved, identity));
+        return respond(saved);
       }
       const draft = parseData(body.draft, body.action === "publish");
       const sharing = parseSharing(body.sharing);
-      if (body.action === "save") return res.status(200).json(envelope(await services.commit(identity.userId, { action: "save", expectedRevision, draft, sharing }), identity));
+      if (body.action === "save") return respond(await services.commit(identity.userId, { action: "save", expectedRevision, draft, sharing }));
       let path: string | null = null;
       if (sharing.cv) {
         const bytes = await renderPdf(sharedCvData(draft, sharing), sharing);
         if (!bytes.length || bytes.length > 5242880) throw new MemberCvError(400, "The generated PDF must be smaller than 5 MB.");
         path = services.newPath(identity.userId);
-        await services.upload(path, bytes);
+        await services.prepareUpload(identity.userId, path, expectedRevision);
+        try { await services.upload(path, bytes); }
+        catch (error) {
+          // A failed upload still has a durable candidate. Settlement prevents a
+          // late publication from adopting bytes that cleanup will retire.
+          try { await services.settleUpload(identity.userId, path, true); await services.cleanup(identity.userId); } catch { /* Retried from the durable candidate on a later request. */ }
+          throw error;
+        }
       }
       let saved;
       try { saved = await services.commit(identity.userId, { action: "publish", expectedRevision, draft, sharing, path }); }
       catch (error) {
-        // A dropped RPC response can happen after PostgreSQL committed. Never
-        // delete the new PDF until the publication outcome is reconciled.
-        if (error instanceof MemberCvError && error.status === 409) {
-          if (path) await services.remove(path);
-          throw error;
-        }
         let current;
-        try { current = await services.read(identity.userId); }
-        catch { throw new MemberCvError(503, "The publication result could not be confirmed. Reload your CV before retrying. The generated file has been preserved."); }
+        try { current = await services.settleUpload(identity.userId, path); }
+        catch { throw new MemberCvError(503, "The publication result could not be confirmed. Reload your CV before retrying. Its generated file remains tracked."); }
         const recovered = current.revision === expectedRevision + 1
           && current.publishedRevision === current.revision
           && current.publishedPath === path
@@ -58,14 +63,11 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
           && JSON.stringify(validateSharing(current.sharing)) === JSON.stringify(sharing);
         if (recovered) saved = current;
         else {
-          // A newer draft can retain the PDF from this successful publication.
-          // Leave any referenced path intact even when another edit won a race.
-          if (path && current.publishedPath !== path) await services.remove(path);
+          try { await services.cleanup(identity.userId); } catch { /* Preserve queued cleanup without hiding the mutation error. */ }
           throw error;
         }
       }
-      await services.cleanup(identity.userId);
-      return res.status(200).json(envelope(saved, identity));
+      return respond(saved);
     } catch (error) {
       return res.status(error instanceof MemberCvError ? error.status : 503).json({ error: error instanceof MemberCvError ? error.message : "The member portal request failed. Your input has been kept. Try again." });
     }
