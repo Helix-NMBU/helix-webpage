@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../libs/lib/utils";
 import { memberLoginDestination } from "../MemberCV/repository";
+import "../Portal/portal.css";
 import "../MemberCV/member-cv.css";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -60,10 +61,11 @@ export default function CVBankLogin() {
     }
   }
   return (
-    <main className="mcv-page">
+    <main className="mcv-page portal-root">
       <header className="mcv-header">
         <Link className="mcv-brand" to="/">
-          HELIX <span>Member portal</span>
+          <img src="/Vector.png" alt="Helix" className="mcv-logo" />
+          <span>Member portal</span>
         </Link>
         <Link to="/">Back to home</Link>
       </header>

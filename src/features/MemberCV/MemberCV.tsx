@@ -9,6 +9,11 @@ import {
   validateMutation,
 } from "./repository";
 import type { CvData, CvEnvelope, CvMutation, CvSharing } from "./types";
+import { Button } from "@libs/components/ui/button";
+import { Input } from "@libs/components/ui/input";
+import { Textarea } from "@libs/components/ui/textarea";
+import { Card } from "@libs/components/ui/card";
+import "../Portal/portal.css";
 import "./member-cv.css";
 
 type Row = { id: string; [key: string]: string };
@@ -124,7 +129,7 @@ function Field({
     <label className={multiline ? "mcv-field mcv-full" : "mcv-field"}>
       <span>{label}</span>
       {multiline ? (
-        <textarea
+        <Textarea
           rows={4}
           value={value}
           maxLength={maxLength === 500 ? 8000 : maxLength}
@@ -132,7 +137,7 @@ function Field({
           onChange={(event) => onChange(event.target.value)}
         />
       ) : (
-        <input
+        <Input
           type={type}
           value={value}
           maxLength={maxLength}
@@ -154,10 +159,12 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="mcv-card">
-      <h2>{title}</h2>
-      {hint && <p className="mcv-hint">{hint}</p>}
-      {children}
+    <section className="mcv-section">
+      <Card className="mcv-card">
+        <h2>{title}</h2>
+        {hint && <p className="mcv-hint">{hint}</p>}
+        {children}
+      </Card>
     </section>
   );
 }
@@ -466,18 +473,21 @@ export default function MemberCV() {
     );
 
   return (
-    <main className="mcv-page">
+    <main className="mcv-page portal-root">
       <header className="mcv-header">
         <Link className="mcv-brand" to="/">
-          HELIX <span>Member portal</span>
+          <img src="/Vector.png" alt="Helix" className="mcv-logo" />
+          <span>Member portal</span>
         </Link>
-        <button
+        <Button
+          variant="outline"
+          className="mcv-header-button"
           type="button"
           onClick={() => void logout()}
           disabled={Boolean(busy)}
         >
           Sign out
-        </button>
+        </Button>
       </header>
       <div className="mcv-container">
         {demo && (
@@ -511,13 +521,14 @@ export default function MemberCV() {
           <div className="mcv-error" role="alert">
             {error}
             {!ended && (
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => void reload()}
                 disabled={Boolean(busy)}
               >
                 Reload saved draft
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -531,13 +542,14 @@ export default function MemberCV() {
                 file is still pending. Your saved revision and directory
                 visibility are up to date.
               </p>
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 disabled={Boolean(busy)}
                 onClick={() => void reload()}
               >
                 Reload saved draft to retry cleanup
-              </button>
+              </Button>
             </div>
           )}
         {notice && (
@@ -656,7 +668,8 @@ export default function MemberCV() {
                               <h3>
                                 {title} {index + 1}
                               </h3>
-                              <button
+                              <Button
+                                variant="ghost"
                                 type="button"
                                 className="mcv-remove"
                                 aria-label={`Remove ${singular} ${index + 1}`}
@@ -670,7 +683,7 @@ export default function MemberCV() {
                                 }
                               >
                                 Remove
-                              </button>
+                              </Button>
                             </div>
                             <div className="mcv-grid">
                               {fields.map((field) => (
@@ -693,7 +706,8 @@ export default function MemberCV() {
                             </div>
                           </div>
                         ))}
-                        <button
+                        <Button
+                          variant="outline"
                           type="button"
                           disabled={draft[key].length >= 30}
                           onClick={() =>
@@ -707,7 +721,7 @@ export default function MemberCV() {
                           }
                         >
                           + Add {singular}
-                        </button>
+                        </Button>
                       </Section>
                     ))}
                     <Section
@@ -762,10 +776,11 @@ export default function MemberCV() {
                         including unsaved changes.
                       </p>
                       <div className="mcv-actions">
-                        <button type="submit" className="mcv-primary">
+                        <Button type="submit" className="mcv-primary">
                           {busy === "save" ? "Saving…" : "Save private draft"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="outline"
                           type="button"
                           onClick={() => void run("preview")}
                         >
@@ -774,16 +789,18 @@ export default function MemberCV() {
                             : demo
                               ? "Preview demo CV"
                               : "Preview PDF"}
-                        </button>
+                        </Button>
                         {!demo && (
-                          <button
+                          <Button
+                            variant="outline"
                             type="button"
                             onClick={() => void run("preview", true)}
                           >
                             Download PDF
-                          </button>
+                          </Button>
                         )}
-                        <button
+                        <Button
+                          variant="default"
                           type="button"
                           className="mcv-primary"
                           onClick={() => void run("publish")}
@@ -793,15 +810,16 @@ export default function MemberCV() {
                             : envelope.document.publishedRevision === null
                               ? "Publish to Talent Directory"
                               : "Publish new version"}
-                        </button>
+                        </Button>
                         {envelope.document.publishedRevision !== null && (
-                          <button
+                          <Button
+                            variant="ghost"
                             type="button"
                             className="mcv-withdraw"
                             onClick={() => void run("withdraw")}
                           >
                             Withdraw published profile
-                          </button>
+                          </Button>
                         )}
                       </div>
                       <p className="mcv-hint">
@@ -811,7 +829,8 @@ export default function MemberCV() {
                         recalled.
                       </p>
                       {demo && (
-                        <button
+                        <Button
+                          variant="outline"
                           type="button"
                           onClick={() => {
                             setDraft(fictionalCv());
@@ -821,7 +840,7 @@ export default function MemberCV() {
                           }}
                         >
                           Fill fictional example
-                        </button>
+                        </Button>
                       )}
                     </Section>
                   </aside>
@@ -859,9 +878,14 @@ export default function MemberCV() {
           <div className="mcv-preview-panel">
             <header>
               <h2>{demo ? "Demo CV preview" : "Generated CV preview"}</h2>
-              <button autoFocus type="button" onClick={clearPreview}>
+              <Button
+                variant="outline"
+                autoFocus
+                type="button"
+                onClick={clearPreview}
+              >
                 Close preview
-              </button>
+              </Button>
             </header>
             <p className="mcv-preview-caption">
               This preview follows your current email and phone sharing choices.
@@ -869,9 +893,15 @@ export default function MemberCV() {
             </p>
             {preview.url ? (
               <>
-                <a href={preview.url} download="Helix-CV.pdf">
-                  Download this PDF
-                </a>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="mcv-preview-download"
+                >
+                  <a href={preview.url} download="Helix-CV.pdf">
+                    Download this PDF
+                  </a>
+                </Button>
                 <iframe src={preview.url} title="Generated CV PDF" />
               </>
             ) : (
