@@ -90,6 +90,32 @@ describe("generated member CV PDFs", () => {
     expect(text.trim()).toBe("1 / 1");
   });
 
+  it("renders all additive profile fields and current markers while still redacting contacts", async () => {
+    const cv = sample();
+    Object.assign(cv.education[0], { fieldOfStudy: "Autonom styring", grade: "A / 4.5", activities: "Studentforening for robotikk" });
+    Object.assign(cv.experience[0], { employmentType: "Part-time", location: "Trondheim", locationType: "Hybrid", startDate: "2025-06", endDate: "Present" });
+    Object.assign(cv.projects[0], { startDate: "2026-08", endDate: "Present" });
+    const { pdf, text } = await inspect(await generateCvPdf(validateCvData(cv, true), { cv: true, email: false, phone: false }));
+    for (const expected of ["Studieretning: Autonom styring", "Karakter: A / 4.5", "Aktiviteter: Studentforening for robotikk", "Part-time | Trondheim | Hybrid", "2025-06 - Present", "S27 | 2026-08 - Present"]) expect(text).toContain(expected);
+    expect(text).not.toContain(cv.contactEmail);
+    expect(text).not.toContain(cv.phone);
+    expect(pdf.getTitle()).not.toContain(cv.contactEmail);
+    expect(cv.contactEmail).toBe("private@example.no");
+  });
+
+  it("includes optional-only rows and paginates activities without dropping text", async () => {
+    const cv = emptyCv("Ada");
+    const activities = "Deltok i studentforening.\n".repeat(100) + "AKTIVITETSSLUTT";
+    cv.education = [{ id: "e", institution: "", degree: "", startDate: "", endDate: "", description: "", activities }];
+    cv.experience = [{ id: "x", organization: "", title: "", startDate: "", endDate: "", description: "", employmentType: "Internship", location: "Ås", locationType: "Remote" }];
+    cv.projects = [{ id: "p", name: "", role: "", season: "", description: "", url: "", startDate: "2026", endDate: "Present" }];
+    const { pdf, text } = await inspect(await generateCvPdf(validateCvData(cv), shared));
+    expect(pdf.getPageCount()).toBeGreaterThan(1);
+    for (const expected of ["Utdanning", "Aktiviteter:", "AKTIVITETSSLUTT", "Erfaring", "Internship | Ås | Remote", "Helix og prosjekter", "2026 - Present"]) expect(text).toContain(expected);
+    expect(text.match(/Deltok i studentforening\./g)).toHaveLength(100);
+    expect(text).not.toContain("undefined");
+  });
+
   it("paginates long descriptions, repeated entries and unbroken words without losing text", async () => {
     const cv = sample();
     const longWord = "Æøå".repeat(450);

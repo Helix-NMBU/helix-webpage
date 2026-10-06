@@ -16,6 +16,12 @@ function text(value: unknown, key: string, limit = 500): string {
   return value.trim();
 }
 
+// Keep legacy omitted properties absent. A present property must still pass
+// the same string/length/control-character checks as existing fields.
+function optionalText(row: Record<string, unknown>, key: string, label: string, limit = 500): Record<string, string> {
+  return Object.prototype.hasOwnProperty.call(row, key) ? { [key]: text(row[key], label, limit) } : {};
+}
+
 function url(value: unknown): string {
   const result = text(value, "link", 2000);
   if (!result) return "";
@@ -45,9 +51,18 @@ export function validateCvData(value: unknown, forPublication = false): CvData {
     fullName: text(row.fullName, "name"), contactEmail: text(row.contactEmail, "email"),
     phone: text(row.phone, "phone", 100), city: text(row.city, "city"), headline: text(row.headline, "headline"),
     summary: text(row.summary, "summary", 8000), fieldOfStudy: text(row.fieldOfStudy, "field of study"), graduationYear: text(row.graduationYear, "graduation year", 4),
-    education: list(row.education, "education", (e) => ({ id: String(e.id), institution: text(e.institution, "institution"), degree: text(e.degree, "degree"), startDate: text(e.startDate, "start date", 30), endDate: text(e.endDate, "end date", 30), description: text(e.description, "education description", 8000) })),
-    experience: list(row.experience, "experience", (e) => ({ id: String(e.id), organization: text(e.organization, "organization"), title: text(e.title, "title"), startDate: text(e.startDate, "start date", 30), endDate: text(e.endDate, "end date", 30), description: text(e.description, "experience description", 8000) })),
-    projects: list(row.projects, "projects", (e) => ({ id: String(e.id), name: text(e.name, "project name"), role: text(e.role, "role"), season: text(e.season, "season", 30), description: text(e.description, "project description", 8000), url: url(e.url) })),
+    education: list(row.education, "education", (e) => ({
+      id: String(e.id), institution: text(e.institution, "institution"), degree: text(e.degree, "degree"), startDate: text(e.startDate, "start date", 30), endDate: text(e.endDate, "end date", 30), description: text(e.description, "education description", 8000),
+      ...optionalText(e, "fieldOfStudy", "field of study"), ...optionalText(e, "grade", "grade", 100), ...optionalText(e, "activities", "activities", 8000),
+    })),
+    experience: list(row.experience, "experience", (e) => ({
+      id: String(e.id), organization: text(e.organization, "organization"), title: text(e.title, "title"), startDate: text(e.startDate, "start date", 30), endDate: text(e.endDate, "end date", 30), description: text(e.description, "experience description", 8000),
+      ...optionalText(e, "employmentType", "employment type", 100), ...optionalText(e, "location", "location"), ...optionalText(e, "locationType", "location type", 100),
+    })),
+    projects: list(row.projects, "projects", (e) => ({
+      id: String(e.id), name: text(e.name, "project name"), role: text(e.role, "role"), season: text(e.season, "season", 30), description: text(e.description, "project description", 8000), url: url(e.url),
+      ...optionalText(e, "startDate", "start date", 30), ...optionalText(e, "endDate", "end date", 30),
+    })),
     languages: list(row.languages, "languages", (e) => ({ id: String(e.id), name: text(e.name, "language", 100), level: text(e.level, "language level", 100) })),
     links: list(row.links, "links", (e) => ({ id: String(e.id), label: text(e.label, "link label", 100), url: url(e.url) })),
     skills: [],

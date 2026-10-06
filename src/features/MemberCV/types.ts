@@ -1,6 +1,6 @@
-export type CvEducation = { id: string; institution: string; degree: string; startDate: string; endDate: string; description: string };
-export type CvExperience = { id: string; organization: string; title: string; startDate: string; endDate: string; description: string };
-export type CvProject = { id: string; name: string; role: string; season: string; description: string; url: string };
+export type CvEducation = { id: string; institution: string; degree: string; startDate: string; endDate: string; description: string; fieldOfStudy?: string; grade?: string; activities?: string };
+export type CvExperience = { id: string; organization: string; title: string; startDate: string; endDate: string; description: string; employmentType?: string; location?: string; locationType?: string };
+export type CvProject = { id: string; name: string; role: string; season: string; description: string; url: string; startDate?: string; endDate?: string };
 export type CvLanguage = { id: string; name: string; level: string };
 export type CvLink = { id: string; label: string; url: string };
 export type CvData = {
