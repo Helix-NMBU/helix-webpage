@@ -11,6 +11,7 @@ export async function portalDatabase(includeCvMigration = true) {
     create schema auth;
     create schema storage;
     create table auth.users(id uuid primary key, email text, raw_app_meta_data jsonb default '{}'::jsonb);
+    create table auth.identities(id text primary key, user_id uuid references auth.users(id), provider text, identity_data jsonb);
     create function auth.jwt() returns jsonb language sql stable as
       $$ select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb $$;
     create function auth.uid() returns uuid language sql stable as

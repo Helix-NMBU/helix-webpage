@@ -17,3 +17,15 @@ Each worker is restricted to its own worktree and bounded change areas. Root own
 Review: not started. Verification: not started.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
 Next action: complete coordinator integration groundwork while workers implement. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification will use PGlite with explicitly emulated Supabase schemas.
+
+## Integrated implementation and verification
+
+- T-03 #55: worker /root/pdf commit 7fa6ccb, integrated 431bb98. Nine real-PDF tests passed on integrated code. Four-page sample /private/tmp/helix-member-cv-sample.pdf, all pages visually inspected; licensed Noto Sans assets bundled.
+- T-02 #54: worker /root/editor commit 0292c80, integrated f3ea337. Fifteen repository/demo behavior tests and frontend typecheck passed after integration.
+- T-01 #53: worker /root/backend commit 7079e6f, integrated aacb226. Twenty-seven HTTP/login tests plus seven real PostgreSQL role/publication scenarios pass.
+- Full integrated verification before review: 85 tests/9 files passed; frontend/API typecheck, lint, build passed. Vite's existing chunk-size warning remains.
+- A local harness cleanup issue initially caused failures after expected SQL permission errors; fixed rollback order, then the full suite passed. This was test-fixture behavior, not a production database change.
+- Browser review on 2026-10-06: 1280px desktop and 390px mobile. Fictional fill, Nordic name input, private save, publish, private edit/save with published version retained, redacted preview, republish, withdrawal, reload persistence, logout and return to draft were observed. Screenshots /private/tmp/member-cv-desktop.jpg and /private/tmp/member-cv-mobile.jpg. Browser tab shows local demo at http://127.0.0.1:5177/member/profile?demo=1; local server session 73704 remains running.
+- Runtime entrypoint is coordinator-owned api/member-cv.ts. Sponsor viewing now fetches authenticated Storage blobs rather than issuing signed CV URLs. Existing avatars are retained during publication; final profile image editing remains deferred.
+- Reviewer assignments and reviewed commit: pending integration commit capture.
+- Live Google/Supabase project configuration, migration application and actual Storage transport checks remain rollout prerequisites. No live project was mutated or deployed.

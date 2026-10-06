@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { TokenPayload } from "google-auth-library";
 import type { User } from "@supabase/supabase-js";
-import { createMemberLoginHandler, type MemberLoginServices } from "./member-login.js";
-import { matchesGoogleUser } from "./_lib/member-cv-service.js";
+import { createMemberLoginHandler, type MemberLoginServices } from "../api/member-login.js";
+import { matchesGoogleUser } from "../api/_lib/member-cv-service.js";
 
 const valid = { iss: "https://accounts.google.com", aud: "server-client", exp: 200, iat: 50, sub: "google-ase", hd: "helixnmbu.no", email: "ase@helixnmbu.no", email_verified: true, name: "Åse" } satisfies TokenPayload;
 const user: User = { id: "member-id", email: valid.email, app_metadata: {}, user_metadata: {}, aud: "authenticated", created_at: "2026-10-06", identities: [{ id: "google-ase", user_id: "member-id", identity_id: "identity-id", provider: "google", identity_data: { sub: valid.sub } }] };

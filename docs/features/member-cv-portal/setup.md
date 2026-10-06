@@ -29,3 +29,11 @@ Use authenticated Storage downloads for CV viewing. Previously created signed UR
 ## Rollout checks
 
 Verify real Google/Supabase login, save/logout/relogin persistence, a second member's denied access and a client-forged metadata attempt. Check publish/save/republish/withdraw and injected storage failures. Confirm current PDFs download for an entitled sponsor and fail for Bronze, Service, expired and anonymous sessions. Confirm replaced/withdrawn paths fail with actual Storage, not just mocked handlers. Inspect the generated PDF for contact consent and Norwegian letters. These live checks remain required even when local unit and SQL-role tests pass.
+
+## Local review and verification
+
+Run `npm ci`, `npm run typecheck`, `npm run typecheck:api`, `npm run lint`, `npm test` and `npm run build`. The SQL-role tests run the actual base and incremental SQL in PGlite PostgreSQL. Only Supabase-owned auth/storage schemas and identities are emulated; the unsupported pgcrypto extension line is omitted because the schema uses built-in gen_random_uuid. This checks database rules and transactions, not live Supabase Auth or Storage transport.
+
+For the isolated fictional editor, run `npm run dev -- --port 5177` and open `/member/profile?demo=1`. The demo persists only in browser-local storage and uses an explicitly labeled HTML preview. It is excluded from production builds. Use `vercel dev` to run the real local API endpoints after configuring a separate test Supabase project. Vite alone does not run the API.
+
+`api/member-cv.ts` runs on Node and bundles `api/_lib/fonts/*.ttf` through vercel.json. The temporary Noto Sans template is separate from stored CV data. Norwegian letters, Latin diacritics, Greek and Cyrillic are supported; unsupported glyphs such as emoji return an actionable validation error. The final reference design and profile image editing are deferred. Publishing keeps an existing profile image unchanged.

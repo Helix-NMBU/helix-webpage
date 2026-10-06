@@ -140,7 +140,7 @@ begin
     ) on conflict (id) do update set
       full_name = excluded.full_name, email = excluded.email, personal_email = excluded.personal_email,
       personal_phone = excluded.personal_phone, linkedin = excluded.linkedin, field_of_study = excluded.field_of_study,
-      graduation_year = excluded.graduation_year, profile_image_url = excluded.profile_image_url, cv_url = excluded.cv_url,
+      graduation_year = excluded.graduation_year, cv_url = excluded.cv_url,
       career_entries = excluded.career_entries, skills = excluded.skills, visible_to_sponsors = true,
       share_cv = excluded.share_cv, share_email = excluded.share_email, share_phone = excluded.share_phone, updated_at = now();
     delete from public.positions where student_id = p_user_id;
