@@ -3,7 +3,7 @@
 Feature: member-cv-portal. Revision: 1, 2026-10-06.
 Status: approved for delivery of the first CV workflow.
 Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. Final CV styling and profile images remain deferred.
-Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. Parent and child issue numbers will be recorded in delivery.md after publication.
+Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. Parent: #51. T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56; see tracker.json and delivery.md.
 
 ## Requirements
 
