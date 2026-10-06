@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createPrivateAutosave, type CvAutosaveSnapshot } from "./autosave";
+import { classifyCvRequestFailure, createPrivateAutosave, type CvAutosaveSnapshot } from "./autosave";
 import { emptyCv, privateSharing } from "./model";
 import { CvRequestError, validateMutation } from "./repository";
 import type { CvEnvelope, CvMutation } from "./types";
@@ -34,6 +34,21 @@ function setup(mutate = vi.fn<(mutation: CvMutation) => Promise<CvEnvelope>>(asy
   const edit = (summary: string, sharing = privateSharing) => controller.update({ ...emptyCv("Ada Eksempel"), summary }, sharing);
   return { controller, mutate, onSaved, onFailure, onState, edit };
 }
+
+describe("shared CV request failure classification", () => {
+  it.each([
+    [new CvRequestError("Invalid input", 400), "validation"],
+    [new CvRequestError("Stale revision", 409), "conflict"],
+    [new CvRequestError("Expired session", 401), "session"],
+    [new CvRequestError("Rejected identity", 403), "session"],
+    [new CvRequestError("Transport failed", 500), "uncertain"],
+    [new Error("Failed to fetch"), "uncertain"],
+    [{ status: 400, message: "Unverified native failure" }, "uncertain"],
+    [null, "uncertain"],
+  ] as const)("classifies %s as %s", (failure, kind) => {
+    expect(classifyCvRequestFailure(failure)).toBe(kind);
+  });
+});
 
 describe("private debounced CV autosave", () => {
   beforeEach(() => vi.useFakeTimers());

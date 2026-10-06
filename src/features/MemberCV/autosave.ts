@@ -9,6 +9,14 @@ export type CvAutosaveState = {
   paused: CvAutosaveFailure | null;
 };
 
+export function classifyCvRequestFailure(failure: unknown): CvAutosaveFailure {
+  if (!(failure instanceof CvRequestError)) return "uncertain";
+  if (failure.status === 400) return "validation";
+  if (failure.status === 409) return "conflict";
+  if (failure.status === 401 || failure.status === 403) return "session";
+  return "uncertain";
+}
+
 type AutosaveOptions = {
   initialEnvelope: CvEnvelope;
   mutate: (mutation: CvMutation) => Promise<CvEnvelope>;
@@ -98,11 +106,7 @@ export function createPrivateAutosave(options: AutosaveOptions) {
       })
       .catch((failure: unknown) => {
         if (disposed || current !== generation) return;
-        paused = failure instanceof CvRequestError
-          ? failure.status === 400 ? "validation"
-            : failure.status === 409 ? "conflict"
-              : failure.status === 401 || failure.status === 403 ? "session" : "uncertain"
-          : "uncertain";
+        paused = classifyCvRequestFailure(failure);
         options.onFailure(failure, paused);
       })
       .finally(() => {
