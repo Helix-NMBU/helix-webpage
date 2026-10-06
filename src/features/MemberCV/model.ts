@@ -1,4 +1,4 @@
-import type { CvData, CvSharing } from "./types";
+import type { CvData, CvSharing } from "./types.js";
 
 export function emptyCv(fullName = "", contactEmail = ""): CvData {
   return { fullName, contactEmail, phone: "", city: "", headline: "", summary: "", fieldOfStudy: "", graduationYear: "", education: [], experience: [], projects: [], skills: [], languages: [], links: [] };

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "typecheck:api": "tsc --project tsconfig.api.json"
+    "typecheck:api": "tsc --project tsconfig.api.json",
+    "typecheck:api:runtime": "tsc --project tsconfig.api.runtime.json"
   },
   "dependencies": {
     "@fontsource/montserrat": "^5.2.6",
