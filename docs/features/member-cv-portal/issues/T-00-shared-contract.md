@@ -5,10 +5,10 @@ Local ticket: T-00. See `docs/features/member-cv-portal/spec.md`, revision 1.
 
 ## Acceptance criteria
 
-- [ ] CV data contract supports repeatable sections and privacy defaults.
-- [ ] Incomplete drafts accepted; publication requires name and one education institution/degree.
-- [ ] Malformed/oversized data and non-http(s) links rejected.
-- [ ] Contact redaction does not mutate private draft.
+- [x] CV data contract supports repeatable sections and privacy defaults.
+- [x] Incomplete drafts accepted; publication requires name and one education institution/degree.
+- [x] Malformed/oversized data and non-http(s) links rejected.
+- [x] Contact redaction does not mutate private draft.
 
 ## Blocking dependencies
 

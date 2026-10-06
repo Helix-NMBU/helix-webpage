@@ -1,6 +1,6 @@
 # Member CV portal setup
 
-The PR contains application code and an incremental SQL migration. It does not configure a live Google project, apply SQL, or deploy.
+The PR contains application code and an incremental SQL migration. It does not configure a live Google project, apply SQL, or perform a manual deployment.
 
 ## Migration and server configuration
 
@@ -34,7 +34,7 @@ Verify real Google/Supabase login, save/logout/relogin persistence, a second mem
 
 ## Local review and verification
 
-Run `npm ci`, `npm run typecheck`, `npm run typecheck:api`, `npm run lint`, `npm test` and `npm run build`. The SQL-role tests run the actual base and incremental SQL in PGlite PostgreSQL. Only Supabase-owned auth/storage schemas and identities are emulated; the unsupported pgcrypto extension line is omitted because the schema uses built-in gen_random_uuid. This checks database rules and transactions, not live Supabase Auth or Storage transport.
+Run `npm ci`, `npm run typecheck`, `npm run typecheck:api`, `npm run typecheck:api:runtime`, `npm run lint`, `npm test` and `npm run build`. The source-only NodeNext check verifies that emitted API imports follow Node ESM rules, while the broader API check also validates tests. The SQL-role tests run the actual base and incremental SQL in PGlite PostgreSQL. Only Supabase-owned auth/storage schemas and identities are emulated; the unsupported pgcrypto extension line is omitted because the schema uses built-in gen_random_uuid. This checks database rules and transactions, not live Supabase Auth or Storage transport.
 
 For the isolated fictional editor, run `npm run dev -- --port 5177` and open `/member/profile?demo=1`. The demo persists only in browser-local storage and uses an explicitly labeled HTML preview. It is excluded from production builds. Use `vercel dev` to run the real local API endpoints after configuring a separate test Supabase project. Vite alone does not run the API.
 
