@@ -92,6 +92,8 @@
   line-height: 1.6;
 }
 .mcv-page button:not([data-slot="checkbox"]),
+.mcv-page .mcv-header-button,
+.mcv-page .mcv-demo-button,
 .mcv-dialog button:not([data-slot="checkbox"]) {
   min-height: 44px;
   height: auto;
@@ -99,6 +101,15 @@
   white-space: normal;
   line-height: 1.4;
   box-shadow: none;
+}
+.mcv-page .mcv-header-button,
+.mcv-page .mcv-demo-button {
+  font-family: inherit;
+}
+.mcv-page .mcv-demo-button {
+  text-decoration: none;
+  width: fit-content;
+  max-width: 100%;
 }
 .mcv-page button:disabled {
   cursor: not-allowed;
@@ -442,7 +453,8 @@
   .mcv-brand span {
     font-size: 12px;
   }
-  .mcv-header button {
+  .mcv-header button,
+  .mcv-page .mcv-header-button {
     font-size: 12px;
   }
   .mcv-container {
