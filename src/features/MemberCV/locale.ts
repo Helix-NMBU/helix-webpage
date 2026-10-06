@@ -4,10 +4,24 @@ export type MemberLocale = "nb" | "en";
 export const MEMBER_LOCALE_KEY = "helix-member-ui-language-v1";
 
 export const englishCopy = {
+  Sections: "Sections",
+  "Show sections": "Show sections",
+  "Hide sections": "Hide sections",
+  "Section overview": "Section overview",
+  "Content progress is separate from saving and publication.":
+    "Content progress is separate from saving and publication.",
+  Empty: "Empty",
+  Started: "Started",
+  Filled: "Filled",
+  Saved: "Saved",
+  Unsaved: "Unsaved",
+  Settings: "Settings",
+  "Optional fields can stay empty. Save your draft to keep changes.":
+    "Optional fields can stay empty. Save your draft to keep changes.",
   "Member portal": "Member portal",
   "Back to home": "Back to home",
   "Sign out": "Sign out",
-  "Cancel": "Cancel",
+  Cancel: "Cancel",
   Language: "Language",
   "Choose Norwegian Bokmål or English": "Choose Norwegian Bokmål or English",
   "Your member profile": "Your member profile",
@@ -147,10 +161,24 @@ export const englishCopy = {
 
 export type MemberCopyKey = keyof typeof englishCopy;
 export const norwegianCopy: Record<MemberCopyKey, string> = {
+  Sections: "Seksjoner",
+  "Show sections": "Vis seksjoner",
+  "Hide sections": "Skjul seksjoner",
+  "Section overview": "Seksjonsoversikt",
+  "Content progress is separate from saving and publication.":
+    "Utfylt innhold vises separat fra lagring og publisering.",
+  Empty: "Tom",
+  Started: "Påbegynt",
+  Filled: "Utfylt",
+  Saved: "Lagret",
+  Unsaved: "Ulagret",
+  Settings: "Innstillinger",
+  "Optional fields can stay empty. Save your draft to keep changes.":
+    "Valgfrie felt kan stå tomme. Lagre utkastet for å beholde endringene.",
   "Member portal": "Medlemsportal",
   "Back to home": "Til forsiden",
   "Sign out": "Logg ut",
-  "Cancel": "Avbryt",
+  Cancel: "Avbryt",
   Language: "Språk",
   "Choose Norwegian Bokmål or English": "Velg norsk bokmål eller engelsk",
   "Your member profile": "Din medlemsprofil",

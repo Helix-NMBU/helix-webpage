@@ -142,16 +142,11 @@
   gap: 32px;
   align-items: start;
 }
-.mcv-editor,
-.mcv-sidebar {
+.mcv-editor {
   display: flex;
   flex-direction: column;
   gap: 24px;
   min-width: 0;
-}
-.mcv-sidebar {
-  position: sticky;
-  top: 24px;
 }
 .mcv-card {
   background: var(--card);
@@ -161,9 +156,6 @@
   padding: 32px;
   gap: 0;
   box-shadow: none;
-}
-.mcv-sidebar .mcv-card {
-  padding: 24px;
 }
 .mcv-hint {
   font-size: 13px;
@@ -426,11 +418,6 @@
   .mcv-layout {
     grid-template-columns: 1fr;
   }
-  .mcv-sidebar {
-    position: static;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
   .mcv-card {
     padding: 24px;
   }
@@ -474,12 +461,8 @@
   .mcv-field textarea {
     font-size: 16px;
   }
-  .mcv-card,
-  .mcv-sidebar .mcv-card {
+  .mcv-card {
     padding: 20px;
-  }
-  .mcv-sidebar {
-    display: flex;
   }
   .mcv-status {
     flex-direction: column;
@@ -706,4 +689,165 @@
 }
 .mcv-cleanup-warning button {
   margin-top: 16px;
+}
+
+/* Keep only the section overview sticky; sharing and actions follow the CV fields. */
+.mcv-layout {
+  grid-template-areas: "editor overview";
+}
+.mcv-layout > .mcv-form-fieldset {
+  grid-area: editor;
+  min-width: 0;
+}
+.mcv-section-overview {
+  grid-area: overview;
+  position: sticky;
+  top: 24px;
+  min-width: 0;
+}
+.mcv-nav-card {
+  gap: 0;
+  padding: 20px 12px 12px;
+  border-color: var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 5%, transparent);
+  max-height: calc(100svh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mcv-nav-header {
+  padding: 0 8px 16px;
+  gap: 8px;
+}
+.mcv-nav-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mcv-nav-title-row h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.mcv-page .mcv-nav-toggle {
+  display: none;
+}
+.mcv-nav-description {
+  line-height: 1.5;
+  font-size: 13px;
+}
+.mcv-nav-body {
+  padding: 0;
+}
+.mcv-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.mcv-page .mcv-nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  white-space: normal;
+  text-decoration: none;
+  color: var(--foreground);
+  font-family: inherit;
+  line-height: 1.4;
+  text-align: left;
+}
+.mcv-nav-link[aria-current="location"] {
+  background: var(--secondary);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.mcv-nav-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.mcv-nav-indicators {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mcv-nav-content,
+.mcv-nav-save {
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 6px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.mcv-nav-content {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+.mcv-nav-unsaved {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+}
+.mcv-nav-help {
+  margin: 16px 8px 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.mcv-section {
+  scroll-margin-top: 24px;
+}
+.mcv-section h2:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+.mcv-nav-chevron-open {
+  transform: rotate(180deg);
+}
+@media (max-width: 960px) {
+  .mcv-layout {
+    grid-template-areas: "overview" "editor";
+  }
+  .mcv-section-overview {
+    position: static;
+  }
+  .mcv-nav-card {
+    padding: 12px;
+    max-height: none;
+    overflow: visible;
+    box-shadow: none;
+  }
+  .mcv-nav-header {
+    padding: 0;
+  }
+  .mcv-page .mcv-nav-toggle {
+    display: inline-flex;
+    font-size: 12px;
+    padding: 8px;
+  }
+  .mcv-nav-description {
+    display: none;
+  }
+  .mcv-nav-body {
+    display: none;
+  }
+  .mcv-nav-body[data-expanded="true"] {
+    display: block;
+    margin-top: 12px;
+  }
+  .mcv-nav-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 400px) {
+  .mcv-nav-list {
+    grid-template-columns: 1fr;
+  }
 }

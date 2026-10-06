@@ -41,6 +41,8 @@ import {
   DialogTitle,
 } from "@libs/components/ui/dialog";
 import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
+import { SectionNavigation } from "./SectionNavigation";
+import { getSectionStatuses } from "./section-status";
 import {
   useMemberLocale,
   memberText,
@@ -189,20 +191,28 @@ function Field({
 }
 
 function Section({
+  id,
   title,
   hint,
   children,
 }: {
+  id: string;
   title: string;
   hint?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="mcv-section">
+    <section
+      className="mcv-section"
+      id={`mcv-${id}`}
+      aria-labelledby={`mcv-${id}-title`}
+    >
       <Card className="mcv-card">
         <CardHeader className="mcv-card-header">
           <CardTitle>
-            <h2>{title}</h2>
+            <h2 id={`mcv-${id}-title`} tabIndex={-1}>
+              {title}
+            </h2>
           </CardTitle>
           {hint && (
             <CardDescription className="mcv-hint">{hint}</CardDescription>
@@ -714,13 +724,22 @@ export default function MemberCV() {
                 void run("save");
               }}
             >
-              <fieldset
-                disabled={Boolean(busy) || ended}
-                className="mcv-form-fieldset"
-              >
-                <div className="mcv-layout">
+              <div className="mcv-layout">
+                <SectionNavigation
+                  locale={locale}
+                  statuses={getSectionStatuses(
+                    draft,
+                    sharing,
+                    envelope.document,
+                  )}
+                />
+                <fieldset
+                  disabled={Boolean(busy) || ended}
+                  className="mcv-form-fieldset"
+                >
                   <div className="mcv-editor">
                     <Section
+                      id="contact"
                       title={t("Contact and introduction")}
                       hint={t(
                         "Your Workspace login address stays linked to your account. Contact details below are shared only when you choose.",
@@ -784,6 +803,7 @@ export default function MemberCV() {
                     {definitions.map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}
+                        id={key}
                         title={t(title)}
                         hint={
                           key === "education"
@@ -865,6 +885,7 @@ export default function MemberCV() {
                       </Section>
                     ))}
                     <Section
+                      id="skills"
                       title={t("Skills")}
                       hint={t("Enter one skill per line. Use up to 50 skills.")}
                     >
@@ -877,9 +898,8 @@ export default function MemberCV() {
                         onChange={(value) => edit("skills", value.split("\n"))}
                       />
                     </Section>
-                  </div>
-                  <aside className="mcv-sidebar">
                     <Section
+                      id="sharing"
                       title={t("Share with sponsors")}
                       hint={t(
                         "These choices apply when you publish. Email and phone choices also apply inside the generated CV.",
@@ -913,7 +933,10 @@ export default function MemberCV() {
                         )}
                       </p>
                     </Section>
-                    <Section title={t("Preview and publication")}>
+                    <Section
+                      id="publication"
+                      title={t("Preview and publication")}
+                    >
                       <p className="mcv-hint">
                         {t(
                           "Preview uses your current inputs and sharing choices, including unsaved changes.",
@@ -990,9 +1013,9 @@ export default function MemberCV() {
                         </Button>
                       )}
                     </Section>
-                  </aside>
-                </div>
-              </fieldset>
+                  </div>
+                </fieldset>
+              </div>
             </form>
           </>
         )}
