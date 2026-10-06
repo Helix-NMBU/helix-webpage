@@ -52,8 +52,8 @@ export function readableProfileDate(
     : value;
 }
 
-export function currentPeriod(value: string) {
-  return value === "Present";
+export function currentPeriod(value: string, hasCurrentChoice = true) {
+  return hasCurrentChoice && value === "Present";
 }
 
 /** Keeps the prior end date solely for an explicit reversal of the current-role choice. */

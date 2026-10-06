@@ -215,7 +215,7 @@ export function PeriodInputs({
   const id = useId();
   const previous = useRef(currentPeriod(endDate) ? "" : endDate);
   const t = (key: StaticMemberCopyKey) => memberText(locale, key);
-  const ongoing = currentPeriod(endDate);
+  const ongoing = currentPeriod(endDate, Boolean(ongoingLabel));
   return (
     <div className="mcv-period mcv-full">
       {ongoingLabel && (

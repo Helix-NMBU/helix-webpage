@@ -678,6 +678,24 @@ export default function MemberCV() {
       previous ? { ...previous, [key]: value } : previous,
     );
 
+  function changeRowField(
+    key: (typeof definitions)[number]["key"],
+    rowId: string,
+    fieldKey: string,
+    value: string,
+  ) {
+    setDraft((previous) =>
+      previous
+        ? {
+            ...previous,
+            [key]: previous[key].map((entry) =>
+              entry.id === rowId ? { ...entry, [fieldKey]: value } : entry,
+            ),
+          }
+        : previous,
+    );
+  }
+
   return (
     <main className="mcv-page portal-root" lang={locale}>
       <header className="mcv-header">
@@ -956,26 +974,17 @@ export default function MemberCV() {
                                             : undefined
                                       }
                                       onChange={(dateKey, value) =>
-                                        edit(
+                                        changeRowField(
                                           key,
-                                          (draft[key] as Row[]).map((entry) =>
-                                            entry.id === row.id
-                                              ? { ...entry, [dateKey]: value }
-                                              : entry,
-                                          ) as CvData[typeof key],
+                                          row.id,
+                                          dateKey,
+                                          value,
                                         )
                                       }
                                     />
                                   ) : null;
                                 const change = (value: string) =>
-                                  edit(
-                                    key,
-                                    (draft[key] as Row[]).map((entry) =>
-                                      entry.id === row.id
-                                        ? { ...entry, [field.key]: value }
-                                        : entry,
-                                    ) as CvData[typeof key],
-                                  );
+                                  changeRowField(key, row.id, field.key, value);
                                 return field.choices ? (
                                   <ChoiceInput
                                     key={field.key}

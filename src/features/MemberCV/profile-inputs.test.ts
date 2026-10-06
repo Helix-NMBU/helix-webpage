@@ -82,6 +82,14 @@ describe("member period input compatibility", () => {
       toggleCurrentPeriod(false, current.value, current.previous).value,
     ).toBe("Summer 2028");
   });
+  it("leaves education's legacy Present date editable when there is no current-role control", () => {
+    expect(currentPeriod("Present", false)).toBe(false);
+    expect(profileDateParts("Present").legacy).toBe(true);
+    expect(readableProfileDate("Present", (index) => months[index])).toBe(
+      "Present",
+    );
+    expect(currentPeriod("Present", true)).toBe(true);
+  });
   it("does not fabricate an end date for a role that was already current when loaded", () => {
     expect(toggleCurrentPeriod(false, "Present", "").value).toBe("");
     expect(toggleCurrentPeriod(true, "Present", "2028-06").previous).toBe(
