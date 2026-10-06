@@ -131,6 +131,13 @@ export function createPrivateAutosave(options: AutosaveOptions) {
       blocked = value;
       schedule();
     },
+    /** A failed manual action must not unlock into an automatic retry. */
+    pause(kind: CvAutosaveFailure) {
+      if (disposed) return;
+      cancelTimer();
+      paused = kind;
+      emit();
+    },
     /** Call before capturing input for any manual action; unlock in its finally. */
     async lock(): Promise<CvEnvelope> {
       locked = true;

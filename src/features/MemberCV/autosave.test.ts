@@ -213,6 +213,44 @@ describe("private debounced CV autosave", () => {
     expect(mutate.mock.calls[1][0].expectedRevision).toBe(8);
   });
 
+  it("keeps failed manual saves paused across unlocking and later edits until explicitly acknowledged", async () => {
+    const { controller, edit, mutate, onFailure } = setup();
+    edit("Pending input");
+    await controller.lock();
+    const manualSave = vi.fn().mockRejectedValue(new Error("Response was lost"));
+    await expect(manualSave()).rejects.toThrow("Response was lost");
+    controller.pause("uncertain");
+    controller.unlock();
+    edit("Later input");
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(mutate).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(controller.getState()).toEqual({ saving: false, pending: true, paused: "uncertain" });
+    await controller.lock();
+    const raw = { draft: { ...emptyCv("Ada Eksempel"), summary: "Later input" }, sharing: privateSharing };
+    controller.acknowledge(saved({ action: "save", ...raw }, 8), raw);
+    controller.unlock();
+    edit("Next edit");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(mutate.mock.calls[0][0].expectedRevision).toBe(8);
+  });
+
+  it("keeps a manual validation failure paused until a changed edit", async () => {
+    const { controller, edit, mutate, onFailure } = setup();
+    edit("Invalid input");
+    await controller.lock();
+    controller.pause("validation");
+    controller.unlock();
+    edit("Invalid input");
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(mutate).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(controller.getState().paused).toBe("validation");
+    edit("Corrected input");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
   it("accepts both submitted and normalized saved snapshots without trimming live input or creating a save loop", async () => {
     const { controller, edit, mutate } = setup();
     edit("  Whitespace  ");
