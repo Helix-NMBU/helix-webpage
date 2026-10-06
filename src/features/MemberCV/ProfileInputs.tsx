@@ -4,6 +4,11 @@ import { Checkbox } from "@libs/components/ui/checkbox";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@libs/components/ui/collapsible";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -18,8 +23,8 @@ import {
 import {
   composeProfileDate,
   currentPeriod,
-  months,
   profileDateParts,
+  profileDateValidation,
   toggleCurrentPeriod,
   profileChoiceSelection,
 } from "./profile-inputs";
@@ -97,6 +102,41 @@ export function ChoiceInput({
   );
 }
 
+export function OptionalGradeInput({
+  value,
+  onChange,
+  locale,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  locale: MemberLocale;
+  disabled: boolean;
+}) {
+  const id = useId();
+  const [open, setOpen] = useState(Boolean(value));
+  const t = (key: StaticMemberCopyKey) => memberText(locale, key);
+  return (
+    <Collapsible className="mcv-optional-grade" open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" type="button" disabled={disabled}>
+          {t("Grade (optional)")}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent forceMount className="mcv-optional-grade-content">
+        <Label htmlFor={id}>{t("Grade")}</Label>
+        <Input
+          id={id}
+          value={value}
+          maxLength={100}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function DateInput({
   label,
   value,
@@ -114,13 +154,27 @@ function DateInput({
   const parts = profileDateParts(value);
   const [textMode, setTextMode] = useState(parts.legacy);
   const t = (key: StaticMemberCopyKey) => memberText(locale, key);
-  const validYear = /^\d{4}$/.test(parts.year);
+  const validation = profileDateValidation(value);
+  const invalid =
+    !parts.legacy && validation !== "valid" && validation !== "partial";
+  const error =
+    validation === "month"
+      ? t("Enter a month from 01 to 12.")
+      : validation === "day"
+        ? t("Enter a valid calendar day.")
+        : validation === "year"
+          ? t("Enter a four-digit year.")
+          : "";
+  function changePart(key: "year" | "month" | "day", next: string) {
+    const nextParts = { ...parts, [key]: next };
+    onChange(composeProfileDate(nextParts.year, nextParts.month, nextParts.day));
+  }
   return (
     <div className="mcv-date-field">
-      <Label htmlFor={`${id}-year`}>{label}</Label>
+      <Label htmlFor={`${id}-${textMode ? "text" : "day"}`}>{label}</Label>
       {textMode ? (
         <Input
-          id={`${id}-year`}
+          id={`${id}-text`}
           disabled={disabled}
           maxLength={30}
           value={value}
@@ -129,57 +183,42 @@ function DateInput({
       ) : (
         <>
           <div className="mcv-date-controls">
-            <Input
-              id={`${id}-year`}
-              disabled={disabled}
-              inputMode="numeric"
-              maxLength={4}
-              placeholder={t("Year")}
-              aria-label={`${label} · ${t("Year")}`}
-              value={parts.year}
-              onChange={(event) => {
-                const year = event.target.value;
-                if (/^\d{0,4}$/.test(year))
-                  onChange(composeProfileDate(year, parts.month));
-              }}
-            />
-            <Select
-              value={parts.month || "__none"}
-              disabled={disabled || !validYear}
-              onValueChange={(next) => {
-                const selected = next === "__none" ? "" : next;
-                onChange(composeProfileDate(parts.year, selected));
-              }}
-            >
-              <SelectTrigger
-                className="mcv-profile-select"
-                aria-label={`${label} · ${t("Month")}`}
-              >
-                <SelectValue placeholder={t("Month")} />
-              </SelectTrigger>
-              <SelectContent
-                className="portal-root mcv-profile-menu"
-                lang={locale}
-              >
-                <SelectItem value="__none">{t("Year only")}</SelectItem>
-                {months.map((name, index) => (
-                  <SelectItem
-                    key={name}
-                    value={String(index + 1).padStart(2, "0")}
-                  >
-                    {t(name)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {(["day", "month", "year"] as const).map((key) => (
+              <Input
+                key={key}
+                id={`${id}-${key}`}
+                disabled={disabled}
+                inputMode="numeric"
+                maxLength={key === "year" ? 4 : 2}
+                placeholder={key === "day" ? "DD" : key === "month" ? "MM" : "YYYY"}
+                aria-label={`${label} · ${t(key === "day" ? "Day (optional)" : key === "month" ? "Month" : "Year")}`}
+                aria-invalid={invalid && validation === key ? true : undefined}
+                aria-describedby={`${id}-note${invalid ? ` ${id}-error` : ""}`}
+                value={parts[key]}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if ((key === "year" ? /^\d{0,4}$/ : /^\d{0,2}$/).test(next))
+                    changePart(key, next);
+                }}
+                onBlur={() => {
+                  if (
+                    key !== "year" &&
+                    /^\d$/.test(parts[key]) &&
+                    parts[key] !== "0"
+                  )
+                    changePart(key, parts[key].padStart(2, "0"));
+                }}
+              />
+            ))}
           </div>
-          {parts.legacy && (
-            <p className="mcv-date-note">
-              {memberText(
-                locale,
-                "Current date: {date}. Enter a year to replace it.",
-                { date: value },
-              )}
+          <p id={`${id}-note`} className="mcv-date-note">
+            {parts.legacy
+              ? memberText(locale, "Current date: {date}. Enter a year to replace it.", { date: value })
+              : t("Day is optional. Use day, month, year.")}
+          </p>
+          {invalid && (
+            <p id={`${id}-error`} className="mcv-date-error" role="alert">
+              {error}
             </p>
           )}
         </>
@@ -191,7 +230,7 @@ function DateInput({
         disabled={disabled}
         onClick={() => setTextMode((current) => !current)}
       >
-        {textMode ? t("Use month and year") : t("Edit date as text")}
+        {textMode ? t("Use numeric date") : t("Edit date as text")}
       </Button>
     </div>
   );

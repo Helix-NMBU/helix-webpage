@@ -4,6 +4,23 @@ export type MemberLocale = "nb" | "en";
 export const MEMBER_LOCALE_KEY = "helix-member-ui-language-v1";
 
 export const englishCopy = {
+  "No content yet": "No content yet",
+  "Some content is missing": "Some content is missing",
+  "Grade (optional)": "Grade (optional)",
+  "Day (optional)": "Day (optional)",
+  "Day is optional. Use day, month, year.": "Day is optional. Use day, month, year.",
+  "Use numeric date": "Use numeric date",
+  "Changes are saved automatically as a private draft.": "Changes are saved automatically as a private draft.",
+  "Saving draft…": "Saving draft…",
+  "All changes saved": "All changes saved",
+  "Changes waiting to be saved": "Changes waiting to be saved",
+  "Automatic saving paused. Your input is kept.": "Automatic saving paused. Your input is kept.",
+  "Retry saving": "Retry saving",
+  "Complete the date before saving.": "Complete the date before saving.",
+  "Enter a month from 01 to 12.": "Enter a month from 01 to 12.",
+  "Enter a valid calendar day.": "Enter a valid calendar day.",
+  "Enter a four-digit year.": "Enter a four-digit year.",
+
   "Expand {section}": "Expand {section}",
   "Collapse {section}": "Collapse {section}",
   Grade: "Grade",
@@ -214,6 +231,23 @@ export const englishCopy = {
 
 export type MemberCopyKey = keyof typeof englishCopy;
 export const norwegianCopy: Record<MemberCopyKey, string> = {
+  "No content yet": "Ikke noe innhold ennå",
+  "Some content is missing": "Noe innhold mangler",
+  "Grade (optional)": "Karakter (valgfritt)",
+  "Day (optional)": "Dag (valgfritt)",
+  "Day is optional. Use day, month, year.": "Dag er valgfritt. Bruk dag, måned, år.",
+  "Use numeric date": "Bruk numerisk dato",
+  "Changes are saved automatically as a private draft.": "Endringer lagres automatisk som et privat utkast.",
+  "Saving draft…": "Lagrer utkast…",
+  "All changes saved": "Alle endringer er lagret",
+  "Changes waiting to be saved": "Endringer venter på lagring",
+  "Automatic saving paused. Your input is kept.": "Automatisk lagring er satt på pause. Det du har skrevet, er beholdt.",
+  "Retry saving": "Prøv å lagre igjen",
+  "Complete the date before saving.": "Fullfør datoen før du lagrer.",
+  "Enter a month from 01 to 12.": "Skriv inn en måned fra 01 til 12.",
+  "Enter a valid calendar day.": "Skriv inn en gyldig kalenderdag.",
+  "Enter a four-digit year.": "Skriv inn et år med fire sifre.",
+
   "Expand {section}": "Åpne {section}",
   "Collapse {section}": "Lukk {section}",
   Grade: "Karakter",

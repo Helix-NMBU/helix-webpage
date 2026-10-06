@@ -35,12 +35,11 @@ import {
   CollapsibleTrigger,
 } from "@libs/components/ui/collapsible";
 import { ChevronDown } from "lucide-react";
-import { ChoiceInput, PeriodInputs } from "./ProfileInputs";
+import { ChoiceInput, OptionalGradeInput, PeriodInputs } from "./ProfileInputs";
 import {
   employmentTypes,
   locationTypes,
   languageLevels,
-  months,
   readableProfileDate,
 } from "./profile-inputs";
 import { Alert, AlertDescription, AlertTitle } from "@libs/components/ui/alert";
@@ -325,10 +324,7 @@ function DemoPreview({
                           {field.date
                             ? row[field.key] === "Present"
                               ? t("Present")
-                              : readableProfileDate(
-                                  row[field.key] ?? "",
-                                  (index) => t(months[index]),
-                                )
+                              : readableProfileDate(row[field.key] ?? "")
                             : field.choices?.includes(
                                   row[field.key] as StaticMemberCopyKey,
                                 )
@@ -341,12 +337,6 @@ function DemoPreview({
               ))}
             </section>
           ),
-      )}
-      {cv.skills.length > 0 && (
-        <section>
-          <h2>{t("Skills")}</h2>
-          <p>{cv.skills.join(", ")}</p>
-        </section>
       )}
     </article>
   );
@@ -958,6 +948,7 @@ export default function MemberCV() {
                             </div>
                             <div className="mcv-grid">
                               {fields.map((field) => {
+                                if (field.key === "grade") return null;
                                 if (field.date)
                                   return field.key === "startDate" ? (
                                     <PeriodInputs
@@ -1011,6 +1002,16 @@ export default function MemberCV() {
                                 );
                               })}
                             </div>
+                            {key === "education" && (
+                              <OptionalGradeInput
+                                value={row.grade ?? ""}
+                                onChange={(value) =>
+                                  changeRowField(key, row.id, "grade", value)
+                                }
+                                locale={locale}
+                                disabled={Boolean(busy) || ended}
+                              />
+                            )}
                           </div>
                         ))}
                         <Button
@@ -1031,20 +1032,6 @@ export default function MemberCV() {
                         </Button>
                       </Section>
                     ))}
-                    <Section
-                      {...sectionProps("skills")}
-                      title={t("Skills")}
-                      hint={t("Enter one skill per line. Use up to 50 skills.")}
-                    >
-                      <Field
-                        label={t("Your skills")}
-                        value={draft.skills.join("\n")}
-                        multiline
-                        maxLength={5050}
-                        placeholder={t("CAD\nPrototyping\nTeamwork")}
-                        onChange={(value) => edit("skills", value.split("\n"))}
-                      />
-                    </Section>
                     <Section
                       {...sectionProps("sharing")}
                       title={t("Share with sponsors")}

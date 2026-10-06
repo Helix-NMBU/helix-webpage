@@ -1,11 +1,9 @@
 import { useEffect, useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Badge } from "@libs/components/ui/badge";
 import { Button } from "@libs/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@libs/components/ui/card";
@@ -23,18 +21,11 @@ const entries = [
   { key: "projects", title: "Helix roles and projects" },
   { key: "languages", title: "Languages" },
   { key: "links", title: "Links" },
-  { key: "skills", title: "Skills" },
   { key: "sharing", title: "Share with sponsors" },
   { key: "publication", title: "Preview and publication" },
 ] as const;
 
 type SectionKey = (typeof entries)[number]["key"];
-const contentLabels = {
-  empty: "Empty",
-  started: "Started",
-  filled: "Filled",
-} as const;
-
 export function SectionNavigation({
   locale,
   statuses,
@@ -138,9 +129,6 @@ export function SectionNavigation({
               />
             </Button>
           </div>
-          <CardDescription className="mcv-nav-description">
-            {t("Content progress is separate from saving and publication.")}
-          </CardDescription>
         </CardHeader>
         <CardContent className="mcv-nav-body" id={id} data-expanded={expanded}>
           <nav aria-label={t("Section overview")}>
@@ -167,27 +155,15 @@ export function SectionNavigation({
                         }}
                       >
                         <span className="mcv-nav-label">{t(title)}</span>
-                        {status && (
-                          <div className="mcv-nav-indicators">
-                            <Badge
-                              variant="secondary"
-                              className="mcv-nav-content"
-                            >
-                              {key === "sharing"
-                                ? t("Settings")
-                                : t(contentLabels[status.content])}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={
-                                status.dirty
-                                  ? "mcv-nav-save mcv-nav-unsaved"
-                                  : "mcv-nav-save"
-                              }
-                            >
-                              {status.dirty ? t("Unsaved") : t("Saved")}
-                            </Badge>
-                          </div>
+                        {status && key !== "sharing" && status.content !== "filled" && (
+                          <span
+                            className="mcv-nav-missing"
+                            role="img"
+                            aria-label={t(status.content === "empty" ? "No content yet" : "Some content is missing")}
+                            title={t(status.content === "empty" ? "No content yet" : "Some content is missing")}
+                          >
+                            <span aria-hidden="true" />
+                          </span>
                         )}
                       </a>
                     </Button>
@@ -196,11 +172,6 @@ export function SectionNavigation({
               })}
             </ol>
           </nav>
-          <p className="mcv-nav-help">
-            {t(
-              "Optional fields can stay empty. Save your draft to keep changes.",
-            )}
-          </p>
         </CardContent>
       </Card>
     </aside>

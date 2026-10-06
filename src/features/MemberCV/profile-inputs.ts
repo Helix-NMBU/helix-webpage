@@ -31,26 +31,12 @@ export const months = [
   "December",
 ] as const;
 
-export function profileDateParts(value: string) {
-  const match = /^(\d{0,4})(?:-(0[1-9]|1[0-2]))?$/.exec(value);
-  if (!match) return { year: "", month: "", legacy: true };
-  return { year: match[1], month: match[2] ?? "", legacy: false };
-}
-
-/** Partial year input is retained verbatim; months never fabricate a missing year. */
-export function composeProfileDate(year: string, month: string) {
-  return month ? `${year}-${month}` : year;
-}
-
-export function readableProfileDate(
-  value: string,
-  monthName: (index: number) => string,
-) {
-  const parts = profileDateParts(value);
-  return !parts.legacy && parts.year.length === 4 && parts.month
-    ? `${monthName(Number(parts.month) - 1)} ${parts.year}`
-    : value;
-}
+export {
+  composeProfileDate,
+  profileDateParts,
+  profileDateValidation,
+  readableProfileDate,
+} from "./profile-dates.js";
 
 export function currentPeriod(value: string, hasCurrentChoice = true) {
   return hasCurrentChoice && value === "Present";

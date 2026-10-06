@@ -3,76 +3,69 @@ import {
   composeProfileDate,
   currentPeriod,
   profileDateParts,
+  profileDateValidation,
   readableProfileDate,
   toggleCurrentPeriod,
   profileChoiceSelection,
   languageLevels,
 } from "./profile-inputs";
-import { months } from "./profile-inputs";
 
 describe("member period input compatibility", () => {
-  it("represents year-only and month/year dates without adding an unspecified month", () => {
-    expect(profileDateParts("2024")).toEqual({
-      year: "2024",
-      month: "",
-      legacy: false,
-    });
-    expect(profileDateParts("2024-09")).toEqual({
-      year: "2024",
-      month: "09",
-      legacy: false,
-    });
-    expect(composeProfileDate("2024", "")).toBe("2024");
-    expect(composeProfileDate("2024", "09")).toBe("2024-09");
-  });
   it.each([
-    "Sep 2024",
-    "Spring 2023",
-    "2024-13",
-    "2024-5",
-    "2024-09-01",
-    "Present",
-  ])(
-    "keeps existing free date %s readable and editable without a conversion",
+    ["2024", "2024", "", ""],
+    ["2024-09", "2024", "09", ""],
+    ["2024-09-01", "2024", "09", "01"],
+  ])("parses existing canonical %s without rewriting it", (value, year, month, day) => {
+    expect(profileDateParts(value)).toEqual({ year, month, day, legacy: false });
+    expect(composeProfileDate(year, month, day)).toBe(value);
+    expect(profileDateValidation(value)).toBe("valid");
+  });
+  it.each(["Sep 2024", "Spring 2023", "Present", "01.09.2024", "2024/2025"])(
+    "leaves free legacy date %s untouched and valid",
     (value) => {
       expect(profileDateParts(value).legacy).toBe(true);
-      expect(readableProfileDate(value, (index) => months[index])).toBe(value);
+      expect(readableProfileDate(value)).toBe(value);
+      expect(profileDateValidation(value)).toBe("valid");
     },
   );
-  it("keeps the selected month in the draft while a year is cleared or partially retyped", () => {
-    const cleared = composeProfileDate("", "05");
-    expect(cleared).toBe("-05");
-    expect(profileDateParts(cleared)).toEqual({
-      year: "",
-      month: "05",
-      legacy: false,
-    });
-    const partial = composeProfileDate("202", profileDateParts(cleared).month);
-    expect(partial).toBe("202-05");
-    expect(readableProfileDate(partial, (index) => months[index])).toBe(
-      partial,
-    );
-    expect(composeProfileDate("2027", profileDateParts(partial).month)).toBe(
-      "2027-05",
-    );
+  it("retains month and optional day while year is cleared or partially entered", () => {
+    const cleared = composeProfileDate("", "05", "12");
+    expect(cleared).toBe("-05-12");
+    expect(profileDateParts(cleared)).toEqual({ year: "", month: "05", day: "12", legacy: false });
+    expect(composeProfileDate("202", "05", "12")).toBe("202-05-12");
+    expect(profileDateValidation(cleared)).toBe("partial");
+    expect(readableProfileDate(cleared)).toBe(cleared);
   });
-  it("keeps a blank or partial year without inventing a month or year", () => {
+  it("keeps missing components and leading digit prefixes without inventing them", () => {
     expect(composeProfileDate("", "")).toBe("");
     expect(composeProfileDate("20", "")).toBe("20");
-    expect(profileDateParts("20")).toEqual({
-      year: "20",
-      month: "",
-      legacy: false,
-    });
+    expect(composeProfileDate("", "1")).toBe("-1");
+    expect(composeProfileDate("", "", "12")).toBe("--12");
+    expect(composeProfileDate("2024", "", "12")).toBe("2024--12");
+    for (const value of ["20", "-1", "-0", "2024-1", "2024-01-0", "--12", "2024--12", "2024-", "2024-01-", "-"]) {
+      expect(profileDateParts(value).legacy).toBe(false);
+      expect(profileDateValidation(value)).toBe("partial");
+      expect(readableProfileDate(value)).toBe(value);
+    }
   });
-  it("formats only complete month/year values with the currently chosen language", () => {
-    expect(readableProfileDate("2024-09", () => "September")).toBe(
-      "September 2024",
-    );
-    expect(readableProfileDate("2024-09", () => "Septembre")).toBe(
-      "Septembre 2024",
-    );
-    expect(readableProfileDate("2024", () => "unused")).toBe("2024");
+  it.each([
+    ["2024-13", "month"], ["2024-00", "month"], ["2024-01-00", "day"],
+    ["2024-01-32", "day"], ["2024-04-31", "day"], ["2023-02-29", "day"],
+    ["1900-02-29", "day"], ["2024-02-30", "day"], ["0000", "year"],
+  ])("marks invalid numeric %s as %s while preserving all entered parts", (value, issue) => {
+    expect(profileDateValidation(value)).toBe(issue);
+    expect(readableProfileDate(value)).toBe(value);
+    const { year, month, day } = profileDateParts(value);
+    expect(composeProfileDate(year, month, day)).toBe(value);
+  });
+  it.each(["2024-02-29", "2000-02-29", "2023-02-28", "2024-01-31", "2024-12", "2024", ""])(
+    "allows complete calendar date, year/month or year-only %s",
+    (value) => expect(profileDateValidation(value)).toBe("valid"),
+  );
+  it("shows complete dates in European order in either interface language", () => {
+    expect(readableProfileDate("2024-09-01")).toBe("01.09.2024");
+    expect(readableProfileDate("2024-09")).toBe("09.2024");
+    expect(readableProfileDate("2024")).toBe("2024");
   });
   it("restores the exact prior free-text end date when the current-role choice is reversed", () => {
     const current = toggleCurrentPeriod(true, "Summer 2028", "");
@@ -85,7 +78,7 @@ describe("member period input compatibility", () => {
   it("leaves education's legacy Present date editable when there is no current-role control", () => {
     expect(currentPeriod("Present", false)).toBe(false);
     expect(profileDateParts("Present").legacy).toBe(true);
-    expect(readableProfileDate("Present", (index) => months[index])).toBe(
+    expect(readableProfileDate("Present")).toBe(
       "Present",
     );
     expect(currentPeriod("Present", true)).toBe(true);
