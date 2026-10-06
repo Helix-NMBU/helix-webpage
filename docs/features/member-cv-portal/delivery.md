@@ -6,17 +6,17 @@ Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
 Existing dependency PR: https://github.com/Helix-NMBU/helix-webpage/pull/46, verified open/Draft; unchanged.
-New feature PR: https://github.com/Helix-NMBU/helix-webpage/pull/57. Open/Draft, reviewer joasmund requested. Attached to the current Codex chat.
+New feature PR: https://github.com/Helix-NMBU/helix-webpage/pull/57. Open, ready for review, reviewer joasmund requested. Unmerged. Attached to the current Codex chat.
 T-00: verified at 0070630; three domain tests and frontend typecheck passed.
 Workers assigned from 0070630:
 - /root/backend: T-01 #53, /private/tmp/helix-member-cv-backend, codex/member-cv-backend.
 - /root/editor: T-02 #54, /private/tmp/helix-member-cv-editor, codex/member-cv-editor.
 - /root/pdf: T-03 #55, /private/tmp/helix-member-cv-pdf, codex/member-cv-pdf.
-T-04 #56: integrated and independently reviewed; confirmed Vercel lockfile repair is integrated; final current-commit remote checks remain pending.
+T-04 #56: closed after integrated verification, independent review, successful current-commit remote checks and verified PR readiness.
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: push the reviewed lockfile repair and verify current-commit GitHub/Vercel checks before marking PR #57 ready. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: human review of PR #57 and prerequisite PR #46. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -30,7 +30,7 @@ Next action: push the reviewed lockfile repair and verify current-commit GitHub/
 - Reviewer assignments and reviewed commit: /root/review_correctness, /root/review_spec and /root/review_standards independently reviewed 79b73a9 against f99939d. None participated in implementation.
 - Live Google/Supabase project configuration, migration application and actual Storage transport checks remain rollout prerequisites. No live database was mutated and no manual deployment was performed.
 
-## Independent review at 79b73a9
+## Historical independent review at 79b73a9
 
 Standards: no actionable findings. Existing React/TypeScript boundaries, explicit domain types and Member Profile/Talent Directory terminology follow project conventions. The editor's size alone did not justify a refactor.
 
@@ -48,13 +48,15 @@ Reports remain distinct. The initial clean Standards report does not settle the 
 
 ## Current delivery state
 
-T-00 #52, T-01 #53, T-02 #54 and T-03 #55 are verified on the integration branch and closed with evidence. T-04 #56 remains open for the current-commit remote CI and PR readiness gate. Parent #51 stays open until merge.
+Reconciled on 2026-10-06 after the verified ready-for-review transition. T-00 #52, T-01 #53, T-02 #54, T-03 #55 and T-04 #56 are closed with evidence. Parent #51 remains open until merge. PR #57 is open, non-draft and unmerged, targeting sponsor-portal-v2. Reviewer joasmund is requested; no human approval is claimed. PR #46 remains unchanged and draft at f99939d.
 
-Full feature review is bound to 2cb5807, supplemented by independent emitted-runtime repair review at b846e39. Initial Standards and Spec reports are preserved above; the full reviewer independently verified all affected repairs. The runtime import repair and its CI guard are independently reviewed; subsequent changes are documentation only. Live Google/Supabase/Storage verification is still required before rollout.
+At remote 9d8dabb7703563dd854cb3e539e0506ccbdd3273, both GitHub workflows and the automatic Vercel preview succeeded. PR workflow https://github.com/Helix-NMBU/helix-webpage/actions/runs/37524442594 and push workflow https://github.com/Helix-NMBU/helix-webpage/actions/runs/37524439046. Preview deployment dpl_Brp3xetPXJc75uPC7e6wBHoFjdzU succeeded. GitHub reported MERGEABLE, merge state CLEAN, and no applicable branch protection rules. Final documentation is committed after this verified gate; the coordinator must re-read its current-commit checks before handoff.
 
-PR #57 was created as draft against sponsor-portal-v2 and attached. PR #46 remains unchanged and unmerged. The branch has no applicable required protection rules and was mergeable when checked, but the automatic Vercel preview failed, so the final delivery gate remains unmet.
+Full feature review is bound to 2cb5807, supplemented by independent emitted-runtime review at b846e39 and dependency install repair review at 97f2940. No material findings remain. Final local verification passed 103 tests in 11 files, all three typechecks, lint, build and diff checks after a clean npm install. Subsequent changes are delivery documentation only.
 
-## Initial remote verification and diagnostic gap
+Live Google/Supabase/Storage verification and migration application remain rollout prerequisites. No live database changes, manual deployment, merge or auto-merge were performed. Local fictional demo remains available at http://127.0.0.1:5177/member/profile?demo=1. Earlier pending states below are historical evidence, superseded by this section.
+
+## Historical initial remote verification and diagnostic gap
 
 At remote commit c1d4909d0e18c45ce839ea790379eca01e7c8167, both GitHub Member CV checks succeeded. PR workflow run 37522362734 independently reported 103 tests in 11 files, both typechecks, lint and build. The automatic Vercel status failed for deployment dpl_384NBCDssaZkGKM2RXEtGxQV8HRE. No failure cause has been confirmed.
 
@@ -62,7 +64,7 @@ Build diagnostics belong to Vercel scope jacob14-fe28. The local CLI lists only 
 
 T-04 #56 and parent #51 remain open. Keep PR #57 draft while this preview failure is unresolved. Local demo remains at http://127.0.0.1:5177/member/profile?demo=1. Code review and local verification are complete, but delivery is not fully complete until the current remote preview check is resolved and readiness is reverified.
 
-## Emitted runtime repair after preview investigation
+## Historical emitted runtime repair after preview investigation
 
 The bounded local function build emitted all seven endpoints and traced both licensed fonts into the CV bundle. A separate materialized-runtime smoke reproduced ERR_MODULE_NOT_FOUND because the PDF renderer imported the shared model without .js. Worker 942a1e0 fixed model.js/types.js imports, integrated as 825eed8. This does not establish the cause of the automatic preview build failure, whose log remains unavailable.
 
@@ -72,10 +74,10 @@ T-03 #55 was reopened when the emitted runtime failure invalidated its deploymen
 
 Final source review: /root/review_correctness inspected b846e39 against c1d4909. No material finding; NodeNext guard includes production API dependencies and excludes tests. The reviewer independently loaded the materialized handler and generated a Nordic PDF from bundled fonts. Current remote checks will be re-read after this documentation checkpoint is pushed. Keep the PR draft unless the preview gate also passes.
 
-## Confirmed preview failure and dependency install repair
+## Confirmed preview failure and dependency install repair history
 
 The next automatic preview for remote 9eadbc3 reported the accessible helix-nmbu scope. Its build log confirmed frontend npm install/build succeeded, then the function builder selected the obsolete pnpm lockfile and failed frozen installation with ERR_PNPM_OUTDATED_LOCKFILE. This settled the actual preview cause; no project settings change was performed by this delivery.
 
 Worker 575934b removed only pnpm-lock.yaml, integrated as 97f2940. README, Vercel commands and CI already use npm. Official Vercel detection changed from pnpm lock version 9 to npm lock version 3. The npm dependency graph and versions are unchanged. Root npm ci succeeded; full revalidation passed 103 tests in 11 files, all three typechecks, lint, build and diff checks. Independent review of 97f2940 confirmed that every manifest dependency matches the retained npm lock and found no material issue.
 
-The old diagnostic request is no longer needed. Final readiness still awaits the automatic preview check on the pushed repair. PR #57 remains draft until that check passes. T-04 and parent #51 remain open.
+The old diagnostic request is no longer needed. The subsequent automatic preview and GitHub checks passed at 9d8dabb. PR #57 is now ready for review and T-04 is closed. Parent #51 remains open until merge.

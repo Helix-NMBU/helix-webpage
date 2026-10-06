@@ -9,7 +9,7 @@ Local ticket: T-04. See `docs/features/member-cv-portal/spec.md`, revision 1.
 - [x] Verify role/RLS isolation, publication lifecycle and stale revisions on integrated code.
 - [x] Verify rendered editor desktop/mobile and actual generated PDF.
 - [x] Run full relevant tests, frontend/API typechecks, lint/build and independent full code review.
-- [ ] Create one PR targeting sponsor-portal-v2; check current-commit CI/rules; leave unmerged and record real rollout gaps.
+- [x] Create one PR targeting sponsor-portal-v2; check current-commit CI/rules; leave unmerged and record real rollout gaps.
 
 ## Blocking dependencies
 
@@ -21,4 +21,4 @@ Integrated checks, browser evidence, independent review, PR current-commit CI.
 
 Workers commit in isolated worktrees. Coordinator integrates, verifies and closes this ticket with evidence. Parent remains open until merge.
 
-Status: in progress. PR #57 is open/Draft. Current GitHub checks passed at 9eadbc3 with 103 tests. The accessible Vercel log confirmed an obsolete pnpm lock blocked the function dependency install. Repair 97f2940 removes only that lock, preserves the npm dependency graph and passes independent review plus clean npm install/full checks. Final current-commit preview verification remains pending. Parent #51 stays open.
+Status: closed. PR #57 is open, ready for review and unmerged. GitHub push/PR checks and the Vercel preview passed at remote 9d8dabb7703563dd854cb3e539e0506ccbdd3273. The PR is mergeable with merge state CLEAN and no applicable branch protection rules. Reviewer joasmund is requested; no human approval is claimed. The independent source reviews cover 2cb5807, b846e39 and 97f2940. Final local verification passed 103 tests, all three typechecks, lint, build and diff checks after a clean npm install. GitHub #56 was closed with this evidence and read back as CLOSED on 2026-10-06. Parent #51 remains open, and dependency PR #46 remains draft. Live Google/Supabase configuration, migration application and Storage/login checks remain prerequisites before rollout. See setup.md and delivery.md.
