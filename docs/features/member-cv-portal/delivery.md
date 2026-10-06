@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 6. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 adds collapsible sections and familiar profile inputs.
+Spec: spec.md revision 7. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 adds collapsible sections and familiar profile inputs.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: reviewer assessment of unmerged PR #57; local T-09 is closed after verification and successful remote gates. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: implement and verify local T-10, then update existing PR #57; prior T-09 remains closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -173,3 +173,8 @@ Before /private/tmp/member-cv-forms-before.png; after /private/tmp/member-cv-for
 
 
 Status: local T-09 CLOSED after all criteria passed at remote 40e567b058aa7eda9f39ebab43d77f742c0856f4. Both GitHub workflows and automatic preview succeeded: PR run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37537583146, push run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37537577789, preview https://vercel.com/helix-nmbu/helix-webpage/DsYk7xGj6TgDv1ccbsa1Q6JHNHMz. PR #57 is open/non-draft, MERGEABLE/CLEAN and unmerged, with joasmund requested; no human approval is claimed. Dependency #46 remains open/draft at f99939d and parent #51 remains open until merge. No applicable base-branch rules were returned. Code review is bound to 5822203; subsequent changes are documentation only. Final documentation follows this successful gate; re-read current-commit remote checks before handoff. No merge, auto-merge, manual deployment or live database change.
+
+
+## Autosave and simplified editor follow-up
+
+Spec revision 7 adds F-14 and local T-10, authorized by the user on 2026-10-07. Start reconciled at clean bb8046573ac00133b36af4fddd829e9162174df2, existing PR #57 open/non-draft with all current gates successful, dependency #46 open/draft at f99939d. User confirmed optional day displayed DD.MM.YYYY. Root owns MemberCV autosave integration, docs, skills omission in new PDF exports, browser/review/remote gates. Isolated autosave worker owns new controller/helpers/tests only; isolated UI worker owns SectionNavigation, ProfileInputs/date helpers, locale/CSS and bounded MemberCV skills/secondary-grade presentation only. Root integrates serially; no worker pushes or edits integration branch. No destructive migration/live configuration/deployment/merge.
