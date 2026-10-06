@@ -1,174 +1,113 @@
-import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
+import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { useState } from "react";
-import { Link, useNavigate, useLocation, type Location } from "react-router-dom";
-import { useCVBankAuth } from "./auth";
-import { parseGoogleCredential } from "./session";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../libs/lib/utils";
+import { memberLoginDestination } from "../MemberCV/repository";
+import "../MemberCV/member-cv.css";
 
-const allowedDomain = (import.meta.env.VITE_GOOGLE_ALLOWED_DOMAIN || "helixnmbu.no").toLowerCase();
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const supabaseConfigured = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY && supabase);
+const configured = Boolean(googleClientId && supabase);
 
 export default function CVBankLogin() {
-	const navigate = useNavigate();
-	const location = useLocation();
-	const { login, isAuthenticated } = useCVBankAuth();
-	const [error, setError] = useState<string | null>(null);
-
-	const from = (location.state as { from?: Location })?.from?.pathname ?? "/member/profile";
-
-	const handleSuccess = async (response: CredentialResponse) => {
-		try {
-			if (!response.credential) {
-				throw new Error("Missing Google credential.");
-			}
-			if (!supabaseConfigured || !supabase) {
-				throw new Error("Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-			}
-
-			// 1) Parse the Google ID token for local app state
-			const user = parseGoogleCredential(response.credential, allowedDomain);
-
-			// 2) Sign into Supabase using the Google ID token so auth.getUser() works
-			const { error: supabaseSignInError } = await supabase.auth.signInWithIdToken({
-				provider: "google",
-				token: response.credential,
-			});
-			if (supabaseSignInError) {
-				throw new Error(`Supabase sign-in failed: ${supabaseSignInError.message}`);
-			}
-
-			const { data: portalContext, error: contextError } = await supabase.rpc("current_portal_context");
-			if (contextError) throw new Error(`Could not verify Helix membership: ${contextError.message}`);
-			if (!portalContext?.is_member) {
-				await supabase.auth.signOut();
-				throw new Error("This account is not registered as an active Helix member.");
-			}
-
-			// 3) Fetch the Supabase user and upsert to the students table
-			const { data, error: supabaseUserError } = await supabase.auth.getUser();
-			if (supabaseUserError) {
-				throw new Error(`Could not fetch Supabase user: ${supabaseUserError.message}`);
-			}
-
-			const supabaseUser = data.user;
-			if (supabaseUser) {
-				const { error: upsertError } = await supabase.from("students").upsert({
-					id: supabaseUser.id,
-					full_name: supabaseUser.user_metadata.full_name ?? user.name,
-					email: supabaseUser.email,
-				});
-				if (upsertError) {
-					throw new Error(`Failed to sync user in Supabase: ${upsertError.message}`);
-				}
-			}
-
-			// 4) Persist user in local CVBank auth and continue navigation
-			login(user);
-			setError(null);
-			navigate(from, { replace: true });
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Login failed. Please try again.");
-		}
-	};
-
-	const handleError = () => {
-		setError("Google sign-in failed. Please try again.");
-	};
-
-	if (isAuthenticated) {
-		navigate(from, { replace: true });
-		return null;
-	}
-
-	if (!googleClientId) {
-		return (
-			<div className="flex items-center justify-center px-4 py-12 min-h-svh bg-menu-background">
-				<div className="w-full max-w-lg p-6 border shadow-2xl rounded-2xl border-amber-200/40 bg-amber-500/10 text-amber-50">
-					<h2 className="mb-2 text-lg font-semibold">Google Client ID missing</h2>
-					<p className="mb-3 text-sm">
-						Set <code className="font-mono">VITE_GOOGLE_CLIENT_ID</code> in your <code className="font-mono">.env</code> (Web Client ID from Google Cloud) and restart <code className="font-mono">npm run dev</code>.
-					</p>
-					<ol className="space-y-1 text-sm list-decimal list-inside">
-						<li>Google Cloud Console → Credentials → OAuth client → copy Web Client ID.</li>
-						<li>Add <code className="font-mono">http://localhost:5173</code> to Authorized JavaScript origins.</li>
-						<li>Restart the dev server so Vite picks up env changes.</li>
-					</ol>
-				</div>
-			</div>
-		);
-	}
-
-	if (!supabaseConfigured) {
-		return (
-			<div className="flex items-center justify-center px-4 py-12 min-h-svh bg-menu-background">
-				<div className="w-full max-w-lg p-6 border shadow-2xl rounded-2xl border-amber-200/40 bg-amber-500/10 text-amber-50">
-					<h2 className="mb-2 text-lg font-semibold">Supabase not configured</h2>
-					<p className="mb-3 text-sm">
-						Set <code className="font-mono">VITE_SUPABASE_URL</code> and <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> in your <code className="font-mono">.env</code>, then restart <code className="font-mono">npm run dev</code>.
-					</p>
-					<ol className="space-y-1 text-sm list-decimal list-inside">
-						<li>From Supabase → Project Settings → API → copy Project URL.</li>
-						<li>Copy anon public key from the same page.</li>
-						<li>Add both to <code className="font-mono">.env</code> and restart the dev server.</li>
-					</ol>
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<div className="flex items-center justify-center px-4 py-12 min-h-svh bg-menu-background">
-			<div className="relative w-full max-w-md p-8 overflow-hidden text-white border shadow-2xl rounded-2xl border-white/10 bg-white/5 backdrop-blur">
-				<div className="absolute w-24 h-24 rounded-full -left-10 -top-10 bg-accent/30 blur-3xl" />
-				<div className="absolute w-24 h-24 rounded-full -right-10 -bottom-10 bg-secondary/30 blur-3xl" />
-
-				<div className="relative flex flex-col gap-6">
-					<div className="flex items-center justify-between">
-						<div>
-							<p className="text-sm uppercase tracking-[0.2em] text-white/70">CV-Bank</p>
-							<h1 className="text-xl font-semibold">Log in for Helix Members</h1>
-						</div>
-						<Link
-							to="/"
-							className="inline-flex items-center justify-center w-10 h-10 text-white transition border group rounded-xl border-white/30 hover:border-accent hover:text-accent"
-							aria-label="Back to home"
-						>
-							<svg
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								className="transition duration-200 group-hover:-translate-x-0.5"
-							>
-								<path d="M15 18l-6-6 6-6" />
-							</svg>
-						</Link>
-					</div>
-
-					<div className="flex flex-col gap-4">
-						<div className="flex justify-center">
-							<GoogleLogin
-								onSuccess={handleSuccess}
-								onError={handleError}
-								useOneTap
-								shape="rectangular"
-								size="large"
-							/>
-						</div>
-                        
-						{error && (
-							<p className="px-3 py-2 text-sm text-red-100 border rounded-lg border-red-400/60 bg-red-500/10">
-								{error}
-							</p>
-						)}
-					</div>
-				</div>
-			</div>
-		</div>
-	);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const destination = memberLoginDestination(location.state);
+  async function handleSuccess(response: CredentialResponse) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (!response.credential || !supabase)
+        throw new Error("Sign-in is unavailable. Please try again later.");
+      const result = await fetch("/api/member-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+      const body = await result.json().catch(() => ({}));
+      if (!result.ok)
+        throw new Error(
+          typeof body.error === "string"
+            ? body.error
+            : "Sign-in failed. Use your Helix Google Workspace account.",
+        );
+      if (
+        typeof body.access_token !== "string" ||
+        typeof body.refresh_token !== "string"
+      )
+        throw new Error(
+          "Could not start your member session. Please try again.",
+        );
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: body.access_token,
+        refresh_token: body.refresh_token,
+      });
+      if (sessionError)
+        throw new Error(
+          "Could not start your member session. Please try again.",
+        );
+      navigate(destination, { replace: true });
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Sign-in failed. Please try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="mcv-page">
+      <header className="mcv-header">
+        <Link className="mcv-brand" to="/">
+          HELIX <span>Member portal</span>
+        </Link>
+        <Link to="/">Back to home</Link>
+      </header>
+      <div className="mcv-container">
+        <section className="mcv-login-card">
+          <p className="mcv-eyebrow">Member portal</p>
+          <h1>Sign in to build your CV</h1>
+          <p className="mcv-login-help">
+            Use your @helixnmbu.no Google Workspace account. Your profile starts
+            as a private draft. You choose when to publish it to Talent
+            Directory.
+          </p>
+          {configured ? (
+            <div className="mcv-google-button" aria-busy={busy}>
+              {busy ? (
+                <p role="status">Verifying your Helix account…</p>
+              ) : (
+                <GoogleLogin
+                  onSuccess={(response) => void handleSuccess(response)}
+                  onError={() =>
+                    setError("Google sign-in failed. Please try again.")
+                  }
+                  shape="rectangular"
+                  size="large"
+                />
+              )}
+            </div>
+          ) : (
+            <p className="mcv-error" role="alert">
+              Member sign-in is not configured yet. Please contact Helix.
+            </p>
+          )}
+          {error && (
+            <p className="mcv-error" role="alert">
+              {error}
+            </p>
+          )}
+          {import.meta.env.DEV && (
+            <p className="mcv-login-help">
+              <Link to="/member/profile?demo=1">Open fictional local demo</Link>
+            </p>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }
