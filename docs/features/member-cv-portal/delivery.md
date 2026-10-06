@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 7. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 adds collapsible sections and familiar profile inputs.
+Spec: spec.md revision 7. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 adds private autosave and simpler numeric dates/overview.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: implement and verify local T-10, then update existing PR #57; prior T-09 remains closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: update existing PR #57 with verified T-10 and wait for current-commit remote checks before closure; prior tickets remain closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -178,3 +178,26 @@ Status: local T-09 CLOSED after all criteria passed at remote 40e567b058aa7eda9f
 ## Autosave and simplified editor follow-up
 
 Spec revision 7 adds F-14 and local T-10, authorized by the user on 2026-10-07. Start reconciled at clean bb8046573ac00133b36af4fddd829e9162174df2, existing PR #57 open/non-draft with all current gates successful, dependency #46 open/draft at f99939d. User confirmed optional day displayed DD.MM.YYYY. Root owns MemberCV autosave integration, docs, skills omission in new PDF exports, browser/review/remote gates. Isolated autosave worker owns new controller/helpers/tests only; isolated UI worker owns SectionNavigation, ProfileInputs/date helpers, locale/CSS and bounded MemberCV skills/secondary-grade presentation only. Root integrates serially; no worker pushes or edits integration branch. No destructive migration/live configuration/deployment/merge.
+
+
+T-10 integration: isolated /root/autosave in /private/tmp/helix-member-cv-backend delivered ec29f6a as 847702e and manual-pause repair 1cc2064 as 4b1c38c. /root/editor_simplify in /private/tmp/helix-member-cv-editor delivered a1c537e as 57efa8a. Root f7bf5fc wires private autosave into the editor, serial manual actions, numeric date validation and European PDF output without Skills. Existing Skills JSON and published snapshots are retained. No migration, dependency or auth changes.
+
+Coordinator verification at final code 79b98bdeff35d587be40e1a214306492ee87d18c: 276 tests in 20 files, frontend/API/Node ESM typechecks, lint, production build and diff checks pass. Existing chunk-size warning remains. Tests cover debounce, edits during saves, latest revisions, action draining, validation/session/conflict/uncertain pauses, explicit retry, reset/disposal, calendar dates, legacy compatibility and real PDF privacy/content. Browser finding: reverting an invalid date exactly to the saved value cleared the controller pause but left an obsolete error. Root 79b98bd clears that validation message when editing releases the pause; browser verified the obsolete error is absent.
+
+## Standards
+
+Independent /root/review_autosave_standards inspected bb80465...f7bf5fc. Zero documented breaches; one P3 possible Duplicated Code heuristic for manual/automatic HTTP failure classification. Isolated worker 9e443a integrated as 17c5b29 exports the shared classifier, and root 79b98bd uses it in manual handling. Final report bound to 79b98bd: zero hard breaches and zero outstanding suggestions.
+
+## Spec
+
+Independent /root/review_autosave_spec inspected revision 7/F-14 against bb80465 and rechecked final 79b98bd. No missing requirements, incorrect behavior or scope creep. Standards total: 0 outstanding; Spec total: 0 outstanding. Reviewed feature commit: 79b98bdeff35d587be40e1a214306492ee87d18c.
+
+Independent complete-feature reviewer /root/review_autosave_correctness inspected the follow-up and surrounding repository/auth/validation/publication/storage/PDF code against the full feature base f99939d, reusing prior review for unchanged code. Independently ran 101 relevant tests, then 34 tests after repairs. No actionable findings remain; final review bound to 79b98bd.
+
+Browser verification: 1280x1000 desktop, 390x844 and 320x740 mobile, both languages. Private autosave updates acknowledged revisions without pressing Save. Numeric 29.02.2024 saves and appears in HTML preview; 31.02 pauses while closed sections and language changes retain input. Reload/signout Cancel preserves invalid/partial input and initial Cancel focus. Month 12 can be entered with an empty year; no year is fabricated, correction resumes saving. Grade is a secondary collapsible optional field. Overview has eight links, missing-content dots only, no Filled/Saved labels or Skills; Enter opens/focuses the destination. No horizontal overflow at tested mobile widths. All original fictional content, yearly periods and sharing choices were restored at private unpublished revision 36; optional blank keys may remain. Fresh reload has no console error, only the expected missing local Google client configuration warning. Viewport override was reset.
+
+A temporary local-only demo transport delayed mutations by 1.8 seconds and injected one network failure to exercise the actual component. Editing remained enabled during autosave; the later edit survived acknowledgment and was saved next. Simulated network failure preserved input and paused automatic retries; explicit Save recovered. Publication waited for an active save and published the latest input at revision 32; private autosave advanced draft to 33 while published revision stayed 32, then withdrawal produced 34. The fixture was removed and demo.ts restored byte-for-byte before final checks/review. This is fictional transport evidence, not live Google/Supabase evidence.
+
+Actual application-generated four-page /private/tmp/helix-member-cv-autosave.pdf was rendered and every page inspected. Day/month/year and monthly dates are readable, Nordic characters and pagination intact, Skills omitted, unshared contact fields absent, and all repeated experience endings preserved. Local screenshots: before /private/tmp/member-cv-forms-collapsed.png; after /private/tmp/member-cv-autosave-desktop.png, /private/tmp/member-cv-autosave-mobile-nb.png, /private/tmp/member-cv-autosave-mobile-en.png and /private/tmp/member-cv-autosave-final.png. Artifacts stay outside the repository.
+
+T-10 is locally VERIFIED; current-commit GitHub/automatic-preview gates are pending before closure. Existing PR #57 remains open and unmerged, parent #51 remains open, prerequisite #46 remains open/draft. Live rollout checks in setup.md, final CV design and profile image editing remain deferred. No merge, auto-merge, manual deployment or live SQL/configuration change.
