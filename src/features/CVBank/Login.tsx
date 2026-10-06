@@ -3,6 +3,9 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../../libs/lib/utils";
 import { memberLoginDestination } from "../MemberCV/repository";
+import { useMemberLocale } from "../MemberCV/locale";
+import { LanguageSwitcher } from "../MemberCV/LanguageSwitcher";
+import { localizeCvError } from "../MemberCV/errors";
 import "../Portal/portal.css";
 import "../MemberCV/member-cv.css";
 
@@ -10,6 +13,7 @@ const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const configured = Boolean(googleClientId && supabase);
 
 export default function CVBankLogin() {
+  const { locale, setLocale, t } = useMemberLocale();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -61,29 +65,33 @@ export default function CVBankLogin() {
     }
   }
   return (
-    <main className="mcv-page portal-root">
+    <main className="mcv-page portal-root" lang={locale}>
       <header className="mcv-header">
         <Link className="mcv-brand" to="/">
           <img src="/Vector.png" alt="Helix" className="mcv-logo" />
-          <span>Member portal</span>
+          <span>{t("Member portal")}</span>
         </Link>
-        <Link to="/">Back to home</Link>
+        <div className="mcv-header-actions">
+          <LanguageSwitcher locale={locale} onChange={setLocale} />
+          <Link to="/">{t("Back to home")}</Link>
+        </div>
       </header>
       <div className="mcv-container">
         <section className="mcv-login-card">
-          <p className="mcv-eyebrow">Member portal</p>
-          <h1>Sign in to build your CV</h1>
+          <p className="mcv-eyebrow">{t("Member portal")}</p>
+          <h1>{t("Sign in to build your CV")}</h1>
           <p className="mcv-login-help">
-            Use your @helixnmbu.no Google Workspace account. Your profile starts
-            as a private draft. You choose when to publish it to Talent
-            Directory.
+            {t(
+              "Use your @helixnmbu.no Google Workspace account. Your profile starts as a private draft. You choose when to publish it to Talent Directory.",
+            )}
           </p>
           {configured ? (
             <div className="mcv-google-button" aria-busy={busy}>
               {busy ? (
-                <p role="status">Verifying your Helix account…</p>
+                <p role="status">{t("Verifying your Helix account…")}</p>
               ) : (
                 <GoogleLogin
+                  locale={locale === "nb" ? "no" : "en"}
                   onSuccess={(response) => void handleSuccess(response)}
                   onError={() =>
                     setError("Google sign-in failed. Please try again.")
@@ -95,17 +103,19 @@ export default function CVBankLogin() {
             </div>
           ) : (
             <p className="mcv-error" role="alert">
-              Member sign-in is not configured yet. Please contact Helix.
+              {t("Member sign-in is not configured yet. Please contact Helix.")}
             </p>
           )}
           {error && (
             <p className="mcv-error" role="alert">
-              {error}
+              {localizeCvError(error, locale)}
             </p>
           )}
           {import.meta.env.DEV && (
             <p className="mcv-login-help">
-              <Link to="/member/profile?demo=1">Open fictional local demo</Link>
+              <Link to="/member/profile?demo=1">
+                {t("Open fictional local demo")}
+              </Link>
             </p>
           )}
         </section>

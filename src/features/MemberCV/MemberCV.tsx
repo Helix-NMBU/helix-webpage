@@ -13,16 +13,24 @@ import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Textarea } from "@libs/components/ui/textarea";
 import { Card } from "@libs/components/ui/card";
+import {
+  useMemberLocale,
+  memberText,
+  type StaticMemberCopyKey,
+  type MemberLocale,
+} from "./locale";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
 import "./member-cv.css";
 
 type Row = { id: string; [key: string]: string };
 type FieldDefinition = {
   key: string;
-  label: string;
+  label: StaticMemberCopyKey;
   multiline?: boolean;
   maxLength?: number;
-  placeholder?: string;
+  placeholder?: StaticMemberCopyKey;
 };
 const period: FieldDefinition[] = [
   {
@@ -40,8 +48,8 @@ const period: FieldDefinition[] = [
 ];
 const definitions: {
   key: "education" | "experience" | "projects" | "languages" | "links";
-  title: string;
-  singular: string;
+  title: StaticMemberCopyKey;
+  singular: StaticMemberCopyKey;
   fields: FieldDefinition[];
 }[] = [
   {
@@ -169,12 +177,21 @@ function Section({
   );
 }
 
-function DemoPreview({ data, sharing }: { data: CvData; sharing: CvSharing }) {
+function DemoPreview({
+  data,
+  sharing,
+  locale,
+}: {
+  data: CvData;
+  sharing: CvSharing;
+  locale: MemberLocale;
+}) {
+  const t = (key: StaticMemberCopyKey) => memberText(locale, key);
   const cv = sharedCvData(data, sharing);
   return (
     <article className="mcv-demo-document">
-      <p className="mcv-demo-label">Fictional demo · HTML preview</p>
-      <h1>{cv.fullName || "Your name"}</h1>
+      <p className="mcv-demo-label">{t("Fictional demo · HTML preview")}</p>
+      <h1>{cv.fullName || t("Your name")}</h1>
       {cv.headline && <p>{cv.headline}</p>}
       <p>{[cv.city, cv.contactEmail, cv.phone].filter(Boolean).join(" · ")}</p>
       {cv.summary && <p className="mcv-preserve">{cv.summary}</p>}
@@ -182,7 +199,7 @@ function DemoPreview({ data, sharing }: { data: CvData; sharing: CvSharing }) {
         ({ key, title, fields }) =>
           cv[key].length > 0 && (
             <section key={key}>
-              <h2>{title}</h2>
+              <h2>{t(title)}</h2>
               {(cv[key] as Row[]).map((row) => (
                 <div key={row.id} className="mcv-preview-entry">
                   {fields.map(
@@ -200,7 +217,7 @@ function DemoPreview({ data, sharing }: { data: CvData; sharing: CvSharing }) {
       )}
       {cv.skills.length > 0 && (
         <section>
-          <h2>Skills</h2>
+          <h2>{t("Skills")}</h2>
           <p>{cv.skills.join(", ")}</p>
         </section>
       )}
@@ -209,6 +226,7 @@ function DemoPreview({ data, sharing }: { data: CvData; sharing: CvSharing }) {
 }
 
 export default function MemberCV() {
+  const { locale, setLocale, t } = useMemberLocale();
   const location = useLocation();
   const navigate = useNavigate();
   const demo =
@@ -250,7 +268,7 @@ export default function MemberCV() {
     phone: false,
   });
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<StaticMemberCopyKey | "">("");
   const [busy, setBusy] = useState<string | null>("load");
   const [ended, setEnded] = useState(false);
   const [preview, setPreview] = useState<{
@@ -416,7 +434,9 @@ export default function MemberCV() {
     if (
       dirty &&
       !window.confirm(
-        "Reloading replaces your unsaved input with the saved draft. Continue?",
+        t(
+          "Reloading replaces your unsaved input with the saved draft. Continue?",
+        ),
       )
     )
       return;
@@ -448,7 +468,7 @@ export default function MemberCV() {
   async function logout() {
     if (
       dirty &&
-      !window.confirm("Your latest changes are not saved. Sign out anyway?")
+      !window.confirm(t("Your latest changes are not saved. Sign out anyway?"))
     )
       return;
     setBusy("logout");
@@ -473,53 +493,57 @@ export default function MemberCV() {
     );
 
   return (
-    <main className="mcv-page portal-root">
+    <main className="mcv-page portal-root" lang={locale}>
       <header className="mcv-header">
         <Link className="mcv-brand" to="/">
           <img src="/Vector.png" alt="Helix" className="mcv-logo" />
-          <span>Member portal</span>
+          <span>{t("Member portal")}</span>
         </Link>
-        <Button
-          variant="outline"
-          className="mcv-header-button"
-          type="button"
-          onClick={() => void logout()}
-          disabled={Boolean(busy)}
-        >
-          Sign out
-        </Button>
+        <div className="mcv-header-actions">
+          <LanguageSwitcher locale={locale} onChange={setLocale} />
+          <Button
+            variant="outline"
+            className="mcv-header-button"
+            type="button"
+            onClick={() => void logout()}
+            disabled={Boolean(busy)}
+          >
+            {t("Sign out")}
+          </Button>
+        </div>
       </header>
       <div className="mcv-container">
         {demo && (
           <div className="mcv-demo-banner">
-            <strong>Fictional local demo</strong>
+            <strong>{t("Fictional local demo")}</strong>
             <p>
-              This demo saves only in this browser. It does not verify Google,
-              Supabase or sponsor access. PDF generation is replaced by an HTML
-              preview.
+              {t(
+                "This demo saves only in this browser. It does not verify Google, Supabase or sponsor access. PDF generation is replaced by an HTML preview.",
+              )}
             </p>
           </div>
         )}
         <div className="mcv-intro">
-          <p className="mcv-eyebrow">Your member profile</p>
-          <h1>Build your CV</h1>
+          <p className="mcv-eyebrow">{t("Your member profile")}</p>
+          <h1>{t("Build your CV")}</h1>
           <p>
-            Save privately, preview your CV and choose when to share it with
-            sponsors.
+            {t(
+              "Save privately, preview your CV and choose when to share it with sponsors.",
+            )}
           </p>
         </div>
         {ended && (
           <div className="mcv-error" role="alert">
-            Your session has ended. Editing is locked.{" "}
+            {t("Your session has ended. Editing is locked.")}{" "}
             <Link to="/member/login" state={{ from: "/member/profile" }}>
-              Sign in again
+              {t("Sign in again")}
             </Link>
             .
           </div>
         )}
         {error && (
           <div className="mcv-error" role="alert">
-            {error}
+            {localizeCvError(error, locale)}
             {!ended && (
               <Button
                 variant="outline"
@@ -527,7 +551,7 @@ export default function MemberCV() {
                 onClick={() => void reload()}
                 disabled={Boolean(busy)}
               >
-                Reload saved draft
+                {t("Reload saved draft")}
               </Button>
             )}
           </div>
@@ -538,9 +562,9 @@ export default function MemberCV() {
           envelope.cleanupPending === true && (
             <div className="mcv-cleanup-warning" role="status">
               <p>
-                Your latest CV operation succeeded, but deletion of a retired CV
-                file is still pending. Your saved revision and directory
-                visibility are up to date.
+                {t(
+                  "Your latest CV operation succeeded, but deletion of a retired CV file is still pending. Your saved revision and directory visibility are up to date.",
+                )}
               </p>
               <Button
                 variant="outline"
@@ -548,39 +572,46 @@ export default function MemberCV() {
                 disabled={Boolean(busy)}
                 onClick={() => void reload()}
               >
-                Reload saved draft to retry cleanup
+                {t("Reload saved draft to retry cleanup")}
               </Button>
             </div>
           )}
         {notice && (
           <div className="mcv-notice" role="status">
-            {notice}
+            {t(notice)}
           </div>
         )}
         {ended ? null : !draft || !envelope ? (
           <p role="status">
-            {busy ? "Loading your private CV…" : "Your CV could not be opened."}
+            {busy
+              ? t("Loading your private CV…")
+              : t("Your CV could not be opened.")}
           </p>
         ) : (
           <>
             <div className="mcv-status" aria-live="polite">
               <span>
                 <strong>
-                  {dirty ? "Unsaved changes" : "Private draft saved"}
+                  {dirty ? t("Unsaved changes") : t("Private draft saved")}
                 </strong>
                 <br />
-                Draft revision {envelope.document.revision}
+                {t("Draft revision {revision}", {
+                  revision: envelope.document.revision,
+                })}
               </span>
               <span>
                 <strong>
                   {envelope.document.publishedRevision === null
-                    ? "Not published"
-                    : "Published in Talent Directory"}
+                    ? t("Not published")
+                    : t("Published in Talent Directory")}
                 </strong>
                 <br />
                 {envelope.document.publishedRevision === null
-                  ? "Only you can access this draft."
-                  : `Published version ${envelope.document.publishedRevision}. Draft changes stay private until republished.`}
+                  ? t("Only you can access this draft.")
+                  : t(
+                      "Published version {revision}. Draft changes stay private until republished.",
+                      { revision: envelope.document.publishedRevision },
+                    )}
               </span>
             </div>
             <form
@@ -596,56 +627,60 @@ export default function MemberCV() {
                 <div className="mcv-layout">
                   <div className="mcv-editor">
                     <Section
-                      title="Contact and introduction"
-                      hint="Your Workspace login address stays linked to your account. Contact details below are shared only when you choose."
+                      title={t("Contact and introduction")}
+                      hint={t(
+                        "Your Workspace login address stays linked to your account. Contact details below are shared only when you choose.",
+                      )}
                     >
                       <p className="mcv-account">
-                        Signed in as {envelope.identity.email}
+                        {t("Signed in as {email}", {
+                          email: envelope.identity.email,
+                        })}
                       </p>
                       <div className="mcv-grid">
                         <Field
-                          label="Full name"
+                          label={t("Full name")}
                           value={draft.fullName}
                           onChange={(value) => edit("fullName", value)}
                         />
                         <Field
-                          label="Headline"
+                          label={t("Headline")}
                           value={draft.headline}
-                          placeholder="Your field or role"
+                          placeholder={t("Your field or role")}
                           onChange={(value) => edit("headline", value)}
                         />
                         <Field
-                          label="Contact email"
+                          label={t("Contact email")}
                           type="email"
                           value={draft.contactEmail}
                           onChange={(value) => edit("contactEmail", value)}
                         />
                         <Field
-                          label="Phone"
+                          label={t("Phone")}
                           type="tel"
                           value={draft.phone}
                           maxLength={100}
                           onChange={(value) => edit("phone", value)}
                         />
                         <Field
-                          label="City"
+                          label={t("City")}
                           value={draft.city}
                           onChange={(value) => edit("city", value)}
                         />
                         <Field
-                          label="Field of study"
+                          label={t("Field of study")}
                           value={draft.fieldOfStudy}
                           onChange={(value) => edit("fieldOfStudy", value)}
                         />
                         <Field
-                          label="Graduation year"
+                          label={t("Graduation year")}
                           value={draft.graduationYear}
                           maxLength={4}
-                          placeholder="2028"
+                          placeholder={t("2028")}
                           onChange={(value) => edit("graduationYear", value)}
                         />
                         <Field
-                          label="Introduction"
+                          label={t("Introduction")}
                           value={draft.summary}
                           multiline
                           onChange={(value) => edit("summary", value)}
@@ -655,10 +690,12 @@ export default function MemberCV() {
                     {definitions.map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}
-                        title={title}
+                        title={t(title)}
                         hint={
                           key === "education"
-                            ? "Add at least one institution and degree before publishing."
+                            ? t(
+                                "Add at least one institution and degree before publishing.",
+                              )
                             : undefined
                         }
                       >
@@ -666,13 +703,16 @@ export default function MemberCV() {
                           <div className="mcv-entry" key={row.id}>
                             <div className="mcv-entry-title">
                               <h3>
-                                {title} {index + 1}
+                                {t(title)} {index + 1}
                               </h3>
                               <Button
                                 variant="ghost"
                                 type="button"
                                 className="mcv-remove"
-                                aria-label={`Remove ${singular} ${index + 1}`}
+                                aria-label={t("Remove {entry} {number}", {
+                                  entry: t(singular),
+                                  number: index + 1,
+                                })}
                                 onClick={() =>
                                   edit(
                                     key,
@@ -682,7 +722,7 @@ export default function MemberCV() {
                                   )
                                 }
                               >
-                                Remove
+                                {t("Remove")}
                               </Button>
                             </div>
                             <div className="mcv-grid">
@@ -690,6 +730,12 @@ export default function MemberCV() {
                                 <Field
                                   {...field}
                                   key={field.key}
+                                  label={t(field.label)}
+                                  placeholder={
+                                    field.placeholder
+                                      ? t(field.placeholder)
+                                      : undefined
+                                  }
                                   value={row[field.key]}
                                   onChange={(value) =>
                                     edit(
@@ -720,28 +766,30 @@ export default function MemberCV() {
                             ] as CvData[typeof key])
                           }
                         >
-                          + Add {singular}
+                          {t("+ Add {entry}", { entry: t(singular) })}
                         </Button>
                       </Section>
                     ))}
                     <Section
-                      title="Skills"
-                      hint="Enter one skill per line. Use up to 50 skills."
+                      title={t("Skills")}
+                      hint={t("Enter one skill per line. Use up to 50 skills.")}
                     >
                       <Field
-                        label="Your skills"
+                        label={t("Your skills")}
                         value={draft.skills.join("\n")}
                         multiline
                         maxLength={5050}
-                        placeholder={"CAD\nPrototyping\nTeamwork"}
+                        placeholder={t("CAD\nPrototyping\nTeamwork")}
                         onChange={(value) => edit("skills", value.split("\n"))}
                       />
                     </Section>
                   </div>
                   <aside className="mcv-sidebar">
                     <Section
-                      title="Share with sponsors"
-                      hint="These choices apply when you publish. Email and phone choices also apply inside the generated CV."
+                      title={t("Share with sponsors")}
+                      hint={t(
+                        "These choices apply when you publish. Email and phone choices also apply inside the generated CV.",
+                      )}
                     >
                       {(["cv", "email", "phone"] as const).map((key) => (
                         <label className="mcv-checkbox" key={key}>
@@ -757,27 +805,30 @@ export default function MemberCV() {
                           />
                           <span>
                             {key === "cv"
-                              ? "Share generated CV"
+                              ? t("Share generated CV")
                               : key === "email"
-                                ? "Share contact email"
-                                : "Share phone number"}
+                                ? t("Share contact email")
+                                : t("Share phone number")}
                           </span>
                         </label>
                       ))}
                       <p className="mcv-hint">
-                        A published profile is visible in Talent Directory even
-                        when CV download is off. Sponsors need an eligible
-                        agreement.
+                        {t(
+                          "A published profile is visible in Talent Directory even when CV download is off. Sponsors need an eligible agreement.",
+                        )}
                       </p>
                     </Section>
-                    <Section title="Preview and publication">
+                    <Section title={t("Preview and publication")}>
                       <p className="mcv-hint">
-                        Preview uses your current inputs and sharing choices,
-                        including unsaved changes.
+                        {t(
+                          "Preview uses your current inputs and sharing choices, including unsaved changes.",
+                        )}
                       </p>
                       <div className="mcv-actions">
                         <Button type="submit" className="mcv-primary">
-                          {busy === "save" ? "Saving…" : "Save private draft"}
+                          {busy === "save"
+                            ? t("Saving…")
+                            : t("Save private draft")}
                         </Button>
                         <Button
                           variant="outline"
@@ -785,10 +836,10 @@ export default function MemberCV() {
                           onClick={() => void run("preview")}
                         >
                           {busy === "preview"
-                            ? "Generating…"
+                            ? t("Generating…")
                             : demo
-                              ? "Preview demo CV"
-                              : "Preview PDF"}
+                              ? t("Preview demo CV")
+                              : t("Preview PDF")}
                         </Button>
                         {!demo && (
                           <Button
@@ -796,7 +847,7 @@ export default function MemberCV() {
                             type="button"
                             onClick={() => void run("preview", true)}
                           >
-                            Download PDF
+                            {t("Download PDF")}
                           </Button>
                         )}
                         <Button
@@ -806,10 +857,10 @@ export default function MemberCV() {
                           onClick={() => void run("publish")}
                         >
                           {busy === "publish"
-                            ? "Publishing…"
+                            ? t("Publishing…")
                             : envelope.document.publishedRevision === null
-                              ? "Publish to Talent Directory"
-                              : "Publish new version"}
+                              ? t("Publish to Talent Directory")
+                              : t("Publish new version")}
                         </Button>
                         {envelope.document.publishedRevision !== null && (
                           <Button
@@ -818,15 +869,14 @@ export default function MemberCV() {
                             className="mcv-withdraw"
                             onClick={() => void run("withdraw")}
                           >
-                            Withdraw published profile
+                            {t("Withdraw published profile")}
                           </Button>
                         )}
                       </div>
                       <p className="mcv-hint">
-                        Publication saves and shares this version. Later draft
-                        edits stay private. Withdrawal keeps your draft and
-                        prevents new access. Files already downloaded cannot be
-                        recalled.
+                        {t(
+                          "Publication saves and shares this version. Later draft edits stay private. Withdrawal keeps your draft and prevents new access. Files already downloaded cannot be recalled.",
+                        )}
                       </p>
                       {demo && (
                         <Button
@@ -839,7 +889,7 @@ export default function MemberCV() {
                             );
                           }}
                         >
-                          Fill fictional example
+                          {t("Fill fictional example")}
                         </Button>
                       )}
                     </Section>
@@ -855,13 +905,13 @@ export default function MemberCV() {
           className="mcv-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="CV preview"
+          aria-label={t("CV preview")}
           onKeyDown={(event) => {
             if (event.key === "Escape") clearPreview();
             if (event.key === "Tab") {
               const controls =
                 event.currentTarget.querySelectorAll<HTMLElement>(
-                  "button, a[href], iframe",
+                  "button, select, a[href], iframe",
                 );
               const first = controls[0];
               const last = controls[controls.length - 1];
@@ -877,19 +927,25 @@ export default function MemberCV() {
         >
           <div className="mcv-preview-panel">
             <header>
-              <h2>{demo ? "Demo CV preview" : "Generated CV preview"}</h2>
-              <Button
-                variant="outline"
-                autoFocus
-                type="button"
-                onClick={clearPreview}
-              >
-                Close preview
-              </Button>
+              <h2>{demo ? t("Demo CV preview") : t("Generated CV preview")}</h2>
+              <div className="mcv-preview-controls">
+                <LanguageSwitcher locale={locale} onChange={setLocale} />
+                <Button
+                  variant="outline"
+                  autoFocus
+                  type="button"
+                  onClick={clearPreview}
+                >
+                  {t("Close preview")}
+                </Button>
+              </div>
             </header>
             <p className="mcv-preview-caption">
-              This preview follows your current email and phone sharing choices.
-              {!sharing.cv && " CV download is currently off for sponsors."}
+              {t(
+                "This preview follows your current email and phone sharing choices.",
+              )}
+              {!sharing.cv &&
+                ` ${t("CV download is currently off for sponsors.")}`}
             </p>
             {preview.url ? (
               <>
@@ -899,13 +955,17 @@ export default function MemberCV() {
                   className="mcv-preview-download"
                 >
                   <a href={preview.url} download="Helix-CV.pdf">
-                    Download this PDF
+                    {t("Download this PDF")}
                   </a>
                 </Button>
-                <iframe src={preview.url} title="Generated CV PDF" />
+                <iframe src={preview.url} title={t("Generated CV PDF")} />
               </>
             ) : (
-              <DemoPreview data={preview.draft} sharing={preview.sharing} />
+              <DemoPreview
+                data={preview.draft}
+                sharing={preview.sharing}
+                locale={locale}
+              />
             )}
           </div>
         </div>
