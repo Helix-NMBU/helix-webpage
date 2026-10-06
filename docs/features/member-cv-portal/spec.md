@@ -1,11 +1,12 @@
 # Member CV portal specification
 
-Feature: member-cv-portal. Revision: 4, 2026-10-06.
-Status: workflow, website styling, Norwegian/English and shadcn/ui member components are delivered on the feature branch; PR remains unmerged.
+Feature: member-cv-portal. Revision: 5, 2026-10-06.
+Status: prior workflow and presentation follow-ups are delivered; section navigation is in progress on the feature branch. PR remains unmerged.
 Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. Final CV styling and profile images remain deferred.
 Follow-up authorization: the user requested that the member CV page use the same design system as the website. This changes presentation only; final CV document styling and profile images remain deferred.
 Language follow-up authorization: the user requested Norwegian and English display for the member page. Norwegian uses Bokmål. This localizes the interface and dependent member login; user-authored CV content and generated PDF document language are outside this interface change.
 Component follow-up authorization: the user requested shadcn/ui components for forms and other suitable controls on this member page, retaining Helix colors/font/design. Reuse the installed library, preserve CV/auth/privacy/language behavior and generated document content.
+Navigation follow-up authorization: the user requested a floating upper-right table of contents with clickable sections and indications of completion, modification and saving. Use the existing Helix/shadcn interface in both languages.
 Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. Parent: #51. T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56; see tracker.json and delivery.md.
 
 ## Requirements
@@ -23,6 +24,8 @@ Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. 
 - F-09: Provide Norwegian Bokmål and English interface text on the member editor and login, including labels, placeholders, actions, statuses, errors, confirmations and demo preview controls. Offer an accessible language selector, remember the choice across reload/navigation, and use browser language for the first visit. Set the appropriate language attribute. Language switches preserve unsaved CV input, sharing, revisions, authentication and preview state. Do not translate or rewrite user-authored CV data. Verify both languages on desktop/mobile and preserve F-08.
 
 - F-10: Use the installed shadcn/ui components for member form inputs, textareas, labels, checkboxes, buttons, cards, statuses/alerts, language select and preview/unsaved-change dialogs. Keep semantic HTML for layout and the generated document. Preserve Helix colors/font, bilingual labels, keyboard access, disabled/busy states, focus restoration, draft/publication state and contact redaction. Portal menus/dialogs inherit the member theme. Reuse existing dependencies; no broader shared-site restyling. Browser-native tab-close protection remains necessary.
+
+- F-11: Provide an upper-right section overview on desktop that stays accessible while scrolling. Clicking a link scrolls to and focuses its section without losing edits; identify the current section accessibly. Show content progress independently from unsaved/saved state, compared to the latest server-confirmed draft. Empty added rows are not completed content, optional fields remain optional, and saving is not publication. Include contact, repeatable CV sections, skills, sharing and preview/publication navigation. Keep the overview usable on narrow screens, with keyboard navigation, reduced-motion support and localized text. Preserve F-01 through F-10; no backend contract or publication validation change.
 
 ## Shared contract
 
@@ -51,5 +54,6 @@ Base: sponsor-portal-v2 at f99939dfadaa43d869ad6429034608f0bc7f9429. Integration
 | T-05 local follow-up | Use website design system in member editor | F-06/F-08 | Verified T-02/T-04 |
 | T-06 local follow-up | Norwegian/English member interface and errors | F-06/F-08/F-09 | Verified T-05 |
 | T-07 local follow-up | Use shadcn/ui throughout member pages | F-06/F-08/F-09/F-10 | Verified T-06 |
+| T-08 local follow-up | Section navigation and content/save indicators | F-06/F-08/F-09/F-10/F-11 | Verified T-07 |
 
 T-01, T-02 and T-03 develop against the verified shared contract; T-04 provides the final runtime integration. Test Google verification failures and onboarding without an allowlist using injected external services. Run actual PostgreSQL RLS/scenario tests locally if the environment supports it; separately record any missing live Google/Supabase evidence. Inspect actual generated PDF pages. Browser-check demo on desktop/mobile and its create/save/publish/withdraw flow. Run typecheck, API typecheck, lint, tests, build and diff checks. Request fresh full-code review before PR creation. A PR can be ready for code review while live configuration remains a stated rollout prerequisite.
