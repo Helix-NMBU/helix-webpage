@@ -32,8 +32,8 @@
   text-decoration: none;
 }
 .mcv-logo {
-  width: 128px;
-  height: auto;
+  width: auto;
+  height: 40px;
   object-fit: contain;
 }
 .mcv-brand span {
@@ -444,7 +444,8 @@
     gap: 12px;
   }
   .mcv-logo {
-    width: 96px;
+    width: auto;
+    height: 32px;
   }
   .mcv-brand span {
     font-size: 12px;
