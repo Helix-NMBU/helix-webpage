@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 2. Revision 1 was delivered through user `$deliver`; revision 2 adds the user-approved website design follow-up.
+Spec: spec.md revision 3. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 adds the user-approved Norwegian/English interface.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: human review of PR #57 and prerequisite PR #46. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: integrate and verify the language follow-up, independently review the affected code, update existing PR #57 and verify current checks. Then human review of PR #57 and prerequisite PR #46. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -97,3 +97,17 @@ Coordinator verification at 6c06c85 passed frontend typecheck, lint, all 103 tes
 Browser verification on final code: 1280px desktop and 390px mobile; exact Helvetica body inheritance, white background and rgb(0,46,196) header; logo loads and respects aspect ratio. Both viewports have no horizontal overflow. Saved Nordic input at revision 6, previewed redacted contact data, published at 7, withdrew at 8, signed out and checked the readable missing-config login state, then reopened the persistent fictional draft. Keyboard Tab produced a visible 2px Helix-blue outline. Mobile preview fits the viewport with accessible close control. Before /private/tmp/member-cv-design-before.jpg; after /private/tmp/member-cv-design-desktop.jpg and /private/tmp/member-cv-design-mobile.jpg; dependent login /private/tmp/member-cv-design-login-mobile.jpg.
 
 Status: local T-05 closed after verified current-commit gates at dd7e7e10ba2d862ba7c969fa6c1685c37965c0e8. Both GitHub workflows and the automatic Vercel preview succeeded. PR workflow https://github.com/Helix-NMBU/helix-webpage/actions/runs/37527080993; push workflow https://github.com/Helix-NMBU/helix-webpage/actions/runs/37527071855; preview dpl_CVfQuBvXxDcHWjFFt4fU6Pk1NXEG. PR #57 remains open, non-draft, MERGEABLE and CLEAN, with joasmund requested and no applicable base branch rules. Final documentation changes follow this gate; re-read their current-commit checks before handoff. No new PR, automatic merge or manual deployment. Parent #51 remains open; live rollout prerequisites are unchanged.
+
+## Norwegian/English interface follow-up
+
+User requested both languages for the member page. Spec revision 3 adds F-09 and local T-06. Existing tickets remain closed. At start, integration and remote PR #57 were clean at d4e297bd0cbfda7cdad8267d0fc41f87c2c003e1, open/non-draft and targeting sponsor-portal-v2. No new feature branch or PR.
+
+Reused isolated workers after merging the verified integration base. /root/editor, /private/tmp/helix-member-cv-editor, codex/member-cv-editor owns the typed bilingual catalog, language preference/selector, editor/login display and language tests. /root/backend, /private/tmp/helix-member-cv-backend, codex/member-cv-backend owns only new frontend errors.ts/errors.test.ts with localizeCvError(message, locale), covering known validation/server/network errors. Backend APIs and stored CV data are unchanged. Root owns integration, browser verification and docs. Unknown Norwegian errors use a safe generic message; known uncertain-publication errors retain reload guidance.
+
+Language choice follows browser language initially and persists when explicitly selected. Changing it must not reset the repository, draft or session effects. UI messages localize when rendered, including messages from requests already in flight. User-authored CV content is preserved. Actual generated PDF document language remains outside this page-display request.
+
+Worker error catalog 38c2d84 integrated as 32ab9eb; coverage-test repair f17f468 integrated as be80d74. Worker interface 1938325 integrated as 46f6b925aeffee7e4206b05e46b4775ade7ac218. Full coordinator checks passed 166 tests in 13 files, frontend/API/Node ESM typechecks, lint, production build and diff checks. Independent reviewer /root/review_correctness inspected the complete affected diff against d4e297b, independently ran 79 locale/error/lifecycle tests and found no material issue. Earlier full-feature reviews remain valid for unchanged code.
+
+Browser verification at the reviewed source: Norwegian and English editor labels, stored language after reload and login navigation, translated login missing-configuration state, validation error changing language while invalid data stays intact, unsaved Nordic input and unchanged sharing/revision across language switches. Saved revision 9, published fictional revision 10 in Norwegian, verified its notice in English, then withdrew revision 11 and verified its Norwegian notice. HTML preview remains open while changing language, keeps CV data and contact redaction, and its controls fit 390px mobile. Desktop is 1280px and neither viewport has horizontal overflow. Final demo is a private draft in Norwegian. Screenshots before /private/tmp/member-cv-language-before.jpg; after /private/tmp/member-cv-norsk.jpg, /private/tmp/member-cv-english.jpg, /private/tmp/member-cv-language-mobile.jpg and /private/tmp/member-cv-language-login.jpg. Screenshot files are local evidence, not repository assets.
+
+Status: local criteria and independent review passed; current remote gates pending. T-06 closes after those gates are verified. The installed Google wrapper forwards locale and rerenders on changes, but real configured Google button rendering remains a live verification gap. Google/Supabase rollout prerequisites remain unchanged. PR #57 stays unmerged.
