@@ -521,6 +521,25 @@ export default function MemberCV() {
             )}
           </div>
         )}
+        {envelope &&
+          !ended &&
+          "cleanupPending" in envelope &&
+          envelope.cleanupPending === true && (
+            <div className="mcv-cleanup-warning" role="status">
+              <p>
+                Your latest CV operation succeeded, but deletion of a retired CV
+                file is still pending. Your saved revision and directory
+                visibility are up to date.
+              </p>
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => void reload()}
+              >
+                Reload saved draft to retry cleanup
+              </button>
+            </div>
+          )}
         {notice && (
           <div className="mcv-notice" role="status">
             {notice}

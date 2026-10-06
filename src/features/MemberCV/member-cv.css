@@ -452,3 +452,15 @@
     padding: 24px;
   }
 }
+
+.mcv-cleanup-warning {
+  border: 1px solid #e7d5a5;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #735524;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+.mcv-cleanup-warning p {
+  margin: 0 0 12px;
+}

@@ -93,6 +93,42 @@ describe("member CV repository", () => {
   });
 });
 
+describe("pending retired file cleanup", () => {
+  it("keeps a successful publication response and its new revision when cleanup is pending", async () => {
+    const envelope = {
+      identity: { email: "alex@example.invalid", name: "Alex Example" },
+      document: {
+        draft: fictionalCv(),
+        sharing: { cv: true, email: false, phone: false },
+        revision: 2,
+        publishedRevision: 2,
+        publishedAt: "2026-10-06T12:00:00Z",
+      },
+      cleanupPending: true,
+    };
+    const request = vi
+      .fn<typeof fetch>()
+      .mockImplementation(
+        async () => new Response(JSON.stringify(envelope), { status: 200 }),
+      );
+    const repository = createCvRepository(async () => "token", request);
+    const saved = await repository.mutate({
+      action: "publish",
+      draft: fictionalCv(),
+      expectedRevision: 1,
+    });
+    expect(saved).toEqual(envelope);
+    expect(saved.document.revision).toBe(2);
+    expect(saved.document.publishedRevision).toBe(2);
+    const reloaded = await repository.load();
+    expect(reloaded).toMatchObject({
+      cleanupPending: true,
+      document: { revision: 2 },
+    });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("fictional demo lifecycle", () => {
   it("keeps saved drafts across reloads and separate from the published version", async () => {
     const local = storage();
