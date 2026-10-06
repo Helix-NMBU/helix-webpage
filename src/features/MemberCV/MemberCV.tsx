@@ -14,9 +14,10 @@ import { sharedCvData } from "./model";
 import {
   createCvRepository,
   CvRequestError,
-  validateMutation,
 } from "./repository";
 import type { CvData, CvEnvelope, CvMutation, CvSharing } from "./types";
+import { createPrivateAutosave, cvSnapshotKey, type CvAutosaveState } from "./autosave";
+import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Textarea } from "@libs/components/ui/textarea";
@@ -433,11 +434,18 @@ export default function MemberCV() {
   } | null>(null);
   const previewUrl = useRef<string | null>(null);
   const generation = useRef(0);
+  const autosave = useRef<ReturnType<typeof createPrivateAutosave> | null>(null);
+  const acknowledgedInput = useRef<string | null>(null);
+  const manualOperation = useRef(false);
+  const latestInput = useRef({ draft, sharing, envelope });
+  latestInput.current = { draft, sharing, envelope };
+  const [savingState, setSavingState] = useState<CvAutosaveState>({ saving: false, pending: false, paused: null });
+  const inputKey = draft ? cvSnapshotKey({ draft, sharing }) : null;
   const dirty = Boolean(
     draft &&
     envelope &&
-    (JSON.stringify(draft) !== JSON.stringify(envelope.document.draft) ||
-      JSON.stringify(sharing) !== JSON.stringify(envelope.document.sharing)),
+    inputKey !== acknowledgedInput.current &&
+    inputKey !== cvSnapshotKey({ draft: envelope.document.draft, sharing: envelope.document.sharing }),
   );
 
   function clearPreview() {
@@ -449,6 +457,11 @@ export default function MemberCV() {
     const current = ++generation.current;
     let active = true;
     boundUserId.current = null;
+    autosave.current?.dispose();
+    autosave.current = null;
+    acknowledgedInput.current = null;
+    manualOperation.current = false;
+    setSavingState({ saving: false, pending: false, paused: null });
     unsavedConfirmation.resolve(false);
     setBusy("load");
     setEnded(false);
@@ -465,6 +478,38 @@ export default function MemberCV() {
         setEnvelope(result);
         setDraft(result.document.draft);
         setSharing(result.document.sharing);
+        autosave.current = createPrivateAutosave({
+          initialEnvelope: result,
+          mutate: (mutation) => repository.mutate(mutation),
+          validate: (mutation) => validateProfileMutation(mutation, latestInput.current.envelope?.document.draft),
+          onSaved: (saved, submitted) => {
+            if (!active || generation.current !== current) return;
+            acknowledgedInput.current = cvSnapshotKey(submitted);
+            setEnvelope(saved);
+            setError(null);
+            setNotice("");
+          },
+          onFailure: (failure, kind) => {
+            if (!active || generation.current !== current) return;
+            setError(failure instanceof CvRequestError && failure.status === 409
+              ? "Another session saved a newer version. Your input has been kept. Copy any changes you need, then reload the saved draft before saving again."
+              : failure instanceof Error ? failure.message : "The request failed. Your input has been kept.");
+            setNotice("");
+            if (kind === "session") {
+              generation.current++;
+              autosave.current?.dispose();
+              unsavedConfirmation.resolve(false);
+              setEnded(true);
+              setBusy(null);
+              if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+              previewUrl.current = null;
+              setPreview(null);
+            }
+          },
+          onState: (state) => {
+            if (active && generation.current === current) setSavingState(state);
+          },
+        });
         setBusy(null);
       })
       .catch((failure: unknown) => {
@@ -491,6 +536,7 @@ export default function MemberCV() {
             session.user.id !== boundUserId.current)
         ) {
           generation.current++;
+          autosave.current?.dispose();
           unsavedConfirmation.resolve(false);
           setEnded(true);
           setBusy(null);
@@ -502,12 +548,21 @@ export default function MemberCV() {
     return () => {
       active = false;
       generation.current++;
+      autosave.current?.dispose();
+      autosave.current = null;
       unsavedConfirmation.dispose();
       if (subscription) subscription.data.subscription.unsubscribe();
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = null;
     };
   }, [demo, navigate, repository, unsavedConfirmation]);
+  useEffect(() => {
+    const controller = autosave.current;
+    if (!controller) return;
+    controller.setBlocked(Boolean(busy) || ended || Boolean(confirmation));
+    if (draft) controller.update(draft, sharing);
+  }, [draft, sharing, busy, ended, confirmation]);
+
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -532,36 +587,62 @@ export default function MemberCV() {
     return unsavedConfirmation.request(action);
   }
 
+  function finishManual(current: number) {
+    if (generation.current !== current) return;
+    manualOperation.current = false;
+    autosave.current?.unlock();
+    setBusy(null);
+  }
+
+  function hasUnsavedInput(saved: CvEnvelope | null) {
+    const live = latestInput.current;
+    if (!live.draft || !saved) return false;
+    const key = cvSnapshotKey({ draft: live.draft, sharing: live.sharing });
+    return key !== acknowledgedInput.current && key !== cvSnapshotKey({
+      draft: saved.document.draft,
+      sharing: saved.document.sharing,
+    });
+  }
+
   async function run(
     action: CvMutation["action"],
     download = false,
     opener?: HTMLElement,
   ) {
-    if (!draft || !envelope || busy || ended) return;
+    if (!draft || !envelope || busy || ended || manualOperation.current) return;
     const current = generation.current;
+    const controller = autosave.current;
+    manualOperation.current = true;
+    controller?.setBlocked(true);
     if (action === "preview" && !download)
-      previewOpener.current =
-        opener ??
-        (document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null);
+      previewOpener.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setBusy(action);
-    setError(null);
     setNotice("");
+    let submittedRequest = false;
     try {
-      const mutation = validateMutation({
+      const saved = controller ? await controller.lock() : envelope;
+      if (generation.current !== current) return;
+      const pause = controller?.getState().paused;
+      if (action !== "preview" && pause === "conflict") {
+        throw new Error("Another session saved a newer version. Your input has been kept. Copy any changes you need, then reload the saved draft before saving again.");
+      }
+      if (action !== "preview" && pause === "uncertain" && action !== "save") {
+        throw new Error("The save result could not be confirmed. Reload your CV before retrying.");
+      }
+      const live = latestInput.current;
+      if (!live.draft) return;
+      const submitted = { draft: structuredClone(live.draft), sharing: { ...live.sharing } };
+      const mutation = validateProfileMutation({
         action,
-        ...(action === "withdraw" ? {} : { draft, sharing }),
-        expectedRevision: envelope.document.revision,
-      });
+        ...(action === "withdraw" ? {} : submitted),
+        expectedRevision: saved.document.revision,
+      }, saved.document.draft);
+      setError(null);
       if (action === "preview") {
         clearPreview();
-        if (demo)
-          setPreview({
-            draft: structuredClone(draft),
-            sharing: { ...sharing },
-          });
+        if (demo) setPreview(submitted);
         else {
+          submittedRequest = true;
           const blob = await repository.preview(mutation);
           if (generation.current !== current) return;
           const url = URL.createObjectURL(blob);
@@ -573,95 +654,111 @@ export default function MemberCV() {
             window.setTimeout(() => URL.revokeObjectURL(url), 1000);
           } else {
             previewUrl.current = url;
-            setPreview({
-              url,
-              draft: structuredClone(draft),
-              sharing: { ...sharing },
-            });
+            setPreview({ url, ...submitted });
           }
         }
       } else {
+        submittedRequest = true;
         const result = await repository.mutate(mutation);
         if (generation.current !== current) return;
         setEnvelope(result);
+        controller?.acknowledge(result, action === "withdraw" ? undefined : submitted);
         if (action !== "withdraw") {
+          acknowledgedInput.current = cvSnapshotKey(submitted);
           setDraft(result.document.draft);
           setSharing(result.document.sharing);
         }
-        setNotice(
-          action === "save"
-            ? "Private draft saved. Your published version has not changed."
-            : action === "publish"
-              ? "Published. Sponsors with Talent Directory access can see this version with your sharing choices."
-              : "Profile withdrawn from Talent Directory. Your private draft is kept.",
-        );
+        setNotice(action === "save"
+          ? "Private draft saved. Your published version has not changed."
+          : action === "publish"
+            ? "Published. Sponsors with Talent Directory access can see this version with your sharing choices."
+            : "Profile withdrawn from Talent Directory. Your private draft is kept.");
       }
     } catch (failure) {
       if (generation.current !== current) return;
-      if (failure instanceof CvRequestError && failure.status === 401) {
+      if (failure instanceof CvRequestError) {
+        controller?.pause(failure.status === 400 ? "validation"
+          : failure.status === 409 ? "conflict"
+            : failure.status === 401 || failure.status === 403 ? "session" : "uncertain");
+      } else if (!controller?.getState().paused) {
+        controller?.pause(submittedRequest ? "uncertain" : "validation");
+      }
+      if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
+        autosave.current?.dispose();
         setEnded(true);
         clearPreview();
       }
-      setError(
-        failure instanceof CvRequestError && failure.status === 409
-          ? "Another session saved a newer version. Your input has been kept. Copy any changes you need, then reload the saved draft before saving again."
-          : failure instanceof Error
-            ? failure.message
-            : "The request failed. Your input has been kept.",
-      );
+      setError(failure instanceof CvRequestError && failure.status === 409
+        ? "Another session saved a newer version. Your input has been kept. Copy any changes you need, then reload the saved draft before saving again."
+        : failure instanceof Error ? failure.message : "The request failed. Your input has been kept.");
     } finally {
-      if (generation.current === current) setBusy(null);
+      finishManual(current);
     }
   }
+
   async function reload(opener?: HTMLElement) {
-    if (busy || ended) return;
+    if (busy || ended || manualOperation.current) return;
     const current = generation.current;
-    if (dirty && !(await confirmUnsaved("reload", opener))) return;
-    if (generation.current !== current) return;
+    const controller = autosave.current;
+    manualOperation.current = true;
+    controller?.setBlocked(true);
     setBusy("load");
-    setError(null);
     try {
+      const saved = controller ? await controller.lock() : envelope;
+      if (generation.current !== current) return;
+      if (hasUnsavedInput(saved) && !(await confirmUnsaved("reload", opener))) return;
+      if (generation.current !== current) return;
+      setError(null);
       const result = await repository.load();
       if (generation.current !== current) return;
+      controller?.reset(result);
+      acknowledgedInput.current = null;
       setEnvelope(result);
       setDraft(result.document.draft);
       setSharing(result.document.sharing);
       setNotice("Saved draft reloaded.");
     } catch (failure) {
       if (generation.current !== current) return;
-      if (failure instanceof CvRequestError && failure.status === 401) {
+      if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
+        controller?.dispose();
         setEnded(true);
         clearPreview();
       }
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : "Could not reload. Your input has been kept.",
-      );
+      setError(failure instanceof Error ? failure.message : "Could not reload. Your input has been kept.");
     } finally {
-      if (generation.current === current) setBusy(null);
+      finishManual(current);
     }
   }
+
   async function logout(opener?: HTMLElement) {
-    if (busy) return;
+    if (busy || manualOperation.current) return;
     const current = generation.current;
-    if (dirty && !(await confirmUnsaved("logout", opener))) return;
-    if (generation.current !== current) return;
+    const controller = autosave.current;
+    manualOperation.current = true;
+    controller?.setBlocked(true);
     setBusy("logout");
-    if (!demo) {
-      const result = await supabase?.auth.signOut();
-      if (result?.error) {
-        setError("Could not sign out. Please try again.");
-        setBusy(null);
-        return;
+    try {
+      const saved = controller ? await controller.lock() : envelope;
+      if (generation.current !== current) return;
+      if (hasUnsavedInput(saved) && !(await confirmUnsaved("logout", opener))) return;
+      if (generation.current !== current) return;
+      if (!demo) {
+        const result = await supabase?.auth.signOut();
+        if (result?.error) throw new Error("Could not sign out. Please try again.");
       }
+      generation.current++;
+      controller?.dispose();
+      clearPreview();
+      setDraft(null);
+      setEnvelope(null);
+      setEnded(true);
+      navigate("/member/login", { replace: true });
+    } catch (failure) {
+      if (generation.current !== current) return;
+      setError(failure instanceof Error ? failure.message : "Could not sign out. Please try again.");
+    } finally {
+      finishManual(current);
     }
-    generation.current++;
-    clearPreview();
-    setDraft(null);
-    setEnvelope(null);
-    setEnded(true);
-    navigate("/member/login", { replace: true });
   }
   const edit = (key: keyof CvData, value: CvData[keyof CvData]) =>
     setDraft((previous) =>
@@ -792,9 +889,14 @@ export default function MemberCV() {
             <div className="mcv-status" aria-live="polite">
               <div>
                 <Badge variant="outline" className="mcv-status-badge">
-                  {dirty ? t("Unsaved changes") : t("Private draft saved")}
+                  {savingState.saving || busy === "save"
+                    ? t("Saving draft…")
+                    : savingState.paused
+                      ? t("Automatic saving paused. Your input is kept.")
+                      : dirty ? t("Changes waiting to be saved") : t("All changes saved")}
                 </Badge>
 
+                <p className="mcv-status-detail">{t("Changes are saved automatically as a private draft.")}</p>
                 <p className="mcv-status-detail">
                   {t("Draft revision {revision}", {
                     revision: envelope.document.revision,
@@ -1080,7 +1182,7 @@ export default function MemberCV() {
                         <Button type="submit" className="mcv-primary">
                           {busy === "save"
                             ? t("Saving…")
-                            : t("Save private draft")}
+                            : savingState.paused ? t("Retry saving") : t("Save private draft")}
                         </Button>
                         <Button
                           variant="outline"

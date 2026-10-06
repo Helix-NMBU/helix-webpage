@@ -1,3 +1,4 @@
+import { readableProfileDate } from "../../src/features/MemberCV/profile-inputs.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
@@ -137,25 +138,24 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
 
   const hasContent = (values: (string | undefined)[]) => values.some((value) => typeof value === "string" && value.trim());
   const label = (name: string, value?: string) => value?.trim() ? `${name}: ${value}` : "";
+  const period = (start?: string, end?: string) => [start, end].filter((value): value is string => Boolean(value)).map((value) => value === "Present" ? "Nå" : readableProfileDate(value)).join(" - ");
   const education = cv.education.filter((e) => hasContent([e.institution, e.degree, e.startDate, e.endDate, e.description, e.fieldOfStudy, e.grade, e.activities]));
   if (education.length) section("Utdanning", () => education.forEach((e) => entry(
     [e.institution, e.degree].filter(Boolean).join(" | "),
-    [e.startDate, e.endDate].filter(Boolean).join(" - "), e.description, "",
+    period(e.startDate, e.endDate), e.description, "",
     [label("Studieretning", e.fieldOfStudy), label("Karakter", e.grade), label("Aktiviteter", e.activities)],
   )));
   const experience = cv.experience.filter((e) => hasContent([e.organization, e.title, e.startDate, e.endDate, e.description, e.employmentType, e.location, e.locationType]));
   if (experience.length) section("Erfaring", () => experience.forEach((e) => entry(
     [e.title, e.organization].filter(Boolean).join(" | "),
-    [e.startDate, e.endDate].filter(Boolean).join(" - "), e.description, "",
+    period(e.startDate, e.endDate), e.description, "",
     [[e.employmentType, e.location, e.locationType].filter(Boolean).join(" | ")],
   )));
   const projects = cv.projects.filter((e) => hasContent([e.name, e.role, e.season, e.description, e.url, e.startDate, e.endDate]));
   if (projects.length) section("Helix og prosjekter", () => projects.forEach((e) => entry(
     [e.name, e.role].filter(Boolean).join(" | "),
-    [e.season, [e.startDate, e.endDate].filter(Boolean).join(" - ")].filter(Boolean).join(" | "), e.description, e.url,
+    [e.season, period(e.startDate, e.endDate)].filter(Boolean).join(" | "), e.description, e.url,
   )));
-  const skills = cv.skills.filter((v) => v.trim());
-  if (skills.length) section("Ferdigheter", () => skills.forEach((skill) => text(skill)));
   const languages = cv.languages.filter((e) => e.name.trim() || e.level.trim());
   if (languages.length) section("Språk", () => languages.forEach((e) => text([e.name, e.level].filter(Boolean).join(" | "))));
   const links = cv.links.filter((e) => e.label.trim() || e.url.trim());
