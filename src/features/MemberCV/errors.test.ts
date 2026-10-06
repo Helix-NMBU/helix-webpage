@@ -10,6 +10,19 @@ function validationError(input: unknown): string {
   throw new Error("The fixture must fail validation.");
 }
 
+function rawWorkflowErrors(source: string): string[] {
+  const errors: string[] = [];
+  for (const match of source.matchAll(/"([^"\n]+)"/g)) {
+    // Catalog keys passed directly to t/memberText are already localized UI
+    // copy. Constructors, setError calls and plain fallback strings remain.
+    const before = source.slice(0, match.index);
+    if (/\b(?:t\s*\(|memberText\s*\(\s*[^,()]+,)[\s]*$/.test(before)) continue;
+    const message = match[1];
+    if (/^(?:Invalid |Could not |Sign-in |Google sign-in |Member (?:sign-in |Google |portal server)|Your (?:session |Google)|The (?:signed-in |CV is |fictional demo |request failed|save result |publication result |member portal request)|Another (?:tab |session)|A (?:valid saved |Google sign-in)|Use (?:at most |your verified )|Enter a |Add your name |Links must |CV (?:data |file cleanup )|Log in |This CV changed |Publication visibility |Method not allowed\.)/.test(message)) errors.push(message);
+  }
+  return errors;
+}
+
 describe("member error localization", () => {
   it("keeps English messages exactly as received, including Unicode and unknown failures", () => {
     for (const message of ["Invalid summary.", "Failed to fetch", "The save result could not be confirmed. Reload your CV before retrying.", "Åse wrote: æ, ø, å.\nCustom failure", "", "__proto__"]) {
@@ -110,6 +123,24 @@ describe("member error localization", () => {
     }
   });
 
+  it("excludes already localized UI catalog keys while retaining raw error constructors, state and fallbacks", () => {
+    const source = `
+      t("Your session has ended. Editing is locked.");
+      t(
+        "Member sign-in is not configured yet. Please contact Helix."
+      );
+      memberText(locale, "Your session has ended. Editing is locked.");
+      throw new Error("Your session has expired. Log in again.");
+      setError("Could not sign out. Please try again.");
+      const message = failure instanceof Error ? failure.message : "Could not load your CV.";
+    `;
+    expect(rawWorkflowErrors(source)).toEqual([
+      "Your session has expired. Log in again.",
+      "Could not sign out. Please try again.",
+      "Could not load your CV.",
+    ]);
+  });
+
   it("covers current static errors in the member workflow sources", () => {
     const files = [
       "./model.ts", "./repository.ts", "./demo.ts", "./MemberCV.tsx", "../CVBank/Login.tsx",
@@ -118,10 +149,7 @@ describe("member error localization", () => {
     const known: string[] = [];
     for (const file of files) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
-      for (const match of source.matchAll(/"([^"\n]+)"/g)) {
-        const message = match[1];
-        if (/^(?:Invalid |Could not |Sign-in |Google sign-in |Member (?:sign-in |Google |portal server)|Your (?:session |Google)|The (?:signed-in |CV is |fictional demo |request failed|save result |publication result |member portal request)|Another (?:tab |session)|A (?:valid saved |Google sign-in)|Use (?:at most |your verified )|Enter a |Add your name |Links must |CV (?:data |file cleanup )|Log in |This CV changed |Publication visibility |Method not allowed\.)/.test(message)) known.push(message);
-      }
+      known.push(...rawWorkflowErrors(source));
     }
     expect(known.length).toBeGreaterThan(45);
     for (const message of known) expect(localizeCvError(message, "nb"), message).not.toBe(fallback);
