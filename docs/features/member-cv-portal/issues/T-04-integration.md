@@ -21,4 +21,4 @@ Integrated checks, browser evidence, independent review, PR current-commit CI.
 
 Workers commit in isolated worktrees. Coordinator integrates, verifies and closes this ticket with evidence. Parent remains open until merge.
 
-Status: in progress. PR #57 is open/Draft. Current GitHub checks passed at c1d4909 with 103 tests; automatic Vercel preview failed and its owner-scoped build log is unavailable to this session. Parent #51 remains open. Obtain the build error, repair confirmed cause, rerun checks and review changed code before closing this ticket.
+Status: in progress. PR #57 is open/Draft. Current GitHub checks passed at 9eadbc3 with 103 tests. The accessible Vercel log confirmed an obsolete pnpm lock blocked the function dependency install. Repair 97f2940 removes only that lock, preserves the npm dependency graph and passes independent review plus clean npm install/full checks. Final current-commit preview verification remains pending. Parent #51 stays open.

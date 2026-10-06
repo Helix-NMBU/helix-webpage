@@ -12,11 +12,11 @@ Workers assigned from 0070630:
 - /root/backend: T-01 #53, /private/tmp/helix-member-cv-backend, codex/member-cv-backend.
 - /root/editor: T-02 #54, /private/tmp/helix-member-cv-editor, codex/member-cv-editor.
 - /root/pdf: T-03 #55, /private/tmp/helix-member-cv-pdf, codex/member-cv-pdf.
-T-04 #56: integrated and independently reviewed; automatic Vercel preview failure prevents final readiness.
+T-04 #56: integrated and independently reviewed; confirmed Vercel lockfile repair is integrated; final current-commit remote checks remain pending.
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: obtain the failed Vercel build log, repair any confirmed cause, re-review changed code and verify current-commit checks before marking PR #57 ready. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: push the reviewed lockfile repair and verify current-commit GitHub/Vercel checks before marking PR #57 ready. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -54,7 +54,7 @@ Full feature review is bound to 2cb5807, supplemented by independent emitted-run
 
 PR #57 was created as draft against sponsor-portal-v2 and attached. PR #46 remains unchanged and unmerged. The branch has no applicable required protection rules and was mergeable when checked, but the automatic Vercel preview failed, so the final delivery gate remains unmet.
 
-## Remote verification and remaining blocker
+## Initial remote verification and diagnostic gap
 
 At remote commit c1d4909d0e18c45ce839ea790379eca01e7c8167, both GitHub Member CV checks succeeded. PR workflow run 37522362734 independently reported 103 tests in 11 files, both typechecks, lint and build. The automatic Vercel status failed for deployment dpl_384NBCDssaZkGKM2RXEtGxQV8HRE. No failure cause has been confirmed.
 
@@ -71,3 +71,11 @@ Coordinator commit b846e39 adds source-only NodeNext checking, the matching eras
 T-03 #55 was reopened when the emitted runtime failure invalidated its deployment criterion. It closed again after independent review of b846e39 confirmed the fix and reran the runtime check, nine PDF tests and materialized bundle smoke. T-04 and the parent remain open while the actual automatic preview check fails.
 
 Final source review: /root/review_correctness inspected b846e39 against c1d4909. No material finding; NodeNext guard includes production API dependencies and excludes tests. The reviewer independently loaded the materialized handler and generated a Nordic PDF from bundled fonts. Current remote checks will be re-read after this documentation checkpoint is pushed. Keep the PR draft unless the preview gate also passes.
+
+## Confirmed preview failure and dependency install repair
+
+The next automatic preview for remote 9eadbc3 reported the accessible helix-nmbu scope. Its build log confirmed frontend npm install/build succeeded, then the function builder selected the obsolete pnpm lockfile and failed frozen installation with ERR_PNPM_OUTDATED_LOCKFILE. This settled the actual preview cause; no project settings change was performed by this delivery.
+
+Worker 575934b removed only pnpm-lock.yaml, integrated as 97f2940. README, Vercel commands and CI already use npm. Official Vercel detection changed from pnpm lock version 9 to npm lock version 3. The npm dependency graph and versions are unchanged. Root npm ci succeeded; full revalidation passed 103 tests in 11 files, all three typechecks, lint, build and diff checks. Independent review of 97f2940 confirmed that every manifest dependency matches the retained npm lock and found no material issue.
+
+The old diagnostic request is no longer needed. Final readiness still awaits the automatic preview check on the pushed repair. PR #57 remains draft until that check passes. T-04 and parent #51 remain open.
