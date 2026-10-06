@@ -1,7 +1,7 @@
 # Member CV portal specification
 
 Feature: member-cv-portal. Revision: 4, 2026-10-06.
-Status: workflow, website styling and Norwegian/English are delivered; user requested shadcn/ui throughout the member page.
+Status: workflow, website styling, Norwegian/English and shadcn/ui member components are delivered on the feature branch; PR remains unmerged.
 Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. Final CV styling and profile images remain deferred.
 Follow-up authorization: the user requested that the member CV page use the same design system as the website. This changes presentation only; final CV document styling and profile images remain deferred.
 Language follow-up authorization: the user requested Norwegian and English display for the member page. Norwegian uses Bokmål. This localizes the interface and dependent member login; user-authored CV content and generated PDF document language are outside this interface change.
