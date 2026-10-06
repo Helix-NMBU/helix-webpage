@@ -5,10 +5,10 @@ Local ticket: T-03. See `docs/features/member-cv-portal/spec.md`, revision 1.
 
 ## Acceptance criteria
 
-- [ ] Produce real PDF from CV fields, with all entries, long-word/text wrapping and page breaks.
-- [ ] Preserve Norwegian letters; omit empty sections; no invented content.
-- [ ] PDF contact fields follow email/phone sharing flags.
-- [ ] Bundle licensed font assets and document runtime tracing.
+- [x] Produce real PDF from CV fields, with all entries, long-word/text wrapping and page breaks.
+- [x] Preserve Norwegian letters; omit empty sections; no invented content.
+- [x] PDF contact fields follow email/phone sharing flags.
+- [x] Bundle licensed font assets and document runtime tracing.
 
 ## Blocking dependencies
 
@@ -20,4 +20,6 @@ Real PDF extraction/privacy tests, multipage sample and visual inspection.
 
 Workers commit in isolated worktrees. Coordinator integrates, verifies and closes this ticket with evidence. Parent remains open until merge.
 
-Status: ready
+Status: closed on the integrated feature branch.
+
+Evidence: worker 7fa6ccb integrated as 431bb98 and revalidated in 79b73a9. Nine real-PDF tests passed, including contact redaction, Nordic text, long wrapping and multipage output. All four pages of /private/tmp/helix-member-cv-sample.pdf were visually inspected. Font assets and Vercel tracing are included. Independent Spec and correctness review found no PDF findings. Live Vercel/Supabase transport remains a rollout prerequisite.

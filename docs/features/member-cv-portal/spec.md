@@ -19,7 +19,7 @@ Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. 
 
 `src/features/MemberCV/types.ts` defines CvData, CvSharing, CvRecord, CvEnvelope, CvMutation and PdfRenderer. `model.ts` validates and redacts data.
 
-GET /api/member-cv returns CvEnvelope. POST actions save/publish/withdraw return CvEnvelope, require expectedRevision, and use authenticated user ownership. POST action preview returns application/pdf and never mutates stored data. Errors return {error:string}, with 401 for invalid session, 403 for non-verified profile identity, 409 for revision conflict and 400 for invalid input.
+GET /api/member-cv returns CvEnvelope. Successful reads and mutations may include `cleanupPending=true` when retired-file deletion must be retried; this does not undo the returned document or its visibility. POST actions save/publish/withdraw return CvEnvelope, require expectedRevision, and use authenticated user ownership. POST action preview returns application/pdf and never mutates stored data. Errors return {error:string}, with 401 for invalid session, 403 for non-verified profile identity, 409 for revision conflict and 400 for invalid input.
 POST /api/member-login accepts {credential:string}; verifies Google on the server, authenticates through Supabase, records a server-managed Workspace identity, creates missing private profile, and returns {access_token,refresh_token}. The client sets the Supabase session. No token or service key is logged.
 
 The backend handler takes an injected PdfRenderer. The coordinator wires the completed PDF renderer into api/member-cv.ts after integration. The editor uses the agreed HTTP contract, not direct writes to publication tables.
