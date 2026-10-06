@@ -1,12 +1,13 @@
 # Member CV portal specification
 
-Feature: member-cv-portal. Revision: 5, 2026-10-06.
-Status: workflow, design, languages, shadcn/ui and section navigation are delivered on the feature branch. PR remains unmerged.
+Feature: member-cv-portal. Revision: 6, 2026-10-06.
+Status: prior requirements are delivered; collapsible sections and familiar profile fields are in progress. PR remains unmerged.
 Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. Final CV styling and profile images remain deferred.
 Follow-up authorization: the user requested that the member CV page use the same design system as the website. This changes presentation only; final CV document styling and profile images remain deferred.
 Language follow-up authorization: the user requested Norwegian and English display for the member page. Norwegian uses Bokmål. This localizes the interface and dependent member login; user-authored CV content and generated PDF document language are outside this interface change.
 Component follow-up authorization: the user requested shadcn/ui components for forms and other suitable controls on this member page, retaining Helix colors/font/design. Reuse the installed library, preserve CV/auth/privacy/language behavior and generated document content.
 Navigation follow-up authorization: the user requested a floating upper-right table of contents with clickable sections and indications of completion, modification and saving. Use the existing Helix/shadcn interface in both languages.
+Form follow-up authorization: the user requested individually collapsible sections and LinkedIn-style input formats for existing CV sections, excluding competence tags. Keep simple skills text provisionally; an optional clarification was sent about removing that field. This adapts existing CV sections rather than adding every LinkedIn profile feature.
 Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. Parent: #51. T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56; see tracker.json and delivery.md.
 
 ## Requirements
@@ -26,6 +27,9 @@ Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. 
 - F-10: Use the installed shadcn/ui components for member form inputs, textareas, labels, checkboxes, buttons, cards, statuses/alerts, language select and preview/unsaved-change dialogs. Keep semantic HTML for layout and the generated document. Preserve Helix colors/font, bilingual labels, keyboard access, disabled/busy states, focus restoration, draft/publication state and contact redaction. Portal menus/dialogs inherit the member theme. Reuse existing dependencies; no broader shared-site restyling. Browser-native tab-close protection remains necessary.
 
 - F-11: Provide an upper-right section overview on desktop that stays accessible while scrolling. Clicking a link scrolls to and focuses its section without losing edits; identify the current section accessibly. Show content progress independently from unsaved/saved state, compared to the latest server-confirmed draft. Empty added rows are not completed content, optional fields remain optional, and saving is not publication. Include contact, repeatable CV sections, skills, sharing and preview/publication navigation. Keep the overview usable on narrow screens, with keyboard navigation, reduced-motion support and localized text. Preserve F-01 through F-10; no backend contract or publication validation change.
+
+- F-12: Each editor section can be independently expanded/collapsed through an accessible shadcn Collapsible trigger, with Contact initially open and other sections closed. Preserve unsaved input, language state and saving/publication for closed sections. The section overview opens its destination before scrolling/focusing. Provide clear expand/collapse actions in both languages and preserve Helix styling/mobile usability.
+- F-13: Adapt existing CV inputs to familiar LinkedIn patterns. Education has school, degree, field of study, month/year start and end or expected date, optional grade, activities and description. Experience has title, company, optional employment type/location/location type, month/year dates and current-role choice. Helix projects retain department/name, role, season, description and URL and gain optional month/year period/current choice. Languages use proficiency options while preserving custom previously entered values. Links remain label/URL; contact/about remains editable. Do not add skill tags, endorsements, external LinkedIn lookup/import or additional profile sections. Simple skills text is provisionally retained pending optional clarification. Additive fields must survive draft saving, preview and generated PDF/publication. Keep existing free-text date/proficiency values readable/editable without silent conversion, and preserve existing validation/publication/privacy rules. No destructive data migration.
 
 ## Shared contract
 
@@ -55,5 +59,10 @@ Base: sponsor-portal-v2 at f99939dfadaa43d869ad6429034608f0bc7f9429. Integration
 | T-06 local follow-up | Norwegian/English member interface and errors | F-06/F-08/F-09 | Verified T-05 |
 | T-07 local follow-up | Use shadcn/ui throughout member pages | F-06/F-08/F-09/F-10 | Verified T-06 |
 | T-08 local follow-up | Section navigation and content/save indicators | F-06/F-08/F-09/F-10/F-11 | Verified T-07 |
+| T-09 local follow-up | Collapsible sections and familiar profile input formats | F-02/F-03/F-08/F-09/F-10/F-11/F-12/F-13 | Verified T-08 |
 
 T-01, T-02 and T-03 develop against the verified shared contract; T-04 provides the final runtime integration. Test Google verification failures and onboarding without an allowlist using injected external services. Run actual PostgreSQL RLS/scenario tests locally if the environment supports it; separately record any missing live Google/Supabase evidence. Inspect actual generated PDF pages. Browser-check demo on desktop/mobile and its create/save/publish/withdraw flow. Run typecheck, API typecheck, lint, tests, build and diff checks. Request fresh full-code review before PR creation. A PR can be ready for code review while live configuration remains a stated rollout prerequisite.
+
+## Form references
+
+LinkedIn's official [education accessibility guide](https://www.linkedin.com/help/linkedin/answer/a1441968?lang=en) describes school, degree, field of study, month/year dates, grade, activities and description. Its [experience guide](https://www.linkedin.com/help/linkedin/answer/a1439550) describes title, employment type, company, location, current-role choice and month/year dates. These guides are dated references, not a claim of exact parity with every current LinkedIn feature. Helix keeps its own validation, branding and private draft workflow.

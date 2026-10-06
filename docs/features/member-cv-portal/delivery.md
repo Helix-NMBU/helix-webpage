@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 5. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 adds the section overview.
+Spec: spec.md revision 6. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 adds the section overview.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: human review of PR #57 and prerequisite PR #46. The section overview is verified and local T-08 is closed; see current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: implement and verify local T-09 before updating PR #57. The section overview is verified and local T-08 is closed; see current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -143,3 +143,7 @@ Browser verification: 1280x1000 desktop and 1050x720 short desktop, with overvie
 Before screenshot /private/tmp/member-cv-toc-before.jpg; final screenshots /private/tmp/member-cv-toc-desktop.jpg and /private/tmp/member-cv-toc-mobile.jpg. Root keeps local demo available at http://127.0.0.1:5177/member/profile?demo=1. T-08 is verified locally and awaits current-commit remote checks before closure. Existing PR #57 will be updated; parent #51 and dependency PR #46 remain open.
 
 Status: local T-08 CLOSED after all criteria passed at remote 2234070ec1af3dc8a7033f3f2ff1a861b6d0562e. Both GitHub workflows and the automatic preview succeeded: PR run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37534332188, push run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37534328276, preview https://vercel.com/joasmunds-projects/helix-webpage/5DPjqWdzGypuSt6ctyZh8qFCgxs2. PR #57 is open, non-draft, MERGEABLE/CLEAN with joasmund requested; no human approval is claimed. Dependency PR #46 remains open/draft at f99939d. Parent #51 remains open until merge. Final documentation follows this gate; re-read its current-commit checks before handoff. No merge, auto-merge, manual deployment or live database change.
+
+## Collapsible sections and familiar input follow-up
+
+Spec revision 6 adds F-12/F-13 and local T-09 on explicit user request. Reconciled clean integration/remote at c0c96267ba353c6df54a8bcb5fec63d739e60f0c, existing PR #57 open/non-draft against sponsor-portal-v2. Prior tickets remain closed. Root adds installed shadcn Collapsible primitive/dependency, docs and integration. Reuse isolated /root/editor for UI/collapse/navigation/date/proficiency controls and locale; /root/backend for additive optional string fields in types/model, errors, meaningful compatibility/roundtrip tests and PDF representation. No SQL/auth changes. Root owns browser/runtime verification and current remote gates; fresh affected-code review required. Field contract: education fieldOfStudy/grade/activities optional strings; experience employmentType/location/locationType optional strings; projects startDate/endDate optional strings. Ongoing roles/projects use existing endDate text marker Present. Existing dates/custom language levels remain intact unless edited. Skills text remains provisionally; no tags are introduced.
