@@ -2,8 +2,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, PDFString, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { sharedCvData } from "../../src/features/MemberCV/model";
-import type { CvData, CvSharing } from "../../src/features/MemberCV/types";
+import { sharedCvData } from "../../src/features/MemberCV/model.js";
+import type { CvData, CvSharing } from "../../src/features/MemberCV/types.js";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
