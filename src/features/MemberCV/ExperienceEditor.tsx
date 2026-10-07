@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
@@ -10,6 +10,7 @@ import { employmentTypes, locationTypes } from "./profile-inputs";
 import { groupExperience } from "./experience";
 import { memberText, type MemberLocale } from "./locale";
 import type { CvExperience } from "./types";
+import { currentPeriod } from "./profile-inputs";
 
 type ExperienceField = Exclude<keyof CvExperience, "id">;
 
@@ -64,6 +65,8 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
   const id = useId();
   // Retain groups while focus is inside the editor, including adjacent controls and Tab targets.
   const [editingOrganizations, setEditingOrganizations] = useState<Map<string, string> | null>(null);
+  // A role may move between groups. Keep its current-period undo value outside the group subtree.
+  const previousEndDates = useRef(new Map<string, string>());
   const groupingRows = editingOrganizations
     ? rows.map((role) => ({ ...role, organization: editingOrganizations.get(role.id) ?? role.organization }))
     : rows;
@@ -98,13 +101,32 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
         {group.roles.map((groupRole) => {
           const role = currentRoles.get(groupRole.id)!;
           const index = rows.findIndex((entry) => entry.id === role.id);
-          const change = (key: ExperienceField, value: string) => onChange(role.id, key, value);
+          const change = (key: ExperienceField, value: string) => {
+            if (key === "organization") {
+              // Rows added while the editor has focus are absent from the original snapshot.
+              setEditingOrganizations((previous) => {
+                const snapshot = new Map(previous);
+                for (const entry of rows) {
+                  if (!snapshot.has(entry.id)) snapshot.set(entry.id, entry.organization);
+                }
+                return snapshot;
+              });
+            }
+            if (key === "endDate") {
+              if (!currentPeriod(value)) previousEndDates.current.set(role.id, value);
+              else if (!currentPeriod(role.endDate)) previousEndDates.current.set(role.id, role.endDate);
+            }
+            onChange(role.id, key, value);
+          };
           return <li key={role.id} className="mcv-role-entry">
             <div className="mcv-entry-title">
               <h4>{role.title || `${memberText(locale, "Role")} ${index + 1}`}</h4>
               <Button variant="ghost" type="button" className="mcv-remove" disabled={disabled}
                 aria-label={memberText(locale, "Remove {entry} {number}", { entry: memberText(locale, "experience"), number: index + 1 })}
-                onClick={() => onRemove(role.id)}>{memberText(locale, "Remove")}</Button>
+                onClick={() => {
+                  previousEndDates.current.delete(role.id);
+                  onRemove(role.id);
+                }}>{memberText(locale, "Remove")}</Button>
             </div>
             <div className="mcv-grid">
               <TextField label={memberText(locale, "Job title")} disabled={disabled} value={role.title} onChange={(value) => change("title", value)} />
@@ -116,6 +138,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
               <ChoiceInput label={memberText(locale, "Location type")} value={role.locationType ?? ""} options={locationTypes}
                 locale={locale} disabled={disabled} onChange={(value) => change("locationType", value)} />
               <PeriodInputs startDate={role.startDate} endDate={role.endDate} locale={locale} disabled={disabled}
+                previousEndDate={previousEndDates.current.get(role.id)}
                 ongoingLabel={memberText(locale, "I currently work here")} onChange={change} />
               <div className="mcv-field mcv-full">
                 <Label htmlFor={`${id}-${role.id}-description`}>{memberText(locale, "Description")}</Label>

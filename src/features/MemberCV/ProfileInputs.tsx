@@ -241,6 +241,7 @@ export function PeriodInputs({
   endDate,
   onChange,
   ongoingLabel,
+  previousEndDate,
   locale,
   disabled,
 }: {
@@ -248,6 +249,7 @@ export function PeriodInputs({
   endDate: string;
   onChange: (key: "startDate" | "endDate", value: string) => void;
   ongoingLabel?: string;
+  previousEndDate?: string;
   locale: MemberLocale;
   disabled: boolean;
 }) {
@@ -267,7 +269,7 @@ export function PeriodInputs({
               const next = toggleCurrentPeriod(
                 checked === true,
                 endDate,
-                previous.current,
+                previousEndDate ?? previous.current,
               );
               previous.current = next.previous;
               onChange("endDate", next.value);
