@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
@@ -65,6 +65,16 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
   const id = useId();
   // Retain groups while focus is inside the editor, including adjacent controls and Tab targets.
   const [editingOrganizations, setEditingOrganizations] = useState<Map<string, string> | null>(null);
+  const editor = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!editingOrganizations) return;
+    // Regroup after an outside button/link activates, so changing layout cannot swallow its click.
+    const finishEditing = (event: MouseEvent) => {
+      if (event.target instanceof Node && !editor.current?.contains(event.target)) setEditingOrganizations(null);
+    };
+    document.addEventListener("click", finishEditing);
+    return () => document.removeEventListener("click", finishEditing);
+  }, [editingOrganizations]);
   // A role may move between groups. Keep its current-period undo value outside the group subtree.
   const previousEndDates = useRef(new Map<string, string>());
   const groupingRows = editingOrganizations
@@ -72,7 +82,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
     : rows;
   const groups = groupExperience(groupingRows);
   const currentRoles = new Map(rows.map((role) => [role.id, role]));
-  return <div className="mcv-experience-editor"
+  return <div className="mcv-experience-editor" ref={editor}
     onFocus={(event) => {
       if (!editingOrganizations && !event.currentTarget.contains(event.relatedTarget)) {
         setEditingOrganizations(new Map(rows.map((role) => [role.id, role.organization])));
@@ -81,6 +91,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
     onBlur={(event) => {
       // Choice menus use a portal while the member is still editing this role.
       if (event.relatedTarget instanceof Element && event.relatedTarget.closest(".mcv-profile-menu")) return;
+      if (event.relatedTarget instanceof Element && event.relatedTarget.closest("button, a")) return;
       if (!event.currentTarget.contains(event.relatedTarget)) setEditingOrganizations(null);
     }}>
     {groups.map((group, groupIndex) => <section key={group.key} className="mcv-experience-group" aria-labelledby={`${id}-group-${groupIndex}`}>
