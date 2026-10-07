@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 7. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 adds private autosave and simpler numeric dates/overview.
+Spec: spec.md revision 8. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 adds private autosave and simpler numeric dates/overview.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: T-10 is closed; verify final documentation-commit remote gates before handoff. Parent #51 stays open until merge. Prior tickets remain closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: implement/verify T-11 and update the existing PR; T-10 is closed. Parent #51 stays open until merge. Prior tickets remain closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -204,3 +204,8 @@ T-10 is locally VERIFIED; current-commit GitHub/automatic-preview gates are pend
 
 
 Status: local T-10 CLOSED after all criteria passed at remote 25f3526d3b49a634d3a1c49a51ba6a1dcec218a7. Both GitHub workflows and automatic preview succeeded: PR run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37542504000, push run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37542500518, preview https://vercel.com/joasmunds-projects/helix-webpage/6v21fPDduvSit3f6qNt7JYZkuKej. PR #57 is open/non-draft, MERGEABLE/CLEAN, unmerged with joasmund requested; no human approval claimed. No applicable base-branch rules returned. Dependency PR #46 remains open/draft at f99939d; parent #51 stays open until merge. Review is bound to final code 79b98bd; subsequent commits record evidence only. Re-read final documentation-commit gates before handoff. Live rollout prerequisites remain unchanged; no merge, auto-merge, manual deployment or live SQL/configuration change.
+
+
+## Grouped experience follow-up
+
+User requested Helix roles under Experience with LinkedIn-like connected roles for an organization, and confirmed concrete Projects remain separate. Revision 8/F-15 and local T-11 record this approved scope. Start clean at 3cf6acc0a58d89d3ae9ffe6c83cb434c0508203f, existing PR #57 open/non-draft with successful gates. Reuse three clean isolated worktrees: /root/experience_model in /private/tmp/helix-member-cv-backend owns types/model, pure grouping/transfer helper and validation/tests; /root/experience_editor in /private/tmp/helix-member-cv-editor owns UI/HTML/locale/CSS/nav; /root/experience_pdf in /private/tmp/helix-member-cv-pdf owns PDF changes/tests. Root owns integration/docs/browser/review/remote gates. Existing contracts/publication snapshots stay intact; explicit project-role transfer avoids guessing which existing project is a role.
