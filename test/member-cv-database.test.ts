@@ -98,7 +98,7 @@ describe("member CV SQL authorization and publication", () => {
   });
   it("publishes Helix experience roles and metadata without treating other employers as Helix", async () => {
     const helixRoles = [
-      { id: "lead", organization: " Helix   NMBU ", title: "Team lead", startDate: "2026-09", endDate: "Present", description: "Led testing", department: "Suspension", season: "S27", url: "https://example.com/team" },
+      { id: "lead", organization: "\ufeff Helix\t\n\u000b\u000c\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000NMBU\u00a0", title: "Team lead", startDate: "2026-09", endDate: "Present", description: "Led testing", department: "Suspension", season: "S27", url: "https://example.com/team" },
       { id: "member", organization: "HELIX", title: "Team member", startDate: "2025", endDate: "2026", description: "Built prototypes", season: "S26" },
       { id: "other", organization: "Helix Consulting", title: "Consultant", startDate: "2024", endDate: "2025", description: "Separate employer", season: "S25" },
     ];

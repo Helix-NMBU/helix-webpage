@@ -219,7 +219,8 @@ begin
         union all
         select e->>'season' as season, e->>'title' as title
         from jsonb_array_elements(snapshot->'experience') e
-        where lower(btrim(regexp_replace(e->>'organization', '\s+', ' ', 'g'))) in ('helix', 'helix nmbu')
+        -- Match JavaScript's whitespace normalization, including pasted nonbreaking spaces.
+        where lower(btrim(regexp_replace(e->>'organization', U&'[\0009-\000D\0020\00A0\1680\2000-\200A\2028\2029\202F\205F\3000\FEFF]+', ' ', 'g'))) in ('helix', 'helix nmbu')
       ) role where coalesce(role.title, '') <> '';
     update public.member_cv_documents set published_revision = next_revision, published_at = now(), published_path = p_path where user_id = p_user_id;
     update public.member_cv_upload_candidates set status = 'current' where user_id = p_user_id and path = p_path;
