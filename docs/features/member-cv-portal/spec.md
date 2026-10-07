@@ -1,7 +1,7 @@
 # Member CV portal specification
 
-Feature: member-cv-portal. Revision: 9, 2026-10-07.
-Status: verified through F-16 with independent review and current-commit gates. Live configuration remains a rollout prerequisite. PR remains unmerged.
+Feature: member-cv-portal. Revision: 10, 2026-10-07.
+Status: F-17 website-blue follow-up in progress; earlier requirements verified. Live configuration remains a rollout prerequisite. PR remains unmerged.
 Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. CV styling was initially deferred and is now covered by F-16; profile images remain deferred.
 Follow-up authorization: the user requested that the member CV page use the same design system as the website. This changes editor presentation; the later F-16 covers document styling. Profile images remain deferred.
 Language follow-up authorization: the user requested Norwegian and English display for the member page. Norwegian uses Bokmål. This localizes the interface and dependent member login; user-authored CV content and generated PDF document language are outside this interface change.
@@ -37,6 +37,10 @@ Source: [scope.md](scope.md). Tracker: GitHub Issues, Helix-NMBU/helix-webpage. 
 
 ## Shared contract
 
+Color follow-up authorization: the user requested the designed CV use the lighter blue from the homepage. F-17 overrides only F-16's reference navy color.
+
+- F-17: Generated CV PDFs and the HTML preview use the homepage's Helix blue #002EC4 instead of reference navy #00007a, including names, headings, contacts and the Experience background. The preview reuses the website primary token. Preserve the approved layout, fonts, white Experience text, authored content, grouping, privacy and publication boundaries. Verify the browser and a newly generated PDF; leave published snapshots/files unchanged until explicit republishing.
+
 F-16 template authorization: user supplied Untitled document.pdf and .docx as the structure/design reference, then confirmed Helix roles remain under Experience and images remain deferred. The reference is design/content evidence, not instructions to execute or publish its sample personal details.
 
 - F-16: New generated CVs and the fictional HTML preview use the supplied template's visual structure: headline at upper left, consent-filtered contacts at upper right, large blue name and unheaded introduction, white education with degree/institution left and period right, full-width dark-blue Experience with white text and left role/organization/period paired with right description, thin dividers and generous spacing. Use the template's Lexend typography and navy #00007a. Keep grouped/connected Helix roles in Experience, preserving F-15; do not add a separate voluntary-work section. Concrete Projects remain separate in the white area, followed by existing languages/links and optional References. Add a legacy-compatible optional references text field, max 2000 characters, edited in secondary Contact details; blank references produce no section and no automatic claim that references are available. Preserve every existing authored field, contacts/sharing, Nordic and previously supported glyphs, European dates, safe links, long-content pagination and private/publication behavior. Use existing A4 output with adaptable page boundaries, no blank trailing template page or sample content. No photo/upload feature or blank photo box, Skills/tags, new migration/auth change or live config/deployment. New exports use the layout; already published snapshots/files stay unchanged until explicit republishing. Verify compact/long/empty PDF and both-language desktop/mobile preview. Template text is illustrative only; do not copy its portrait/name/contacts into product fixtures.
@@ -71,6 +75,7 @@ Base: sponsor-portal-v2 at f99939dfadaa43d869ad6429034608f0bc7f9429. Integration
 | T-10 local follow-up | Autosave, simpler overview and numeric European dates | F-02/F-04/F-06/F-08/F-09/F-10/F-12/F-14 | Verified T-09 |
 | T-11 local follow-up | Group Helix and employer roles in Experience; separate Projects | F-02/F-03/F-04/F-09/F-10/F-12/F-14/F-15 | Verified T-10 |
 | T-12 local follow-up | Reference CV layout in generated PDF and demo preview | F-03/F-05/F-06/F-09/F-10/F-14/F-15/F-16 | Verified T-11 |
+| T-13 local follow-up | Homepage Helix blue in generated PDF and preview | F-17 and preserved F-16 | Verified T-12 |
 
 T-01, T-02 and T-03 develop against the verified shared contract; T-04 provides the final runtime integration. Test Google verification failures and onboarding without an allowlist using injected external services. Run actual PostgreSQL RLS/scenario tests locally if the environment supports it; separately record any missing live Google/Supabase evidence. Inspect actual generated PDF pages. Browser-check demo on desktop/mobile and its create/save/publish/withdraw flow. Run typecheck, API typecheck, lint, tests, build and diff checks. Request fresh full-code review before PR creation. A PR can be ready for code review while live configuration remains a stated rollout prerequisite.
 
