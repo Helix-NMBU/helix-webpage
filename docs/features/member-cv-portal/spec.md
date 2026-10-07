@@ -1,9 +1,9 @@
 # Member CV portal specification
 
 Feature: member-cv-portal. Revision: 9, 2026-10-07.
-Status: F-16 template follow-up in progress. Earlier requirements verified. Live configuration remains a rollout prerequisite. PR remains unmerged.
-Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. Final CV styling and profile images remain deferred.
-Follow-up authorization: the user requested that the member CV page use the same design system as the website. This changes presentation only; final CV document styling and profile images remain deferred.
+Status: verified through F-16 with independent review and current-commit gates. Live configuration remains a rollout prerequisite. PR remains unmerged.
+Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. CV styling was initially deferred and is now covered by F-16; profile images remain deferred.
+Follow-up authorization: the user requested that the member CV page use the same design system as the website. This changes editor presentation; the later F-16 covers document styling. Profile images remain deferred.
 Language follow-up authorization: the user requested Norwegian and English display for the member page. Norwegian uses Bokmål. This localizes the interface and dependent member login; user-authored CV content and generated PDF document language are outside this interface change.
 Component follow-up authorization: the user requested shadcn/ui components for forms and other suitable controls on this member page, retaining Helix colors/font/design. Reuse the installed library, preserve CV/auth/privacy/language behavior and generated document content.
 Navigation follow-up authorization: the user requested a floating upper-right table of contents with clickable sections and indications of completion, modification and saving. Use the existing Helix/shadcn interface in both languages.

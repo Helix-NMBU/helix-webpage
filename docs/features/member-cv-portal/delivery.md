@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 9. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 adds private autosave and simpler numeric dates/overview.
+Spec: spec.md revision 9. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 delivered private autosave and numeric dates/overview; revision 8 delivered grouped Experience; revision 9 delivered the reference CV design.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: implement/verify T-12 reference layout and update the existing PR; T-11 is closed. Parent #51 stays open until merge. Prior tickets remain closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: human PR review; before rollout, complete the configuration and live checks in setup.md. T-12 and prior implementation tickets are closed; parent #51 stays open until merge. See current record below. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -264,3 +264,5 @@ Independent /root/review_experience_spec inspected revision 9/F-16, reference an
 Independent complete-feature /root/review_autosave_spec reviewed changed code against 0188602 and surrounding feature against f99939d, reread unchanged auth/storage/publication paths and independently passed 225 tests in 14 suites. Reuse of prior review is limited to unchanged areas; new model/form/renderer/preview received fresh review. Pagination makes finite progress and preserves original lines; contact consent, unsafe actions, legacy references, autosave/publication and ownership retain their boundaries. It independently rechecked 00b27e8 with all 20 PDF tests passing. No outstanding correctness, regression or security finding. Code review is bound to 00b27e8; subsequent changes record evidence only.
 
 T-12 VERIFIED locally; remote current-commit checks pending before closure. Existing PR #57 remains open/unmerged. Live setup checks remain prerequisites; no live SQL/configuration, manual deployment, merge or auto-merge.
+
+Status: local T-12 CLOSED after all criteria passed at remote a012da3eed71d37e45918cd669c8f9700bbe34f7. Both GitHub workflows and automatic preview succeeded: PR run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37589296284, push run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37589290720, preview https://vercel.com/helix-nmbu/helix-webpage/ChS8ieFJ5Q26z6kPYz3dGjrTzJNs. PR #57 is open/non-draft, MERGEABLE/CLEAN and unmerged with joasmund requested; no human approval claimed. No applicable base-branch rules returned. Dependency PR #46 remains open/draft at f99939d; parent #51 stays open until merge. Code review is bound to 00b27e8; later commits contain evidence only. Re-read final closure-documentation commit gates before handoff. No merge, auto-merge, manual deployment or live database/configuration change.
