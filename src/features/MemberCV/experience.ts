@@ -1,4 +1,22 @@
-import type { CvData, CvExperience } from "./types.js";
+import type { CvData, CvExperience, CvProject } from "./types.js";
+
+// Private edit provenance survives object spreads and autosave's structuredClone.
+// validateCvData omits it before requests or stored drafts are produced.
+type ProjectRoleExperience = CvExperience & { __projectRoleSourceId?: string };
+
+export function projectRoleSourceId(row: CvExperience): string | undefined {
+  const value = (row as ProjectRoleExperience).__projectRoleSourceId;
+  return typeof value === "string" ? value : undefined;
+}
+
+/** Map the selected project's content without changing or inventing date text. */
+export function projectRoleToExperience(project: CvProject, id: string): CvExperience {
+  return {
+    id, organization: "Helix NMBU", title: project.role,
+    department: project.name, season: project.season, url: project.url,
+    description: project.description, startDate: project.startDate ?? "", endDate: project.endDate ?? "",
+  };
+}
 
 /** Group named organizations in first-appearance order, retaining each role's order and text. */
 export function groupExperience(rows: CvExperience[]): { key: string; organization: string; roles: CvExperience[] }[] {
@@ -35,10 +53,9 @@ export function moveProjectRoleToExperience(draft: CvData, projectId: string, ne
     throw new Error("Invalid experience entry ID.");
   }
   const project = draft.projects[sourceIndex];
-  const experience: CvExperience = {
-    id: newExperienceId, organization: "Helix NMBU", title: project.role,
-    department: project.name, season: project.season, url: project.url,
-    description: project.description, startDate: project.startDate ?? "", endDate: project.endDate ?? "",
+  const experience: ProjectRoleExperience = {
+    ...projectRoleToExperience(project, newExperienceId),
+    __projectRoleSourceId: project.id,
   };
   return {
     ...draft,

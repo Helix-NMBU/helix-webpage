@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { localizeCvError } from "./errors";
-import { groupExperience, moveProjectRoleToExperience } from "./experience";
-import { emptyCv } from "./model";
+import { groupExperience, moveProjectRoleToExperience, projectRoleToExperience } from "./experience";
+import { emptyCv, validateCvData } from "./model";
 import type { CvExperience } from "./types";
 
 function role(id: string, organization: string): CvExperience {
@@ -59,7 +59,7 @@ describe("explicit project role transfer", () => {
     const result = moveProjectRoleToExperience(draft, "first", "new-role");
     expect(result.experience).toEqual([
       draft.experience[0],
-      { id: "new-role", organization: "Helix NMBU", title: "Lead", department: "Aerodynamics", season: "S27", url: "https://example.no/project", description: "  Exact\nproject text  ", startDate: "2023-02-29", endDate: "Summer 2025" },
+      { id: "new-role", organization: "Helix NMBU", title: "Lead", department: "Aerodynamics", season: "S27", url: "https://example.no/project", description: "  Exact\nproject text  ", startDate: "2023-02-29", endDate: "Summer 2025", __projectRoleSourceId: "first" },
     ]);
     expect(result.projects).toEqual([draft.projects[1]]);
     expect(result.projects[0]).toBe(draft.projects[1]);
@@ -67,6 +67,18 @@ describe("explicit project role transfer", () => {
     expect(result.contactEmail).toBe(original.contactEmail);
     expect(result.phone).toBe(original.phone);
     expect(result.skills).toEqual(original.skills);
+  });
+
+  it("shares a pure content mapper and strips private transfer provenance before storage", () => {
+    const draft = projectDraft();
+    const source = structuredClone(draft.projects[0]);
+    const mapped = projectRoleToExperience(draft.projects[0], "new-role");
+    expect(mapped).toEqual({ id: "new-role", organization: "Helix NMBU", title: "Lead", department: "Aerodynamics", season: "S27", url: "https://example.no/project", description: "  Exact\nproject text  ", startDate: "2023-02-29", endDate: "Summer 2025" });
+    expect(draft.projects[0]).toEqual(source);
+    const transferred = structuredClone(moveProjectRoleToExperience(draft, "first", "new-role"));
+    expect(JSON.stringify(transferred)).toContain("__projectRoleSourceId");
+    expect(JSON.stringify(validateCvData(transferred))).not.toContain("__projectRoleSourceId");
+    expect(transferred.experience[1]).toMatchObject({ __projectRoleSourceId: "first" });
   });
 
   it("fills only omitted date strings and leaves a missing source draft unchanged", () => {

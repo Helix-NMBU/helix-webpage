@@ -48,12 +48,28 @@ describe("member date mutation guard", () => {
     expect(saved.experience).toEqual([]);
   });
 
-  it.each(["organization", "title", "department", "season", "url", "description", "startDate", "endDate"] as const)("does not exempt legacy invalid dates when mapped %s changes", (key) => {
+  it.each(["organization", "title", "department", "season", "url", "description", "employmentType", "location", "locationType"] as const)("retains transferred legacy dates when %s changes before acknowledgement", (key) => {
     const saved = data("2024");
     saved.projects = [{ id: "project", name: "Aerodynamics", role: "Lead", season: "S27", description: "Existing content", url: "https://example.no", startDate: "2024-13", endDate: "202-08" }];
     const transferred = moveProjectRoleToExperience(saved, "project", "role");
     transferred.experience[0][key] = key === "url" ? "https://example.no/changed" : "Changed";
-    expect(() => validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 1 }, saved)).toThrow();
+    const result = validateProfileMutation({ action: "save", draft: structuredClone(transferred), sharing, expectedRevision: 1 }, saved);
+    expect(result.draft?.experience[0]).toMatchObject({ [key]: transferred.experience[0][key], startDate: "2024-13", endDate: "202-08" });
+    expect(JSON.stringify(result)).not.toContain("__projectRoleSourceId");
+  });
+
+  it.each(["startDate", "endDate"] as const)("rejects a changed invalid transferred %s before and after acknowledgement", (key) => {
+    const saved = data("2024");
+    saved.projects = [{ id: "project", name: "Aerodynamics", role: "Lead", season: "S27", description: "Existing content", url: "", startDate: "2024-13", endDate: "202-08" }];
+    const transferred = moveProjectRoleToExperience(saved, "project", "role");
+    const acknowledged = validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 1 }, saved).draft!;
+    transferred.experience[0][key] = "2023-02-29";
+    for (const baseline of [saved, acknowledged]) {
+      expect(() => validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 2 }, baseline)).toThrow("Enter a valid calendar day.");
+    }
+    transferred.experience[0][key] = "2024-02-29";
+    expect(validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 2 }, acknowledged).draft?.experience[0][key]).toBe("2024-02-29");
+    expect(saved.projects[0]).toMatchObject({ startDate: "2024-13", endDate: "202-08" });
   });
 
   it("validates every other new date and all unsafe URLs despite an exact transfer", () => {
@@ -68,13 +84,32 @@ describe("member date mutation guard", () => {
     expect(() => validateProfileMutation({ action: "save", draft: moveProjectRoleToExperience(unsafe, "project", "role"), sharing, expectedRevision: 1 }, unsafe)).toThrow("Links must be valid http or https URLs.");
   });
 
-  it("rejects extra role fields and only transfers missing sources, rather than borrowing another section's baseline", () => {
+  it("allows new role details but rejects an unrelated row borrowing a removed project's dates", () => {
     const saved = data("2024");
     saved.projects = [{ id: "project", name: "Aerodynamics", role: "Lead", season: "S27", description: "Existing content", url: "", startDate: "2024-13" }];
     const transferred = moveProjectRoleToExperience(saved, "project", "role");
     transferred.experience[0].location = "New location";
-    expect(() => validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 1 }, saved)).toThrow("Enter a month from 01 to 12.");
+    expect(validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 1 }, saved).draft?.experience[0].location).toBe("New location");
     transferred.experience = [{ id: "project", organization: "Helix NMBU", title: "Lead", description: "", startDate: "2024-13", endDate: "" }];
     expect(() => validateProfileMutation({ action: "save", draft: transferred, sharing, expectedRevision: 1 }, saved)).toThrow("Enter a month from 01 to 12.");
+  });
+
+  it("rejects missing, forged and reused source references without granting date compatibility", () => {
+    const saved = data("2024");
+    saved.projects = [{ id: "project", name: "Aerodynamics", role: "Lead", season: "S27", description: "", url: "", startDate: "2024-13" }];
+    const transferred = moveProjectRoleToExperience(saved, "project", "role");
+    const row = transferred.experience[0];
+    for (const sourceId of [undefined, "missing", "education"]) {
+      const draft = { ...transferred, experience: [{ ...row, __projectRoleSourceId: sourceId }] };
+      expect(() => validateProfileMutation({ action: "save", draft, sharing, expectedRevision: 1 }, saved)).toThrow("Enter a month from 01 to 12.");
+    }
+    const reused = { ...transferred, experience: [row, { ...row, id: "another-role", title: "Unrelated role" }] };
+    expect(() => validateProfileMutation({ action: "save", draft: reused, sharing, expectedRevision: 1 }, saved)).toThrow("Enter a month from 01 to 12.");
+    const retainedSource = { ...transferred, projects: saved.projects };
+    expect(() => validateProfileMutation({ action: "save", draft: retainedSource, sharing, expectedRevision: 1 }, saved)).toThrow("Enter a month from 01 to 12.");
+    const changed = { ...transferred, experience: [{ ...row, startDate: "2025-13" }] };
+    expect(() => validateProfileMutation({ action: "save", draft: changed, sharing, expectedRevision: 1 }, saved)).toThrow("Enter a month from 01 to 12.");
+    expect(saved.projects).toHaveLength(1);
+    expect(saved.experience).toEqual([]);
   });
 });

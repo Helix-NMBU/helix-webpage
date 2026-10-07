@@ -3,6 +3,8 @@ import { classifyCvRequestFailure, createPrivateAutosave, type CvAutosaveSnapsho
 import { emptyCv, privateSharing } from "./model";
 import { CvRequestError, validateMutation } from "./repository";
 import type { CvEnvelope, CvMutation } from "./types";
+import { moveProjectRoleToExperience } from "./experience";
+import { validateProfileMutation } from "./validate-profile-mutation";
 
 function initial(): CvEnvelope {
   return {
@@ -90,6 +92,53 @@ describe("private debounced CV autosave", () => {
     expect(controller.getState().pending).toBe(true);
     await vi.advanceTimersByTimeAsync(800);
     expect(mutate.mock.calls[1][0]).toMatchObject({ expectedRevision: 5, draft: { summary: "Later live input" }, sharing: { email: true } });
+  });
+
+  it("saves nondate transfer edits before and during autosave, then validates changed dates against the acknowledged role", async () => {
+    let acknowledged = initial();
+    acknowledged.document.draft.projects = [{ id: "project", name: "Chassis", role: "Lead", season: "S27", description: "Old description", url: "", startDate: "2023-02-29", endDate: "202-08" }];
+    const source = structuredClone(acknowledged.document.draft);
+    const first = deferred<CvEnvelope>();
+    const mutate = vi.fn<(mutation: CvMutation) => Promise<CvEnvelope>>()
+      .mockReturnValueOnce(first.promise)
+      .mockImplementation(async (mutation) => saved(mutation, 6));
+    const onFailure = vi.fn();
+    const controller = createPrivateAutosave({
+      initialEnvelope: acknowledged, mutate, onFailure,
+      validate: (mutation) => validateProfileMutation(mutation, acknowledged.document.draft),
+      onSaved: (result) => { acknowledged = result; },
+    });
+    let live = moveProjectRoleToExperience(source, "project", "role");
+    controller.update(live, privateSharing);
+    await vi.advanceTimersByTimeAsync(500);
+    live = { ...live, experience: [{ ...live.experience[0], title: "Team lead", location: "Ås" }] };
+    controller.update(live, privateSharing);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(mutate.mock.calls[0][0].draft?.experience[0]).toMatchObject({ title: "Team lead", location: "Ås", startDate: "2023-02-29", endDate: "202-08" });
+    expect(JSON.stringify(mutate.mock.calls[0][0])).not.toContain("__projectRoleSourceId");
+    live = { ...live, experience: [{ ...live.experience[0], description: "Edited during transfer save" }] };
+    controller.update(live, privateSharing);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    first.resolve(saved(mutate.mock.calls[0][0], 5));
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(mutate.mock.calls[1][0]).toMatchObject({ expectedRevision: 5, draft: { experience: [{ title: "Team lead", location: "Ås", description: "Edited during transfer save", startDate: "2023-02-29", endDate: "202-08" }] } });
+    expect(onFailure).not.toHaveBeenCalled();
+    expect(controller.getState()).toEqual({ saving: false, pending: false, paused: null });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(mutate).toHaveBeenCalledTimes(2);
+    live = { ...live, experience: [{ ...live.experience[0], startDate: "2025-13" }] };
+    controller.update(live, privateSharing);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(mutate).toHaveBeenCalledTimes(2);
+    expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ message: "Enter a month from 01 to 12." }), "validation");
+    expect(controller.getState().paused).toBe("validation");
+    expect(source.projects[0]).toMatchObject({ startDate: "2023-02-29", endDate: "202-08" });
+    expect(source.experience).toEqual([]);
+    controller.dispose();
   });
 
   it("locks immediately, drains an active save and keeps new autosaves stopped throughout a manual action", async () => {
