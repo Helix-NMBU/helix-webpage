@@ -172,13 +172,13 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
     return { index, y: cursor, firstBaseline };
   }
 
-  function whiteColumns(left: LayoutLine[], right: LayoutLine[], leftWidth: number, rightWidth: number) {
+  function whiteColumns(left: LayoutLine[], right: LayoutLine[], leftWidth: number, rightWidth: number, color: Color = INK) {
     let leftIndex = 0;
     let rightIndex = 0;
     while (leftIndex < left.length || rightIndex < right.length) {
       ensureWhiteRoom(22);
-      const leftResult = column(left, leftIndex, y, MARGIN, leftWidth, INK);
-      const rightResult = column(right, rightIndex, y, PAGE_WIDTH - MARGIN - rightWidth, rightWidth, INK, true);
+      const leftResult = column(left, leftIndex, y, MARGIN, leftWidth, color);
+      const rightResult = column(right, rightIndex, y, PAGE_WIDTH - MARGIN - rightWidth, rightWidth, color, true);
       y = Math.min(leftResult.y, rightResult.y);
       leftIndex = leftResult.index;
       rightIndex = rightResult.index;
@@ -196,16 +196,7 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
   const contacts = [cv.contactEmail, cv.phone, cv.city].flatMap((value) => layout(value, { size: 10, width: contactWidth, gap: 1 }));
   if (headline.length || contacts.length) {
     // Both top columns use the template navy, including consent-filtered contacts.
-    let leftIndex = 0;
-    let rightIndex = 0;
-    while (leftIndex < headline.length || rightIndex < contacts.length) {
-      const leftResult = column(headline, leftIndex, y, MARGIN, WIDTH - contactWidth - 20, NAVY);
-      const rightResult = column(contacts, rightIndex, y, PAGE_WIDTH - MARGIN - contactWidth, contactWidth, NAVY, true);
-      y = Math.min(leftResult.y, rightResult.y);
-      leftIndex = leftResult.index;
-      rightIndex = rightResult.index;
-      if (leftIndex < headline.length || rightIndex < contacts.length) whitePage();
-    }
+    whiteColumns(headline, contacts, WIDTH - contactWidth - 20, contactWidth, NAVY);
     y -= 21;
   }
   text(cv.fullName, { weight: "bold", size: 32, color: NAVY, gap: 12 });
