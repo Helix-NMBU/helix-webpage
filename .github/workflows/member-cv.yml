@@ -1,0 +1,24 @@
+name: Member CV checks
+on:
+  pull_request:
+    branches: [main, sponsor-portal-v2]
+  push:
+    branches: [codex/member-cv-portal]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run typecheck:api
+      - run: npm run typecheck:api:runtime
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

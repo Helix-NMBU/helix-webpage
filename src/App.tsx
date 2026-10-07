@@ -16,7 +16,7 @@ import SponsorPortal from './features/SponsorPortal/Sponsorportal.tsx'
 import CVBankLogin from './features/CVBank/Login.tsx'
 import RecruitmentLogin from './features/Recruitment/RecruitmentLogin.tsx'
 import RecruitmentPortal from './features/Recruitment/RecruitmentPortal.tsx'
-import CVBankProfile from './features/CVBank/Profile.tsx'
+import MemberCV from './features/MemberCV/MemberCV.tsx'
 import SponsorLogin from './features/Portal/SponsorLogin.tsx'
 import AccessUnavailable from './features/Portal/AccessUnavailable.tsx'
 import MemberOpportunities from './features/Portal/MemberOpportunities.tsx'
@@ -62,8 +62,9 @@ function AppContent() {
         <Route path="/recruitment" element={<RecruitmentPortal />} />
         <Route path="/cv-bank" element={<Navigate to="/member/profile" replace />} />
         <Route path="/cv-bank/login" element={<CVBankLogin />} />
+        <Route path="/member/login" element={<CVBankLogin />} />
         <Route path="/cv-bank/profile" element={<Navigate to="/member/profile" replace />} />
-        <Route path="/member/profile" element={<RequireMember><CVBankProfile /></RequireMember>} />
+        <Route path="/member/profile" element={<MemberCV />} />
         <Route path="/member/opportunities" element={<RequireMember><MemberOpportunities /></RequireMember>} />
         <Route path="/admin/sponsors" element={<RequirePortalAdmin><SponsorAdmin /></RequirePortalAdmin>} />
         <Route path="*" element={<NotFound />} />

@@ -1,0 +1,29 @@
+{
+  "repository": "Helix-NMBU/helix-webpage",
+  "tickets": {
+    "T-00": {
+      "number": 52,
+      "url": "https://github.com/Helix-NMBU/helix-webpage/issues/52"
+    },
+    "T-01": {
+      "number": 53,
+      "url": "https://github.com/Helix-NMBU/helix-webpage/issues/53"
+    },
+    "T-02": {
+      "number": 54,
+      "url": "https://github.com/Helix-NMBU/helix-webpage/issues/54"
+    },
+    "T-03": {
+      "number": 55,
+      "url": "https://github.com/Helix-NMBU/helix-webpage/issues/55"
+    },
+    "T-04": {
+      "number": 56,
+      "url": "https://github.com/Helix-NMBU/helix-webpage/issues/56"
+    }
+  },
+  "parent": {
+    "number": 51,
+    "url": "https://github.com/Helix-NMBU/helix-webpage/issues/51"
+  }
+}

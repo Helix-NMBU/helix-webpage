@@ -22,12 +22,16 @@ export const hasSharedCv = (member: DirectoryMember) => Boolean(sharedCv(member)
 
 async function downloadCv(member: DirectoryMember) {
   const path = sharedCv(member);
-  if (!supabase || !path) return;
-  const { data } = await supabase.storage.from(cvBucket).createSignedUrl(path, 900, { download: `${member.full_name} CV.pdf` });
-  if (!data?.signedUrl) return;
-  // A same-tab navigation to an attachment URL downloads without leaving the page (window.open after an await is popup-blocked in Safari).
-  window.location.assign(data.signedUrl);
+  if (!supabase || !path) return false;
+  // Check the current storage policy on every fetch rather than issuing a reusable signed URL.
+  const { data, error } = await supabase.storage.from(cvBucket).download(path);
+  if (error || !data) return false;
+  const url = URL.createObjectURL(data);
+  const link = Object.assign(document.createElement("a"), { href: url, download: `${member.full_name} CV.pdf` });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   await logCvView(member, "download");
+  return true;
 }
 
 /** Downloads one CV directly, or several bundled into a single zip. Returns how many could not be fetched. */
@@ -36,8 +40,7 @@ export async function downloadCvs(members: DirectoryMember[]) {
   const withCv = members.filter(hasSharedCv);
   if (!client || !withCv.length) return 0;
   if (withCv.length === 1) {
-    await downloadCv(withCv[0]);
-    return 0;
+    return (await downloadCv(withCv[0])) ? 0 : 1;
   }
 
   const results = await Promise.all(withCv.map(async (member) => {
@@ -152,16 +155,20 @@ export function MemberProfileDialog({ member, onClose }: { member: DirectoryMemb
 
   useEffect(() => {
     const client = supabase;
+    setCvUrl(null);
+    setCvFailed(false);
     if (!client || !cvPath || !isPdf) return;
     let cancelled = false;
+    let objectUrl: string | null = null;
     void (async () => {
-      const { data, error } = await client.storage.from(cvBucket).createSignedUrl(cvPath, 900);
+      const { data, error } = await client.storage.from(cvBucket).download(cvPath);
       if (cancelled) return;
-      if (error || !data?.signedUrl) { setCvFailed(true); return; }
-      setCvUrl(data.signedUrl);
+      if (error || !data) { setCvFailed(true); return; }
+      objectUrl = URL.createObjectURL(data);
+      setCvUrl(objectUrl);
       await logCvView(member, "profile");
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [cvPath, isPdf, member]);
 
   const cvMessage = !cvPath
