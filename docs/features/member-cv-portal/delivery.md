@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 8. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 adds private autosave and simpler numeric dates/overview.
+Spec: spec.md revision 9. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 adds private autosave and simpler numeric dates/overview.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
@@ -16,7 +16,7 @@ T-04 #56: closed after integrated verification, independent review, successful c
 Each worker is restricted to its own worktree and bounded change areas. Root owns runtime integration, sponsor PDF download/preview changes, SQL integration harness and CI.
 Review: three independent reports completed at 79b73a9. Verification: local checks and browser review completed; see below.
 Live Google and Supabase access have not been configured or tested. Do not deploy or merge.
-Next action: implement/verify T-11 and update the existing PR; T-10 is closed. Parent #51 stays open until merge. Prior tickets remain closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
+Next action: implement/verify T-12 reference layout and update the existing PR; T-11 is closed. Parent #51 stays open until merge. Prior tickets remain closed. See current record below. Before rollout, complete the configuration and live checks in setup.md. GitHub connector write returned 403; authorized GitHub CLI creation succeeded and IDs were read back. Docker is unavailable; local PostgreSQL policy verification uses PGlite with explicitly emulated Supabase schemas.
 
 ## Integrated implementation and verification
 
@@ -237,3 +237,8 @@ Local screenshots outside the repository: before /private/tmp/member-cv-experien
 
 
 Status: local T-11 CLOSED after all criteria passed at remote 167f26478d5485b9000194de12b262d5e9384592. Both GitHub workflows and automatic preview succeeded: PR run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37581627591, push run https://github.com/Helix-NMBU/helix-webpage/actions/runs/37581623203, preview https://vercel.com/joasmunds-projects/helix-webpage/9Nzjx9B1M6pTrgC7S4AJALuYhmNC. PR #57 is open/non-draft, MERGEABLE/CLEAN and unmerged with joasmund requested; no human approval is claimed. No applicable base-branch rules returned. Dependency PR #46 remains open/draft at f99939d; parent #51 remains open until merge. Code review is bound to dbbc3d5; later changes record evidence only. Re-read final closure-documentation commit gates before handoff. No merge, auto-merge, manual deployment or live database/configuration change.
+
+
+## Reference CV design follow-up
+
+Revision 9/F-16 and local T-12 follow the user-supplied PDF/DOCX. All three reference PDF pages inspected, including blank trailing page. Reference uses Lexend Light/Medium, navy #00007a, white header/education, full-width navy Experience with two columns, white later sections. User confirmed Helix roles remain under Experience and image upload stays deferred. Template sample identity/photo/contacts are not imported. Start verified clean at 0188602b41d6e0cae6ee61c76fab602059228b41, PR #57 open/non-draft with successful gates. Reuse isolated PDF worker for renderer/tests, isolated UI worker for preview/locale/secondary reference input and CSS. Root owns licensed font assets, additive references model validation, docs/integration/browser/PDF/review/remote gates. No worker edits integration branch, pushes or closes tickets. No live SQL/configuration, deployment or merge.
