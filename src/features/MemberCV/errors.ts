@@ -79,7 +79,7 @@ const fields: Record<string, string> = {
   "graduation year": "fullføringsår", institution: "studiested", degree: "grad",
   "start date": "startdato", "end date": "sluttdato", "education description": "utdanningsbeskrivelse",
   grade: "karakter", activities: "aktiviteter", "employment type": "ansettelsestype", location: "arbeidssted", "location type": "arbeidsform",
-  organization: "organisasjon", title: "tittel", "experience description": "erfaringsbeskrivelse",
+  organization: "organisasjon", title: "tittel", "experience description": "erfaringsbeskrivelse", department: "avdeling",
   "project name": "prosjektnavn", role: "rolle", season: "sesong", "project description": "prosjektbeskrivelse",
   language: "språk", "language level": "språknivå", "link label": "lenketekst", skill: "ferdighet",
   link: "lenke", "entry ID": "ID for oppføringen",

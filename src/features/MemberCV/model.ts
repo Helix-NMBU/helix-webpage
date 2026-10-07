@@ -58,6 +58,8 @@ export function validateCvData(value: unknown, forPublication = false): CvData {
     experience: list(row.experience, "experience", (e) => ({
       id: String(e.id), organization: text(e.organization, "organization"), title: text(e.title, "title"), startDate: text(e.startDate, "start date", 30), endDate: text(e.endDate, "end date", 30), description: text(e.description, "experience description", 8000),
       ...optionalText(e, "employmentType", "employment type", 100), ...optionalText(e, "location", "location"), ...optionalText(e, "locationType", "location type", 100),
+      ...optionalText(e, "department", "department"), ...optionalText(e, "season", "season", 30),
+      ...(Object.prototype.hasOwnProperty.call(e, "url") ? { url: url(e.url) } : {}),
     })),
     projects: list(row.projects, "projects", (e) => ({
       id: String(e.id), name: text(e.name, "project name"), role: text(e.role, "role"), season: text(e.season, "season", 30), description: text(e.description, "project description", 8000), url: url(e.url),
