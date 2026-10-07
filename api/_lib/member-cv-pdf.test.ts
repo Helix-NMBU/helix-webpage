@@ -13,10 +13,13 @@ async function inspect(bytes: Uint8Array) {
   const text: string[] = [];
   const pages: string[] = [];
   const urls: string[] = [];
-  for (const page of pdf.getPages()) {
+  const drawn: { page: number; text: string; x: number; y: number; size: number; color: number[]; font: string }[] = [];
+  const graphics: string[] = [];
+  for (const [pageIndex, page] of pdf.getPages().entries()) {
     const pageText: string[] = [];
     const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
     const characterMaps = new Map<string, Map<string, string>>();
+    const fontNames = new Map<string, string>();
     for (const [name, fontRef] of fonts.entries()) {
       const font = pdf.context.lookup(fontRef, PDFDict);
       const cmap = font.lookup(PDFName.of("ToUnicode")) as PDFRawStream;
@@ -27,15 +30,27 @@ async function inspect(bytes: Uint8Array) {
         characters.set(match[1].toUpperCase(), String.fromCharCode(...utf16));
       }
       characterMaps.set(name.toString().slice(1), characters);
+      fontNames.set(name.toString().slice(1), font.lookup(PDFName.of("BaseFont"), PDFName).toString());
     }
     const contents = page.node.Contents();
     const streams = contents instanceof PDFArray ? contents.asArray() : [contents];
     for (const stream of streams) {
       const source = Buffer.from(decodePDFRawStream(pdf.context.lookup(stream) as PDFRawStream).decode()).toString();
+      graphics.push(...[...source.matchAll(/q\n[\s\S]*?\nQ/g)].map((match) => match[0]));
       let fontName = "";
-      for (const operator of source.matchAll(/\/([^\s]+)\s+[\d.]+\s+Tf|<([0-9a-f]+)>\s+Tj/gi)) {
-        if (operator[1]) fontName = operator[1];
-        else pageText.push(operator[2].match(/.{4}/g)!.map((code) => characterMaps.get(fontName)!.get(code.toUpperCase()) ?? "").join(""));
+      let size = 0;
+      let x = 0;
+      let y = 0;
+      let color = [0, 0, 0];
+      for (const operator of source.matchAll(/\/([^\s]+)\s+([\d.]+)\s+Tf|1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm|([\d.]+) ([\d.]+) ([\d.]+) rg|<([0-9a-f]+)>\s+Tj/gi)) {
+        if (operator[1]) { fontName = operator[1]; size = Number(operator[2]); }
+        else if (operator[3]) { x = Number(operator[3]); y = Number(operator[4]); }
+        else if (operator[5]) color = [Number(operator[5]), Number(operator[6]), Number(operator[7])];
+        else {
+          const value = operator[8].match(/.{4}/g)!.map((code) => characterMaps.get(fontName)!.get(code.toUpperCase()) ?? "").join("");
+          pageText.push(value);
+          drawn.push({ page: pageIndex, text: value, x, y, size, color: [...color], font: fontNames.get(fontName)! });
+        }
       }
     }
     text.push(...pageText);
@@ -46,7 +61,7 @@ async function inspect(bytes: Uint8Array) {
       urls.push(action.lookup(PDFName.of("URI"), PDFString).decodeText());
     }
   }
-  return { pdf, text: text.join("\n"), urls, pages };
+  return { pdf, text: text.join("\n"), urls, pages, drawn, graphics };
 }
 
 function sample(): CvData {
@@ -65,8 +80,10 @@ function sample(): CvData {
 describe("generated member CV PDFs", () => {
   it("renders all fields and sections with Norwegian and other supported letters", async () => {
     const { pdf, text, urls } = await inspect(await generateCvPdf(sample(), shared));
-    expect(pdf.getPageCount()).toBe(1);
-    for (const expected of ["Åse Ødegård Ærlig", "Ingeniørstudent", "Ås", "Robotikk | 2027", "Élodie, Łukasz, Žaneta", "Ελληνικά Русский", "NMBU", "Master i robotikk", "2022 - 2027", "Studerer mekanikk", "Sommerstudent", "Eksempelbedrift", "Utviklet måleverktøy", "Testansvarlig", "S27", "Norsk | Morsmål", "Portefølje", "1 / 1"]) {
+    // The reference's larger name, section rules and generous spacing place
+    // this fixture's final language/link sections on its second page.
+    expect(pdf.getPageCount()).toBe(2);
+    for (const expected of ["Åse Ødegård Ærlig", "Ingeniørstudent", "Ås", "Robotikk | 2027", "Élodie, Łukasz, Žaneta", "Ελληνικά Русский", "NMBU", "Master i robotikk", "2022 - 2027", "Studerer mekanikk", "Sommerstudent", "Eksempelbedrift", "Utviklet måleverktøy", "Testansvarlig", "S27", "Norsk | Morsmål", "Portefølje", "2 / 2"]) {
       expect(text).toContain(expected);
     }
     expect(urls).toEqual(["https://example.com/prosjekt", "https://example.com/ase"]);
@@ -170,7 +187,7 @@ describe("generated member CV PDFs", () => {
     const original = structuredClone(cv);
     const { text, urls } = await inspect(await generateCvPdf(validateCvData(cv, true), { cv: true, email: false, phone: false }));
     expect(text.match(/^Helix NMBU$/gm)).toHaveLength(1);
-    for (const expected of ["Erfaring", "Gruppeleder", "Gruppemedlem", "01.08.2026 - Nå", "08.2025 - 06.2026", "Ledet testarbeidet.", "Målte sensorrespons.", "Avdeling: Elektronikk | Sesong: S27", "Part-time | Ås | On-site", "https://example.com/elektronikk", "Prosjekter", "Testansvarlig", "Prøvde sensorer og dokumenterte resultater."]) expect(text).toContain(expected);
+    for (const expected of ["Erfaring", "Gruppeleder", "Gruppemedlem", "01.08.2026 - Nå", "08.2025 - 06.2026", "Ledet testarbeidet.", "Målte sensorrespons.", "Avdeling: Elektronikk | Sesong: S27", "Part-time | Ås | On-site", "https://example.com/elektronikk", "Prosjekter", "Testansvarlig", "Prøvde sensorer og dokumenterte resultater."]) expect(text.replace(/\n/g, " ")).toContain(expected);
     expect(text.indexOf("Gruppeleder")).toBeLessThan(text.indexOf("Gruppemedlem"));
     expect(text.indexOf("Gruppemedlem")).toBeLessThan(text.indexOf("Prosjekter"));
     expect(text).not.toContain("Helix og prosjekter");
@@ -254,6 +271,113 @@ describe("generated member CV PDFs", () => {
       expect(pageText).toContain("Title");
     }
     expect(cv.experience[0].title).toBe(title);
+  });
+
+  it("saves the template's actual font, color, column and background geometry without adding a portrait or extra sections", async () => {
+    const cv = sample();
+    cv.references = "Fiktiv referanse: prosjektveileder Åse Eksempel.";
+    const { pdf, text, drawn, graphics } = await inspect(await generateCvPdf(cv, { cv: true, email: true, phone: false }));
+    const item = (value: string) => drawn.find((line) => line.text === value)!;
+    const name = item(cv.fullName);
+    const headline = item(cv.headline);
+    const contact = item(cv.contactEmail);
+    expect(name.font).toContain("HelixCVSans-Bold");
+    expect(headline.font).toContain("HelixCVSans-Medium");
+    expect(contact.font).toContain("HelixCVSans-Light");
+    expect(name.size).toBe(32);
+    expect(name.color).toEqual([0, 0, 122 / 255]);
+    expect(headline.color).toEqual(name.color);
+    expect(contact.color).toEqual(name.color);
+    expect(headline.x).toBe(64);
+    expect(contact.x).toBeGreaterThan(300);
+    expect(headline.page).toBe(name.page);
+    expect(contact.page).toBe(name.page);
+    expect(headline.y).toBeGreaterThan(name.y);
+    expect(contact.y).toBeGreaterThan(name.y);
+    const introduction = drawn.find((line) => line.text.includes("Ελληνικά Русский"))!;
+    expect(introduction.font).toContain("NotoSans");
+    expect(introduction.y).toBeLessThan(name.y);
+    expect(item("Robotikk | 2027").y).toBeLessThan(introduction.y);
+    const degree = item("Master i robotikk");
+    const educationPeriod = item("2022 - 2027");
+    expect(degree.font).toContain("Medium");
+    expect(degree.x).toBe(64);
+    expect(educationPeriod.x).toBeGreaterThan(degree.x + 250);
+    expect(Math.abs(educationPeriod.y - degree.y)).toBeLessThan(5);
+    const position = item("Sommerstudent");
+    const description = item("Utviklet måleverktøy.");
+    expect(position.color).toEqual([1, 1, 1]);
+    expect(description.color).toEqual([1, 1, 1]);
+    expect(description.page).toBe(position.page);
+    expect(description.x).toBe(266);
+    expect(position.x).toBe(64);
+    expect(Math.abs(description.y - position.y)).toBeLessThan(5);
+    expect(graphics.some((source) => source.includes("0 0 0.47843137254901963 rg") && source.includes("595.28 0 l") && source.includes("\nh\nf"))).toBe(true);
+    expect(graphics.some((source) => source.includes("1 1 1 RG") && /251 [\d.]+ m[\s\S]*251 [\d.]+ l/.test(source))).toBe(true);
+    expect(graphics.some((source) => source.includes("0.58 0.58 0.58 RG"))).toBe(true);
+    expect(item("Prosjekter").color).toEqual(name.color);
+    expect(item("Helix | Testansvarlig").color).toEqual([0.08, 0.08, 0.08]);
+    expect(text).not.toContain(cv.phone);
+    for (const absent of ["Om meg", "Frivillig", "Ferdigheter", "Python", "CAD"]) expect(text).not.toContain(absent);
+    for (const page of pdf.getPages()) {
+      expect(page.getSize()).toEqual({ width: 595.28, height: 841.89 });
+      const objects = page.node.Resources()?.lookup(PDFName.of("XObject"), PDFDict);
+      expect(objects?.entries().length ?? 0).toBe(0);
+    }
+  });
+
+  it("prints only authored references after the existing sections and omits blank reference sections", async () => {
+    const cv = sample();
+    const original = structuredClone(cv);
+    for (const references of [undefined, "", " \n "]) {
+      const { text } = await inspect(await generateCvPdf({ ...cv, references }, shared));
+      expect(text).not.toContain("Referanser");
+      expect(text).not.toContain("Oppgis på forespørsel");
+    }
+    cv.references = "Veileder: Élodie Eksempel.\nFiktiv kontakt etter avtale.";
+    const { text, pages } = await inspect(await generateCvPdf(cv, shared));
+    expect(text).toContain(cv.references);
+    expect(text.indexOf("Referanser")).toBeGreaterThan(text.indexOf("Portefølje"));
+    expect(pages.at(-1)).toContain("Fiktiv kontakt etter avtale.");
+    expect(original.references).toBeUndefined();
+  });
+
+  it("paginates either experience column independently, retaining every original title, description, link and reference", async () => {
+    const cv = emptyCv("Åse Ødegård");
+    const longTitle = Array(50).fill("VENSTRE").join("\n");
+    const longDepartment = "D".repeat(400);
+    const longUrl = `https://example.com/${"abc".repeat(150)}`;
+    cv.experience = [
+      { id: "left", organization: "Helix NMBU", title: longTitle, startDate: "2024-02-29", endDate: "2025-06", description: "KORT HØYRE SLUTT", department: longDepartment, season: "S26", url: longUrl },
+      { id: "right", organization: "Helix", title: "Kort venstre", startDate: "2026-08-01", endDate: "Present", description: "LANG HØYRE.\n".repeat(160) + "HØYRE SLUTT" },
+    ];
+    cv.references = "Referansetekst.\n".repeat(100) + "REFERANSE SLUTT";
+    const original = structuredClone(cv);
+    const { pdf, text, pages, drawn, urls } = await inspect(await generateCvPdf(validateCvData(cv), { cv: true, email: false, phone: false }));
+    expect(pdf.getPageCount()).toBeGreaterThan(6);
+    expect(pdf.getPageCount()).toBeLessThan(20);
+    expect(text.match(/^VENSTRE$/gm)).toHaveLength(50);
+    expect(text.match(/^LANG HØYRE\.$/gm)).toHaveLength(160);
+    expect(text.replace(/\n/g, "")).toContain(longDepartment);
+    expect(text).toContain("KORT HØYRE SLUTT");
+    expect(text).toContain("29.02.2024 - 06.2025");
+    expect(text).toContain("01.08.2026 - Nå");
+    expect(text).toContain("HØYRE SLUTT");
+    expect(text.match(/^Referansetekst\.$/gm)).toHaveLength(100);
+    expect(pages.at(-1)).toContain("REFERANSE SLUTT");
+    expect(urls.length).toBeGreaterThan(1);
+    expect(new Set(urls)).toEqual(new Set([longUrl]));
+    for (const line of drawn.filter((line) => line.size !== 8)) {
+      expect(line.x).toBeGreaterThanOrEqual(64);
+      expect(line.x).toBeLessThan(531.28);
+      expect(line.y).toBeGreaterThanOrEqual(48);
+      expect(line.y).toBeLessThan(777.89);
+    }
+    for (const pageText of pages.filter((value) => value.includes("LANG HØYRE."))) {
+      expect(pageText).toContain("Helix NMBU");
+      expect(pageText).toContain("Kort venstre");
+    }
+    expect(cv).toEqual(original);
   });
 
   it("reports unsupported glyphs instead of silently losing the member's content", async () => {

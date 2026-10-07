@@ -2,27 +2,35 @@ import { readableProfileDate } from "../../src/features/MemberCV/profile-inputs.
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, PDFName, PDFString, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, PDFName, PDFString, rgb, type Color, type PDFFont, type PDFPage } from "pdf-lib";
 import { sharedCvData } from "../../src/features/MemberCV/model.js";
 import { groupExperience } from "../../src/features/MemberCV/experience.js";
 import type { CvData, CvSharing } from "../../src/features/MemberCV/types.js";
 
 const PAGE_WIDTH = 595.28;
 const PAGE_HEIGHT = 841.89;
-const MARGIN = 48;
-const BODY_SIZE = 10.5;
-const LINE_HEIGHT = 15;
-const BOTTOM = 56;
+const MARGIN = 64;
+const BOTTOM = 48;
 const WIDTH = PAGE_WIDTH - 2 * MARGIN;
+const BODY_SIZE = 10.5;
+const NAVY = rgb(0, 0, 122 / 255);
+const INK = rgb(0.08, 0.08, 0.08);
+const WHITE = rgb(1, 1, 1);
+const RULE = rgb(0.58, 0.58, 0.58);
+const LEFT_WIDTH = 172;
+const COLUMN_GAP = 30;
+const RIGHT_X = MARGIN + LEFT_WIDTH + COLUMN_GAP;
+const RIGHT_WIDTH = WIDTH - LEFT_WIDTH - COLUMN_GAP;
 
-// Vercel must include api/_lib/fonts/*.ttf in the member-cv function bundle.
-// Read font files from the project root, including when Vercel bundles this module.
-let fontBytes: Promise<[Buffer, Buffer]> | undefined;
-function loadFonts(): Promise<[Buffer, Buffer]> {
+type Weight = "light" | "medium" | "bold";
+type LayoutLine = { text: string; font: PDFFont; size: number; height: number; gap: number; url?: string };
+
+// Vercel includes api/_lib/fonts/*.ttf from the function's project root.
+let fontBytes: Promise<Buffer[]> | undefined;
+function loadFonts(): Promise<Buffer[]> {
   fontBytes ??= Promise.all([
-    readFile(join(process.cwd(), "api/_lib/fonts/NotoSans-Regular.ttf")),
-    readFile(join(process.cwd(), "api/_lib/fonts/NotoSans-Bold.ttf")),
-  ]).catch((error: unknown) => {
+    "HelixCV-Light.ttf", "HelixCV-Medium.ttf", "HelixCV-Bold.ttf", "NotoSans-Regular.ttf", "NotoSans-Bold.ttf",
+  ].map((name) => readFile(join(process.cwd(), "api/_lib/fonts", name)))).catch((error: unknown) => {
     fontBytes = undefined;
     throw error;
   });
@@ -33,7 +41,7 @@ function safeLink(value: string): string | undefined {
   try {
     const url = new URL(value);
     if (["https:", "http:"].includes(url.protocol) && !url.username && !url.password) return url.href;
-  } catch { /* Invalid links are never turned into active PDF actions. */ }
+  } catch { /* Invalid links never become active PDF actions. */ }
   return undefined;
 }
 
@@ -42,207 +50,321 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
   const cv = sharedCvData(data, sharing);
   const document = await PDFDocument.create();
   document.registerFontkit(fontkit);
-  const [regularBytes, boldBytes] = await loadFonts();
-  const regular = await document.embedFont(regularBytes, { subset: true });
-  const bold = await document.embedFont(boldBytes, { subset: true });
-  const supported = new Set(regular.getCharacterSet());
-  let page: PDFPage;
-  let y: number;
-  let pageContinuation: (() => void) | undefined;
+  const embedded = await Promise.all((await loadFonts()).map((bytes) => document.embedFont(bytes, { subset: true })));
+  const fonts: Record<Weight, PDFFont> = { light: embedded[0], medium: embedded[1], bold: embedded[2] };
+  const fallback: Record<Weight, PDFFont> = { light: embedded[3], medium: embedded[4], bold: embedded[4] };
+  const characterSets = new Map(embedded.map((font) => [font, new Set(font.getCharacterSet())]));
+  let page!: PDFPage;
+  let y = 0;
+  let whiteSection: string | undefined;
+  const darkFooters = new Set<PDFPage>();
 
-  function newPage() {
+  function newPage(dark = false) {
     page = document.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     y = PAGE_HEIGHT - MARGIN;
+    if (dark) {
+      page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: NAVY });
+      darkFooters.add(page);
+    }
   }
   newPage();
 
-  function ensureRoom(height: number) {
-    if (y - height < BOTTOM) {
-      newPage();
-      const continuation = pageContinuation;
-      // Header drawing must never recursively invoke its own page callback.
-      pageContinuation = undefined;
-      continuation?.();
-      pageContinuation = continuation;
-    }
-  }
-
-  function lines(value: string, font: PDFFont, size: number, width = WIDTH): string[] {
-    const normalized = value.replace(/\r\n?/g, "\n").replace(/\t/g, " ");
-    for (const character of normalized) {
-      if (character !== "\n" && !supported.has(character.codePointAt(0)!)) {
-        // Never replace member content with missing-glyph boxes or silently drop it.
+  function fontFor(value: string, weight: Weight): PDFFont {
+    const characters = [...value].filter((character) => character !== "\n");
+    if (characters.every((character) => characterSets.get(fonts[weight])!.has(character.codePointAt(0)!))) return fonts[weight];
+    for (const character of characters) {
+      if (!characterSets.get(fallback[weight])!.has(character.codePointAt(0)!)) {
         throw new Error(`The CV font does not support ${character}. Please use supported text.`);
       }
     }
-    const result: string[] = [];
-    for (const paragraph of normalized.split("\n")) {
+    // A paragraph uses one fallback font so mixed Latin/Greek/Cyrillic text
+    // retains its shaping, wrapping and extraction order.
+    return fallback[weight];
+  }
+
+  function layout(value: string, options: { weight?: Weight; size?: number; width?: number; gap?: number; url?: string } = {}): LayoutLine[] {
+    if (!value.trim()) return [];
+    const size = options.size ?? BODY_SIZE;
+    const width = options.width ?? WIDTH;
+    const result: LayoutLine[] = [];
+    for (const paragraph of value.replace(/\r\n?/g, "\n").replace(/\t/g, " ").split("\n")) {
+      const font = fontFor(paragraph, options.weight ?? "light");
+      const push = (text: string) => result.push({ text, font, size, height: size * 1.42, gap: 0, url: options.url });
       let line = "";
       for (const word of paragraph.trim().split(/ +/)) {
         if (!word) continue;
         const candidate = line ? `${line} ${word}` : word;
-        if (font.widthOfTextAtSize(candidate, size) <= width) {
-          line = candidate;
-          continue;
-        }
-        if (line) { result.push(line); line = ""; }
+        if (font.widthOfTextAtSize(candidate, size) <= width) { line = candidate; continue; }
+        if (line) { push(line); line = ""; }
         for (const character of word) {
-          if (line && font.widthOfTextAtSize(line + character, size) > width) {
-            result.push(line);
-            line = "";
-          }
+          if (line && font.widthOfTextAtSize(line + character, size) > width) { push(line); line = ""; }
           line += character;
         }
       }
-      result.push(line);
+      push(line);
     }
+    result[result.length - 1].gap = options.gap ?? 4;
     return result;
   }
 
-  function text(value: string, options: { bold?: boolean; size?: number; url?: string; gap?: number; indent?: number; onLine?: (lineY: number) => void } = {}) {
-    if (!value.trim()) return;
-    const font = options.bold ? bold : regular;
-    const size = options.size ?? BODY_SIZE;
-    const height = size === BODY_SIZE ? LINE_HEIGHT : size * 1.4;
-    const x = MARGIN + (options.indent ?? 0);
-    for (const line of lines(value, font, size, WIDTH - (options.indent ?? 0))) {
-      ensureRoom(height);
-      y -= height;
-      if (!line) continue;
-      page.drawText(line, { x, y, size, font, color: rgb(0.12, 0.12, 0.12) });
-      options.onLine?.(y);
-      const target = options.url && safeLink(options.url);
-      if (target) {
-        const annotation = document.context.register(document.context.obj({
-          Type: "Annot", Subtype: "Link", Rect: [x, y - 2, x + font.widthOfTextAtSize(line, size), y + size],
-          Border: [0, 0, 0], A: { Type: "Action", S: "URI", URI: PDFString.of(target) },
-        }));
-        page.node.addAnnot(annotation);
-      }
+  function draw(line: LayoutLine, x: number, baseline: number, color: Color, rightAligned = false, width = WIDTH) {
+    if (!line.text) return;
+    const lineWidth = line.font.widthOfTextAtSize(line.text, line.size);
+    const lineX = rightAligned ? x + width - lineWidth : x;
+    page.drawText(line.text, { x: lineX, y: baseline, font: line.font, size: line.size, color });
+    const target = line.url && safeLink(line.url);
+    if (target) {
+      const annotation = document.context.register(document.context.obj({
+        Type: "Annot", Subtype: "Link", Rect: [lineX, baseline - 2, lineX + lineWidth, baseline + line.size],
+        Border: [0, 0, 0], A: { Type: "Action", S: "URI", URI: PDFString.of(target) },
+      }));
+      page.node.addAnnot(annotation);
     }
-    y -= options.gap ?? 3;
   }
 
-  function section(title: string, render: () => void, minimumHeight = 90) {
-    // Keep the heading with the beginning of its first entry on this page.
-    ensureRoom(minimumHeight);
+  function heading(title: string, dark = false) {
+    const color = dark ? WHITE : NAVY;
+    const line = layout(title, { weight: "medium", size: 16, gap: 0 })[0];
+    y -= line.height;
+    draw(line, MARGIN, y, color);
     y -= 13;
-    text(title, { bold: true, size: 13, gap: 7 });
+    page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE_WIDTH - MARGIN, y }, thickness: 0.6, color: dark ? WHITE : RULE });
+    y -= 18;
+  }
+
+  function whitePage() {
+    newPage();
+    if (whiteSection) heading(`${whiteSection} (forts.)`);
+  }
+  function ensureWhiteRoom(height: number) { if (y - height < BOTTOM) whitePage(); }
+
+  function text(value: string, options: { weight?: Weight; size?: number; gap?: number; url?: string; color?: Color } = {}) {
+    for (const line of layout(value, options)) {
+      ensureWhiteRoom(line.height);
+      y -= line.height;
+      draw(line, MARGIN, y, options.color ?? INK);
+      y -= line.gap;
+    }
+  }
+
+  function section(title: string, render: () => void) {
+    // Check before activating the new heading, so a page break never repeats
+    // the previous section or leaves a heading without its first content line.
+    whiteSection = undefined;
+    ensureWhiteRoom(125);
+    y -= 18;
+    whiteSection = title;
+    heading(title);
     render();
+    whiteSection = undefined;
   }
 
-  function entry(title: string, detail: string, description: string, url = "", extra: string[] = []) {
-    ensureRoom(45);
-    text(title, { bold: true });
-    text(detail);
-    extra.forEach((value) => text(value));
-    text(description);
-    text(url, { url });
-    y -= 6;
+  function column(lines: LayoutLine[], index: number, top: number, x: number, width: number, color: Color, rightAligned = false) {
+    let cursor = top;
+    let firstBaseline: number | undefined;
+    while (index < lines.length && cursor - lines[index].height >= BOTTOM) {
+      const line = lines[index++];
+      cursor -= line.height;
+      firstBaseline ??= cursor;
+      draw(line, x, cursor, color, rightAligned, width);
+      cursor -= line.gap;
+    }
+    return { index, y: cursor, firstBaseline };
   }
 
-  text(cv.fullName, { bold: true, size: 25, gap: 6 });
-  text(cv.headline, { size: 12 });
-  text([cv.city, cv.contactEmail, cv.phone].filter(Boolean).join(" | "));
-  text([cv.fieldOfStudy, cv.graduationYear].filter(Boolean).join(" | "));
-  if (cv.summary.trim()) section("Om meg", () => text(cv.summary));
+  function whiteColumns(left: LayoutLine[], right: LayoutLine[], leftWidth: number, rightWidth: number) {
+    let leftIndex = 0;
+    let rightIndex = 0;
+    while (leftIndex < left.length || rightIndex < right.length) {
+      ensureWhiteRoom(22);
+      const leftResult = column(left, leftIndex, y, MARGIN, leftWidth, INK);
+      const rightResult = column(right, rightIndex, y, PAGE_WIDTH - MARGIN - rightWidth, rightWidth, INK, true);
+      y = Math.min(leftResult.y, rightResult.y);
+      leftIndex = leftResult.index;
+      rightIndex = rightResult.index;
+      if (leftIndex < left.length || rightIndex < right.length) whitePage();
+    }
+  }
 
   const hasContent = (values: (string | undefined)[]) => values.some((value) => typeof value === "string" && value.trim());
   const label = (name: string, value?: string) => value?.trim() ? `${name}: ${value}` : "";
   const period = (start?: string, end?: string) => [start, end].filter((value): value is string => Boolean(value)).map((value) => value === "Present" ? "Nå" : readableProfileDate(value)).join(" - ");
-  const education = cv.education.filter((e) => hasContent([e.institution, e.degree, e.startDate, e.endDate, e.description, e.fieldOfStudy, e.grade, e.activities]));
-  if (education.length) section("Utdanning", () => education.forEach((e) => entry(
-    [e.institution, e.degree].filter(Boolean).join(" | "),
-    period(e.startDate, e.endDate), e.description, "",
-    [label("Studieretning", e.fieldOfStudy), label("Karakter", e.grade), label("Aktiviteter", e.activities)],
-  )));
-  const experience = cv.experience.filter((e) => hasContent([e.organization, e.title, e.startDate, e.endDate, e.description, e.employmentType, e.location, e.locationType, e.department, e.season, e.url]));
-  const experienceGroups = groupExperience(experience);
-  const firstGroup = experienceGroups[0];
-  const firstRole = firstGroup?.roles[0];
-  const experienceHeadingRoom = firstRole ? 75
-    + lines(firstGroup.organization, bold, 12).length * 16.8
-    + (firstRole.title ? lines(firstRole.title, bold, BODY_SIZE, WIDTH - (firstGroup.roles.length > 1 ? 18 : 0)).length * LINE_HEIGHT : 0) : 90;
-  if (experience.length) section("Erfaring", () => {
-    for (const group of experienceGroups) {
+
+  // The reference's portrait is deferred. Introduction uses the available width.
+  const contactWidth = 180;
+  const headline = layout(cv.headline, { weight: "medium", size: 14, width: WIDTH - contactWidth - 20 });
+  const contacts = [cv.contactEmail, cv.phone, cv.city].flatMap((value) => layout(value, { size: 10, width: contactWidth, gap: 1 }));
+  if (headline.length || contacts.length) {
+    // Both top columns use the template navy, including consent-filtered contacts.
+    let leftIndex = 0;
+    let rightIndex = 0;
+    while (leftIndex < headline.length || rightIndex < contacts.length) {
+      const leftResult = column(headline, leftIndex, y, MARGIN, WIDTH - contactWidth - 20, NAVY);
+      const rightResult = column(contacts, rightIndex, y, PAGE_WIDTH - MARGIN - contactWidth, contactWidth, NAVY, true);
+      y = Math.min(leftResult.y, rightResult.y);
+      leftIndex = leftResult.index;
+      rightIndex = rightResult.index;
+      if (leftIndex < headline.length || rightIndex < contacts.length) whitePage();
+    }
+    y -= 21;
+  }
+  text(cv.fullName, { weight: "bold", size: 32, color: NAVY, gap: 12 });
+  text(cv.summary, { gap: 9 });
+  text([cv.fieldOfStudy, cv.graduationYear].filter(Boolean).join(" | "), { gap: 7 });
+
+  const education = cv.education.filter((entry) => hasContent([entry.institution, entry.degree, entry.startDate, entry.endDate, entry.description, entry.fieldOfStudy, entry.grade, entry.activities]));
+  if (education.length) section("Utdanning", () => {
+    for (const entry of education) {
+      ensureWhiteRoom(48);
+      const dateWidth = 140;
+      const degreeWidth = WIDTH - dateWidth - 20;
+      whiteColumns([
+        ...layout(entry.degree, { weight: "medium", size: 12, width: degreeWidth, gap: 3 }),
+        ...layout(entry.institution, { width: degreeWidth }),
+      ], layout(period(entry.startDate, entry.endDate), { width: dateWidth }), degreeWidth, dateWidth);
+      text(label("Studieretning", entry.fieldOfStudy));
+      text(label("Karakter", entry.grade));
+      text(label("Aktiviteter", entry.activities));
+      text(entry.description);
+      y -= 17;
+    }
+  });
+
+  const experience = cv.experience.filter((entry) => hasContent([entry.organization, entry.title, entry.startDate, entry.endDate, entry.description, entry.employmentType, entry.location, entry.locationType, entry.department, entry.season, entry.url]));
+  const projects = cv.projects.filter((entry) => hasContent([entry.name, entry.role, entry.season, entry.description, entry.url, entry.startDate, entry.endDate]));
+  const languages = cv.languages.filter((entry) => entry.name.trim() || entry.level.trim());
+  const links = cv.links.filter((entry) => entry.label.trim() || entry.url.trim());
+  const hasWhiteTail = Boolean(projects.length || languages.length || links.length || cv.references?.trim());
+
+  if (experience.length) {
+    whiteSection = undefined;
+    // Start the band only when its heading and first role can share a page.
+    if (y - 155 < BOTTOM) newPage(true);
+    else {
+      y -= 18;
+      page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: y, color: NAVY });
+      darkFooters.add(page);
+      y -= 27;
+    }
+    heading("Erfaring", true);
+    const experiencePage = () => { newPage(true); heading("Erfaring (forts.)", true); };
+    const bounded = (value: string, width: number, size = BODY_SIZE): LayoutLine | undefined => {
+      if (!value.trim()) return undefined;
+      const normalized = value.trim().replace(/\s+/g, " ");
+      const font = fontFor(normalized, "medium");
+      let title = normalized;
+      while (title && font.widthOfTextAtSize(`${title}${title === normalized ? "" : "..."} (forts.)`, size) > width) title = [...title].slice(0, -1).join("");
+      return { text: `${title}${title === normalized ? "" : "..."} (forts.)`, font, size, height: size * 1.42, gap: 4 };
+    };
+    for (const group of groupExperience(experience)) {
       const connected = group.roles.length > 1;
-      const indent = connected ? 18 : 0;
-      // Each page gets its own segment. A connector never spans a page break
-      // or extends into the next organization or Projects section.
+      // A very long single title must not hide its organization until a later
+      // page while the paired description has already started on this page.
+      const separateOrganization = connected || layout(group.roles[0].title, { weight: "medium", size: 12, width: LEFT_WIDTH }).length > 3;
+      const indent = connected ? 14 : 0;
+      const leftX = MARGIN + indent;
+      const leftWidth = LEFT_WIDTH - indent;
       const segments = new Map<PDFPage, { top: number; bottom: number; dots: number[] }>();
-      let markRole = false;
-      const onLine = (lineY: number) => {
+      const mark = (baseline: number, bottom: number) => {
         if (!connected) return;
-        const baseline = lineY + BODY_SIZE / 2;
-        const segment = segments.get(page) ?? { top: baseline, bottom: baseline, dots: [] };
-        segment.bottom = baseline;
-        if (markRole) { segment.dots.push(baseline); markRole = false; }
+        const dotY = baseline + 4;
+        const segment = segments.get(page) ?? { top: dotY, bottom, dots: [] };
+        segment.bottom = Math.min(segment.bottom, bottom);
+        segment.dots.push(dotY);
         segments.set(page, segment);
       };
-      const roleText = (value: string, options: { bold?: boolean; url?: string } = {}) => text(value, { ...options, indent, onLine });
-      const continuationLabel = (value: string, font: PDFFont, size: number, width: number) => {
-        const normalized = value.trim().replace(/\s+/g, " ");
-        let label = normalized;
-        while (label && font.widthOfTextAtSize(`${label}${label === normalized ? "" : "..."} (forts.)`, size) > width) {
-          label = [...label].slice(0, -1).join("");
+      if (y - 80 < BOTTOM) experiencePage();
+      if (separateOrganization && group.organization) {
+        const organization = layout(group.organization, { weight: "medium", size: 12, width: LEFT_WIDTH, gap: 7 });
+        let index = 0;
+        while (index < organization.length) {
+          const result = column(organization, index, y, MARGIN, LEFT_WIDTH, WHITE);
+          index = result.index;
+          y = result.y;
+          if (index < organization.length) experiencePage();
         }
-        return `${label}${label === normalized ? "" : "..."} (forts.)`;
-      };
-      const organization = (continued = false) => {
-        if (group.organization) text(continued ? continuationLabel(group.organization, bold, 12, WIDTH) : group.organization, { bold: true, size: 12, gap: 5 });
-      };
-      const blockHeight = (value: string, font: PDFFont, size = BODY_SIZE, gap = 3, width = WIDTH - indent) => value.trim() ? lines(value, font, size, width).length * (size === BODY_SIZE ? LINE_HEIGHT : size * 1.4) + gap : 0;
-      for (const [index, role] of group.roles.entries()) {
-        pageContinuation = undefined;
-        const previousPage = page;
-        const organizationHeight = blockHeight(group.organization, bold, 12, 5, WIDTH);
-        // The original title can exceed a page. Reserve its beginning, then
-        // let text() paginate every original line without dropping content.
-        ensureRoom(Math.min(150, organizationHeight + blockHeight(role.title, bold) + blockHeight(period(role.startDate, role.endDate), regular) + LINE_HEIGHT));
-        if (index === 0 || page !== previousPage) organization(index > 0);
-        markRole = true;
-        pageContinuation = () => {
-          organization(true);
-          markRole = true;
-          // Keep the individual position clear when its description spans pages.
-          roleText(role.title ? continuationLabel(role.title, bold, BODY_SIZE, WIDTH - indent) : "", { bold: true });
-        };
-        roleText(role.title, { bold: true });
-        roleText(period(role.startDate, role.endDate));
-        roleText([role.employmentType, role.location, role.locationType].filter(Boolean).join(" | "));
-        roleText([label("Avdeling", role.department), label("Sesong", role.season)].filter(Boolean).join(" | "));
-        roleText(role.description);
-        roleText(role.url ?? "", { url: role.url });
-        pageContinuation = undefined;
-        y -= 9;
+      }
+      for (const role of group.roles) {
+        if (y - 64 < BOTTOM) {
+          experiencePage();
+          if (separateOrganization) {
+            const context = bounded(group.organization, LEFT_WIDTH, 12);
+            if (context) { y -= context.height; draw(context, MARGIN, y, WHITE); y -= context.gap; }
+          }
+        }
+        const left = [
+          ...layout(role.title, { weight: "medium", size: 12, width: leftWidth, gap: 3 }),
+          ...(!separateOrganization ? layout(group.organization, { width: leftWidth, gap: 3 }) : []),
+          ...layout(period(role.startDate, role.endDate), { size: 10, width: leftWidth }),
+          ...layout([role.employmentType, role.location, role.locationType].filter(Boolean).join(" | "), { size: 10, width: leftWidth }),
+          ...layout([label("Avdeling", role.department), label("Sesong", role.season)].filter(Boolean).join(" | "), { size: 10, width: leftWidth }),
+        ];
+        const right = [...layout(role.description, { width: RIGHT_WIDTH, gap: 7 }), ...layout(role.url ?? "", { width: RIGHT_WIDTH, url: role.url })];
+        let leftIndex = 0;
+        let rightIndex = 0;
+        let continued = false;
+        while (leftIndex < left.length || rightIndex < right.length) {
+          const top = y;
+          let leftTop = top;
+          let marker: number | undefined;
+          if (continued) {
+            for (const context of [bounded(group.organization, leftWidth, 12), bounded(role.title, leftWidth, 12)]) {
+              if (context) { leftTop -= context.height; draw(context, leftX, leftTop, WHITE); marker ??= leftTop; leftTop -= context.gap; }
+            }
+          }
+          const leftResult = column(left, leftIndex, leftTop, leftX, leftWidth, WHITE);
+          const rightResult = column(right, rightIndex, top, RIGHT_X, RIGHT_WIDTH, WHITE);
+          y = Math.min(leftResult.y, rightResult.y);
+          marker ??= leftResult.firstBaseline ?? rightResult.firstBaseline;
+          if (marker !== undefined) mark(marker, y + 3);
+          if (right.length) page.drawLine({ start: { x: RIGHT_X - COLUMN_GAP / 2, y: top - 3 }, end: { x: RIGHT_X - COLUMN_GAP / 2, y: y + 3 }, thickness: 0.55, color: WHITE });
+          leftIndex = leftResult.index;
+          rightIndex = rightResult.index;
+          if (leftIndex < left.length || rightIndex < right.length) { experiencePage(); continued = true; }
+        }
+        y -= 22;
       }
       for (const [segmentPage, segment] of segments) {
-        const x = MARGIN + 5;
-        const color = rgb(0.65, 0.65, 0.65);
-        segmentPage.drawLine({ start: { x, y: segment.top }, end: { x, y: segment.bottom }, thickness: 0.8, color });
-        for (const dotY of segment.dots) segmentPage.drawCircle({ x, y: dotY, size: 2.5, color });
+        const x = MARGIN + 2;
+        segmentPage.drawLine({ start: { x, y: segment.top }, end: { x, y: segment.bottom }, thickness: 0.65, color: rgb(0.75, 0.75, 0.9) });
+        for (const baseline of segment.dots) segmentPage.drawCircle({ x, y: baseline, size: 2, color: WHITE });
       }
-      y -= 3;
+      y -= 9;
     }
-  }, Math.max(90, Math.min(200, experienceHeadingRoom)));
-  const projects = cv.projects.filter((e) => hasContent([e.name, e.role, e.season, e.description, e.url, e.startDate, e.endDate]));
-  if (projects.length) section("Prosjekter", () => projects.forEach((e) => entry(
-    [e.name, e.role].filter(Boolean).join(" | "),
-    [e.season, period(e.startDate, e.endDate)].filter(Boolean).join(" | "), e.description, e.url,
-  )));
-  const languages = cv.languages.filter((e) => e.name.trim() || e.level.trim());
-  if (languages.length) section("Språk", () => languages.forEach((e) => text([e.name, e.level].filter(Boolean).join(" | "))));
-  const links = cv.links.filter((e) => e.label.trim() || e.url.trim());
-  if (links.length) section("Lenker", () => links.forEach((e) => {
-    text(e.label, { bold: true });
-    text(e.url, { url: e.url, gap: 7 });
+    if (hasWhiteTail) {
+      const boundary = y - 7;
+      if (boundary - 140 < BOTTOM) newPage();
+      else {
+        // The band was painted first. Restore the white area only below the
+        // finished roles, before any following white-section content is drawn.
+        page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: boundary, color: WHITE });
+        darkFooters.delete(page);
+        y = boundary - 8;
+      }
+    }
+  }
+
+  if (projects.length) section("Prosjekter", () => {
+    for (const entry of projects) {
+      ensureWhiteRoom(48);
+      text([entry.name, entry.role].filter(Boolean).join(" | "), { weight: "medium", size: 12 });
+      text([entry.season, period(entry.startDate, entry.endDate)].filter(Boolean).join(" | "));
+      text(entry.description);
+      text(entry.url, { url: entry.url });
+      y -= 15;
+    }
+  });
+  if (languages.length) section("Språk", () => languages.forEach((entry) => text([entry.name, entry.level].filter(Boolean).join(" | "))));
+  if (links.length) section("Lenker", () => links.forEach((entry) => {
+    text(entry.label, { weight: "medium" });
+    text(entry.url, { url: entry.url, gap: 9 });
   }));
+  if (cv.references?.trim()) section("Referanser", () => text(cv.references!));
 
   for (const [index, pdfPage] of document.getPages().entries()) {
     const footer = `${index + 1} / ${document.getPageCount()}`;
-    pdfPage.drawText(footer, { x: PAGE_WIDTH - MARGIN - regular.widthOfTextAtSize(footer, 8), y: 29, font: regular, size: 8, color: rgb(0.4, 0.4, 0.4) });
+    pdfPage.drawText(footer, { x: PAGE_WIDTH - MARGIN - fonts.light.widthOfTextAtSize(footer, 8), y: 26, font: fonts.light, size: 8, color: darkFooters.has(pdfPage) ? WHITE : RULE });
   }
-  // Explicit metadata contains no contacts from the source draft.
   document.setTitle(cv.fullName ? `CV - ${cv.fullName}` : "CV");
   document.setProducer("Helix medlemsportal");
   document.setCreator("Helix medlemsportal");
