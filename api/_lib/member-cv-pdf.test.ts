@@ -239,6 +239,23 @@ describe("generated member CV PDFs", () => {
     expect(urls).toEqual([]);
   });
 
+  it("paginates a multiline title longer than a page with bounded continuation headers", async () => {
+    const cv = emptyCv("Ada");
+    const title = Array(55).fill("Title").join("\n");
+    cv.experience = [{ id: "long-title", organization: "Helix NMBU", title, startDate: "2026-08", endDate: "Present", description: "Description ".repeat(500) }];
+    const { pdf, text, pages } = await inspect(await generateCvPdf(validateCvData(cv), shared));
+    expect(pdf.getPageCount()).toBeGreaterThan(2);
+    expect(pdf.getPageCount()).toBeLessThan(10);
+    expect(text.match(/^Title$/gm)).toHaveLength(55);
+    expect(text.match(/Description/g)).toHaveLength(500);
+    expect(text).toContain("08.2026 - Nå");
+    for (const pageText of pages.filter((value) => value.includes("Description"))) {
+      expect(pageText).toContain("Helix NMBU");
+      expect(pageText).toContain("Title");
+    }
+    expect(cv.experience[0].title).toBe(title);
+  });
+
   it("reports unsupported glyphs instead of silently losing the member's content", async () => {
     const cv = emptyCv("Test");
     cv.summary = "Tekst med 🦄";

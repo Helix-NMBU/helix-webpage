@@ -59,7 +59,11 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
   function ensureRoom(height: number) {
     if (y - height < BOTTOM) {
       newPage();
-      pageContinuation?.();
+      const continuation = pageContinuation;
+      // Header drawing must never recursively invoke its own page callback.
+      pageContinuation = undefined;
+      continuation?.();
+      pageContinuation = continuation;
     }
   }
 
@@ -176,24 +180,34 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
         segments.set(page, segment);
       };
       const roleText = (value: string, options: { bold?: boolean; url?: string } = {}) => text(value, { ...options, indent, onLine });
+      const continuationLabel = (value: string, font: PDFFont, size: number, width: number) => {
+        const normalized = value.trim().replace(/\s+/g, " ");
+        let label = normalized;
+        while (label && font.widthOfTextAtSize(`${label}${label === normalized ? "" : "..."} (forts.)`, size) > width) {
+          label = [...label].slice(0, -1).join("");
+        }
+        return `${label}${label === normalized ? "" : "..."} (forts.)`;
+      };
       const organization = (continued = false) => {
-        if (group.organization) text(`${group.organization}${continued ? " (forts.)" : ""}`, { bold: true, size: 12, gap: 5 });
+        if (group.organization) text(continued ? continuationLabel(group.organization, bold, 12, WIDTH) : group.organization, { bold: true, size: 12, gap: 5 });
       };
       const blockHeight = (value: string, font: PDFFont, size = BODY_SIZE, gap = 3, width = WIDTH - indent) => value.trim() ? lines(value, font, size, width).length * (size === BODY_SIZE ? LINE_HEIGHT : size * 1.4) + gap : 0;
       for (const [index, role] of group.roles.entries()) {
         pageContinuation = undefined;
         const previousPage = page;
         const organizationHeight = blockHeight(group.organization, bold, 12, 5, WIDTH);
-        ensureRoom(organizationHeight + blockHeight(role.title, bold) + blockHeight(period(role.startDate, role.endDate), regular) + LINE_HEIGHT);
+        // The original title can exceed a page. Reserve its beginning, then
+        // let text() paginate every original line without dropping content.
+        ensureRoom(Math.min(150, organizationHeight + blockHeight(role.title, bold) + blockHeight(period(role.startDate, role.endDate), regular) + LINE_HEIGHT));
         if (index === 0 || page !== previousPage) organization(index > 0);
         markRole = true;
-        roleText(role.title, { bold: true });
         pageContinuation = () => {
           organization(true);
           markRole = true;
           // Keep the individual position clear when its description spans pages.
-          roleText(role.title ? `${role.title} (forts.)` : "", { bold: true });
+          roleText(role.title ? continuationLabel(role.title, bold, BODY_SIZE, WIDTH - indent) : "", { bold: true });
         };
+        roleText(role.title, { bold: true });
         roleText(period(role.startDate, role.endDate));
         roleText([role.employmentType, role.location, role.locationType].filter(Boolean).join(" | "));
         roleText([label("Avdeling", role.department), label("Sesong", role.season)].filter(Boolean).join(" | "));
@@ -210,7 +224,7 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
       }
       y -= 3;
     }
-  }, Math.max(90, experienceHeadingRoom));
+  }, Math.max(90, Math.min(200, experienceHeadingRoom)));
   const projects = cv.projects.filter((e) => hasContent([e.name, e.role, e.season, e.description, e.url, e.startDate, e.endDate]));
   if (projects.length) section("Prosjekter", () => projects.forEach((e) => entry(
     [e.name, e.role].filter(Boolean).join(" | "),
