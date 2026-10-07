@@ -92,3 +92,20 @@ describe("CV input and publication boundaries", () => {
     expect(republished.phone).toBe("");
   });
 });
+
+
+describe("optional CV references", () => {
+  it("keeps legacy omissions and roundtrips only member-authored reference text", () => {
+    expect(validateCvData(emptyCv())).not.toHaveProperty("references");
+    const cv = validateCvData({ ...emptyCv("Ada"), references: "  Oppgis på forespørsel.\nTa kontakt.  " });
+    expect(cv.references).toBe("Oppgis på forespørsel.\nTa kontakt.");
+    expect(validateCvData(structuredClone(cv)).references).toBe(cv.references);
+    const shared = sharedCvData(cv, privateSharing);
+    expect(shared.references).toBe(cv.references);
+    expect(shared.contactEmail).toBe("");
+    expect(validateCvData({ ...cv, references: "" }).references).toBe("");
+  });
+  it.each([null, 17, {}, "a".repeat(2001), "bad\u0000value"])("rejects malformed or oversized reference text %j", (references) => {
+    expect(() => validateCvData({ ...emptyCv(), references })).toThrow("Invalid references.");
+  });
+});

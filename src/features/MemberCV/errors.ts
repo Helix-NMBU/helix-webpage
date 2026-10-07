@@ -2,6 +2,7 @@ const generalError = "Noe gikk galt i medlemsportalen. Prøv igjen senere.";
 const networkError = "Kunne ikke koble til medlemsportalen. Det du har skrevet, er beholdt. Kontroller nettforbindelsen. Last inn lagret CV på nytt før du prøver å lagre eller publisere igjen.";
 
 const messages: Record<string, string> = {
+  "Invalid references.": "Ugyldig referansetekst. Bruk maks 2000 tegn.",
   "Complete the date before saving.": "Fullfør datoen før du lagrer.",
   "Enter a month from 01 to 12.": "Skriv inn en måned fra 01 til 12.",
   "Enter a valid calendar day.": "Skriv inn en gyldig dag i kalenderen.",

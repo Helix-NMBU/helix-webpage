@@ -6,6 +6,7 @@ export type CvLink = { id: string; label: string; url: string };
 export type CvData = {
   fullName: string; contactEmail: string; phone: string; city: string; headline: string; summary: string;
   fieldOfStudy: string; graduationYear: string;
+  references?: string;
   education: CvEducation[]; experience: CvExperience[]; projects: CvProject[];
   skills: string[]; languages: CvLanguage[]; links: CvLink[];
 };
