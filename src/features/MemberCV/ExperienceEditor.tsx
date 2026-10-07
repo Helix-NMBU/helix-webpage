@@ -70,6 +70,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
     if (!editingOrganizations) return;
     // Regroup after an outside button/link activates, so changing layout cannot swallow its click.
     const finishEditing = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest(".mcv-profile-menu")) return;
       if (event.target instanceof Node && !editor.current?.contains(event.target)) setEditingOrganizations(null);
     };
     document.addEventListener("click", finishEditing);
