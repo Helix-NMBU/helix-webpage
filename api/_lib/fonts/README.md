@@ -10,7 +10,7 @@ Source: the official [Noto font repository](https://github.com/notofonts/noto-fo
 
 The renderer embeds subsets of these fonts into each generated PDF. Norwegian characters, Latin diacritics, Greek and Cyrillic are supported. Characters outside the font's coverage return an explicit error instead of disappearing or rendering as missing glyphs. The template does not yet provide fonts for every writing system or emoji.
 
-The renderer uses the Node filesystem. Vercel must include `api/_lib/fonts/*.ttf` in the `/api/member-cv` function through `functions["api/member-cv.ts"].includeFiles`. The project root is the runtime working directory. Font files are private server assets, not browser downloads.
+The renderer uses the Node filesystem. Vercel must include `api/_lib/fonts/*.ttf` in the `/api/member-cv` function through `functions["api/member-cv.ts"].includeFiles`. The project root is the runtime working directory. Noto Sans is a server fallback; the template's Lexend derivatives are also emitted as browser assets for the fictional preview.
 
 ## Template fonts
 
