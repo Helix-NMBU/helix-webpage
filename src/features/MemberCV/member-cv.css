@@ -451,7 +451,7 @@
   font-display: swap;
 }
 .mcv-template-document {
-  --cv-navy: #00007a;
+  --cv-blue: var(--primary, #002ec4);
   width: 100%;
   max-width: 740px;
   min-width: 0;
@@ -480,14 +480,14 @@
   margin: 0;
 }
 .mcv-template-document h1 {
-  color: var(--cv-navy);
+  color: var(--cv-blue);
   font-size: clamp(36px, 5vw, 56px);
   font-weight: 700;
   margin: 28px 0 12px;
 }
 .mcv-template-document h2 {
   font-size: 24px;
-  color: var(--cv-navy);
+  color: var(--cv-blue);
   font-weight: 500;
   margin-bottom: 24px;
 }
@@ -510,7 +510,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
   gap: 24px;
   align-items: start;
-  color: var(--cv-navy);
+  color: var(--cv-blue);
 }
 .mcv-template-headline {
   font-size: 22px;
@@ -550,7 +550,7 @@
   flex-shrink: 0;
 }
 .mcv-template-experience {
-  background: var(--cv-navy);
+  background: var(--cv-blue);
   color: #fff;
   padding-top: 38px;
   padding-bottom: 38px;

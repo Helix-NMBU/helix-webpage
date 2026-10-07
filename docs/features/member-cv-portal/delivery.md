@@ -1,7 +1,7 @@
 # Member CV portal delivery
 
 Repository: Helix-NMBU/helix-webpage. Tracker: GitHub Issues; parent #51, T-00 #52, T-01 #53, T-02 #54, T-03 #55, T-04 #56. See tracker.json.
-Spec: spec.md revision 9. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 delivered private autosave and numeric dates/overview; revision 8 delivered grouped Experience; revision 9 delivered the reference CV design.
+Spec: spec.md revision 10. Revision 1 delivered the workflow through user `$deliver`; revision 2 delivered website styling; revision 3 delivered Norwegian/English; revision 4 delivered shadcn/ui components; revision 5 delivered the section overview; revision 6 delivered collapsible sections and familiar profile inputs; revision 7 delivered private autosave and numeric dates/overview; revision 8 delivered grouped Experience; revision 9 delivered the reference CV design; revision 10 aligns its blue with the homepage.
 Base: sponsor-portal-v2, f99939dfadaa43d869ad6429034608f0bc7f9429.
 Integration branch: codex/member-cv-portal.
 Integration worktree: /private/tmp/helix-member-cv-portal.
