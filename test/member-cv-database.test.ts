@@ -96,6 +96,27 @@ describe("member CV SQL authorization and publication", () => {
     await asUser(db, member, "ase@helixnmbu.no");
     expect((await db.query("select draft,published_revision from public.member_cv_documents")).rows[0]).toMatchObject({ draft: { fullName: "Published update" }, published_revision: null });
   });
+  it("publishes Helix experience roles and metadata without treating other employers as Helix", async () => {
+    const helixRoles = [
+      { id: "lead", organization: " Helix   NMBU ", title: "Team lead", startDate: "2026-09", endDate: "Present", description: "Led testing", department: "Suspension", season: "S27", url: "https://example.com/team" },
+      { id: "member", organization: "HELIX", title: "Team member", startDate: "2025", endDate: "2026", description: "Built prototypes", season: "S26" },
+      { id: "other", organization: "Helix Consulting", title: "Consultant", startDate: "2024", endDate: "2025", description: "Separate employer", season: "S25" },
+    ];
+    const data = { ...cv, experience: helixRoles, projects: [
+      { id: "legacy", name: "Suspension", role: "Team lead", season: "S27", description: "Legacy project", url: "" },
+    ] };
+    await commit("publish", 0, data, sharing, path1);
+    await asUser(db, sponsor, "sponsor@example.no");
+    expect((await directory())[0]).toMatchObject({ email: null, personal_phone: null });
+    await asOwner(db);
+    expect((await db.query("select career_entries from public.students where id=$1", [member])).rows[0]).toEqual({ career_entries: helixRoles });
+    const publishedRoles = (await db.query("select season,title from public.positions where student_id=$1 order by season", [member])).rows;
+    expect(publishedRoles).toEqual([{ season: "S26", title: "Team member" }, { season: "S27", title: "Team lead" }]);
+    await commit("save", 1, { ...data, experience: [] });
+    await asOwner(db);
+    expect((await db.query("select season,title from public.positions where student_id=$1 order by season", [member])).rows).toEqual(publishedRoles);
+    expect((await db.query("select career_entries from public.students where id=$1", [member])).rows[0]).toEqual({ career_entries: helixRoles });
+  });
   it("blocks Bronze, Service and expired agreements even if talent_directory is set", async () => {
     await commit("publish", 0, cv, sharing, path1);
     for (const tier of ["Bronze", "Service"]) {

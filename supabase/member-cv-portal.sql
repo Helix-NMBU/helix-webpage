@@ -211,8 +211,16 @@ begin
       share_cv = excluded.share_cv, share_email = excluded.share_email, share_phone = excluded.share_phone, updated_at = now();
     delete from public.positions where student_id = p_user_id;
     insert into public.positions(student_id, season, title)
-      select distinct p_user_id, coalesce(nullif(p->>'season', ''), 'Helix'), p->>'role'
-      from jsonb_array_elements(snapshot->'projects') p where coalesce(p->>'role','') <> '';
+      select distinct p_user_id, coalesce(nullif(role.season, ''), 'Helix'), role.title
+      from (
+        -- Keep previously recorded project roles compatible until members move them.
+        select p->>'season' as season, p->>'role' as title
+        from jsonb_array_elements(snapshot->'projects') p
+        union all
+        select e->>'season' as season, e->>'title' as title
+        from jsonb_array_elements(snapshot->'experience') e
+        where lower(btrim(regexp_replace(e->>'organization', '\s+', ' ', 'g'))) in ('helix', 'helix nmbu')
+      ) role where coalesce(role.title, '') <> '';
     update public.member_cv_documents set published_revision = next_revision, published_at = now(), published_path = p_path where user_id = p_user_id;
     update public.member_cv_upload_candidates set status = 'current' where user_id = p_user_id and path = p_path;
   elsif p_action = 'withdraw' then
