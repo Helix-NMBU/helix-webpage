@@ -13,7 +13,7 @@ const MARGIN = 64;
 const BOTTOM = 48;
 const WIDTH = PAGE_WIDTH - 2 * MARGIN;
 const BODY_SIZE = 10.5;
-const NAVY = rgb(0, 0, 122 / 255);
+const HELIX_BLUE = rgb(0, 46 / 255, 196 / 255);
 const INK = rgb(0.08, 0.08, 0.08);
 const WHITE = rgb(1, 1, 1);
 const RULE = rgb(0.58, 0.58, 0.58);
@@ -63,7 +63,7 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
     page = document.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     y = PAGE_HEIGHT - MARGIN;
     if (dark) {
-      page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: NAVY });
+      page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: HELIX_BLUE });
       darkFooters.add(page);
     }
   }
@@ -123,7 +123,7 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
   }
 
   function heading(title: string, dark = false) {
-    const color = dark ? WHITE : NAVY;
+    const color = dark ? WHITE : HELIX_BLUE;
     const line = layout(title, { weight: "medium", size: 16, gap: 0 })[0];
     y -= line.height;
     draw(line, MARGIN, y, color);
@@ -195,11 +195,11 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
   const headline = layout(cv.headline, { weight: "medium", size: 14, width: WIDTH - contactWidth - 20 });
   const contacts = [cv.contactEmail, cv.phone, cv.city].flatMap((value) => layout(value, { size: 10, width: contactWidth, gap: 1 }));
   if (headline.length || contacts.length) {
-    // Both top columns use the template navy, including consent-filtered contacts.
-    whiteColumns(headline, contacts, WIDTH - contactWidth - 20, contactWidth, NAVY);
+    // Both top columns use Helix blue, including consent-filtered contacts.
+    whiteColumns(headline, contacts, WIDTH - contactWidth - 20, contactWidth, HELIX_BLUE);
     y -= 21;
   }
-  text(cv.fullName, { weight: "bold", size: 32, color: NAVY, gap: 12 });
+  text(cv.fullName, { weight: "bold", size: 32, color: HELIX_BLUE, gap: 12 });
   text(cv.summary, { gap: 9 });
   text([cv.fieldOfStudy, cv.graduationYear].filter(Boolean).join(" | "), { gap: 7 });
 
@@ -233,7 +233,7 @@ export async function generateCvPdf(data: CvData, sharing: CvSharing): Promise<U
     if (y - 155 < BOTTOM) newPage(true);
     else {
       y -= 18;
-      page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: y, color: NAVY });
+      page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: y, color: HELIX_BLUE });
       darkFooters.add(page);
       y -= 27;
     }

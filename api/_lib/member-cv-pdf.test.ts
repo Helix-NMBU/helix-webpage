@@ -285,7 +285,7 @@ describe("generated member CV PDFs", () => {
     expect(headline.font).toContain("HelixCVSans-Medium");
     expect(contact.font).toContain("HelixCVSans-Light");
     expect(name.size).toBe(32);
-    expect(name.color).toEqual([0, 0, 122 / 255]);
+    expect(name.color).toEqual([0, 46 / 255, 196 / 255]);
     expect(headline.color).toEqual(name.color);
     expect(contact.color).toEqual(name.color);
     expect(headline.x).toBe(64);
@@ -312,7 +312,7 @@ describe("generated member CV PDFs", () => {
     expect(description.x).toBe(266);
     expect(position.x).toBe(64);
     expect(Math.abs(description.y - position.y)).toBeLessThan(5);
-    expect(graphics.some((source) => source.includes("0 0 0.47843137254901963 rg") && source.includes("595.28 0 l") && source.includes("\nh\nf"))).toBe(true);
+    expect(graphics.some((source) => source.includes("0 0.1803921568627451 0.7686274509803922 rg") && source.includes("595.28 0 l") && source.includes("\nh\nf"))).toBe(true);
     expect(graphics.some((source) => source.includes("1 1 1 RG") && /251 [\d.]+ m[\s\S]*251 [\d.]+ l/.test(source))).toBe(true);
     expect(graphics.some((source) => source.includes("0.58 0.58 0.58 RG"))).toBe(true);
     expect(item("Prosjekter").color).toEqual(name.color);
