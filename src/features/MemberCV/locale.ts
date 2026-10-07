@@ -4,6 +4,9 @@ export type MemberLocale = "nb" | "en";
 export const MEMBER_LOCALE_KEY = "helix-member-ui-language-v1";
 
 export const englishCopy = {
+  References: "References",
+  "References (optional)": "References (optional)",
+  "Provided on request": "Provided on request",
   "No content yet": "No content yet",
   "Some content is missing": "Some content is missing",
   "Grade (optional)": "Grade (optional)",
@@ -240,6 +243,9 @@ export const englishCopy = {
 
 export type MemberCopyKey = keyof typeof englishCopy;
 export const norwegianCopy: Record<MemberCopyKey, string> = {
+  References: "Referanser",
+  "References (optional)": "Referanser (valgfritt)",
+  "Provided on request": "Oppgis på forespørsel",
   "No content yet": "Ikke noe innhold ennå",
   "Some content is missing": "Noe innhold mangler",
   "Grade (optional)": "Karakter (valgfritt)",

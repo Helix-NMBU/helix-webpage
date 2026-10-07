@@ -203,3 +203,18 @@ describe("additive profile field progress", () => {
     expect(getSectionStatuses(draft, privateSharing, saved).projects).toEqual({content:"started",dirty:true});
   });
 });
+
+describe("optional References within Contact", () => {
+  it("counts authored references as contact content and detects changes", () => {
+    const saved = record();
+    const draft = { ...saved.draft, references: "Contact me first." };
+    expect(getSectionStatuses(draft, privateSharing, saved).contact).toEqual({ content: "started", dirty: true });
+    expect(getSectionStatuses(draft, privateSharing, record(draft)).contact.dirty).toBe(false);
+  });
+  it("treats absent legacy references and an empty References control equally", () => {
+    const saved = record();
+    expect(getSectionStatuses({ ...saved.draft, references: "" }, privateSharing, saved).contact).toEqual({ content: "empty", dirty: false });
+    const storedEmpty = record({ ...saved.draft, references: "" });
+    expect(getSectionStatuses(saved.draft, privateSharing, storedEmpty).contact.dirty).toBe(false);
+  });
+});

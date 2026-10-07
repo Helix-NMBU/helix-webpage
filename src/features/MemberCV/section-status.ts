@@ -24,6 +24,7 @@ const contactFields = [
   "summary",
   "fieldOfStudy",
   "graduationYear",
+  "references",
 ] as const;
 
 function hasText(value: string): boolean {
@@ -91,10 +92,10 @@ export function getSectionStatuses(
     contact: {
       content: hasText(draft.fullName)
         ? "filled"
-        : contactFields.some((key) => hasText(draft[key]))
+        : contactFields.some((key) => hasText(draft[key] ?? ""))
           ? "started"
           : "empty",
-      dirty: contactFields.some((key) => draft[key] !== saved.draft[key]),
+      dirty: contactFields.some((key) => (draft[key] ?? "") !== (saved.draft[key] ?? "")),
     },
     education: {
       content: rowContent(draft.education, ["institution", "degree"]),

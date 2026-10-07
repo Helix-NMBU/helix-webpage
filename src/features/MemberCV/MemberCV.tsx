@@ -10,7 +10,6 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../libs/lib/utils";
 import { createDemoRepository, fictionalCv } from "./demo";
-import { sharedCvData } from "./model";
 import {
   createCvRepository,
   CvRequestError,
@@ -41,7 +40,6 @@ import {
   employmentTypes,
   locationTypes,
   languageLevels,
-  readableProfileDate,
 } from "./profile-inputs";
 import { Alert, AlertDescription, AlertTitle } from "@libs/components/ui/alert";
 import { Badge } from "@libs/components/ui/badge";
@@ -57,7 +55,8 @@ import {
 import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
 import { SectionNavigation } from "./SectionNavigation";
 import { ExperienceEditor } from "./ExperienceEditor";
-import { ExperiencePreview } from "./ExperiencePreview";
+import { CvTemplatePreview } from "./CvTemplatePreview";
+import { OptionalReferencesInput } from "./OptionalReferencesInput";
 import { moveProjectRoleToExperience } from "./experience";
 import { getSectionStatuses } from "./section-status";
 import {
@@ -293,56 +292,6 @@ function Section({
         </Card>
       </section>
     </Collapsible>
-  );
-}
-
-function DemoPreview({
-  data,
-  sharing,
-  locale,
-}: {
-  data: CvData;
-  sharing: CvSharing;
-  locale: MemberLocale;
-}) {
-  const t = (key: StaticMemberCopyKey) => memberText(locale, key);
-  const cv = sharedCvData(data, sharing);
-  return (
-    <article className="mcv-demo-document">
-      <p className="mcv-demo-label">{t("Fictional demo · HTML preview")}</p>
-      <h1>{cv.fullName || t("Your name")}</h1>
-      {cv.headline && <p>{cv.headline}</p>}
-      <p>{[cv.city, cv.contactEmail, cv.phone].filter(Boolean).join(" · ")}</p>
-      {cv.summary && <p className="mcv-preserve">{cv.summary}</p>}
-      {definitions.map(
-        ({ key, title, fields }) =>
-          cv[key].length > 0 && (
-            <section key={key}>
-              <h2>{t(title)}</h2>
-              {key === "experience" ? <ExperiencePreview rows={cv.experience} locale={locale} /> : (cv[key] as Row[]).map((row) => (
-                <div key={row.id} className="mcv-preview-entry">
-                  {fields.map(
-                    (field) =>
-                      row[field.key] && (
-                        <p className="mcv-preserve" key={field.key}>
-                          {field.date
-                            ? row[field.key] === "Present"
-                              ? t("Present")
-                              : readableProfileDate(row[field.key] ?? "")
-                            : field.choices?.includes(
-                                  row[field.key] as StaticMemberCopyKey,
-                                )
-                              ? t(row[field.key] as StaticMemberCopyKey)
-                              : row[field.key]}
-                        </p>
-                      ),
-                  )}
-                </div>
-              ))}
-            </section>
-          ),
-      )}
-    </article>
   );
 }
 
@@ -1040,6 +989,12 @@ export default function MemberCV() {
                           onChange={(value) => edit("summary", value)}
                         />
                       </div>
+                      <OptionalReferencesInput
+                        value={draft.references ?? ""}
+                        onChange={(value) => edit("references", value)}
+                        locale={locale}
+                        disabled={Boolean(busy) || ended}
+                      />
                     </Section>
                     {definitions.map(({ key, title, singular, fields }) => (
                       <Section
@@ -1357,7 +1312,7 @@ export default function MemberCV() {
                 <iframe src={preview.url} title={t("Generated CV PDF")} />
               </>
             ) : (
-              <DemoPreview
+              <CvTemplatePreview
                 data={preview.draft}
                 sharing={preview.sharing}
                 locale={locale}
