@@ -212,6 +212,91 @@
   gap: 12px;
   margin-bottom: 18px;
 }
+.mcv-experience-group {
+  margin: 24px 0;
+  min-width: 0;
+}
+.mcv-organization-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 20px;
+}
+.mcv-page .mcv-organization-heading h3 {
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.mcv-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mcv-role-entry {
+  position: relative;
+  min-width: 0;
+  padding-bottom: 28px;
+}
+.mcv-role-entry:last-child {
+  padding-bottom: 0;
+}
+.mcv-role-entry h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.mcv-role-list[data-connected="true"] > .mcv-role-entry {
+  padding-left: 24px;
+}
+.mcv-role-list[data-connected="true"] > .mcv-role-entry::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 4px;
+  bottom: -14px;
+  border-left: 1px solid var(--border, #bbb);
+}
+.mcv-role-list[data-connected="true"] > .mcv-role-entry:last-child::before {
+  display: none;
+}
+.mcv-role-list[data-connected="true"] > .mcv-role-entry::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--primary, #555);
+}
+.mcv-experience-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.mcv-role-details,
+.mcv-project-transfer {
+  margin-top: 16px;
+}
+.mcv-role-details-content[data-state="closed"] {
+  display: none;
+}
+.mcv-role-details-content[data-state="open"] {
+  margin-top: 16px;
+}
+.mcv-role-details > button {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mcv-role-details svg {
+  width: 16px;
+  height: 16px;
+}
+.mcv-role-period {
+  color: var(--muted-foreground, #555);
+}
 .mcv-checkbox {
   display: flex;
   gap: 12px;
@@ -370,6 +455,20 @@
   margin: 24px 0 10px;
   border-bottom: 1px solid #bbb;
   padding-bottom: 5px;
+}
+.mcv-demo-document .mcv-experience-group h3 {
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+.mcv-demo-document .mcv-role-entry h4 {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+.mcv-demo-document .mcv-role-list[data-connected="true"] > .mcv-role-entry::after {
+  background: #555;
 }
 .mcv-demo-label {
   font-family: Arial, sans-serif;

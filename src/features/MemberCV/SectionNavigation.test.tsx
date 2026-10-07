@@ -28,5 +28,7 @@ describe("simplified section overview", () => {
     expect(markup).not.toMatch(/mcv-nav-save|mcv-nav-content|mcv-nav-help|mcv-nav-description/);
     expect(markup).toContain('aria-current="location"');
     expect(markup).toContain('href="#mcv-publication"');
+    expect(markup).toContain(`>${locale === "en" ? "Projects" : "Prosjekter"}</span>`);
+    expect(markup).not.toMatch(/Helix roles and projects|Helix-roller og prosjekter/);
   });
 });

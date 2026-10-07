@@ -18,7 +18,7 @@ const entries = [
   { key: "contact", title: "Contact and introduction" },
   { key: "education", title: "Education" },
   { key: "experience", title: "Experience" },
-  { key: "projects", title: "Helix roles and projects" },
+  { key: "projects", title: "Projects" },
   { key: "languages", title: "Languages" },
   { key: "links", title: "Links" },
   { key: "sharing", title: "Share with sponsors" },

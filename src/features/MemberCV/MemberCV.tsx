@@ -15,7 +15,7 @@ import {
   createCvRepository,
   CvRequestError,
 } from "./repository";
-import type { CvData, CvEnvelope, CvMutation, CvSharing } from "./types";
+import type { CvData, CvEnvelope, CvExperience, CvMutation, CvSharing } from "./types";
 import { classifyCvRequestFailure, createPrivateAutosave, cvSnapshotKey, type CvAutosaveState } from "./autosave";
 import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
@@ -56,6 +56,9 @@ import {
 } from "@libs/components/ui/dialog";
 import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
 import { SectionNavigation } from "./SectionNavigation";
+import { ExperienceEditor } from "./ExperienceEditor";
+import { ExperiencePreview } from "./ExperiencePreview";
+import { moveProjectRoleToExperience } from "./experience";
 import { getSectionStatuses } from "./section-status";
 import {
   useMemberLocale,
@@ -134,7 +137,7 @@ const definitions: {
   },
   {
     key: "projects",
-    title: "Helix roles and projects",
+    title: "Projects",
     singular: "project",
     fields: [
       { key: "name", label: "Project or department" },
@@ -316,7 +319,7 @@ function DemoPreview({
           cv[key].length > 0 && (
             <section key={key}>
               <h2>{t(title)}</h2>
-              {(cv[key] as Row[]).map((row) => (
+              {key === "experience" ? <ExperiencePreview rows={cv.experience} locale={locale} /> : (cv[key] as Row[]).map((row) => (
                 <div key={row.id} className="mcv-preview-entry">
                   {fields.map(
                     (field) =>
@@ -783,6 +786,35 @@ export default function MemberCV() {
     );
   }
 
+  function addExperience(organization: string, beforeId?: string) {
+    const role: CvExperience = {
+      id: crypto.randomUUID(), organization, title: "", startDate: "", endDate: "", description: "",
+    };
+    setDraft((previous) => {
+      if (!previous || previous.experience.length >= 30) return previous;
+      const index = beforeId ? previous.experience.findIndex((entry) => entry.id === beforeId) : previous.experience.length;
+      const insertAt = index < 0 ? previous.experience.length : index;
+      return { ...previous, experience: [
+        ...previous.experience.slice(0, insertAt), role, ...previous.experience.slice(insertAt),
+      ] };
+    });
+    setOpenSections((previous) => ({ ...previous, experience: true }));
+  }
+
+  function moveProjectRole(projectId: string) {
+    const roleId = crypto.randomUUID();
+    // Check the same transfer before scheduling a functional draft edit. Failures keep all input.
+    try {
+      const current = latestInput.current.draft;
+      if (!current) return;
+      moveProjectRoleToExperience(current, projectId, roleId);
+      setDraft((previous) => previous ? moveProjectRoleToExperience(previous, projectId, roleId) : previous);
+      setOpenSections((previous) => ({ ...previous, experience: true }));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "The request failed. Your input has been kept.");
+    }
+  }
+
   return (
     <main className="mcv-page portal-root" lang={locale}>
       <header className="mcv-header">
@@ -1022,6 +1054,14 @@ export default function MemberCV() {
                             : undefined
                         }
                       >
+                        {key === "experience" ? (
+                          <ExperienceEditor rows={draft.experience} locale={locale} disabled={Boolean(busy) || ended}
+                            onChange={(id, field, value) => changeRowField("experience", id, field, value)}
+                            onRemove={(id) => setDraft((previous) => previous ? {
+                              ...previous, experience: previous.experience.filter((entry) => entry.id !== id),
+                            } : previous)}
+                            onAdd={addExperience} />
+                        ) : <>
                         {(draft[key] as Row[]).map((row, index) => (
                           <div className="mcv-entry" key={row.id}>
                             <div className="mcv-entry-title">
@@ -1060,11 +1100,7 @@ export default function MemberCV() {
                                       locale={locale}
                                       disabled={Boolean(busy) || ended}
                                       ongoingLabel={
-                                        key === "experience"
-                                          ? t("I currently work here")
-                                          : key === "projects"
-                                            ? t("This project is ongoing")
-                                            : undefined
+                                        key === "projects" ? t("This project is ongoing") : undefined
                                       }
                                       onChange={(dateKey, value) =>
                                         changeRowField(
@@ -1104,6 +1140,13 @@ export default function MemberCV() {
                                 );
                               })}
                             </div>
+                            {key === "projects" && (
+                              <Button variant="outline" type="button" className="mcv-project-transfer"
+                                aria-label={t("Move {project} role to Experience", { project: row.name || `${t("Projects")} ${index + 1}` })}
+                                onClick={() => moveProjectRole(row.id)}>
+                                {t("Move role to Experience")}
+                              </Button>
+                            )}
                             {key === "education" && (
                               <OptionalGradeInput
                                 value={row.grade ?? ""}
@@ -1132,6 +1175,7 @@ export default function MemberCV() {
                         >
                           {t("+ Add {entry}", { entry: t(singular) })}
                         </Button>
+                        </>}
                       </Section>
                     ))}
                     <Section
