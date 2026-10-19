@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [cursor/neon-member-cv-portal-d2e1]
+    branches: [main]
 permissions:
   contents: read
 jobs:
