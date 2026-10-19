@@ -41,6 +41,7 @@
     "@types/react-dom": "^19.1.7",
     "@types/react-router-dom": "^5.3.3",
     "@types/react-slick": "^0.23.13",
+    "@vercel/node": "^13.0.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.33.0",
@@ -52,5 +53,14 @@
     "tailwindcss": "^4.1.12",
     "typescript": "^5.9.2",
     "vite": "^7.1.2"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.5.1": true,
+    "@tailwindcss/oxide@4.1.12": true,
+    "esbuild@0.14.47": true,
+    "esbuild@0.27.0": true,
+    "esbuild@0.25.9": true,
+    "esbuild@0.23.1": true,
+    "sharp@0.34.4": true
   }
 }
