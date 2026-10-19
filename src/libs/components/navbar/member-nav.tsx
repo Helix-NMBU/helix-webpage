@@ -3,7 +3,6 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 export type MemberLanguageAppearance = "on-dark" | "on-light";
 
 export type MemberNavActions = {
-  portalLabel: string;
   signOutLabel: string;
   signOutDisabled: boolean;
   onSignOut: (opener?: HTMLElement) => void;

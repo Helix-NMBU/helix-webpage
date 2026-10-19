@@ -401,14 +401,14 @@ export const Navbar = () => {
               ))}
             </div>
             <div className="mt-auto border-t border-gray-200 py-5 md:py-8 flex flex-col gap-3 md:gap-4">
-              {appCtaLinks.map((cta) => (
+              {!memberNav && appCtaLinks.map((cta) => (
                 <Link
                   key={cta.to}
                   to={cta.to}
                   className="text-base font-normal text-gray-500 hover:text-gray-900 transition-colors"
                   onClick={closeDrawer}
                 >
-                  {memberNav ? memberNav.portalLabel : cta.label}
+                  {cta.label}
                 </Link>
               ))}
               {memberNav && <MemberNavControls appearance="on-light" placement="drawer" />}
