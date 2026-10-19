@@ -37,5 +37,25 @@
       "Real experience in B2B sales, negotiation and account management",
       "Lasting professional relationships in the Norwegian engineering and tech industry"
     ]
+  },
+  {
+    "id": "communication-content-manager",
+    "title": "Communication & Content Manager",
+    "department": "Business & Marketing",
+    "applyUrl": "https://form.typeform.com/to/placeholder",
+    "contact": { "name": "Selma Woldseth", "email": "selma.woldseth@helixnmbu.no", "linkedin": "https://linkedin.com/in/selma-w-040660363" },
+    "about": "As Communication & Content Manager you will own how Helix tells its story: planning and running our communication across social media, the website and press. You will set the content strategy, keep the publishing rhythm going through the season and make sure sponsors, students and the FSAE community see what we're building.",
+    "tasks": [
+      "Own the content calendar and publishing across our social channels",
+      "Set the tone and visual direction together with the design profile",
+      "Coordinate content creators and photographers around builds and events",
+      "Produce sponsor visibility content and ensure partner commitments are delivered",
+      "Track engagement and use it to sharpen the communication strategy"
+    ],
+    "achieve": [
+      "A visible, growing brand you shaped and ran through a full season",
+      "Real experience in communication strategy, publishing and analytics",
+      "A portfolio of campaigns tied to a race car people care about"
+    ]
   }
 ]
