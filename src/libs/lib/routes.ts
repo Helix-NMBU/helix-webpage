@@ -8,7 +8,7 @@ export const desktopNavLinks: NavLinkConfig[] = [
   { label: "The Garage", to: "/garage" },
   { label: "The Team", to: "/members" },
   { label: "Partners", to: "/sponsorpage" },
-  { label: "Contact", to: "/Contactside"},
+  /*{label: "Contact", to: "/Contactside"},*/
   { label: "Join Us", to: "/apply" },
 ];
 
