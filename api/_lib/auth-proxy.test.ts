@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import handler, { config } from "../auth/[[...path]].js";
 import { isForwardedAuthCookie, proxyNeonAuth, sendAuthProxyResponse } from "./auth-proxy.js";
 
 const BASE = "https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth";
@@ -19,6 +20,11 @@ function mockFetch(response = upstreamResponse()) {
   return vi.fn(async (_input: string | URL, _init?: RequestInit) => response);
 }
 
+const sameSite = {
+  origin: "https://helixnmbu.no",
+  host: "helixnmbu.no",
+};
+
 async function call(
   rawUrl: string,
   headers: Record<string, string>,
@@ -27,7 +33,7 @@ async function call(
   const response = await proxyNeonAuth({
     method: "POST",
     rawUrl,
-    headers,
+    headers: { ...sameSite, ...headers },
     body: "{\"provider\":\"google\"}",
     baseUrl: BASE,
     fetchImpl,
@@ -157,5 +163,113 @@ describe("Neon auth proxy", () => {
     });
     expect(allowed.status).toBe(200);
     expect(String(fetchImpl.mock.calls[0][0])).toBe(`${BASE}/get-session?foo=1`);
+  });
+
+  it("rejects a cross-site state change and still forwards a same-origin POST and a cross-origin GET", async () => {
+    const crossSite = mockFetch();
+    const rejected = await proxyNeonAuth({
+      method: "POST",
+      rawUrl: "/api/auth/sign-out",
+      headers: { origin: "https://evil.example", host: "helixnmbu.no", "sec-fetch-site": "cross-site" },
+      baseUrl: BASE,
+      fetchImpl: crossSite,
+    });
+    expect(rejected.status).toBe(403);
+    expect(await rejected.json()).toEqual({ error: "Cross-site request was rejected." });
+    expect(rejected.headers.get("cache-control")).toBe("no-store");
+    expect(crossSite).not.toHaveBeenCalled();
+
+    const missingOrigin = mockFetch();
+    const noOrigin = await proxyNeonAuth({
+      method: "POST",
+      rawUrl: "/api/auth/sign-out",
+      headers: { host: "helixnmbu.no", "sec-fetch-site": "cross-site" },
+      baseUrl: BASE,
+      fetchImpl: missingOrigin,
+    });
+    expect(noOrigin.status).toBe(403);
+    expect(missingOrigin).not.toHaveBeenCalled();
+
+    const neither = mockFetch();
+    const noHeaders = await proxyNeonAuth({
+      method: "POST",
+      rawUrl: "/api/auth/sign-out",
+      headers: { host: "helixnmbu.no" },
+      baseUrl: BASE,
+      fetchImpl: neither,
+    });
+    expect(noHeaders.status).toBe(403);
+    expect(neither).not.toHaveBeenCalled();
+
+    const www = mockFetch();
+    const productionAlias = await proxyNeonAuth({
+      method: "POST",
+      rawUrl: "/api/auth/sign-out",
+      headers: { origin: "https://www.helixnmbu.no", host: "helixnmbu.no" },
+      baseUrl: BASE,
+      fetchImpl: www,
+    });
+    expect(productionAlias.status).toBe(200);
+    expect(www).toHaveBeenCalledOnce();
+
+    const sameOrigin = mockFetch();
+    const forwarded = await proxyNeonAuth({
+      method: "POST",
+      rawUrl: "/api/auth/sign-out",
+      headers: { origin: "https://my-branch.vercel.app", host: "my-branch.vercel.app" },
+      baseUrl: BASE,
+      fetchImpl: sameOrigin,
+    });
+    expect(forwarded.status).toBe(200);
+    expect(String(sameOrigin.mock.calls[0][0])).toBe(`${BASE}/sign-out`);
+
+    const callback = mockFetch();
+    const googleGet = await proxyNeonAuth({
+      method: "GET",
+      rawUrl: "/api/auth/callback/google?code=1&state=abc",
+      headers: { origin: "https://accounts.google.com", host: "helixnmbu.no" },
+      baseUrl: BASE,
+      fetchImpl: callback,
+    });
+    expect(googleGet.status).toBe(200);
+    expect(String(callback.mock.calls[0][0])).toBe(`${BASE}/callback/google?code=1&state=abc`);
+  });
+
+  it("forwards a form-encoded POST byte-for-byte with its content type", async () => {
+    expect(config).toEqual({ api: { bodyParser: false } });
+    const form = "provider=google&callbackURL=https%3A%2F%2Fhelixnmbu.no%2Fmember%2Flogin";
+    const previousBase = process.env.NEON_AUTH_BASE_URL;
+    const previousHosts = process.env.AUTH_PROXY_ALLOWED_HOSTS;
+    process.env.NEON_AUTH_BASE_URL = BASE;
+    delete process.env.AUTH_PROXY_ALLOWED_HOSTS;
+    const fetchImpl = mockFetch();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchImpl as typeof fetch;
+    try {
+      const req = {
+        method: "POST",
+        url: "/api/auth/sign-in/social",
+        headers: {
+          host: "helixnmbu.no",
+          origin: "https://helixnmbu.no",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(form.slice(0, 16));
+          yield Buffer.from(form.slice(16));
+        },
+      };
+      await handler(req as unknown as VercelRequest, { status: vi.fn(), setHeader: vi.fn(), send: vi.fn() } as unknown as VercelResponse);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (previousBase === undefined) delete process.env.NEON_AUTH_BASE_URL;
+      else process.env.NEON_AUTH_BASE_URL = previousBase;
+      if (previousHosts === undefined) delete process.env.AUTH_PROXY_ALLOWED_HOSTS;
+      else process.env.AUTH_PROXY_ALLOWED_HOSTS = previousHosts;
+    }
+    const init = fetchImpl.mock.calls[0][1];
+    const sent = init?.headers as Headers;
+    expect(sent.get("content-type")).toBe("application/x-www-form-urlencoded");
+    expect(Buffer.from(init?.body as Uint8Array).equals(Buffer.from(form))).toBe(true);
   });
 });

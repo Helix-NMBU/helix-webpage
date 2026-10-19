@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const PUBLIC_PREFIX = "/api/auth";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+// Apex and www are both first-party. Preview hosts are allowed by matching the request Host.
+export const PRODUCTION_AUTH_HOSTS = ["helixnmbu.no", "www.helixnmbu.no"] as const;
 const FORWARDED_REQUEST_HEADERS = [
   "user-agent",
   "authorization",
@@ -64,6 +67,7 @@ export type AuthProxyRequest = {
   headers?: VercelRequest["headers"] | Headers;
   body?: unknown;
   baseUrl?: string;
+  allowedHosts?: string;
   fetchImpl?: (input: string | URL, init?: RequestInit) => Promise<Response>;
 };
 
@@ -214,12 +218,58 @@ export function rewriteAuthLocation(location: string, baseUrl: string): string {
   return `/api/auth${suffix}${target.search}${target.hash}`;
 }
 
+function normalizeHost(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const host = value.trim().toLowerCase().replace(/\.$/, "");
+  if (!host || /[\s,/\\]/.test(host)) return null;
+  return host;
+}
+
+function allowedAuthHosts(requestHost: string | null, extra: string | undefined): Set<string> {
+  const hosts = new Set<string>(PRODUCTION_AUTH_HOSTS);
+  const current = normalizeHost(requestHost);
+  if (current) hosts.add(current);
+  for (const part of extra?.split(",") ?? []) {
+    const host = normalizeHost(part);
+    if (host) hosts.add(host);
+  }
+  return hosts;
+}
+
+function originHost(origin: string): string | null {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return normalizeHost(url.host);
+  } catch {
+    return null;
+  }
+}
+
+// State-changing requests must come from this site. The upstream Origin is then
+// replaced with Neon's, so this check is what stops a cross-site POST.
+export function allowsAuthStateChange(input: {
+  method: string;
+  headers?: AuthProxyRequest["headers"];
+  allowedHosts?: string;
+}): boolean {
+  if (SAFE_METHODS.has(input.method)) return true;
+  const origin = headerValue(input.headers, "origin")?.trim() ?? "";
+  const fetchSite = headerValue(input.headers, "sec-fetch-site")?.trim().toLowerCase() ?? "";
+  if (!origin && !fetchSite) return false;
+  if (origin) {
+    const host = originHost(origin);
+    if (!host) return false;
+    return allowedAuthHosts(headerValue(input.headers, "host"), input.allowedHosts).has(host);
+  }
+  return fetchSite === "same-origin";
+}
+
 function requestBody(method: string, body: unknown): BodyInit | undefined {
-  if (method === "GET" || method === "HEAD") return undefined;
-  if (body === undefined || body === null || body === "") return undefined;
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return undefined;
   if (typeof body === "string") return body;
   if (Buffer.isBuffer(body) || body instanceof Uint8Array) return new Uint8Array(body);
-  return JSON.stringify(body);
+  return undefined;
 }
 
 function jsonResponse(status: number, error: string): Response {
@@ -236,6 +286,10 @@ export async function proxyNeonAuth(input: AuthProxyRequest): Promise<Response> 
   const target = upstreamUrl(baseUrl, rawUrl);
   if (!target) return jsonResponse(400, "Invalid auth path.");
   const method = (input.method ?? "GET").toUpperCase();
+  if (!allowsAuthStateChange({ method, headers: input.headers, allowedHosts: input.allowedHosts })) {
+    console.error("Rejected a cross-site Neon auth request.");
+    return jsonResponse(403, "Cross-site request was rejected.");
+  }
   const headers = new Headers();
   for (const name of FORWARDED_REQUEST_HEADERS) {
     const value = headerValue(input.headers, name);
