@@ -17,7 +17,7 @@ function jwks(url: string): JWTVerifyGetKey {
 }
 
 // Issuer and audience are the Neon Auth origin. The browser may reach Neon
-// through the same-origin /api/auth rewrite; the token is still minted there.
+// through the same-origin /api/auth proxy; the token is still minted there.
 export async function verifyNeonSession(token: string, env: NodeJS.ProcessEnv = process.env): Promise<{ userId: string }> {
   const baseUrl = env.NEON_AUTH_BASE_URL;
   if (!baseUrl) throw new MemberCvError(503, "Member portal server configuration is missing.");

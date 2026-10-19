@@ -11,10 +11,6 @@
   },
   "rewrites": [
     {
-      "source": "/api/auth/:path*",
-      "destination": "https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth/:path*"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

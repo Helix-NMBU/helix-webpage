@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { memberSessionToken, signOutMember, watchMemberSession } from "./session";
+import { memberLoadFailure, memberSessionToken, signOutMember, watchMemberSession } from "./session";
 import { createDemoRepository, fictionalCv } from "./demo";
 import {
   createCvRepository,
@@ -458,17 +458,16 @@ export default function MemberCV() {
       })
       .catch((failure: unknown) => {
         if (!active || generation.current !== current) return;
-        if (failure instanceof CvRequestError && failure.status === 401)
-          navigate("/member/login", {
+        setBusy(null);
+        const outcome = memberLoadFailure(failure);
+        if ("redirectTo" in outcome) {
+          navigate(outcome.redirectTo, {
             replace: true,
             state: { from: "/member/profile" },
           });
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : "Could not load your CV.",
-        );
-        setBusy(null);
+          return;
+        }
+        setError(outcome.message);
       });
     const stopWatching = !demo
       ? watchMemberSession(() => {

@@ -28,26 +28,94 @@ export const authClient = authUrl
     })
   : null;
 
-export async function memberSessionToken(boundUserId: { current: string | null }): Promise<string> {
-  if (!authClient) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
-  const session = await authClient.getSession();
+export const MEMBER_AUTH_UNAVAILABLE = "Could not load your CV.";
+
+type AuthCall = {
+  data?: { user?: { id?: string } | null; token?: string } | null;
+  error?: unknown;
+};
+
+function authStatus(error: unknown): number | null {
+  if (!error || typeof error !== "object" || !("status" in error)) return null;
+  const status = error.status;
+  return typeof status === "number" && Number.isInteger(status) ? status : null;
+}
+
+function authErrorDetail(error: unknown): { status: number | null; detail: string } {
+  const status = authStatus(error);
+  if (error instanceof Error) return { status, detail: error.message };
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return { status, detail: error.message };
+  }
+  return { status, detail: "Auth request failed." };
+}
+
+// 401 and 403 are a signed-out session. Every other auth failure stays on the
+// page with a generic message so a 400 from the proxy cannot loop back to login.
+export function memberAuthFailure(error: unknown): CvRequestError {
+  const status = authStatus(error);
+  if (status === 401 || status === 403) {
+    return new CvRequestError("Your session has ended. Sign in again to continue.", status);
+  }
+  console.error("Member auth request failed.", authErrorDetail(error));
+  return new CvRequestError(MEMBER_AUTH_UNAVAILABLE, status ?? 0);
+}
+
+export function memberLoadFailure(failure: unknown): { redirectTo: "/member/login" } | { message: string } {
+  if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
+    return { redirectTo: "/member/login" };
+  }
+  if (failure instanceof CvRequestError) return { message: failure.message };
+  console.error("Member CV load failed.", failure instanceof Error ? failure.message : failure);
+  return { message: MEMBER_AUTH_UNAVAILABLE };
+}
+
+export async function sessionTokenFromAuth(
+  client: { getSession: () => Promise<AuthCall>; token: () => Promise<AuthCall> },
+  boundUserId: { current: string | null },
+): Promise<string> {
+  let session: AuthCall;
+  try {
+    session = await client.getSession();
+  } catch (error) {
+    throw memberAuthFailure(error);
+  }
+  if (session.error) throw memberAuthFailure(session.error);
   const userId = session.data?.user?.id;
-  if (session.error || !userId) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+  if (!userId) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
   if (boundUserId.current && boundUserId.current !== userId) {
     throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
   }
   boundUserId.current = userId;
-  const token = await authClient.token();
-  if (token.error || !token.data?.token) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+  let token: AuthCall;
+  try {
+    token = await client.token();
+  } catch (error) {
+    throw memberAuthFailure(error);
+  }
+  if (token.error) throw memberAuthFailure(token.error);
+  if (!token.data?.token) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
   return token.data.token;
+}
+
+export async function memberSessionToken(boundUserId: { current: string | null }): Promise<string> {
+  if (!authClient) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+  return sessionTokenFromAuth(authClient, boundUserId);
 }
 
 export function watchMemberSession(onEnd: () => void): () => void {
   if (!authClient) return () => undefined;
   const onFocus = () => {
     void authClient.getSession().then((session) => {
+      if (session.error) {
+        const failure = memberAuthFailure(session.error);
+        if (failure.status === 401 || failure.status === 403) onEnd();
+        return;
+      }
       if (!session.data?.user) onEnd();
-    }).catch(() => onEnd());
+    }).catch((error: unknown) => {
+      memberAuthFailure(error);
+    });
   };
   window.addEventListener("focus", onFocus);
   return () => window.removeEventListener("focus", onFocus);
@@ -74,10 +142,19 @@ export async function confirmMemberSession(): Promise<void> {
 export async function startGoogleSignIn(): Promise<void> {
   if (!authClient) throw new Error("Member sign-in is not configured yet. Please contact Helix.");
   const callbackURL = `${window.location.origin}/member/login`;
-  const result = await authClient.signIn.social({
-    provider: "google",
-    callbackURL,
-    errorCallbackURL: callbackURL,
-  });
-  if (result?.error) throw new Error("Google sign-in failed. Please try again.");
+  let result: { error?: unknown } | undefined;
+  try {
+    result = await authClient.signIn.social({
+      provider: "google",
+      callbackURL,
+      errorCallbackURL: callbackURL,
+    });
+  } catch (error) {
+    console.error("Member auth sign-in failed.", authErrorDetail(error));
+    throw new Error("Google sign-in failed. Please try again.");
+  }
+  if (result?.error) {
+    console.error("Member auth sign-in failed.", authErrorDetail(result.error));
+    throw new Error("Google sign-in failed. Please try again.");
+  }
 }
