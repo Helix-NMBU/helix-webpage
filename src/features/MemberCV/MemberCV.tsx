@@ -519,6 +519,7 @@ export default function MemberCV() {
 
   useLayoutEffect(() => {
     setActions({
+      portalLabel: memberText(locale, "Member portal"),
       signOutLabel: memberText(locale, "Sign out"),
       signOutDisabled: Boolean(busy),
       onSignOut: (opener) => {

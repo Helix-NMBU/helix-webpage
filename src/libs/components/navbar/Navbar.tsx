@@ -408,7 +408,7 @@ export const Navbar = () => {
                   className="text-base font-normal text-gray-500 hover:text-gray-900 transition-colors"
                   onClick={closeDrawer}
                 >
-                  {cta.label}
+                  {memberNav ? memberNav.portalLabel : cta.label}
                 </Link>
               ))}
               {memberNav && <MemberNavControls appearance="on-light" placement="drawer" />}
