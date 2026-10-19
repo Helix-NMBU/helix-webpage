@@ -198,5 +198,13 @@
     "category": "Bronze" ,
     "logoSize": "scale-75 lg:scale-100"
 
+  },
+  {
+    "id": 27,
+    "name": "Cadence",
+    "image": "/sponsor_logos/Cadence_logo.png",
+    "link": "https://www.cadence.com/en_US/home.html",
+    "category": "Service",
+    "logoSize": "scale-60 lg:scale-80"
   }
 ]
