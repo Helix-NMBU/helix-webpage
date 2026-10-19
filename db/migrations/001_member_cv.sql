@@ -40,7 +40,7 @@ create table if not exists cv.documents (
 create table if not exists cv.publications (
   member_id uuid not null references identity.members(id) on delete cascade,
   revision integer not null,
-  snapshot jsonb not null,
+  snapshot jsonb,
   sharing jsonb not null,
   path text,
   created_at timestamptz not null default now(),
@@ -51,7 +51,7 @@ create table if not exists cv.publications (
 create table if not exists cv.directory_entries (
   member_id uuid primary key references identity.members(id) on delete cascade,
   visible boolean not null default false,
-  full_name text not null,
+  full_name text,
   contact_email text,
   phone text,
   linkedin text,
@@ -84,6 +84,10 @@ create table if not exists cv.upload_candidates (
   cleanup_after timestamptz not null default clock_timestamp(),
   created_at timestamptz not null default clock_timestamp()
 );
+
+-- Databases created before withdrawal wiped these columns still have NOT NULL.
+alter table cv.publications alter column snapshot drop not null;
+alter table cv.directory_entries alter column full_name drop not null;
 
 revoke all on schema identity, cv from public;
 revoke all on all tables in schema identity, cv from public;
@@ -290,9 +294,13 @@ begin
       where member_id = p_member_id;
     update cv.upload_candidates set status = 'current' where member_id = p_member_id and path = p_path;
   elsif p_action = 'withdraw' then
+    -- Drop the published personal data. The private draft on cv.documents stays.
+    update cv.publications set snapshot = null, path = null where member_id = p_member_id;
     update cv.directory_entries set
       visible = false, share_cv = false, share_email = false, share_phone = false,
-      contact_email = null, phone = null, cv_path = null, updated_at = now()
+      full_name = null, contact_email = null, phone = null, linkedin = null,
+      field_of_study = null, graduation_year = null, cv_path = null,
+      career_entries = '[]'::jsonb, helix_roles = '[]'::jsonb, updated_at = now()
     where member_id = p_member_id;
     update cv.documents
       set published_revision = null, published_at = null, published_path = null

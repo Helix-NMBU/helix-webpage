@@ -101,6 +101,47 @@ describe("member CV schema", () => {
     expect((await db.query("select draft->>'fullName' as name, published_revision from cv.documents where member_id = $1", [member])).rows[0]).toEqual({ name: "Åse Ødegård", published_revision: null });
   });
 
+  it("clears publication content and directory personal fields on withdraw", async () => {
+    const revision = Number((await db.query<{ revision: number }>("select revision from cv.documents where member_id = $1", [member])).rows[0].revision);
+    const path = `${member}/30000000-0000-4000-8000-000000000004.pdf`;
+    const data = {
+      ...cv,
+      links: [{ id: "li", label: "LinkedIn", url: "https://www.linkedin.com/in/ase" }],
+      experience: [
+        { id: "lead", organization: "Helix", title: "Team lead", startDate: "2026", endDate: "Present", description: "Led testing", season: "S27" },
+      ],
+    };
+    await commit("publish", revision, data, { cv: true, email: true, phone: true }, path);
+    const published = (await db.query<{ name: string; path: string; linkedin: string; career_entries: unknown[] }>(
+      "select snapshot->>'fullName' as name, path, (select linkedin from cv.directory_entries where member_id = p.member_id) as linkedin, (select career_entries from cv.directory_entries where member_id = p.member_id) as career_entries from cv.publications p where member_id = $1 and revision = $2",
+      [member, revision + 1],
+    )).rows[0];
+    expect(published.name).toBe("Åse Ødegård");
+    expect(published.path).toBe(path);
+    expect(published.linkedin).toBe("https://www.linkedin.com/in/ase");
+    expect(published.career_entries).toEqual([expect.objectContaining({ title: "Team lead" })]);
+    await commit("withdraw", revision + 1, null);
+    const publications = (await db.query("select snapshot, path from cv.publications where member_id = $1", [member])).rows;
+    expect(publications.length).toBeGreaterThan(0);
+    for (const row of publications) expect(row).toEqual({ snapshot: null, path: null });
+    expect((await db.query(
+      "select visible, full_name, contact_email, phone, linkedin, field_of_study, graduation_year, cv_path, career_entries, helix_roles from cv.directory_entries where member_id = $1",
+      [member],
+    )).rows[0]).toEqual({
+      visible: false,
+      full_name: null,
+      contact_email: null,
+      phone: null,
+      linkedin: null,
+      field_of_study: null,
+      graduation_year: null,
+      cv_path: null,
+      career_entries: [],
+      helix_roles: [],
+    });
+    expect((await db.query("select draft->>'fullName' as name from cv.documents where member_id = $1", [member])).rows[0]).toEqual({ name: "Åse Ødegård" });
+  });
+
   it("cancels an uncertain upload and refuses to publish its retired path", async () => {
     const path = `${member}/30000000-0000-4000-8000-000000000003.pdf`;
     const revision = Number((await db.query<{ revision: number }>("select revision from cv.documents where member_id = $1", [member])).rows[0].revision);
