@@ -263,14 +263,27 @@ export default function Members() {
       ? members.filter(isExecutiveMember)
       : members.filter(m => m.mappedDepts.includes(activeFilter))
 
-  const LEADERSHIP_ORDER = ['André Hellne Rasen', 'Niclas Karlsen', 'Birk Sveberg']
+  function isDepartmentLeader(position: string) {
+    return /\b(?:lead|leader)\b|\bhead of\b/i.test(position)
+  }
 
   function rank(dept: string, member: Member) {
-    const leadershipRank = LEADERSHIP_ORDER.indexOf(firstValue(member.name))
-    if (leadershipRank !== -1) return leadershipRank
+    const position = firstValue(member.position)
 
-    if (dept === 'The Board') return LEADERSHIP_ORDER.length
-    return LEADERSHIP_ORDER.length + (member.position.startsWith('Head of') ? 0 : 1)
+    if (dept === 'Executive Team') {
+      if (/^project manager$/i.test(position)) return 0
+      if (/^deputy project manager$/i.test(position)) return 1
+      return isDepartmentLeader(position) ? 2 : 3
+    }
+
+    if (dept === 'The Board') {
+      if (/^project manager$/i.test(position)) return 0
+      if (/^deputy project manager$/i.test(position)) return 1
+      if (/^chair of the board$/i.test(position)) return 2
+      return 3
+    }
+
+    return isDepartmentLeader(position) ? 0 : 1
   }
 
   const byDept = DEPARTMENTS.reduce<Record<string, Member[]>>((acc, dept) => {
@@ -283,9 +296,9 @@ export default function Members() {
   }, {})
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-white">
+  <div ref={containerRef} className="min-h-screen bg-white">
 
-      {/* ── Header ── */}
+    {/* ── Header ── */}
       <div style={{ backgroundColor: "#002EC4" }} className="pb-20 text-white pt-36">
 
         <div className="px-6 mx-auto max-w-screen-2xl lg:px-12">
