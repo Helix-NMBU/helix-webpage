@@ -9,6 +9,7 @@ const FORWARDED_REQUEST_HEADERS = [
   "authorization",
   "referer",
   "content-type",
+  "origin",
   "x-neon-client-info",
 ] as const;
 
@@ -166,6 +167,72 @@ export function isUnsafeAuthPath(path: string): boolean {
   return remainder.split("/").some(segmentEscapes);
 }
 
+function rawQueryParam(search: string, name: string): string | null {
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  if (!query) return null;
+  for (const part of query.split("&")) {
+    if (!part) continue;
+    const eq = part.indexOf("=");
+    const rawKey = eq === -1 ? part : part.slice(0, eq);
+    let key = rawKey;
+    try {
+      key = decodeURIComponent(rawKey.replace(/\+/g, " "));
+    } catch {
+      return null;
+    }
+    if (key !== name) continue;
+    return eq === -1 ? "" : part.slice(eq + 1);
+  }
+  return null;
+}
+
+function decodeQueryComponent(value: string): string | null {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    return null;
+  }
+}
+
+function stripQueryParams(search: string, names: Set<string>): string {
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  if (!query) return "";
+  const kept: string[] = [];
+  for (const part of query.split("&")) {
+    if (!part) continue;
+    const eq = part.indexOf("=");
+    const rawKey = eq === -1 ? part : part.slice(0, eq);
+    const key = decodeQueryComponent(rawKey);
+    if (key && names.has(key)) continue;
+    kept.push(part);
+  }
+  return kept.length ? `?${kept.join("&")}` : "";
+}
+
+// Vercel invokes api/auth.ts with the rewrite destination, not the browser path.
+// `/api/auth/sign-in/social?foo=1` arrives as `/api/auth?__path=sign-in/social&path=sign-in/social&foo=1`.
+export function resolveProxiedAuthUrl(rawUrl: string): { path: string; search: string } | null {
+  const parts = splitRawUrl(rawUrl);
+  if (!parts) return null;
+  const strip = new Set<string>();
+  let path = parts.path;
+  const rawProxyPath = rawQueryParam(parts.search, "__path");
+  if (path === PUBLIC_PREFIX || path === `${PUBLIC_PREFIX}/`) {
+    if (rawProxyPath !== null) {
+      const decoded = decodeQueryComponent(rawProxyPath);
+      if (decoded === null || rawProxyPath.startsWith("/") || rawProxyPath.startsWith("\\") || decoded.startsWith("/") || decoded.startsWith("\\")) return null;
+      path = rawProxyPath === "" ? PUBLIC_PREFIX : `${PUBLIC_PREFIX}/${rawProxyPath}`;
+      strip.add("__path");
+      const injected = rawQueryParam(parts.search, "path");
+      if (injected !== null && decodeQueryComponent(injected) === decoded) strip.add("path");
+    }
+  } else if (rawProxyPath !== null) {
+    strip.add("__path");
+  }
+  if (isUnsafeAuthPath(path)) return null;
+  return { path, search: stripQueryParams(parts.search, strip) };
+}
+
 function upstreamUrl(baseUrl: string, rawUrl: string): URL | null {
   let base: URL;
   try {
@@ -175,8 +242,8 @@ function upstreamUrl(baseUrl: string, rawUrl: string): URL | null {
   }
   if (base.protocol !== "https:" && base.protocol !== "http:") return null;
   if (base.username || base.password) return null;
-  const parts = splitRawUrl(rawUrl);
-  if (!parts || isUnsafeAuthPath(parts.path)) return null;
+  const parts = resolveProxiedAuthUrl(rawUrl);
+  if (!parts) return null;
   const basePath = base.pathname.replace(/\/$/, "");
   const suffix = parts.path === PUBLIC_PREFIX || parts.path === `${PUBLIC_PREFIX}/`
     ? ""
@@ -246,8 +313,8 @@ function originHost(origin: string): string | null {
   }
 }
 
-// State-changing requests must come from this site. The upstream Origin is then
-// replaced with Neon's, so this check is what stops a cross-site POST.
+// State-changing requests must come from this site. The browser Origin is
+// forwarded afterwards; Neon trusts the branch alias and the production domains.
 export function allowsAuthStateChange(input: {
   method: string;
   headers?: AuthProxyRequest["headers"];
@@ -297,7 +364,6 @@ export async function proxyNeonAuth(input: AuthProxyRequest): Promise<Response> 
   }
   const cookies = forwardedAuthCookieHeader(headerValue(input.headers, "cookie"));
   if (cookies) headers.set("cookie", cookies);
-  headers.set("origin", new URL(baseUrl).origin);
   try {
     const upstream = await (input.fetchImpl ?? fetch)(target, {
       method,

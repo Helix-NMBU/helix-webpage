@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import handler, { config } from "../auth/[[...path]].js";
+import handler, { config } from "../auth.js";
 import { isForwardedAuthCookie, proxyNeonAuth, sendAuthProxyResponse } from "./auth-proxy.js";
 
 const BASE = "https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth";
@@ -25,6 +25,18 @@ const sameSite = {
   host: "helixnmbu.no",
 };
 
+// The rewrite destination replaces req.url. A browser request for
+// /api/auth/sign-in/social?foo=1 is invoked as this query form.
+function arrived(requestPath: string): string {
+  const queryAt = requestPath.indexOf("?");
+  const path = queryAt === -1 ? requestPath : requestPath.slice(0, queryAt);
+  const search = queryAt === -1 ? "" : requestPath.slice(queryAt + 1);
+  const prefix = "/api/auth/";
+  if (path === "/api/auth" || !path.startsWith(prefix)) return requestPath;
+  const suffix = path.slice(prefix.length);
+  return `/api/auth?__path=${suffix}&path=${suffix}${search ? `&${search}` : ""}`;
+}
+
 async function call(
   rawUrl: string,
   headers: Record<string, string>,
@@ -32,7 +44,7 @@ async function call(
 ) {
   const response = await proxyNeonAuth({
     method: "POST",
-    rawUrl,
+    rawUrl: arrived(rawUrl),
     headers: { ...sameSite, ...headers },
     body: "{\"provider\":\"google\"}",
     baseUrl: BASE,
@@ -64,11 +76,10 @@ describe("Neon auth proxy", () => {
     expect(String(fetchImpl.mock.calls[0][0])).toBe(`${BASE}/sign-in/social`);
     expect(sent.get("user-agent")).toBe("helix-test");
     expect(sent.get("authorization")).toBe("Bearer member-token");
-    expect(sent.get("origin")).toBe("https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech");
+    expect(sent.get("origin")).toBe("https://helix.example");
     for (const name of ["x-forwarded-host", "x-forwarded-for", "x-forwarded-proto", "host", "x-request-id", "cookie"]) {
       expect(sent.get(name)).toBeNull();
     }
-    expect(sent.get("origin")).not.toBe("https://helix.example");
   });
 
   it("forwards only Neon Auth cookies", async () => {
@@ -136,6 +147,15 @@ describe("Neon auth proxy", () => {
     expect(google.response.headers.get("location")).toBe("https://accounts.google.com/o/oauth2/v2/auth?client_id=helix");
   });
 
+  it("leaves the sign-in JSON url on the Neon host", async () => {
+    const initUrl = `${BASE}/sign-in/social/init?state=abc`;
+    const { response } = await call("/api/auth/sign-in/social", {}, mockFetch(upstreamResponse({
+      headers: new Headers({ "content-type": "application/json" }),
+      body: JSON.stringify({ url: initUrl, redirect: false }),
+    })));
+    expect(await response.json()).toEqual({ url: initUrl, redirect: false });
+  });
+
   it("rejects a traversal path before calling Neon", async () => {
     const fetchImpl = mockFetch();
     const rejected = [
@@ -151,13 +171,13 @@ describe("Neon auth proxy", () => {
       "/api/auth//evil.example",
     ];
     for (const rawUrl of rejected) {
-      const response = await proxyNeonAuth({ rawUrl, baseUrl: BASE, fetchImpl });
+      const response = await proxyNeonAuth({ rawUrl: arrived(rawUrl), baseUrl: BASE, fetchImpl });
       expect(response.status, rawUrl).toBe(400);
       expect(await response.json()).toEqual({ error: "Invalid auth path." });
     }
     expect(fetchImpl).not.toHaveBeenCalled();
     const allowed = await proxyNeonAuth({
-      rawUrl: "/api/auth/get-session?foo=1",
+      rawUrl: arrived("/api/auth/get-session?foo=1"),
       baseUrl: BASE,
       fetchImpl,
     });
@@ -169,7 +189,7 @@ describe("Neon auth proxy", () => {
     const crossSite = mockFetch();
     const rejected = await proxyNeonAuth({
       method: "POST",
-      rawUrl: "/api/auth/sign-out",
+      rawUrl: arrived("/api/auth/sign-out"),
       headers: { origin: "https://evil.example", host: "helixnmbu.no", "sec-fetch-site": "cross-site" },
       baseUrl: BASE,
       fetchImpl: crossSite,
@@ -182,7 +202,7 @@ describe("Neon auth proxy", () => {
     const missingOrigin = mockFetch();
     const noOrigin = await proxyNeonAuth({
       method: "POST",
-      rawUrl: "/api/auth/sign-out",
+      rawUrl: arrived("/api/auth/sign-out"),
       headers: { host: "helixnmbu.no", "sec-fetch-site": "cross-site" },
       baseUrl: BASE,
       fetchImpl: missingOrigin,
@@ -193,7 +213,7 @@ describe("Neon auth proxy", () => {
     const neither = mockFetch();
     const noHeaders = await proxyNeonAuth({
       method: "POST",
-      rawUrl: "/api/auth/sign-out",
+      rawUrl: arrived("/api/auth/sign-out"),
       headers: { host: "helixnmbu.no" },
       baseUrl: BASE,
       fetchImpl: neither,
@@ -204,7 +224,7 @@ describe("Neon auth proxy", () => {
     const www = mockFetch();
     const productionAlias = await proxyNeonAuth({
       method: "POST",
-      rawUrl: "/api/auth/sign-out",
+      rawUrl: arrived("/api/auth/sign-out"),
       headers: { origin: "https://www.helixnmbu.no", host: "helixnmbu.no" },
       baseUrl: BASE,
       fetchImpl: www,
@@ -215,18 +235,19 @@ describe("Neon auth proxy", () => {
     const sameOrigin = mockFetch();
     const forwarded = await proxyNeonAuth({
       method: "POST",
-      rawUrl: "/api/auth/sign-out",
+      rawUrl: arrived("/api/auth/sign-out"),
       headers: { origin: "https://my-branch.vercel.app", host: "my-branch.vercel.app" },
       baseUrl: BASE,
       fetchImpl: sameOrigin,
     });
     expect(forwarded.status).toBe(200);
     expect(String(sameOrigin.mock.calls[0][0])).toBe(`${BASE}/sign-out`);
+    expect((sameOrigin.mock.calls[0][1]?.headers as Headers).get("origin")).toBe("https://my-branch.vercel.app");
 
     const callback = mockFetch();
     const googleGet = await proxyNeonAuth({
       method: "GET",
-      rawUrl: "/api/auth/callback/google?code=1&state=abc",
+      rawUrl: arrived("/api/auth/callback/google?code=1&state=abc"),
       headers: { origin: "https://accounts.google.com", host: "helixnmbu.no" },
       baseUrl: BASE,
       fetchImpl: callback,
@@ -248,7 +269,7 @@ describe("Neon auth proxy", () => {
     try {
       const req = {
         method: "POST",
-        url: "/api/auth/sign-in/social",
+        url: arrived("/api/auth/sign-in/social"),
         headers: {
           host: "helixnmbu.no",
           origin: "https://helixnmbu.no",

@@ -11,6 +11,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth?__path=:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

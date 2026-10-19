@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { proxyNeonAuth, sendAuthProxyResponse } from "../_lib/auth-proxy.js";
+import { proxyNeonAuth, sendAuthProxyResponse } from "./_lib/auth-proxy.js";
 
 export const config = {
   api: {
