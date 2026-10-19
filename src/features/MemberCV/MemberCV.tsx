@@ -342,9 +342,15 @@ export default function MemberCV() {
       opener.focus();
     } else {
       pendingFocus.current = null;
-      [...document.querySelectorAll<HTMLElement>("[data-member-nav='bar'] .mcv-language-trigger")]
-        .find((element) => element.getClientRects().length > 0)
-        ?.focus();
+      const shown = (element: HTMLElement) => {
+        for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+        }
+        return element.getClientRects().length > 0;
+      };
+      const trigger = [...document.querySelectorAll<HTMLElement>(".mcv-member-actions .mcv-language-trigger")].find(shown);
+      (trigger ?? document.querySelector<HTMLElement>("[data-navbar-ref] .cursor-pointer"))?.focus();
     }
   }, []);
   const repository = useMemo(

@@ -310,9 +310,9 @@ export const Navbar = () => {
             />
           </Link>
 
-          {/* Right cluster (hamburger breakpoints): invisible anchor — GSAP reads position/size from this */}
-          <div className="flex flex-1 justify-end items-center gap-2 xl:hidden">
-            {memberNav && <MemberNavControls appearance={linksOnDarkBg ? "on-dark" : "on-light"} placement="bar" />}
+          {/* Right cluster (hamburger breakpoints): invisible anchor — GSAP reads position/size from this.
+              Language and sign-out live in the drawer, matching the home page menu button. */}
+          <div className="flex flex-1 justify-end xl:hidden">
             <div
               ref={pillAnchorRef}
               className="w-14 h-14 rounded-xl invisible shrink-0"
