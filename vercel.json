@@ -1,8 +1,8 @@
 {
-  "buildCommand": "pnpm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "devCommand": "pnpm run dev",
-  "installCommand": "pnpm install --frozen-lockfile",
+  "devCommand": "npm run dev",
+  "installCommand": "npm ci",
   "framework": "vite",
   "rewrites": [
     {
