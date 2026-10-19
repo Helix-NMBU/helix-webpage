@@ -16,8 +16,6 @@ type CVBankAuthContextValue = {
   logout: () => void;
 };
 
-const STORAGE_KEY = "cvbank:user";
-
 const CVBankAuthContext = createContext<CVBankAuthContextValue | undefined>(
   undefined,
 );

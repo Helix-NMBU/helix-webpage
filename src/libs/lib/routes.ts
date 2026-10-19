@@ -37,6 +37,8 @@ export const knownRoutes = new Set([
   "/cv-bank",
   "/cv-bank/login",
   "/cv-bank/profile",
+  "/member/login",
+  "/member/profile",
   "/recruitment",
   "/recruitment/login",
   "/Contactside",
@@ -49,6 +51,8 @@ const hiddenChromePaths = new Set([
   "/cv-bank",
   "/cv-bank/login",
   "/cv-bank/profile",
+  "/member/login",
+  "/member/profile",
 ]);
 
 const hiddenNavbarOnlyPaths = new Set<string>([]);

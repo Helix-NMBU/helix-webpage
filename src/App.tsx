@@ -17,8 +17,7 @@ import SponsorPortal from './features/SponsorPortal/Sponsorportal.tsx'
 import CVBankLogin from './features/CVBank/Login.tsx'
 import RecruitmentLogin from './features/Recruitment/RecruitmentLogin.tsx'
 import RecruitmentPortal from './features/Recruitment/RecruitmentPortal.tsx'
-import CVBankProfile from './features/CVBank/Profile.tsx'
-import { RequireCVBankAuth } from './features/CVBank/auth.tsx'
+import MemberCV from './features/MemberCV/MemberCV.tsx'
 import NotFound from './features/NotFound/NotFound.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
 import Footer from '@libs/components/footer.tsx'
@@ -55,17 +54,12 @@ function AppContent() {
         <Route path="/sponsorportal" element={<SponsorPortal />} />
         <Route path="/recruitment/login" element={<RecruitmentLogin />} />
         <Route path="/recruitment" element={<RecruitmentPortal />} />
-        <Route path="/cv-bank" element={<Navigate to="/cv-bank/login" replace />} />
-        <Route path="/cv-bank/login" element={<CVBankLogin />} />
+        <Route path="/cv-bank" element={<Navigate to="/member/login" replace />} />
+        <Route path="/cv-bank/login" element={<Navigate to="/member/login" replace />} />
+        <Route path="/cv-bank/profile" element={<Navigate to="/member/profile" replace />} />
+        <Route path="/member/login" element={<CVBankLogin />} />
+        <Route path="/member/profile" element={<MemberCV />} />
         {/* <Route path="/Contactside"  element={<Contactside />} /> */}
-        <Route
-          path="/cv-bank/profile"
-          element={
-            <RequireCVBankAuth>
-              <CVBankProfile />
-            </RequireCVBankAuth>
-          }
-        />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {!hideFooter && <Footer />}

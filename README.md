@@ -1,5 +1,9 @@
 # Helix Webpage
 
+## Member CV portal
+
+Members edit a private CV at `/member/profile` and sign in with a Helix Google Workspace account through Neon. Environment variables, the Google redirect URI, and the SQL migration are documented in [docs/features/member-cv-portal/setup.md](docs/features/member-cv-portal/setup.md).
+
 ## CV-Bank Google Login
 
 The CV-Bank flow uses Google OAuth and restricts sign-ins to `@helixnmbu.no` accounts. Configure the following environment variables in `.env`:

@@ -4,6 +4,11 @@
   "devCommand": "npm run dev",
   "installCommand": "npm ci",
   "framework": "vite",
+  "functions": {
+    "api/member-cv.ts": {
+      "includeFiles": "api/_lib/fonts/*.ttf"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
