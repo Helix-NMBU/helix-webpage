@@ -621,6 +621,35 @@ export default function MemberCV() {
     }
   }
 
+  async function downloadPublished() {
+    if (!draft || !envelope || busy || ended || demo || manualOperation.current) return;
+    const current = generation.current;
+    const controller = autosave.current;
+    manualOperation.current = true;
+    controller?.setBlocked(true);
+    setBusy("file");
+    setError(null);
+    try {
+      const file = await repository.downloadPublished();
+      if (generation.current !== current) return;
+      const anchor = document.createElement("a");
+      anchor.href = file.url;
+      anchor.rel = "noopener";
+      anchor.target = "_blank";
+      anchor.click();
+    } catch (failure) {
+      if (generation.current !== current) return;
+      if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
+        autosave.current?.dispose();
+        setEnded(true);
+        clearPreview();
+      }
+      setError(failure instanceof Error ? failure.message : "Could not load your CV.");
+    } finally {
+      finishManual(current);
+    }
+  }
+
   async function reload(opener?: HTMLElement) {
     if (busy || ended || manualOperation.current) return;
     const current = generation.current;
@@ -1173,6 +1202,17 @@ export default function MemberCV() {
                             onClick={() => void run("preview", true)}
                           >
                             {t("Download PDF")}
+                          </Button>
+                        )}
+                        {!demo && envelope.document.publishedRevision !== null && (
+                          <Button
+                            variant="outline"
+                            type="button"
+                            onClick={() => void downloadPublished()}
+                          >
+                            {busy === "file"
+                              ? t("Opening published CV…")
+                              : t("Download published CV")}
                           </Button>
                         )}
                         <Button

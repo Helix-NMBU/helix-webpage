@@ -14,12 +14,22 @@ export interface CvRepository {
   load(): Promise<CvEnvelope>;
   mutate(mutation: CvMutation): Promise<CvEnvelope>;
   preview(mutation: CvMutation): Promise<Blob>;
+  downloadPublished(): Promise<{ url: string; expiresIn: number }>;
 }
 
 export function createCvRepository(
   token: () => Promise<string>,
   request: typeof fetch = fetch,
 ): CvRepository {
+  async function reject(response: Response): Promise<never> {
+    const body = await response.json().catch(() => ({}));
+    throw new CvRequestError(
+      typeof body.error === "string"
+        ? body.error
+        : "Could not complete the request. Your input has been kept.",
+      response.status,
+    );
+  }
   async function call(mutation?: CvMutation) {
     const response = await request("/api/member-cv", {
       method: mutation ? "POST" : "GET",
@@ -29,15 +39,7 @@ export function createCvRepository(
       },
       ...(mutation ? { body: JSON.stringify(mutation) } : {}),
     });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new CvRequestError(
-        typeof body.error === "string"
-          ? body.error
-          : "Could not complete the request. Your input has been kept.",
-        response.status,
-      );
-    }
+    if (!response.ok) await reject(response);
     return response;
   }
   return {
@@ -46,6 +48,18 @@ export function createCvRepository(
       (await call(mutation)).json() as Promise<CvEnvelope>,
     preview: async (mutation) =>
       (await call({ ...mutation, action: "preview" })).blob(),
+    downloadPublished: async () => {
+      const response = await request("/api/member-cv-file", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${await token()}` },
+      });
+      if (!response.ok) await reject(response);
+      const body = await response.json().catch(() => ({}));
+      if (!body || typeof body.url !== "string") {
+        throw new CvRequestError("Could not load your CV.", response.status);
+      }
+      return { url: body.url, expiresIn: Number(body.expiresIn) };
+    },
   };
 }
 

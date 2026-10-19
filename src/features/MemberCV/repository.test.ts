@@ -93,6 +93,32 @@ describe("member CV repository", () => {
   });
 });
 
+describe("published CV download", () => {
+  it("requests the caller's presigned file and surfaces a missing publication", async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ url: "https://storage.example/signed", expiresIn: 120 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "No published CV is available to download." }), { status: 404 }),
+      );
+    const repository = createCvRepository(async () => "member-token", request);
+    await expect(repository.downloadPublished()).resolves.toEqual({
+      url: "https://storage.example/signed",
+      expiresIn: 120,
+    });
+    expect(request.mock.calls[0]).toEqual([
+      "/api/member-cv-file",
+      { method: "GET", headers: { Authorization: "Bearer member-token" } },
+    ]);
+    await expect(repository.downloadPublished()).rejects.toMatchObject({
+      status: 404,
+      message: "No published CV is available to download.",
+    });
+  });
+});
+
 describe("pending retired file cleanup", () => {
   it("keeps a successful publication response and its new revision when cleanup is pending", async () => {
     const envelope = {

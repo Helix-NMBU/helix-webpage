@@ -110,5 +110,10 @@ export function createDemoRepository(
         "The fictional demo uses an HTML preview. Server PDF generation needs the configured application.",
       );
     },
+    downloadPublished: async () => {
+      throw new Error(
+        "The fictional demo uses an HTML preview. Server PDF generation needs the configured application.",
+      );
+    },
   };
 }
