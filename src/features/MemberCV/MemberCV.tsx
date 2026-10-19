@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -66,6 +67,7 @@ import {
   type MemberLocale,
 } from "./locale";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useMemberNav } from "@libs/components/navbar/member-nav";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
 import "./member-cv.css";
@@ -297,6 +299,10 @@ function Section({
 
 export default function MemberCV() {
   const { locale, setLocale, t } = useMemberLocale();
+  const { setActions } = useMemberNav();
+  const logoutRef = useRef<(opener?: HTMLElement) => Promise<void>>(async () => {});
+  const setLocaleRef = useRef(setLocale);
+  setLocaleRef.current = setLocale;
   const location = useLocation();
   const navigate = useNavigate();
   const demo =
@@ -336,8 +342,8 @@ export default function MemberCV() {
       opener.focus();
     } else {
       pendingFocus.current = null;
-      document
-        .querySelector<HTMLElement>(".mcv-header .mcv-language-trigger")
+      [...document.querySelectorAll<HTMLElement>("[data-member-nav='bar'] .mcv-language-trigger")]
+        .find((element) => element.getClientRects().length > 0)
         ?.focus();
     }
   }, []);
@@ -504,6 +510,25 @@ export default function MemberCV() {
       restoreOpener(pendingFocus.current);
     }
   }, [busy, confirmation, preview, restoreOpener]);
+
+  useLayoutEffect(() => {
+    setActions({
+      signOutLabel: memberText(locale, "Sign out"),
+      signOutDisabled: Boolean(busy),
+      onSignOut: (opener) => {
+        void logoutRef.current(opener);
+      },
+      renderLanguage: (appearance) => (
+        <LanguageSwitcher
+          locale={locale}
+          onChange={(next) => setLocaleRef.current(next)}
+          appearance={appearance}
+        />
+      ),
+    });
+  }, [busy, locale, setActions]);
+
+  useEffect(() => () => setActions(null), [setActions]);
 
   function confirmUnsaved(action: UnsavedAction, opener?: HTMLElement) {
     confirmationOpener.current =
@@ -711,6 +736,7 @@ export default function MemberCV() {
       finishManual(current);
     }
   }
+  logoutRef.current = logout;
   const edit = (key: keyof CvData, value: CvData[keyof CvData]) =>
     setDraft((previous) =>
       previous ? { ...previous, [key]: value } : previous,
@@ -764,25 +790,7 @@ export default function MemberCV() {
   }
 
   return (
-    <main className="mcv-page portal-root" lang={locale}>
-      <header className="mcv-header">
-        <Link className="mcv-brand" to="/">
-          <img src="/Vector.png" alt="Helix" className="mcv-logo" />
-          <span>{t("Member portal")}</span>
-        </Link>
-        <div className="mcv-header-actions">
-          <LanguageSwitcher locale={locale} onChange={setLocale} />
-          <Button
-            variant="outline"
-            className="mcv-header-button"
-            type="button"
-            onClick={(event) => void logout(event.currentTarget)}
-            disabled={Boolean(busy)}
-          >
-            {t("Sign out")}
-          </Button>
-        </div>
-      </header>
+    <main className="mcv-page mcv-profile portal-root" lang={locale}>
       <div className="mcv-container">
         {demo && (
           <Alert className="mcv-demo-banner" role="status">
@@ -1292,7 +1300,7 @@ export default function MemberCV() {
                   {demo ? t("Demo CV preview") : t("Generated CV preview")}
                 </DialogTitle>
                 <div className="mcv-preview-controls">
-                  <LanguageSwitcher locale={locale} onChange={setLocale} />
+                  <LanguageSwitcher locale={locale} onChange={setLocale} appearance="on-light" />
                   <DialogClose asChild>
                     <Button ref={previewClose} variant="outline" type="button">
                       {t("Close preview")}
@@ -1356,7 +1364,7 @@ export default function MemberCV() {
               <DialogTitle className="mcv-dialog-title">
                 {t("Unsaved changes")}
               </DialogTitle>
-              <LanguageSwitcher locale={locale} onChange={setLocale} />
+              <LanguageSwitcher locale={locale} onChange={setLocale} appearance="on-light" />
             </div>
             <DialogDescription>
               {confirmation === "reload"

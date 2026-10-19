@@ -6,6 +6,9 @@
   font-family: inherit;
   font-size: 14px;
   line-height: 1.6;
+  /* Zinc-700. Labels and help text sit on white and on the gray section cards. */
+  --muted-foreground: #3f3f46;
+  --color-muted-foreground: #3f3f46;
 }
 .mcv-page * {
   box-sizing: border-box;
@@ -63,8 +66,16 @@
 .mcv-eyebrow {
   color: var(--primary);
   font-weight: 500;
-  font-size: 13px;
+  font-size: 14px;
   margin-bottom: 16px;
+}
+/* Same treatment as the department labels on /members (EXECUTIVE TEAM). */
+.mcv-intro .mcv-eyebrow {
+  color: #111827;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .mcv-intro h1 {
   font-size: clamp(36px, 5vw, 56px);
@@ -101,6 +112,13 @@
   white-space: normal;
   line-height: 1.4;
   box-shadow: none;
+}
+/* Site Button radius is Tailwind rounded-md (0.375rem). Join Us stays rounded-sm. */
+.mcv-page button.mcv-primary,
+.mcv-page button.bg-primary,
+.mcv-dialog button.bg-primary,
+.mcv-dialog button.mcv-primary {
+  border-radius: 0.375rem;
 }
 .mcv-page .mcv-header-button,
 .mcv-page .mcv-demo-button {
@@ -158,10 +176,13 @@
   box-shadow: none;
 }
 .mcv-hint {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted-foreground);
   margin: 0 0 20px;
   line-height: 1.6;
+}
+.mcv-actions + .mcv-hint {
+  margin-top: 12px;
 }
 .mcv-card-content > .mcv-hint:last-child {
   margin-bottom: 0;
@@ -178,7 +199,12 @@
   gap: 8px;
   min-width: 0;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 14px;
+  color: #111827;
+}
+.mcv-field [data-slot="label"] {
+  font-size: 14px;
+  color: #111827;
 }
 .mcv-full {
   grid-column: 1/-1;
@@ -288,7 +314,7 @@
 }
 .mcv-role-details > button {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 14px;
 }
 .mcv-role-details svg {
   width: 16px;
@@ -328,10 +354,10 @@
   justify-content: space-between;
   gap: 32px;
   border: 1px solid var(--border);
-  background: var(--muted);
+  background: var(--card);
   border-radius: 16px;
   padding: 24px 32px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted-foreground);
   margin-bottom: 32px;
 }
@@ -351,7 +377,7 @@
   color: var(--muted-foreground);
   padding: 12px 16px;
   border-radius: 12px;
-  font-size: 13px;
+  font-size: 14px;
   margin: 0 0 24px;
   overflow-wrap: anywhere;
 }
@@ -379,11 +405,15 @@
   border-color: color-mix(in srgb, var(--primary) 20%, var(--border));
   color: var(--foreground);
 }
-.mcv-demo-banner,
+.mcv-demo-banner {
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
 .mcv-cleanup-warning {
   background: var(--muted);
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: 14px;
 }
 .mcv-demo-banner strong {
   color: var(--foreground);
@@ -412,7 +442,7 @@
   box-shadow: 0 16px 48px color-mix(in srgb, var(--foreground) 20%, transparent);
 }
 .mcv-preview-caption {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted-foreground);
   margin-bottom: 20px;
 }
@@ -481,6 +511,7 @@
 }
 .mcv-template-document h1 {
   color: var(--cv-blue);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: clamp(36px, 5vw, 56px);
   font-weight: 700;
   margin: 28px 0 12px;
@@ -652,9 +683,10 @@
   }
 }
 .mcv-demo-label {
-  font-family: Arial, sans-serif;
-  font-size: 11px;
-  color: #795724;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary, #002ec4);
 }
 .mcv-preserve {
   white-space: pre-wrap;
@@ -722,7 +754,7 @@
   }
   .mcv-header button,
   .mcv-page .mcv-header-button {
-    font-size: 12px;
+    font-size: 14px;
   }
   .mcv-container {
     padding: 36px 20px 64px;
@@ -761,8 +793,8 @@
   .mcv-preview-panel > header h2 {
     font-size: 18px;
   }
-  .mcv-preview-panel button {
-    font-size: 12px;
+  .mcv-preview-panel button:not(.mcv-language-trigger) {
+    font-size: 14px;
   }
   .mcv-login-card {
     margin: 24px 0;
@@ -808,6 +840,45 @@
 }
 .mcv-header .mcv-language-trigger:focus-visible {
   outline-color: var(--primary-foreground);
+}
+/* Outlined rectangular control, same geometry as the header Join Us button. */
+.mcv-language-trigger.mcv-language-on-dark,
+.mcv-language-trigger.mcv-language-on-light {
+  min-height: 0;
+  height: auto;
+  padding: 8px 20px;
+  border-radius: 0.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  box-shadow: none;
+  backdrop-filter: blur(12px) saturate(1.5);
+}
+.mcv-language-trigger.mcv-language-on-dark {
+  background: rgb(255 255 255 / 0.1);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  color: #fff;
+}
+.mcv-language-trigger.mcv-language-on-dark:hover {
+  background: rgb(255 255 255 / 0.2);
+}
+.mcv-language-trigger.mcv-language-on-light {
+  background: rgb(0 0 122 / 0.1);
+  border: 1px solid rgb(0 0 122 / 0.2);
+  color: #00007a;
+}
+.mcv-language-trigger.mcv-language-on-light:hover {
+  background: rgb(0 0 122 / 0.15);
+}
+.mcv-language-trigger.mcv-language-on-dark svg,
+.mcv-language-trigger.mcv-language-on-light svg {
+  opacity: 1;
+  color: currentColor;
+}
+.mcv-dialog button.mcv-language-on-dark,
+.mcv-dialog button.mcv-language-on-light {
+  min-height: 0;
+  border-radius: 0.25rem;
 }
 @media (max-width: 600px) {
   .mcv-header {
@@ -1005,7 +1076,8 @@
 }
 .mcv-nav-description {
   line-height: 1.5;
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--muted-foreground);
 }
 .mcv-nav-body {
   padding: 0;
@@ -1030,8 +1102,9 @@
   border-radius: 12px;
   white-space: normal;
   text-decoration: none;
-  color: var(--foreground);
+  color: #111827;
   font-family: inherit;
+  font-size: 16px;
   line-height: 1.4;
   text-align: left;
 }
@@ -1040,8 +1113,9 @@
   box-shadow: inset 3px 0 0 var(--primary);
 }
 .mcv-nav-label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
+  color: #111827;
 }
 .mcv-nav-missing {
   display: inline-flex;
@@ -1084,7 +1158,8 @@
   }
   .mcv-page .mcv-nav-toggle {
     display: inline-flex;
-    font-size: 12px;
+    font-size: 14px;
+    color: #3f3f46;
     padding: 8px;
   }
   .mcv-nav-description {
@@ -1149,13 +1224,13 @@
 .mcv-page .mcv-date-mode {
   align-self: flex-start;
   color: var(--primary);
-  font-size: 12px;
+  font-size: 14px;
   padding: 4px 8px;
   margin-left: -8px;
 }
 .mcv-date-note {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   margin: 0;
 }
@@ -1201,7 +1276,7 @@
 .mcv-date-error {
   margin: 0;
   color: var(--destructive);
-  font-size: 12px;
+  font-size: 14px;
 }
 .mcv-optional-grade {
   margin-top: 16px;
@@ -1210,7 +1285,7 @@
   padding: 4px 8px;
   margin-left: -8px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 14px;
 }
 .mcv-optional-grade-content[data-state="closed"] {
   display: none;
@@ -1220,4 +1295,18 @@
   gap: 8px;
   max-width: 320px;
   margin-top: 8px;
+}
+
+/* Clears the fixed site header. */
+.mcv-profile .mcv-container {
+  padding-top: 112px;
+}
+@media (max-width: 600px) {
+  .mcv-profile .mcv-container {
+    padding-top: 104px;
+  }
+}
+body:has(.mcv-profile) button[aria-label="Scroll to top"] {
+  background: #002ec4;
+  color: #fff;
 }

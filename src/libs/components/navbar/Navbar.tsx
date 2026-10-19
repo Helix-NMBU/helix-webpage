@@ -4,6 +4,7 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ArrowUp } from "lucide-react";
 import { appCtaLinks, desktopNavLinks } from "../../lib/routes";
+import { useMemberNav, type MemberLanguageAppearance } from "./member-nav";
 
 gsap.registerPlugin(useGSAP);
 
@@ -56,6 +57,38 @@ const getPillFg = (brightBg: boolean) => (brightBg ? "#00007A" : "#ffffff");
 const getPillShadow = (brightBg: boolean) =>
   brightBg ? "inset 0 0 0 1.5px rgba(0,46,196,0.25)" : "inset 0 0 0 1.5px rgba(255,255,255,0.35)";
 
+function memberCtaClass(onDark: boolean) {
+  return `whitespace-nowrap rounded-sm px-5 py-2 text-base font-medium backdrop-blur-md backdrop-saturate-150 border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+    onDark
+      ? "bg-white/10 border-white/25 text-white hover:bg-white/20"
+      : "bg-[#00007A]/10 border-[#00007A]/20 text-[#00007A] hover:bg-[#00007A]/15"
+  }`;
+}
+
+function MemberNavControls({
+  appearance,
+  placement,
+}: {
+  appearance: MemberLanguageAppearance;
+  placement: "bar" | "drawer";
+}) {
+  const { actions } = useMemberNav();
+  if (!actions) return null;
+  return (
+    <div className="mcv-member-actions flex items-center gap-2" data-member-nav={placement}>
+      {actions.renderLanguage(appearance)}
+      <button
+        type="button"
+        className={memberCtaClass(appearance === "on-dark")}
+        disabled={actions.signOutDisabled}
+        onClick={(event) => actions.onSignOut(event.currentTarget)}
+      >
+        {actions.signOutLabel}
+      </button>
+    </div>
+  );
+}
+
 const SIDEBAR_WIDTH = 420;
 // Matches the xl: breakpoint below — everything under it uses the hamburger drawer.
 const MOBILE_BP = 1280;
@@ -76,6 +109,7 @@ const getSidebarPos = () => {
 };
 
 export const Navbar = () => {
+  const { actions: memberNav } = useMemberNav();
   const [navVisible, setNavVisible] = useState(true);
   const [isDarkBackground, setIsDarkBackground] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -270,21 +304,24 @@ export const Navbar = () => {
             <img
               src="/Vector.png"
               alt="Helix"
-              className="h-8 md:h-10 w-auto opacity-100 transition-opacity hover:opacity-80"
+              className={`h-8 md:h-10 w-auto opacity-100 transition-opacity hover:opacity-80 ${
+                linksOnDarkBg || location.pathname !== "/member/profile" ? "" : "invert"
+              }`}
             />
           </Link>
 
           {/* Right cluster (hamburger breakpoints): invisible anchor — GSAP reads position/size from this */}
-          <div className="flex flex-1 justify-end xl:hidden">
+          <div className="flex flex-1 justify-end items-center gap-2 xl:hidden">
+            {memberNav && <MemberNavControls appearance={linksOnDarkBg ? "on-dark" : "on-light"} placement="bar" />}
             <div
               ref={pillAnchorRef}
-              className="w-14 h-14 rounded-xl invisible"
+              className="w-14 h-14 rounded-xl invisible shrink-0"
               aria-hidden="true"
             />
           </div>
 
           {/* Right cluster (xl+) — every entry always visible once we're out of hamburger territory */}
-          <div className="hidden xl:flex flex-1 items-center justify-end gap-8">
+          <div className={`hidden xl:flex flex-1 items-center justify-end ${memberNav ? "gap-4 xl:gap-5" : "gap-8"}`}>
             {rightLinks.map((link) => (
               <DesktopNavLink
                 key={link.to}
@@ -303,16 +340,13 @@ export const Navbar = () => {
                 dark={linksOnDarkBg}
               />
             ))}
-            <Link
-              to={ctaLink.to}
-              className={`whitespace-nowrap rounded-sm px-5 py-2 text-base font-medium backdrop-blur-md backdrop-saturate-150 border transition-colors ${
-                linksOnDarkBg
-                  ? "bg-white/10 border-white/25 text-white hover:bg-white/20"
-                  : "bg-[#00007A]/10 border-[#00007A]/20 text-[#00007A] hover:bg-[#00007A]/15"
-              }`}
-            >
-              {ctaLink.label}
-            </Link>
+            {memberNav ? (
+              <MemberNavControls appearance={linksOnDarkBg ? "on-dark" : "on-light"} placement="bar" />
+            ) : (
+              <Link to={ctaLink.to} className={memberCtaClass(linksOnDarkBg)}>
+                {ctaLink.label}
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -377,6 +411,7 @@ export const Navbar = () => {
                   {cta.label}
                 </Link>
               ))}
+              {memberNav && <MemberNavControls appearance="on-light" placement="drawer" />}
             </div>
           </div>
         </div>

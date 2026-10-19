@@ -6,13 +6,16 @@ import {
   SelectValue,
 } from "@libs/components/ui/select";
 import { memberText, type MemberLocale } from "./locale";
+import type { MemberLanguageAppearance } from "@libs/components/navbar/member-nav";
 
 export function LanguageSwitcher({
   locale,
   onChange,
+  appearance,
 }: {
   locale: MemberLocale;
   onChange: (locale: MemberLocale) => void;
+  appearance?: MemberLanguageAppearance;
 }) {
   return (
     <div className="mcv-language">
@@ -23,7 +26,11 @@ export function LanguageSwitcher({
         }}
       >
         <SelectTrigger
-          className="mcv-language-trigger"
+          className={
+            appearance
+              ? `mcv-language-trigger mcv-language-${appearance}`
+              : "mcv-language-trigger"
+          }
           aria-label={memberText(locale, "Choose Norwegian Bokmål or English")}
           lang={locale}
         >

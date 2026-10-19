@@ -20,6 +20,7 @@ import RecruitmentPortal from './features/Recruitment/RecruitmentPortal.tsx'
 import MemberCV from './features/MemberCV/MemberCV.tsx'
 import NotFound from './features/NotFound/NotFound.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
+import { MemberNavProvider } from './libs/components/navbar/member-nav.tsx'
 import Footer from '@libs/components/footer.tsx'
 import { hideNavbar as shouldHideNavbar, hideFooter as shouldHideFooter, knownRoutes } from './libs/lib/routes'
 import { PageLoader } from './libs/components/PageLoader.tsx'
@@ -70,7 +71,9 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <MemberNavProvider>
+        <AppContent />
+      </MemberNavProvider>
     </BrowserRouter>
   )
 }
