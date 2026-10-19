@@ -15,7 +15,7 @@ export default function CVBankLogin() {
 	const { login, isAuthenticated } = useCVBankAuth();
 	const [error, setError] = useState<string | null>(null);
 
-	const from = (location.state as { from?: Location })?.from?.pathname ?? "/cv-bank/profile";
+	const from = (location.state as { from?: Location })?.from?.pathname ?? "/member/profile";
 
 	const handleSuccess = async (response: CredentialResponse) => {
 		try {
@@ -36,6 +36,13 @@ export default function CVBankLogin() {
 			});
 			if (supabaseSignInError) {
 				throw new Error(`Supabase sign-in failed: ${supabaseSignInError.message}`);
+			}
+
+			const { data: portalContext, error: contextError } = await supabase.rpc("current_portal_context");
+			if (contextError) throw new Error(`Could not verify Helix membership: ${contextError.message}`);
+			if (!portalContext?.is_member) {
+				await supabase.auth.signOut();
+				throw new Error("This account is not registered as an active Helix member.");
 			}
 
 			// 3) Fetch the Supabase user and upsert to the students table
@@ -165,4 +172,3 @@ export default function CVBankLogin() {
 		</div>
 	);
 }
-

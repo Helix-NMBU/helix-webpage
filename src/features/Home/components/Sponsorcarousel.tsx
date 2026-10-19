@@ -71,7 +71,7 @@ export default function AutoplayCarousel() {
         {renderList.map((card, idx) => (
           <CarouselItem
             key={`${card.name}-${idx}`}
-            image={card.image}
+            image={card.image ?? ""}
             name={card.name}
           />
         ))}

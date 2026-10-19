@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import './global.css'
 import App from './App'
 import { CVBankAuthProvider } from './features/CVBank/auth'
+import { PortalAuthProvider } from './features/Portal/PortalAuth'
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
@@ -16,7 +17,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GoogleOAuthProvider clientId={googleClientId ?? ''}>
       <CVBankAuthProvider>
-        <App />
+        <PortalAuthProvider>
+          <App />
+        </PortalAuthProvider>
       </CVBankAuthProvider>
     </GoogleOAuthProvider>
   </StrictMode>,
