@@ -79,6 +79,9 @@ export const Navbar = () => {
   const [navVisible, setNavVisible] = useState(true);
   const [isDarkBackground, setIsDarkBackground] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The drawer panel stays mounted so it can animate. While it is fully closed it
+  // must not take clicks or appear in the accessibility tree.
+  const [menuConcealed, setMenuConcealed] = useState(true);
   const location = useLocation();
 
   const morphRef = useRef<HTMLDivElement>(null);
@@ -200,6 +203,7 @@ export const Navbar = () => {
     const sidebar = getSidebarPos();
     drawerOpenRef.current = true;
     setDrawerOpen(true);
+    setMenuConcealed(false);
     gsap.timeline({ onComplete: () => { isAnimating.current = false; } })
       .to(pillTextRef.current, { opacity: 0, duration: 0.08 }, 0)
       .set(morphRef.current, {
@@ -224,6 +228,7 @@ export const Navbar = () => {
       onComplete: () => {
         syncToPill();
         isAnimating.current = false;
+        setMenuConcealed(true);
         window.dispatchEvent(new CustomEvent('helix:nav-closed'));
       },
     })
@@ -339,8 +344,15 @@ export const Navbar = () => {
 
         <div
           ref={cardContentRef}
+          data-nav-overlay=""
           className="absolute inset-0 flex flex-col bg-white"
-          style={{ opacity: 0, pointerEvents: "none" }}
+          style={{
+            opacity: 0,
+            pointerEvents: "none",
+            visibility: menuConcealed ? "hidden" : "visible",
+          }}
+          inert={!drawerOpen}
+          aria-hidden={drawerOpen ? undefined : true}
         >
           <div className="flex items-center justify-end px-8 pt-6 pb-3 md:pt-8 md:pb-4 shrink-0">
             <button
