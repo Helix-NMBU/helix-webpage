@@ -9,8 +9,8 @@ The provisioned Helix project is `helix-nmbu` (`cool-lake-32274277`, `aws-eu-cen
 | Name | Where | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | Server | Pooled Neon Postgres URL used by the Vercel functions. |
-| `NEON_AUTH_BASE_URL` | Server | Managed Better Auth base URL, including the `/neondb/auth` path. |
-| `VITE_NEON_AUTH_URL` | Browser | The same auth base URL. The Vite app uses it to start Google sign-in. |
+| `NEON_AUTH_BASE_URL` | Server | Managed Better Auth base URL, including the `/neondb/auth` path. Issuer and JWKS are taken from this Neon origin. |
+| `VITE_NEON_AUTH_URL` | Browser | Same-origin auth path. Use `/api/auth` on Vercel. The app turns that into the current origin because neon-js requires an absolute URL. |
 | `GOOGLE_CLIENT_ID` | Server | Helix Google OAuth client id. The server checks the stored Google ID token audience against it. |
 | `NEON_S3_ENDPOINT` | Server | Neon Object Storage S3 endpoint. |
 | `NEON_S3_REGION` | Server | Storage region (`eu-central-1`). |
@@ -20,8 +20,9 @@ The provisioned Helix project is `helix-nmbu` (`cool-lake-32274277`, `aws-eu-cen
 
 Empty placeholders are in `.env.example`. Values for this project:
 
-- `NEON_AUTH_BASE_URL` and `VITE_NEON_AUTH_URL`: `https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth`
-- JWKS, derived by the server: `{NEON_AUTH_BASE_URL}/.well-known/jwks.json`
+- `NEON_AUTH_BASE_URL`: `https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth`
+- `VITE_NEON_AUTH_URL`: `/api/auth` for Vercel preview and production. A local `npm run dev` proxies that path to `NEON_AUTH_BASE_URL`. Leave this as the Neon URL only when you are not using the proxy.
+- JWKS, derived by the server from the Neon URL, not the website: `{NEON_AUTH_BASE_URL}/.well-known/jwks.json`
 - `NEON_S3_ENDPOINT`: `https://br-super-resonance-ba0eq1wt.storage.c-8.eu-central-1.aws.neon.tech`
 - `NEON_S3_REGION`: `eu-central-1`
 - `NEON_STORAGE_BUCKET`: `member-cvs`
@@ -50,7 +51,7 @@ That URI is Neon's callback, not the website. After Google returns, Neon sends t
 
 In the Neon Auth console, disable email and password sign-up. The API still rejects a session that is not a verified `@helixnmbu.no` Google account, including a missing or wrong hosted domain, an unverified email, a banned user, or a Google ID token whose audience is not `GOOGLE_CLIENT_ID`. The first successful link stores the Google subject on `identity.members`. Later requests keep that link while the Neon user is still that Google account with a verified Helix email. Changing the email or Google subject requires a fresh valid ID token. A client-supplied `hd` value is ignored.
 
-The session cookie is set on the Neon auth host. The browser then sends the short-lived JWT to `/api/*`. Safari and other browsers that block third-party cookies can fail this pattern; a same-origin auth proxy is not part of this Vite setup.
+`vercel.json` rewrites `/api/auth/:path*` to the Neon Auth URL above, before the SPA catch-all. Vercel rewrites cannot read environment variables, so that destination is hardcoded. The browser then talks to its own origin (`/api/auth`), which keeps the session cookie first-party. Session JWTs are still issued by the Neon origin: `iss` and `aud` are that origin, and the API keeps verifying them with `NEON_AUTH_BASE_URL`. Do not set `NEON_AUTH_BASE_URL` to the website. The Google redirect URI stays `{NEON_AUTH_BASE_URL}/callback/google`.
 
 ## Files
 

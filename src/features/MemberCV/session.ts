@@ -2,7 +2,21 @@ import { createAuthClient } from "@neondatabase/neon-js/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/adapters";
 import { CvRequestError } from "./repository";
 
-const authUrl = import.meta.env.VITE_NEON_AUTH_URL;
+// neon-js rejects a protocol-less base URL. `/api/auth` is expanded to the
+// current origin so one value works for every preview and production host.
+export function resolveMemberAuthUrl(configured: string, origin?: string): string | null {
+  const trimmed = configured.trim().replace(/\/$/, "");
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const base = origin ?? (typeof window === "undefined" ? "" : window.location.origin);
+  if (!base) return null;
+  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return new URL(path, base).href.replace(/\/$/, "");
+}
+
+const authUrl = import.meta.env.VITE_NEON_AUTH_URL
+  ? resolveMemberAuthUrl(import.meta.env.VITE_NEON_AUTH_URL)
+  : null;
 
 export const memberAuthConfigured = Boolean(authUrl);
 
