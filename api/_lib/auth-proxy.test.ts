@@ -185,6 +185,27 @@ describe("Neon auth proxy", () => {
     expect(String(fetchImpl.mock.calls[0][0])).toBe(`${BASE}/get-session?foo=1`);
   });
 
+  it("rejects a traversal path that arrives in the __path query", async () => {
+    const fetchImpl = mockFetch();
+    const rejected = [
+      "/api/auth?__path=..%2F..%2Fadmin&path=..%2F..%2Fadmin",
+      "/api/auth?__path=..%252F..%252Fadmin&path=..%252F..%252Fadmin",
+    ];
+    for (const rawUrl of rejected) {
+      const response = await proxyNeonAuth({ rawUrl, baseUrl: BASE, fetchImpl });
+      expect(response.status, rawUrl).toBe(400);
+      expect(await response.json()).toEqual({ error: "Invalid auth path." });
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const allowed = await proxyNeonAuth({
+      rawUrl: "/api/auth?__path=get-session&path=injected&foo=1",
+      baseUrl: BASE,
+      fetchImpl,
+    });
+    expect(allowed.status).toBe(200);
+    expect(String(fetchImpl.mock.calls[0][0])).toBe(`${BASE}/get-session?foo=1`);
+  });
+
   it("rejects a cross-site state change and still forwards a same-origin POST and a cross-origin GET", async () => {
     const crossSite = mockFetch();
     const rejected = await proxyNeonAuth({

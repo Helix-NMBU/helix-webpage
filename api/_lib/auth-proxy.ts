@@ -214,23 +214,20 @@ function stripQueryParams(search: string, names: Set<string>): string {
 export function resolveProxiedAuthUrl(rawUrl: string): { path: string; search: string } | null {
   const parts = splitRawUrl(rawUrl);
   if (!parts) return null;
-  const strip = new Set<string>();
   let path = parts.path;
   const rawProxyPath = rawQueryParam(parts.search, "__path");
-  if (path === PUBLIC_PREFIX || path === `${PUBLIC_PREFIX}/`) {
-    if (rawProxyPath !== null) {
-      const decoded = decodeQueryComponent(rawProxyPath);
-      if (decoded === null || rawProxyPath.startsWith("/") || rawProxyPath.startsWith("\\") || decoded.startsWith("/") || decoded.startsWith("\\")) return null;
-      path = rawProxyPath === "" ? PUBLIC_PREFIX : `${PUBLIC_PREFIX}/${rawProxyPath}`;
-      strip.add("__path");
-      const injected = rawQueryParam(parts.search, "path");
-      if (injected !== null && decodeQueryComponent(injected) === decoded) strip.add("path");
-    }
-  } else if (rawProxyPath !== null) {
-    strip.add("__path");
+  if ((path === PUBLIC_PREFIX || path === `${PUBLIC_PREFIX}/`) && rawProxyPath !== null) {
+    const decoded = decodeQueryComponent(rawProxyPath);
+    if (decoded === null) return null;
+    // Vercel may already have decoded the rewrite once, so the encoded-slash
+    // and double-decode checks have to see this value too, not only the raw query.
+    const rawCandidate = rawProxyPath === "" ? PUBLIC_PREFIX : `${PUBLIC_PREFIX}/${rawProxyPath}`;
+    const decodedCandidate = decoded === "" ? PUBLIC_PREFIX : `${PUBLIC_PREFIX}/${decoded}`;
+    if (isUnsafeAuthPath(rawCandidate) || isUnsafeAuthPath(decodedCandidate)) return null;
+    path = decodedCandidate;
   }
   if (isUnsafeAuthPath(path)) return null;
-  return { path, search: stripQueryParams(parts.search, strip) };
+  return { path, search: stripQueryParams(parts.search, new Set(["__path", "path"])) };
 }
 
 function upstreamUrl(baseUrl: string, rawUrl: string): URL | null {
