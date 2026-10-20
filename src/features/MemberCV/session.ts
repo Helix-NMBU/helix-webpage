@@ -114,21 +114,54 @@ export function claimNeonAuthSession(
   return promise;
 }
 
+const MEMBER_LOGIN_PATH = "/api/member-login";
+
+// A missing session used to stop in the browser. The member endpoint is what
+// writes the server log, so this call still happens when there is no JWT.
+async function postMemberSession(
+  fetchImpl: typeof fetch,
+  jwt?: string,
+): Promise<Response | null> {
+  try {
+    return await fetchImpl(MEMBER_LOGIN_PATH, {
+      method: "POST",
+      credentials: "include",
+      headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
+    });
+  } catch {
+    console.error("Member session bootstrap failed.", { reason: "no_session_cookie", status: null });
+    return null;
+  }
+}
+
+async function rejectEndedSession(fetchImpl: typeof fetch): Promise<never> {
+  await postMemberSession(fetchImpl);
+  throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+}
+
 export async function sessionTokenFromAuth(
   client: { getSession: () => Promise<AuthCall>; token: () => Promise<AuthCall> },
   boundUserId: { current: string | null },
+  fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
   await claimNeonAuthSession(client);
   let session: AuthCall;
   try {
     session = await client.getSession();
   } catch (error) {
-    throw memberAuthFailure(error);
+    const failure = memberAuthFailure(error);
+    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
+    throw failure;
   }
-  if (session.error) throw memberAuthFailure(session.error);
+  if (session.error) {
+    const failure = memberAuthFailure(session.error);
+    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
+    throw failure;
+  }
   const userId = session.data?.user?.id;
-  if (!userId) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+  if (!userId) return rejectEndedSession(fetchImpl);
   if (boundUserId.current && boundUserId.current !== userId) {
+    await postMemberSession(fetchImpl);
     throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
   }
   boundUserId.current = userId;
@@ -136,10 +169,16 @@ export async function sessionTokenFromAuth(
   try {
     token = await client.token();
   } catch (error) {
-    throw memberAuthFailure(error);
+    const failure = memberAuthFailure(error);
+    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
+    throw failure;
   }
-  if (token.error) throw memberAuthFailure(token.error);
-  if (!token.data?.token) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+  if (token.error) {
+    const failure = memberAuthFailure(token.error);
+    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
+    throw failure;
+  }
+  if (!token.data?.token) return rejectEndedSession(fetchImpl);
   return token.data.token;
 }
 
@@ -187,24 +226,21 @@ export async function confirmMemberSession(
   }
   // The session cookie is stored for /api/auth, so this origin reads it there.
   if (!jwt) {
-    const exchanged = await fetchImpl("/api/auth/token", { method: "GET", credentials: "include" });
-    const exchangedBody = await exchanged.json().catch(() => null);
-    const exchangedToken = exchangedBody && typeof exchangedBody === "object" && "token" in exchangedBody
-      ? exchangedBody.token
-      : undefined;
-    if (exchanged.ok && typeof exchangedToken === "string" && exchangedToken) jwt = exchangedToken;
+    try {
+      const exchanged = await fetchImpl("/api/auth/token", { method: "GET", credentials: "include" });
+      const exchangedBody = await exchanged.json().catch(() => null);
+      const exchangedToken = exchangedBody && typeof exchangedBody === "object" && "token" in exchangedBody
+        ? exchangedBody.token
+        : undefined;
+      if (exchanged.ok && typeof exchangedToken === "string" && exchangedToken) jwt = exchangedToken;
+    } catch {
+      jwt = null;
+    }
   }
-  const response = await fetchImpl("/api/member-login", {
-    method: "POST",
-    credentials: "include",
-    headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
-  });
+  const response = await postMemberSession(fetchImpl, jwt ?? undefined);
+  if (!response) throw new Error("Could not start your member session. Please try again.");
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    console.error("Member session bootstrap failed.", {
-      reason: jwt ? "member_login_rejected" : "no_token",
-      status: response.status,
-    });
     const rejected = typeof body.error === "string" ? body.error : "Sign-in failed. Use your Helix Google Workspace account.";
     throw new Error(jwt ? rejected : "Could not start your member session. Please try again.");
   }

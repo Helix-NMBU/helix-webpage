@@ -29,8 +29,17 @@ export default function CVBankLogin() {
     let cancelled = false;
     void (async () => {
       await claimNeonAuthSession();
-      const session = await authClient.getSession();
-      if (cancelled || !session.data?.user) return;
+      let failed = false;
+      let signedIn = false;
+      try {
+        const session = await authClient.getSession();
+        failed = Boolean(session.error);
+        signedIn = Boolean(session.data?.user);
+      } catch {
+        failed = true;
+      }
+      if (cancelled) return;
+      if (!signedIn && !failed) return;
       setBusy(true);
       try {
         await confirmMemberSession();

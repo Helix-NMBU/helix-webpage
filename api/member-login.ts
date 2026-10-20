@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { forwardedAuthCookieHeader } from "./_lib/auth-proxy.js";
 import { MemberCvError, neonCvServices, type CvServices } from "./_lib/member-cv-service.js";
 
-export type MemberSessionReason = "no_cookie" | "session_lookup_failed" | "domain_rejected" | "db_error" | "missing_env";
+export type MemberSessionReason = "no_session_cookie" | "session_lookup_failed" | "domain_rejected" | "db_error" | "missing_env";
 
 export class MemberSessionFailure extends MemberCvError {
   constructor(
@@ -33,9 +33,22 @@ export async function sessionTokenFromRequest(
   const bearer = headerText(headers, "authorization")?.match(/^Bearer ([^\s]+)$/i);
   if (bearer) return bearer[1];
   const cookies = forwardedAuthCookieHeader(headerText(headers, "cookie") ?? null);
-  if (!cookies) throw new MemberSessionFailure(401, "Log in to continue.", "no_cookie");
+  if (!cookies) throw new MemberSessionFailure(401, "Log in to continue.", "no_session_cookie");
   const baseUrl = env.NEON_AUTH_BASE_URL?.trim().replace(/\/$/, "");
   if (!baseUrl) throw new MemberSessionFailure(503, "Member portal server configuration is missing.", "missing_env");
+  let sessionResponse: Response;
+  try {
+    sessionResponse = await fetchImpl(`${baseUrl}/get-session`, {
+      method: "GET",
+      headers: { cookie: cookies },
+      redirect: "manual",
+    });
+  } catch {
+    throw new MemberSessionFailure(502, "Member sign-in is temporarily unavailable. Try again.", "session_lookup_failed");
+  }
+  if (!sessionResponse.ok) {
+    throw new MemberSessionFailure(401, "Your session has expired. Log in again.", "session_lookup_failed", sessionResponse.status);
+  }
   let response: Response;
   try {
     response = await fetchImpl(`${baseUrl}/token`, {

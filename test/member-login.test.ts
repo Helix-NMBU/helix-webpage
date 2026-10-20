@@ -39,24 +39,29 @@ describe("Neon member sign-in", () => {
     logged.mockRestore();
   });
 
-  it("rejects a missing session before any profile write", async () => {
+  it("returns 401 and logs no_session_cookie when the request has no session cookie", async () => {
     const logged = loggedFailures();
-    const f = fixture(vi.fn());
+    const fetchImpl = vi.fn();
+    const f = fixture(vi.fn(), (headers) => sessionTokenFromRequest(headers, { NEON_AUTH_BASE_URL: BASE }, fetchImpl));
     expect(await f.request()).toEqual({ status: 401, result: { error: "Log in to continue." } });
     expect(f.authenticate).not.toHaveBeenCalled();
-    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "no_cookie", status: 401 });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "no_session_cookie", status: 401 });
     logged.mockRestore();
   });
 
-  it("logs the upstream status when the session cookie cannot be exchanged", async () => {
+  it("returns 401 and logs session_lookup_failed when upstream get-session fails", async () => {
     const logged = loggedFailures();
     const secret = "session-cookie-secret";
-    const fetchImpl = vi.fn(async (_input: RequestInfo | URL) => new Response("upstream failed", { status: 503 }));
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(`${BASE}/get-session`);
+      return new Response("upstream failed", { status: 503 });
+    });
     const f = fixture(vi.fn(), (headers) => sessionTokenFromRequest(headers, { NEON_AUTH_BASE_URL: BASE }, fetchImpl));
     const result = await f.request({ cookie: `theme=dark; __Secure-neon-auth.session_token=${secret}` });
     expect(result).toEqual({ status: 401, result: { error: "Your session has expired. Log in again." } });
     expect(f.authenticate).not.toHaveBeenCalled();
-    expect(String(fetchImpl.mock.calls[0][0])).toBe(`${BASE}/token`);
+    expect(fetchImpl).toHaveBeenCalledOnce();
     expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "session_lookup_failed", status: 503 });
     expect(JSON.stringify(logged.mock.calls)).not.toContain(secret);
     logged.mockRestore();

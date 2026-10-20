@@ -15,7 +15,7 @@ describe("member session bootstrap", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.includes("/get-session")) {
+      if (url.includes("neon_auth_session_verifier")) {
         expect(url).toBe(`${BASE}/get-session?neon_auth_session_verifier=${VERIFIER}`);
         const sent = init?.headers as Headers;
         expect(sent.get("cookie")).toBe(`__Secure-neon-auth.session_challenge=${CHALLENGE}`);
@@ -28,6 +28,12 @@ describe("member session bootstrap", () => {
           status: 200,
           headers,
         });
+      }
+      if (url.endsWith("/get-session")) {
+        expect(init?.headers).toEqual({
+          cookie: `__Secure-neon-auth.session_token=${SESSION}; __Secure-neon-auth.session_token.0=chunk`,
+        });
+        return Response.json({ session: { id: "sess-1" }, user: { id: "user-1" } });
       }
       if (url.endsWith("/token")) {
         expect(init?.headers).toEqual({

@@ -60,18 +60,22 @@ describe("member auth failures", () => {
   it("redirects to login for 401 and 403 and shows a generic error for 400", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const token = vi.fn(async () => ({ data: { token: "unused" } }));
+    const memberLogin = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect([String(input), init?.method]).toEqual(["/api/member-login", "POST"]);
+      return new Response(JSON.stringify({ error: "Log in to continue." }), { status: 401 });
+    });
     const unauthorized = await sessionTokenFromAuth({
       getSession: async () => ({ data: null, error: { status: 401, message: "Unauthorized" } }),
       token,
-    }, { current: null }).catch((error: unknown) => error);
+    }, { current: null }, memberLogin).catch((error: unknown) => error);
     const forbidden = await sessionTokenFromAuth({
       getSession: async () => ({ data: { user: { id: "member" } } }),
       token: async () => ({ data: null, error: { status: 403, message: "Forbidden" } }),
-    }, { current: null }).catch((error: unknown) => error);
+    }, { current: null }, memberLogin).catch((error: unknown) => error);
     const invalid = await sessionTokenFromAuth({
       getSession: async () => ({ data: null, error: { status: 400, message: "HTTP 400 INVALID_HOSTNAME" } }),
       token,
-    }, { current: null }).catch((error: unknown) => error);
+    }, { current: null }, memberLogin).catch((error: unknown) => error);
 
     expect(memberLoadFailure(unauthorized)).toEqual({ redirectTo: "/member/login" });
     expect(unauthorized).toMatchObject({ status: 401 });
@@ -85,6 +89,10 @@ describe("member auth failures", () => {
       detail: "HTTP 400 INVALID_HOSTNAME",
     });
     expect(token).not.toHaveBeenCalled();
+    expect(memberLogin.mock.calls.map(([input, init]) => [String(input), init?.method])).toEqual([
+      ["/api/member-login", "POST"],
+      ["/api/member-login", "POST"],
+    ]);
     logged.mockRestore();
   });
 
@@ -131,21 +139,22 @@ describe("member session claim", () => {
     logged.mockRestore();
   });
 
-  it("logs before showing the member-session error when no token is available", async () => {
-    const order: string[] = [];
-    const logged = vi.spyOn(console, "error").mockImplementation(() => { order.push("log"); });
+  it("still calls the member endpoint when no token is available, then shows the generic message", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      order.push(String(input));
       expect(init?.credentials).toBe("include");
-      return new Response(JSON.stringify({ error: "hidden" }), { status: 401 });
+      if (String(input) === "/api/member-login") {
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toEqual({});
+      }
+      return new Response(JSON.stringify({ error: "Log in to continue." }), { status: 401 });
     });
     const failure = await confirmMemberSession({
       token: async () => ({ error: { status: 400 } }),
     }, fetchImpl).catch((error: unknown) => error);
-    expect(order).toEqual(["/api/auth/token", "/api/member-login", "log"]);
+    expect(fetchImpl.mock.calls.map(([input]) => String(input))).toEqual(["/api/auth/token", "/api/member-login"]);
     expect(failure).toEqual(new Error("Could not start your member session. Please try again."));
-    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "no_token", status: 401 });
-    expect(JSON.stringify(logged.mock.calls)).not.toContain("hidden");
+    expect(logged).not.toHaveBeenCalled();
     logged.mockRestore();
   });
 
