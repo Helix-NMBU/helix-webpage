@@ -197,13 +197,23 @@ describe("member session claim", () => {
   });
 
   it("shows loading then signed-in, and does not repeat the landing after a remount or route change", async () => {
-    const replaceState = vi.fn();
-    vi.stubGlobal("window", { location: new URL("https://helix.example/member/profile?neon_auth_session_verifier=once") });
+    const location = new URL("https://helix.example/member/profile?neon_auth_session_verifier=once");
+    const replaceState = vi.fn((_state: unknown, _title: string, url?: string | URL | null) => {
+      const next = new URL(String(url), location.origin);
+      location.pathname = next.pathname;
+      location.search = next.search;
+      location.hash = next.hash;
+    });
+    vi.stubGlobal("window", { location });
     vi.stubGlobal("history", { state: { idx: 1 }, replaceState });
     let release: (value: { data: { user: { id: string } } }) => void = () => undefined;
-    const getSession = vi.fn(() => new Promise<{ data: { user: { id: string } } }>((resolve) => { release = resolve; }));
+    let searchAtClaim = "";
+    const getSession = vi.fn(() => {
+      searchAtClaim = window.location.search;
+      return new Promise<{ data: { user: { id: string } } }>((resolve) => { release = resolve; });
+    });
     const token = vi.fn(async () => {
-      expect(replaceState).toHaveBeenCalled();
+      expect(window.location.search).not.toContain("neon_auth_session_verifier");
       return { data: { token: "member-jwt" } };
     });
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -218,7 +228,10 @@ describe("member session claim", () => {
     const first = ensureMemberLanding(client, fetchImpl, search);
     const second = ensureMemberLanding(client, fetchImpl, search);
     expect(getSession).toHaveBeenCalledTimes(1);
+    expect(searchAtClaim).toContain("neon_auth_session_verifier=once");
+    expect(window.location.search).not.toContain("neon_auth_session_verifier");
     expect(token).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
     release({ data: { user: { id: "member" } } });
     const [started, remounted] = await Promise.all([first, second]);
     frames.push(memberPageCopy(memberLandingFrame(started)));
@@ -226,6 +239,7 @@ describe("member session claim", () => {
     expect(loginAction(started)).toBe("profile");
     expect(frames).toEqual(["Verifying your Helix account…", "Build your CV"]);
     expect(frames).not.toContain("Sign in to build your CV");
+    expect(window.location.search).not.toContain("neon_auth_session_verifier");
     expect(replaceState).toHaveBeenCalledWith({ idx: 1 }, "", "/member/profile");
     const jwt = await sessionTokenFromAuth(client, { current: null }, fetchImpl);
     const changedRoute = await ensureMemberLanding(client, fetchImpl, "");
@@ -235,5 +249,54 @@ describe("member session claim", () => {
     expect(getSession).toHaveBeenCalledTimes(1);
     expect(token).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(memberLoginCount(fetchImpl)).toBe(1);
+  });
+
+  it("sends the claimed verifier after the address bar is cleared, and still posts member login once", async () => {
+    const location = new URL("https://helix.example/member/profile?tab=cv&neon_auth_session_verifier=once");
+    const replaceState = vi.fn((_state: unknown, _title: string, url?: string | URL | null) => {
+      const next = new URL(String(url), location.origin);
+      location.pathname = next.pathname;
+      location.search = next.search;
+      location.hash = next.hash;
+    });
+    vi.stubGlobal("window", { location });
+    vi.stubGlobal("history", { state: { idx: 1 }, replaceState });
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      expect(window.location.search).not.toContain("neon_auth_session_verifier");
+      if (url.includes("/get-session")) return Response.json({ user: { id: "member" } });
+      if (url.includes("/api/member-login")) return Response.json({ ok: true });
+      return new Response("unexpected", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+    const getSession = vi.fn(async () => {
+      await Promise.resolve();
+      await fetch("/api/auth/get-session", { credentials: "include" });
+      return { data: { user: { id: "member" } } };
+    });
+    const token = vi.fn(async () => ({ data: { token: "member-jwt" } }));
+    const pending = ensureMemberLanding({ getSession, token }, fetchImpl, location.search);
+    expect(getSession).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe("?tab=cv");
+    expect(calls).toEqual([]);
+    await pending;
+    expect(calls.filter((call) => call.includes("/get-session"))).toEqual([
+      "GET https://helix.example/api/auth/get-session?neon_auth_session_verifier=once",
+    ]);
+    expect(memberLoginCount(fetchImpl)).toBe(1);
+    await ensureMemberLanding({ getSession, token }, fetchImpl, "?neon_auth_session_verifier=once");
+    await sessionTokenFromAuth({ getSession, token }, { current: null }, fetchImpl);
+    expect(getSession).toHaveBeenCalledTimes(1);
+    expect(memberLoginCount(fetchImpl)).toBe(1);
   });
 });
+
+function memberLoginCount(fetchImpl: { mock: { calls: unknown[][] } }): number {
+  return fetchImpl.mock.calls.filter((call) => {
+    const [input, init] = call as [RequestInfo | URL, RequestInit | undefined];
+    return String(input).includes("/api/member-login") && (init?.method ?? "GET") === "POST";
+  }).length;
+}

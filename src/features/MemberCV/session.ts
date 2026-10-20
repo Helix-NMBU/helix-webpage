@@ -124,13 +124,37 @@ function currentSearch(search?: string): string {
 
 // neon-js keeps attaching a verifier that is still in the URL, and skips its
 // session cache while that param is present. Remove it once this landing has
-// used it so later reads use the cookie.
+// copied it so later reads use the cookie.
 export function stripNeonAuthVerifier(): void {
   if (typeof window === "undefined" || typeof history === "undefined" || typeof history.replaceState !== "function") return;
   const current = new URL(window.location.href);
   if (!current.searchParams.has(NEON_AUTH_SESSION_VERIFIER_PARAM)) return;
   current.searchParams.delete(NEON_AUTH_SESSION_VERIFIER_PARAM);
   history.replaceState(history.state, "", `${current.pathname}${current.search}${current.hash}`);
+}
+
+// neon-js reads the verifier from window.location inside an awaited request
+// hook. The address bar is cleared before that await, so the one get-session
+// fetch still has to carry the value that was just claimed.
+function holdVerifierForSessionFetch(verifier: string): () => void {
+  const current = globalThis.fetch;
+  if (!current) return () => undefined;
+  let armed = true;
+  const wrapped = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const raw = input instanceof Request ? input.url : String(input);
+    if (!armed || !raw.includes("/get-session") || raw.includes(`${NEON_AUTH_SESSION_VERIFIER_PARAM}=`)) {
+      return current(input, init);
+    }
+    armed = false;
+    const url = new URL(raw, typeof window === "undefined" ? "http://localhost" : window.location.origin);
+    url.searchParams.set(NEON_AUTH_SESSION_VERIFIER_PARAM, verifier);
+    const next = input instanceof Request ? new Request(url, input) : url;
+    return current(next, init);
+  }) as typeof fetch;
+  globalThis.fetch = wrapped;
+  return () => {
+    if (globalThis.fetch === wrapped) globalThis.fetch = current;
+  };
 }
 
 const MEMBER_LOGIN_PATH = "/api/member-login";
@@ -181,9 +205,12 @@ async function runMemberLanding(
   fetchImpl: typeof fetch,
   search: string | undefined,
 ): Promise<MemberLanding> {
-  const hadVerifier = Boolean(verifierFrom(currentSearch(search)));
+  const verifier = verifierFrom(currentSearch(search));
+  const hadVerifier = Boolean(verifier);
   if (!client) return { phase: "unavailable", token: null, userId: null, status: null, error: "Member sign-in is not configured yet. Please contact Helix." };
   if (!client.getSession) {
+    // Nothing else may observe the verifier while the JWT read is in flight.
+    stripNeonAuthVerifier();
     const jwt = await readMemberJwt(client, fetchImpl);
     const response = await postMemberSession(fetchImpl, jwt.token ?? undefined);
     if (!response) return { phase: "unavailable", token: jwt.token, userId: null, status: jwt.status, error: "Could not start your member session. Please try again." };
@@ -193,11 +220,13 @@ async function runMemberLanding(
     const status = jwt.status === 401 || jwt.status === 403 ? jwt.status : response.status;
     return { phase: status === 401 || status === 403 || !jwt.token ? "signed-out" : "unavailable", token: jwt.token, userId: null, status, error: message };
   }
-  let session: AuthCall;
+  const restoreFetch = verifier ? holdVerifierForSessionFetch(verifier) : () => undefined;
+  let pendingSession: Promise<AuthCall>;
   try {
-    session = await client.getSession();
+    pendingSession = client.getSession();
   } catch (error) {
     stripNeonAuthVerifier();
+    restoreFetch();
     const failure = memberAuthFailure(error);
     if (hadVerifier) {
       console.error("Member session bootstrap failed.", { reason: "verifier_exchange_failed", status: failure.status || null });
@@ -205,7 +234,21 @@ async function runMemberLanding(
     if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
     return { phase: failure.status === 401 || failure.status === 403 ? "signed-out" : "unavailable", token: null, userId: null, status: failure.status || null, error: failure.message };
   }
+  // Claimed. Drop it before this function yields, so a re-render cannot start another exchange.
   stripNeonAuthVerifier();
+  let session: AuthCall;
+  try {
+    session = await pendingSession;
+  } catch (error) {
+    const failure = memberAuthFailure(error);
+    if (hadVerifier) {
+      console.error("Member session bootstrap failed.", { reason: "verifier_exchange_failed", status: failure.status || null });
+    }
+    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
+    return { phase: failure.status === 401 || failure.status === 403 ? "signed-out" : "unavailable", token: null, userId: null, status: failure.status || null, error: failure.message };
+  } finally {
+    restoreFetch();
+  }
   if (session.error) {
     const failure = memberAuthFailure(session.error);
     if (hadVerifier) {
