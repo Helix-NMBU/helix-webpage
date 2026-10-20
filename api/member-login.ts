@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { forwardedAuthCookieHeader } from "./_lib/auth-proxy.js";
 import { MemberCvError, neonCvServices, type CvServices } from "./_lib/member-cv-service.js";
 
 export type MemberSessionReason = "no_session_cookie" | "session_lookup_failed" | "domain_rejected" | "db_error" | "missing_env";
@@ -15,59 +14,20 @@ export class MemberSessionFailure extends MemberCvError {
   }
 }
 
-type HeaderBag = VercelRequest["headers"] | { authorization?: string; cookie?: string };
+type HeaderBag = VercelRequest["headers"] | { authorization?: string };
 
-function headerText(headers: HeaderBag, name: "authorization" | "cookie"): string | undefined {
+function authorizationHeader(headers: HeaderBag): string | undefined {
   const bag = headers as Record<string, unknown>;
-  const value = bag[name] ?? bag[name === "authorization" ? "Authorization" : "Cookie"];
+  const value = bag.authorization ?? bag.Authorization;
   if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.filter((item) => typeof item === "string").join(name === "cookie" ? "; " : ", ");
+  if (Array.isArray(value)) return value.filter((item) => typeof item === "string").join(", ");
   return undefined;
 }
 
-export async function sessionTokenFromRequest(
-  headers: HeaderBag,
-  env: NodeJS.ProcessEnv = process.env,
-  fetchImpl: typeof fetch = fetch,
-): Promise<string> {
-  const bearer = headerText(headers, "authorization")?.match(/^Bearer ([^\s]+)$/i);
-  if (bearer) return bearer[1];
-  const cookies = forwardedAuthCookieHeader(headerText(headers, "cookie") ?? null);
-  if (!cookies) throw new MemberSessionFailure(401, "Log in to continue.", "no_session_cookie");
-  const baseUrl = env.NEON_AUTH_BASE_URL?.trim().replace(/\/$/, "");
-  if (!baseUrl) throw new MemberSessionFailure(503, "Member portal server configuration is missing.", "missing_env");
-  let sessionResponse: Response;
-  try {
-    sessionResponse = await fetchImpl(`${baseUrl}/get-session`, {
-      method: "GET",
-      headers: { cookie: cookies },
-      redirect: "manual",
-    });
-  } catch {
-    throw new MemberSessionFailure(502, "Member sign-in is temporarily unavailable. Try again.", "session_lookup_failed");
-  }
-  if (!sessionResponse.ok) {
-    throw new MemberSessionFailure(401, "Your session has expired. Log in again.", "session_lookup_failed", sessionResponse.status);
-  }
-  let response: Response;
-  try {
-    response = await fetchImpl(`${baseUrl}/token`, {
-      method: "GET",
-      headers: { cookie: cookies },
-      redirect: "manual",
-    });
-  } catch {
-    throw new MemberSessionFailure(502, "Member sign-in is temporarily unavailable. Try again.", "session_lookup_failed");
-  }
-  if (!response.ok) {
-    throw new MemberSessionFailure(401, "Your session has expired. Log in again.", "session_lookup_failed", response.status);
-  }
-  const body = await response.json().catch(() => null);
-  const token = body && typeof body === "object" && "token" in body ? body.token : undefined;
-  if (typeof token !== "string" || !token) {
-    throw new MemberSessionFailure(401, "Your session has expired. Log in again.", "session_lookup_failed", response.status);
-  }
-  return token;
+export async function sessionTokenFromRequest(headers: HeaderBag): Promise<string> {
+  const bearer = authorizationHeader(headers)?.match(/^Bearer ([^\s]+)$/i);
+  if (bearer?.[1]) return bearer[1];
+  throw new MemberSessionFailure(401, "Log in to continue.", "no_session_cookie");
 }
 
 function failureOf(error: unknown): MemberSessionFailure {

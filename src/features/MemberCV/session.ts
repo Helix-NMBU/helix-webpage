@@ -63,6 +63,7 @@ export function memberAuthFailure(error: unknown): CvRequestError {
 
 export function memberLoadFailure(failure: unknown): { redirectTo: "/member/login" } | { message: string } {
   if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
+    rejectMemberSession();
     return { redirectTo: "/member/login" };
   }
   if (failure instanceof CvRequestError) return { message: failure.message };
@@ -91,11 +92,68 @@ export type MemberLanding = {
 
 type MemberClient = Partial<SessionReader> & { token?: () => Promise<AuthCall> };
 
-// One landing, including StrictMode's second mount and later route changes.
+// Refresh a cached Neon JWT this long before exp. The verifier exchange stays
+// cached; the JWT does not.
+export const MEMBER_TOKEN_REFRESH_MARGIN_MS = 60_000;
+
+type JwtRead = { token: string | null; status: number | null };
+
+// In-flight or settled verifier exchange and member bootstrap. A failed
+// "unavailable" result is dropped so the next call can retry. The JWT is cached
+// separately and only while it is outside the refresh margin.
 let landingPromise: Promise<MemberLanding> | null = null;
+let jwtCache: { token: string; refreshAt: number } | null = null;
+let jwtFlight: Promise<JwtRead> | null = null;
+let sessionRejected = false;
+
+function signedOutLanding(): MemberLanding {
+  return {
+    phase: "signed-out",
+    token: null,
+    userId: null,
+    status: 401,
+    error: "Your session has ended. Sign in again to continue.",
+  };
+}
 
 export function clearMemberLanding(): void {
   landingPromise = null;
+  jwtCache = null;
+  jwtFlight = null;
+  sessionRejected = false;
+}
+
+function rejectMemberSession(): void {
+  landingPromise = null;
+  jwtCache = null;
+  jwtFlight = null;
+  sessionRejected = true;
+}
+
+function jwtExpiryMs(token: string): number | null {
+  const segment = token.split(".")[1];
+  if (!segment) return null;
+  try {
+    const padded = segment.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (segment.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
+    return typeof payload.exp === "number" && Number.isFinite(payload.exp) ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberJwt(token: string): void {
+  const exp = jwtExpiryMs(token);
+  if (exp === null) {
+    jwtCache = null;
+    return;
+  }
+  const refreshAt = exp - MEMBER_TOKEN_REFRESH_MARGIN_MS;
+  if (refreshAt <= Date.now()) {
+    jwtCache = null;
+    return;
+  }
+  jwtCache = { token, refreshAt };
 }
 
 export function memberLandingFrame(landing: MemberLanding | null): MemberFrame {
@@ -177,7 +235,7 @@ async function postMemberSession(
   }
 }
 
-async function readMemberJwt(client: MemberClient, fetchImpl: typeof fetch): Promise<{ token: string | null; status: number | null }> {
+async function fetchMemberJwt(client: MemberClient, fetchImpl: typeof fetch): Promise<JwtRead> {
   if (client.token) {
     try {
       const token = await client.token();
@@ -198,6 +256,20 @@ async function readMemberJwt(client: MemberClient, fetchImpl: typeof fetch): Pro
   } catch {
     return { token: null, status: null };
   }
+}
+
+async function readMemberJwt(client: MemberClient, fetchImpl: typeof fetch): Promise<JwtRead> {
+  if (jwtCache && Date.now() < jwtCache.refreshAt) return { token: jwtCache.token, status: null };
+  if (!jwtFlight) {
+    jwtFlight = fetchMemberJwt(client, fetchImpl).then((result) => {
+      if (result.token) rememberJwt(result.token);
+      else if (result.status === 401 || result.status === 403) jwtCache = null;
+      return result;
+    }).finally(() => {
+      jwtFlight = null;
+    });
+  }
+  return jwtFlight;
 }
 
 async function runMemberLanding(
@@ -273,14 +345,29 @@ async function runMemberLanding(
   return { phase: signedOut ? "signed-out" : "unavailable", token: jwt.token, userId, status, error: message };
 }
 
-// Verifier exchange, get-session and member bootstrap share this promise.
-// A second mount or a route change joins it instead of starting another one.
+// The one-time verifier exchange and member bootstrap share this promise,
+// including StrictMode's second mount. The JWT is read again for each request
+// once it is inside the refresh margin. A 401 or 403 drops the cache so login
+// cannot send the member back to the profile on a stale signed-in result.
 export function ensureMemberLanding(
   client: MemberClient | null = authClient,
   fetchImpl: typeof fetch = fetch,
   search?: string,
 ): Promise<MemberLanding> {
-  if (!landingPromise) landingPromise = runMemberLanding(client, fetchImpl, search);
+  if (sessionRejected) return Promise.resolve(signedOutLanding());
+  if (!landingPromise) {
+    let run: Promise<MemberLanding>;
+    run = runMemberLanding(client, fetchImpl, search).then((landing) => {
+      if (sessionRejected) {
+        if (landingPromise === run) landingPromise = null;
+        return signedOutLanding();
+      }
+      if (landing.phase === "unavailable" && landingPromise === run) landingPromise = null;
+      if (landing.phase !== "signed-in") jwtCache = null;
+      return landing;
+    });
+    landingPromise = run;
+  }
   return landingPromise;
 }
 
@@ -301,15 +388,26 @@ export async function sessionTokenFromAuth(
   boundUserId: { current: string | null },
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
+  if (sessionRejected) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
   const landing = await ensureMemberLanding(client, fetchImpl);
-  if (landing.phase === "signed-in" && landing.token) {
-    if (boundUserId.current && landing.userId && boundUserId.current !== landing.userId) {
-      throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
+  if (landing.phase === "signed-in") {
+    const jwt = await readMemberJwt(client, fetchImpl);
+    if (jwt.token) {
+      if (boundUserId.current && landing.userId && boundUserId.current !== landing.userId) {
+        rejectMemberSession();
+        throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
+      }
+      if (landing.userId) boundUserId.current = landing.userId;
+      return jwt.token;
     }
-    if (landing.userId) boundUserId.current = landing.userId;
-    return landing.token;
+    if (jwt.status === 401 || jwt.status === 403) {
+      rejectMemberSession();
+      throw new CvRequestError(landing.error ?? "Your session has ended. Sign in again to continue.", jwt.status);
+    }
+    throw new CvRequestError(landing.error ?? MEMBER_AUTH_UNAVAILABLE, jwt.status ?? 0);
   }
   if (landing.status === 401 || landing.status === 403 || landing.phase === "signed-out") {
+    rejectMemberSession();
     throw new CvRequestError(landing.error ?? "Your session has ended. Sign in again to continue.", landing.status === 403 ? 403 : 401);
   }
   throw new CvRequestError(landing.error ?? MEMBER_AUTH_UNAVAILABLE, landing.status ?? 0);
@@ -320,13 +418,22 @@ export async function memberSessionToken(boundUserId: { current: string | null }
   return sessionTokenFromAuth(authClient, boundUserId);
 }
 
-export function watchMemberSession(onEnd: () => void): () => void {
-  if (!authClient) return () => undefined;
+export function watchMemberSession(onEnd: () => void, client: MemberClient | null = authClient): () => void {
+  if (!client?.getSession) return () => undefined;
+  const readSession = client.getSession.bind(client);
   const onFocus = () => {
-    void authClient.getSession().then((session) => {
+    void readSession().then((session) => {
       if (session.error) {
         const failure = memberAuthFailure(session.error);
-        if (failure.status === 401 || failure.status === 403) onEnd();
+        if (failure.status === 401 || failure.status === 403) {
+          rejectMemberSession();
+          onEnd();
+        }
+        return;
+      }
+      if (!session.data?.user?.id) {
+        rejectMemberSession();
+        onEnd();
       }
     }).catch((error: unknown) => {
       memberAuthFailure(error);

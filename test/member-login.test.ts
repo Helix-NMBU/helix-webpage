@@ -1,17 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createMemberLoginHandler, sessionTokenFromRequest } from "../api/member-login.js";
+import { createMemberLoginHandler } from "../api/member-login.js";
 import type { CvServices } from "../api/_lib/member-cv-service.js";
 import { MemberCvError } from "../api/_lib/member-cv-error.js";
 
-const BASE = "https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth";
-
-function fixture(
-  authenticate: CvServices["authenticate"],
-  lookup?: typeof sessionTokenFromRequest,
-) {
+function fixture(authenticate: CvServices["authenticate"]) {
   const services = { authenticate } as CvServices;
-  const handler = createMemberLoginHandler(() => services, lookup);
+  const handler = createMemberLoginHandler(() => services);
   async function request(headers: Record<string, string> = {}, method = "POST") {
     let status: number | undefined;
     let result: unknown;
@@ -39,42 +34,27 @@ describe("Neon member sign-in", () => {
     logged.mockRestore();
   });
 
-  it("returns 401 and logs no_session_cookie when the request has no session cookie", async () => {
+  it("returns 401 and logs no_session_cookie when the request has no bearer token", async () => {
     const logged = loggedFailures();
-    const fetchImpl = vi.fn();
-    const f = fixture(vi.fn(), (headers) => sessionTokenFromRequest(headers, { NEON_AUTH_BASE_URL: BASE }, fetchImpl));
-    expect(await f.request()).toEqual({ status: 401, result: { error: "Log in to continue." } });
+    const f = fixture(vi.fn());
+    expect(await f.request({ cookie: "__Secure-neon-auth.session_token=present" })).toEqual({ status: 401, result: { error: "Log in to continue." } });
     expect(f.authenticate).not.toHaveBeenCalled();
-    expect(fetchImpl).not.toHaveBeenCalled();
     expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "no_session_cookie", status: 401 });
     logged.mockRestore();
   });
 
-  it("returns 401 and logs session_lookup_failed when upstream get-session fails", async () => {
+  it("logs session_lookup_failed when the bearer token is rejected", async () => {
     const logged = loggedFailures();
-    const secret = "session-cookie-secret";
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      expect(String(input)).toBe(`${BASE}/get-session`);
-      return new Response("upstream failed", { status: 503 });
-    });
-    const f = fixture(vi.fn(), (headers) => sessionTokenFromRequest(headers, { NEON_AUTH_BASE_URL: BASE }, fetchImpl));
-    const result = await f.request({ cookie: `theme=dark; __Secure-neon-auth.session_token=${secret}` });
-    expect(result).toEqual({ status: 401, result: { error: "Your session has expired. Log in again." } });
-    expect(f.authenticate).not.toHaveBeenCalled();
-    expect(fetchImpl).toHaveBeenCalledOnce();
-    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "session_lookup_failed", status: 503 });
-    expect(JSON.stringify(logged.mock.calls)).not.toContain(secret);
+    const f = fixture(vi.fn(async () => { throw new MemberCvError(401, "Your session has expired. Log in again."); }));
+    expect(await f.request({ authorization: "Bearer expired" })).toEqual({ status: 401, result: { error: "Your session has expired. Log in again." } });
+    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "session_lookup_failed", status: 401 });
     logged.mockRestore();
   });
 
-  it("logs a missing auth base URL without calling Neon", async () => {
+  it("logs missing_env when authentication reports missing configuration", async () => {
     const logged = loggedFailures();
-    const fetchImpl = vi.fn();
-    const f = fixture(vi.fn(), (headers) => sessionTokenFromRequest(headers, {}, fetchImpl));
-    const result = await f.request({ cookie: "__Secure-neon-auth.session_token=present" });
-    expect(result).toEqual({ status: 503, result: { error: "Member portal server configuration is missing." } });
-    expect(fetchImpl).not.toHaveBeenCalled();
-    expect(f.authenticate).not.toHaveBeenCalled();
+    const f = fixture(vi.fn(async () => { throw new MemberCvError(503, "Member portal server configuration is missing."); }));
+    expect(await f.request({ authorization: "Bearer neon-session" })).toEqual({ status: 503, result: { error: "Member portal server configuration is missing." } });
     expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "missing_env", status: 503 });
     logged.mockRestore();
   });

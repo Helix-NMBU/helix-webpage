@@ -13,9 +13,16 @@ import {
   googleSignInRequest,
   memberSignInCallbackUrl,
   clearMemberLanding,
+  MEMBER_TOKEN_REFRESH_MARGIN_MS,
   resolveMemberAuthUrl,
   sessionTokenFromAuth,
+  watchMemberSession,
 } from "./session";
+
+function memberJwt(expSeconds: number): string {
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds, sub: "member" })}.sig`;
+}
 
 describe("member auth URL", () => {
   it("keeps an absolute Neon URL and expands the same-origin proxy path", () => {
@@ -212,13 +219,14 @@ describe("member session claim", () => {
       searchAtClaim = window.location.search;
       return new Promise<{ data: { user: { id: string } } }>((resolve) => { release = resolve; });
     });
+    const tokenValue = memberJwt(Math.floor(Date.now() / 1000) + 60 * 60);
     const token = vi.fn(async () => {
       expect(window.location.search).not.toContain("neon_auth_session_verifier");
-      return { data: { token: "member-jwt" } };
+      return { data: { token: tokenValue } };
     });
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(String(input)).toBe("/api/member-login");
-      expect(init).toMatchObject({ method: "POST", headers: { Authorization: "Bearer member-jwt" } });
+      expect(init).toMatchObject({ method: "POST", headers: { Authorization: `Bearer ${tokenValue}` } });
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     });
     const client = { getSession, token };
@@ -244,7 +252,7 @@ describe("member session claim", () => {
     const jwt = await sessionTokenFromAuth(client, { current: null }, fetchImpl);
     const changedRoute = await ensureMemberLanding(client, fetchImpl, "");
     frames.push(memberPageCopy(memberLandingFrame(changedRoute)));
-    expect(jwt).toBe("member-jwt");
+    expect(jwt).toBe(tokenValue);
     expect(frames).toEqual(["Verifying your Helix account…", "Build your CV", "Build your CV"]);
     expect(getSession).toHaveBeenCalledTimes(1);
     expect(token).toHaveBeenCalledTimes(1);
@@ -291,6 +299,106 @@ describe("member session claim", () => {
     await sessionTokenFromAuth({ getSession, token }, { current: null }, fetchImpl);
     expect(getSession).toHaveBeenCalledTimes(1);
     expect(memberLoginCount(fetchImpl)).toBe(1);
+  });
+
+  it("refreshes an expiring token on the next request without a 401 loop", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    try {
+      const issued: string[] = [];
+      const firstToken = memberJwt(Math.floor(Date.now() / 1000) + 120);
+      const freshToken = memberJwt(Math.floor(Date.now() / 1000) + 60 * 60);
+      const token = vi.fn(async () => {
+        const next = issued.length === 0 ? firstToken : freshToken;
+        issued.push(next);
+        return { data: { token: next } };
+      });
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe("/api/member-login");
+        expect(init).toMatchObject({ method: "POST", headers: { Authorization: `Bearer ${firstToken}` } });
+        return Response.json({ ok: true });
+      });
+      const client = {
+        getSession: async () => ({ data: { user: { id: "member" } } }),
+        token,
+      };
+      const bound = { current: null };
+      const first = await sessionTokenFromAuth(client, bound, fetchImpl);
+      expect(first).toBe(firstToken);
+      expect(loginAction(await ensureMemberLanding(client, fetchImpl))).toBe("profile");
+      vi.setSystemTime(Date.now() + MEMBER_TOKEN_REFRESH_MARGIN_MS + 30_000);
+      const second = await sessionTokenFromAuth(client, bound, fetchImpl);
+      expect(second).toBe(freshToken);
+      expect(token).toHaveBeenCalledTimes(2);
+      expect(memberLoginCount(fetchImpl)).toBe(1);
+      expect(loginAction(await ensureMemberLanding(client, fetchImpl))).toBe("profile");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears a signed-in landing on 401 so login stays signed out", async () => {
+    const getSession = vi.fn(async () => ({ data: { user: { id: "member" } } }));
+    const token = vi.fn(async () => ({ data: { token: memberJwt(Math.floor(Date.now() / 1000) + 60 * 60) } }));
+    const fetchImpl = vi.fn(async () => Response.json({ ok: true }));
+    const client = { getSession, token };
+    const landing = await ensureMemberLanding(client, fetchImpl);
+    expect(loginAction(landing)).toBe("profile");
+    const failure = new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+    expect(memberLoadFailure(failure)).toEqual({ redirectTo: "/member/login" });
+    const after = await ensureMemberLanding(client, fetchImpl);
+    expect(loginAction(after)).toBe("form");
+    expect(loginAction(await ensureMemberLanding(client, fetchImpl))).toBe("form");
+    expect(getSession).toHaveBeenCalledTimes(1);
+    expect(memberLoginCount(fetchImpl)).toBe(1);
+  });
+
+  it("retries an unavailable landing on the next call", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let attempt = 0;
+    const getSession = vi.fn(async () => {
+      attempt += 1;
+      if (attempt === 1) return { data: null, error: { status: 400, message: "HTTP 400 INVALID_HOSTNAME" } };
+      return { data: { user: { id: "member" } } };
+    });
+    const token = vi.fn(async () => ({ data: { token: memberJwt(Math.floor(Date.now() / 1000) + 60 * 60) } }));
+    const fetchImpl = vi.fn(async () => Response.json({ ok: true }));
+    const client = { getSession, token };
+    const first = await ensureMemberLanding(client, fetchImpl);
+    expect(first.phase).toBe("unavailable");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const second = await ensureMemberLanding(client, fetchImpl);
+    expect(second.phase).toBe("signed-in");
+    expect(getSession).toHaveBeenCalledTimes(2);
+    expect(memberLoginCount(fetchImpl)).toBe(1);
+    expect(loginAction(second)).toBe("profile");
+    logged.mockRestore();
+  });
+
+  it("ends the session when get-session has no user", async () => {
+    const onEnd = vi.fn();
+    let user: { id: string } | null = { id: "member" };
+    const getSession = vi.fn(async () => ({ data: { user } }));
+    const listeners = new Map<string, EventListener>();
+    vi.stubGlobal("window", {
+      addEventListener: (type: string, listener: EventListener) => { listeners.set(type, listener); },
+      removeEventListener: (type: string, listener: EventListener) => {
+        if (listeners.get(type) === listener) listeners.delete(type);
+      },
+    });
+    const stop = watchMemberSession(onEnd, { getSession });
+    listeners.get("focus")?.(new Event("focus"));
+    await Promise.resolve();
+    expect(onEnd).not.toHaveBeenCalled();
+    user = null;
+    listeners.get("focus")?.(new Event("focus"));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onEnd).toHaveBeenCalledOnce();
+    const after = await ensureMemberLanding({ getSession }, vi.fn());
+    expect(loginAction(after)).toBe("form");
+    stop();
+    expect(listeners.has("focus")).toBe(false);
   });
 });
 

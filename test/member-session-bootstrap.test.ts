@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { proxyNeonAuth } from "../api/_lib/auth-proxy.js";
-import { createMemberLoginHandler, sessionTokenFromRequest } from "../api/member-login.js";
+import { createMemberLoginHandler } from "../api/member-login.js";
 import type { CvServices } from "../api/_lib/member-cv-service.js";
 
 const BASE = "https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth";
@@ -29,18 +29,6 @@ describe("member session bootstrap", () => {
           headers,
         });
       }
-      if (url.endsWith("/get-session")) {
-        expect(init?.headers).toEqual({
-          cookie: `__Secure-neon-auth.session_token=${SESSION}; __Secure-neon-auth.session_token.0=chunk`,
-        });
-        return Response.json({ session: { id: "sess-1" }, user: { id: "user-1" } });
-      }
-      if (url.endsWith("/token")) {
-        expect(init?.headers).toEqual({
-          cookie: `__Secure-neon-auth.session_token=${SESSION}; __Secure-neon-auth.session_token.0=chunk`,
-        });
-        return Response.json({ token: JWT });
-      }
       throw new Error(`unexpected ${url}`);
     });
 
@@ -62,7 +50,6 @@ describe("member session bootstrap", () => {
       `__Secure-neon-auth.session_token=${SESSION}; Path=/api/auth; HttpOnly; SameSite=Lax; Secure`,
     ]);
     expect(setCookie[0]).not.toMatch(/domain=/i);
-    const stored = setCookie[0].split(";")[0];
 
     const authenticate = vi.fn(async (token: string) => {
       expect(token).toBe(JWT);
@@ -70,7 +57,6 @@ describe("member session bootstrap", () => {
     });
     const handler = createMemberLoginHandler(
       () => ({ authenticate }) as unknown as CvServices,
-      (headers) => sessionTokenFromRequest(headers, { NEON_AUTH_BASE_URL: BASE }, fetchImpl),
     );
     let status: number | undefined;
     let result: unknown;
@@ -81,9 +67,10 @@ describe("member session bootstrap", () => {
     };
     await handler({
       method: "POST",
-      headers: { cookie: `theme=dark; ${stored}; __Secure-neon-auth.session_token.0=chunk` },
+      headers: { authorization: `Bearer ${JWT}` },
     } as VercelRequest, res as unknown as VercelResponse);
 
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(status).toBe(200);
     expect(result).toEqual({ ok: true, email: "ase@helixnmbu.no" });
     expect(authenticate).toHaveBeenCalledOnce();
