@@ -155,23 +155,20 @@ function returnCandidate(source: unknown): string | null {
   return `${from.pathname}${search}${hash}`;
 }
 
-// Neon treats a relative or missing callback as the site base URL (`/`).
-// Only a same-origin `/member/...` path is kept; everything else becomes the profile.
+// A return path must be a single-slash path. `new URL` then has to stay on this origin.
 export function memberSignInCallbackUrl(source: unknown, origin: string): string {
   const fallback = new URL(MEMBER_PROFILE_PATH, origin).href;
-  const raw = returnCandidate(source)?.trim() ?? "";
-  if (!raw || raw.startsWith("//") || raw.includes("\\") || /%(?:25)*2f/i.test(raw) || /%(?:25)*5c/i.test(raw)) {
-    return fallback;
-  }
+  const path = returnCandidate(source)?.trim() ?? "";
+  if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) return fallback;
   let target: URL;
-  let allowed: URL;
+  let allowedOrigin: string;
   try {
-    target = new URL(raw, origin);
-    allowed = new URL(origin);
+    target = new URL(path, origin);
+    allowedOrigin = new URL(origin).origin;
   } catch {
     return fallback;
   }
-  if (target.origin !== allowed.origin || target.username || target.password) return fallback;
+  if (target.origin !== allowedOrigin) return fallback;
   if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
   return new URL(`${target.pathname}${target.search}${target.hash}`, origin).href;
 }

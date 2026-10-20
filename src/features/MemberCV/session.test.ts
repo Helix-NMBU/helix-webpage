@@ -45,13 +45,12 @@ describe("Google sign-in callback", () => {
     );
   });
 
-  it("falls back to the profile for an external or protocol-relative return", () => {
+  it("falls back to the profile for a missing, protocol-relative, absolute, or backslash return", () => {
     const profile = "https://helix.example/member/profile";
-    expect(memberSignInCallbackUrl("//evil.com", origin)).toBe(profile);
-    expect(memberSignInCallbackUrl("https://other.example/member/profile", origin)).toBe(profile);
-    expect(memberSignInCallbackUrl({ from: "//evil.com" }, origin)).toBe(profile);
-    expect(memberSignInCallbackUrl({ next: "https://other.example" }, origin)).toBe(profile);
-    expect(googleSignInRequest("//evil.com", origin).callbackURL).toBe(profile);
+    for (const source of [undefined, "//evil.com", "https://evil.com", "/\\evil.com"]) {
+      expect(memberSignInCallbackUrl(source, origin), String(source)).toBe(profile);
+      expect(googleSignInRequest(source, origin).callbackURL, String(source)).toBe(profile);
+    }
   });
 });
 
