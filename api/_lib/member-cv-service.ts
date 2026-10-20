@@ -6,6 +6,7 @@ import { MemberCvError } from "./member-cv-error.js";
 import { assertFreshHelixGoogleAccount, assertLinkedHelixAccount } from "./helix-workspace.js";
 import { verifyGoogleIdToken, verifyNeonSession } from "./neon-session.js";
 import { createCvStorage, isOwnedPdfPath, type CvObjectStorage } from "./member-cv-storage.js";
+import { withVerifyFullSsl } from "./pg-ssl.js";
 
 export { MemberCvError } from "./member-cv-error.js";
 export type WorkspaceIdentity = { userId: string; googleSub: string; email: string; name: string };
@@ -30,8 +31,9 @@ type MemberRow = { id: string; google_sub: string; email: string; full_name: str
 
 let pool: pg.Pool | undefined;
 function database(): CvDatabase {
-  if (!process.env.DATABASE_URL) throw new MemberCvError(503, "Member portal server configuration is missing.");
-  pool ??= new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) throw new MemberCvError(503, "Member portal server configuration is missing.");
+  pool ??= new pg.Pool({ connectionString: withVerifyFullSsl(connectionString), max: 1 });
   return {
     async query<T = Record<string, unknown>>(sql: string, params?: unknown[]) {
       const result = await pool!.query(sql, params);

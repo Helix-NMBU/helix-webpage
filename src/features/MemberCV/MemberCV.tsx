@@ -458,7 +458,6 @@ export default function MemberCV() {
       })
       .catch((failure: unknown) => {
         if (!active || generation.current !== current) return;
-        setBusy(null);
         const outcome = memberLoadFailure(failure);
         if ("redirectTo" in outcome) {
           navigate(outcome.redirectTo, {
@@ -467,6 +466,7 @@ export default function MemberCV() {
           });
           return;
         }
+        setBusy(null);
         setError(outcome.message);
       });
     const stopWatching = !demo
@@ -809,7 +809,11 @@ export default function MemberCV() {
         )}
         <div className="mcv-intro">
           <p className="mcv-eyebrow">{t("Your member profile")}</p>
-          <h1>{t("Build your CV")}</h1>
+          {busy === "load" && !envelope ? (
+            <p role="status">{t("Verifying your Helix account…")}</p>
+          ) : (
+            <h1>{t("Build your CV")}</h1>
+          )}
           <p>
             {t(
               "Save privately, preview your CV and choose when to share it with sponsors.",

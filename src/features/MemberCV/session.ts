@@ -79,39 +79,58 @@ function verifierFrom(search: string): string | null {
   return value || null;
 }
 
-let pendingClaim: { verifier: string; promise: Promise<boolean> } | null = null;
+export type MemberFrame = "loading" | "signed-in" | "signed-out";
 
-// Google returns to Neon, which redirects here with a one-time verifier.
-// neon-js copies that verifier onto get-session, and the response Set-Cookie
-// is what puts the session on this origin. Any landing page has to run it.
-export function claimNeonAuthSession(
-  client: SessionReader | null = authClient,
-  search?: string,
-): Promise<boolean> {
-  const current = search ?? (typeof window === "undefined" ? "" : window.location.search);
-  const verifier = verifierFrom(current);
-  if (!client || !verifier) return Promise.resolve(false);
-  if (pendingClaim?.verifier === verifier) return pendingClaim.promise;
-  const promise = client.getSession().then((session) => {
-    if (session.error || !session.data?.user) {
-      console.error("Member session bootstrap failed.", {
-        reason: "verifier_exchange_failed",
-        status: authStatus(session.error),
-      });
-      return false;
-    }
-    return true;
-  }).catch((error: unknown) => {
-    console.error("Member session bootstrap failed.", {
-      reason: "verifier_exchange_failed",
-      status: authStatus(error),
-    });
-    return false;
-  }).finally(() => {
-    if (pendingClaim?.verifier === verifier) pendingClaim = null;
-  });
-  pendingClaim = { verifier, promise };
-  return promise;
+export type MemberLanding = {
+  phase: "signed-in" | "signed-out" | "unavailable";
+  token: string | null;
+  userId: string | null;
+  status: number | null;
+  error: string | null;
+};
+
+type MemberClient = Partial<SessionReader> & { token?: () => Promise<AuthCall> };
+
+// One landing, including StrictMode's second mount and later route changes.
+let landingPromise: Promise<MemberLanding> | null = null;
+
+export function clearMemberLanding(): void {
+  landingPromise = null;
+}
+
+export function memberLandingFrame(landing: MemberLanding | null): MemberFrame {
+  if (!landing) return "loading";
+  if (landing.phase === "signed-in") return "signed-in";
+  return "signed-out";
+}
+
+export function loginAction(landing: MemberLanding | null): "loading" | "profile" | "form" {
+  const frame = memberLandingFrame(landing);
+  if (frame === "loading") return "loading";
+  if (frame === "signed-in") return "profile";
+  return "form";
+}
+
+export function memberPageCopy(frame: MemberFrame): "Verifying your Helix account…" | "Sign in to build your CV" | "Build your CV" {
+  if (frame === "loading") return "Verifying your Helix account…";
+  if (frame === "signed-out") return "Sign in to build your CV";
+  return "Build your CV";
+}
+
+function currentSearch(search?: string): string {
+  if (search !== undefined) return search;
+  return typeof window === "undefined" ? "" : window.location.search;
+}
+
+// neon-js keeps attaching a verifier that is still in the URL, and skips its
+// session cache while that param is present. Remove it once this landing has
+// used it so later reads use the cookie.
+export function stripNeonAuthVerifier(): void {
+  if (typeof window === "undefined" || typeof history === "undefined" || typeof history.replaceState !== "function") return;
+  const current = new URL(window.location.href);
+  if (!current.searchParams.has(NEON_AUTH_SESSION_VERIFIER_PARAM)) return;
+  current.searchParams.delete(NEON_AUTH_SESSION_VERIFIER_PARAM);
+  history.replaceState(history.state, "", `${current.pathname}${current.search}${current.hash}`);
 }
 
 const MEMBER_LOGIN_PATH = "/api/member-login";
@@ -134,52 +153,123 @@ async function postMemberSession(
   }
 }
 
-async function rejectEndedSession(fetchImpl: typeof fetch): Promise<never> {
-  await postMemberSession(fetchImpl);
-  throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
+async function readMemberJwt(client: MemberClient, fetchImpl: typeof fetch): Promise<{ token: string | null; status: number | null }> {
+  if (client.token) {
+    try {
+      const token = await client.token();
+      if (!token.error && token.data?.token) return { token: token.data.token, status: null };
+      const status = authStatus(token.error);
+      if (status === 401 || status === 403) return { token: null, status };
+    } catch (error) {
+      const status = authStatus(error);
+      if (status === 401 || status === 403) return { token: null, status };
+    }
+  }
+  try {
+    const exchanged = await fetchImpl("/api/auth/token", { method: "GET", credentials: "include" });
+    const body = await exchanged.json().catch(() => null);
+    const value = body && typeof body === "object" && "token" in body ? body.token : undefined;
+    if (exchanged.ok && typeof value === "string" && value) return { token: value, status: null };
+    return { token: null, status: exchanged.status === 401 || exchanged.status === 403 ? exchanged.status : null };
+  } catch {
+    return { token: null, status: null };
+  }
 }
 
-export async function sessionTokenFromAuth(
-  client: { getSession: () => Promise<AuthCall>; token: () => Promise<AuthCall> },
-  boundUserId: { current: string | null },
-  fetchImpl: typeof fetch = fetch,
-): Promise<string> {
-  await claimNeonAuthSession(client);
+async function runMemberLanding(
+  client: MemberClient | null,
+  fetchImpl: typeof fetch,
+  search: string | undefined,
+): Promise<MemberLanding> {
+  const hadVerifier = Boolean(verifierFrom(currentSearch(search)));
+  if (!client) return { phase: "unavailable", token: null, userId: null, status: null, error: "Member sign-in is not configured yet. Please contact Helix." };
+  if (!client.getSession) {
+    const jwt = await readMemberJwt(client, fetchImpl);
+    const response = await postMemberSession(fetchImpl, jwt.token ?? undefined);
+    if (!response) return { phase: "unavailable", token: jwt.token, userId: null, status: jwt.status, error: "Could not start your member session. Please try again." };
+    if (response.ok && jwt.token) return { phase: "signed-in", token: jwt.token, userId: null, status: response.status, error: null };
+    const body = await response.json().catch(() => ({}));
+    const message = typeof body.error === "string" ? body.error : "Could not start your member session. Please try again.";
+    const status = jwt.status === 401 || jwt.status === 403 ? jwt.status : response.status;
+    return { phase: status === 401 || status === 403 || !jwt.token ? "signed-out" : "unavailable", token: jwt.token, userId: null, status, error: message };
+  }
   let session: AuthCall;
   try {
     session = await client.getSession();
   } catch (error) {
+    stripNeonAuthVerifier();
     const failure = memberAuthFailure(error);
+    if (hadVerifier) {
+      console.error("Member session bootstrap failed.", { reason: "verifier_exchange_failed", status: failure.status || null });
+    }
     if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
-    throw failure;
+    return { phase: failure.status === 401 || failure.status === 403 ? "signed-out" : "unavailable", token: null, userId: null, status: failure.status || null, error: failure.message };
   }
+  stripNeonAuthVerifier();
   if (session.error) {
     const failure = memberAuthFailure(session.error);
+    if (hadVerifier) {
+      console.error("Member session bootstrap failed.", { reason: "verifier_exchange_failed", status: failure.status || null });
+    }
     if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
-    throw failure;
+    return { phase: failure.status === 401 || failure.status === 403 ? "signed-out" : "unavailable", token: null, userId: null, status: failure.status || null, error: failure.message };
   }
-  const userId = session.data?.user?.id;
-  if (!userId) return rejectEndedSession(fetchImpl);
-  if (boundUserId.current && boundUserId.current !== userId) {
+  const userId = session.data?.user?.id ?? null;
+  if (!userId) {
     await postMemberSession(fetchImpl);
-    throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
+    return { phase: "signed-out", token: null, userId: null, status: null, error: null };
   }
-  boundUserId.current = userId;
-  let token: AuthCall;
-  try {
-    token = await client.token();
-  } catch (error) {
-    const failure = memberAuthFailure(error);
-    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
-    throw failure;
+  const jwt = await readMemberJwt(client, fetchImpl);
+  const response = await postMemberSession(fetchImpl, jwt.token ?? undefined);
+  if (!response) return { phase: "unavailable", token: jwt.token, userId, status: jwt.status, error: "Could not start your member session. Please try again." };
+  if (response.ok && jwt.token) return { phase: "signed-in", token: jwt.token, userId, status: response.status, error: null };
+  const body = await response.json().catch(() => ({}));
+  const message = typeof body.error === "string" ? body.error : "Could not start your member session. Please try again.";
+  const status = jwt.status === 401 || jwt.status === 403 ? jwt.status : response.status;
+  const signedOut = status === 401 || status === 403 || !jwt.token;
+  return { phase: signedOut ? "signed-out" : "unavailable", token: jwt.token, userId, status, error: message };
+}
+
+// Verifier exchange, get-session and member bootstrap share this promise.
+// A second mount or a route change joins it instead of starting another one.
+export function ensureMemberLanding(
+  client: MemberClient | null = authClient,
+  fetchImpl: typeof fetch = fetch,
+  search?: string,
+): Promise<MemberLanding> {
+  if (!landingPromise) landingPromise = runMemberLanding(client, fetchImpl, search);
+  return landingPromise;
+}
+
+// Google returns to Neon, which redirects here with a one-time verifier.
+// neon-js copies that verifier onto get-session. Only a landing that still
+// has the param needs to exchange it.
+export function claimNeonAuthSession(
+  client: MemberClient | null = authClient,
+  search?: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<boolean> {
+  if (!client || !verifierFrom(currentSearch(search))) return Promise.resolve(false);
+  return ensureMemberLanding(client, fetchImpl, search).then((landing) => landing.phase === "signed-in" || Boolean(landing.userId));
+}
+
+export async function sessionTokenFromAuth(
+  client: MemberClient,
+  boundUserId: { current: string | null },
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  const landing = await ensureMemberLanding(client, fetchImpl);
+  if (landing.phase === "signed-in" && landing.token) {
+    if (boundUserId.current && landing.userId && boundUserId.current !== landing.userId) {
+      throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
+    }
+    if (landing.userId) boundUserId.current = landing.userId;
+    return landing.token;
   }
-  if (token.error) {
-    const failure = memberAuthFailure(token.error);
-    if (failure.status === 401 || failure.status === 403) await postMemberSession(fetchImpl);
-    throw failure;
+  if (landing.status === 401 || landing.status === 403 || landing.phase === "signed-out") {
+    throw new CvRequestError(landing.error ?? "Your session has ended. Sign in again to continue.", landing.status === 403 ? 403 : 401);
   }
-  if (!token.data?.token) return rejectEndedSession(fetchImpl);
-  return token.data.token;
+  throw new CvRequestError(landing.error ?? MEMBER_AUTH_UNAVAILABLE, landing.status ?? 0);
 }
 
 export async function memberSessionToken(boundUserId: { current: string | null }): Promise<string> {
@@ -194,9 +284,7 @@ export function watchMemberSession(onEnd: () => void): () => void {
       if (session.error) {
         const failure = memberAuthFailure(session.error);
         if (failure.status === 401 || failure.status === 403) onEnd();
-        return;
       }
-      if (!session.data?.user) onEnd();
     }).catch((error: unknown) => {
       memberAuthFailure(error);
     });
@@ -206,44 +294,23 @@ export function watchMemberSession(onEnd: () => void): () => void {
 }
 
 export async function signOutMember(): Promise<void> {
+  clearMemberLanding();
   if (!authClient) return;
   const result = await authClient.signOut();
   if (result.error) throw new Error("Could not sign out. Please try again.");
 }
 
 export async function confirmMemberSession(
-  client: ({ token: () => Promise<AuthCall> } & Partial<SessionReader>) | null = authClient,
+  client: MemberClient | null = authClient,
   fetchImpl: typeof fetch = fetch,
 ): Promise<void> {
   if (!client) throw new Error("Member sign-in is not configured yet. Please contact Helix.");
-  if (client.getSession) await claimNeonAuthSession({ getSession: client.getSession });
-  let jwt: string | null = null;
-  try {
-    const token = await client.token();
-    if (!token.error && token.data?.token) jwt = token.data.token;
-  } catch {
-    jwt = null;
+  const landing = await ensureMemberLanding(client, fetchImpl);
+  if (landing.phase === "signed-in") return;
+  if (!landing.token || landing.status === 401 || landing.phase === "signed-out") {
+    throw new Error("Could not start your member session. Please try again.");
   }
-  // The session cookie is stored for /api/auth, so this origin reads it there.
-  if (!jwt) {
-    try {
-      const exchanged = await fetchImpl("/api/auth/token", { method: "GET", credentials: "include" });
-      const exchangedBody = await exchanged.json().catch(() => null);
-      const exchangedToken = exchangedBody && typeof exchangedBody === "object" && "token" in exchangedBody
-        ? exchangedBody.token
-        : undefined;
-      if (exchanged.ok && typeof exchangedToken === "string" && exchangedToken) jwt = exchangedToken;
-    } catch {
-      jwt = null;
-    }
-  }
-  const response = await postMemberSession(fetchImpl, jwt ?? undefined);
-  if (!response) throw new Error("Could not start your member session. Please try again.");
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const rejected = typeof body.error === "string" ? body.error : "Sign-in failed. Use your Helix Google Workspace account.";
-    throw new Error(jwt ? rejected : "Could not start your member session. Please try again.");
-  }
+  throw new Error(landing.error ?? "Sign-in failed. Use your Helix Google Workspace account.");
 }
 
 const MEMBER_PROFILE_PATH = "/member/profile";
