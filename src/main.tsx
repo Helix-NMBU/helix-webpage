@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import './global.css'
 import App from './App'
-import { CVBankAuthProvider } from './features/CVBank/auth'
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
@@ -15,9 +14,7 @@ if (!googleClientId) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <GoogleOAuthProvider clientId={googleClientId ?? ''}>
-      <CVBankAuthProvider>
-        <App />
-      </CVBankAuthProvider>
+      <App />
     </GoogleOAuthProvider>
   </StrictMode>,
 )

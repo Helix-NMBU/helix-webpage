@@ -4,7 +4,7 @@ import CarouselItem from "@libs/components/Carouselitem.tsx";
 import { loadSponsors } from "../../../libs/lib/staticContent";
 
 type Sponsor = {
-  image?: string;
+  image: string;
   name: string;
 };
 
@@ -13,7 +13,7 @@ export default function AutoplayCarousel() {
 
   useEffect(() => {
     loadSponsors()
-      .then((data) => setCards((data || []).filter((s) => s.image)))
+      .then((data) => setCards((data || []).flatMap((s) => (s.image ? [{ image: s.image, name: s.name }] : []))))
       .catch((err) => {
         console.error("Failed to load sponsor.json", err);
       });
