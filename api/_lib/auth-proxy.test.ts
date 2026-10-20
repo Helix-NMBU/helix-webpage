@@ -314,4 +314,22 @@ describe("Neon auth proxy", () => {
     expect(sent.get("content-type")).toBe("application/x-www-form-urlencoded");
     expect(Buffer.from(init?.body as Uint8Array).equals(Buffer.from(form))).toBe(true);
   });
+
+  it("forwards callbackURL in a JSON sign-in body unchanged", async () => {
+    const body = JSON.stringify({
+      provider: "google",
+      callbackURL: "https://helixnmbu.no/member/profile",
+      errorCallbackURL: "https://helixnmbu.no/member/profile",
+    });
+    const fetchImpl = mockFetch();
+    await proxyNeonAuth({
+      method: "POST",
+      rawUrl: arrived("/api/auth/sign-in/social"),
+      headers: { ...sameSite, "content-type": "application/json" },
+      body,
+      baseUrl: BASE,
+      fetchImpl,
+    });
+    expect(fetchImpl.mock.calls[0][1]?.body).toBe(body);
+  });
 });

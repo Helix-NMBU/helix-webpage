@@ -4,6 +4,8 @@ import {
   MEMBER_AUTH_UNAVAILABLE,
   memberAuthFailure,
   memberLoadFailure,
+  googleSignInRequest,
+  memberSignInCallbackUrl,
   resolveMemberAuthUrl,
   sessionTokenFromAuth,
 } from "./session";
@@ -14,6 +16,42 @@ describe("member auth URL", () => {
     expect(resolveMemberAuthUrl(`${neon}/`, "https://preview.example")).toBe(neon);
     expect(resolveMemberAuthUrl("/api/auth", "https://preview.example")).toBe("https://preview.example/api/auth");
     expect(resolveMemberAuthUrl("/api/auth", "https://helix.example/")).toBe("https://helix.example/api/auth");
+  });
+});
+
+describe("Google sign-in callback", () => {
+  const origin = "https://helix.example";
+
+  it("sends an absolute callback on the current origin pointing at the profile by default", () => {
+    const request = googleSignInRequest(undefined, origin);
+    expect(request).toEqual({
+      provider: "google",
+      callbackURL: "https://helix.example/member/profile",
+      errorCallbackURL: "https://helix.example/member/profile",
+    });
+    expect(request.callbackURL).toBe(new URL("/member/profile", origin).href);
+    expect(memberSignInCallbackUrl(null, origin)).toBe("https://helix.example/member/profile");
+  });
+
+  it("keeps a safe same-origin member return path", () => {
+    expect(memberSignInCallbackUrl("/member/opportunities?tab=open", origin)).toBe(
+      "https://helix.example/member/opportunities?tab=open",
+    );
+    expect(memberSignInCallbackUrl({ from: "/member/profile" }, origin)).toBe(
+      "https://helix.example/member/profile",
+    );
+    expect(googleSignInRequest({ redirect: "/member/profile" }, origin).callbackURL).toBe(
+      "https://helix.example/member/profile",
+    );
+  });
+
+  it("falls back to the profile for an external or protocol-relative return", () => {
+    const profile = "https://helix.example/member/profile";
+    expect(memberSignInCallbackUrl("//evil.com", origin)).toBe(profile);
+    expect(memberSignInCallbackUrl("https://other.example/member/profile", origin)).toBe(profile);
+    expect(memberSignInCallbackUrl({ from: "//evil.com" }, origin)).toBe(profile);
+    expect(memberSignInCallbackUrl({ next: "https://other.example" }, origin)).toBe(profile);
+    expect(googleSignInRequest("//evil.com", origin).callbackURL).toBe(profile);
   });
 });
 

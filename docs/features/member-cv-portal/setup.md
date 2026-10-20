@@ -47,7 +47,7 @@ For this project that is:
 
 `https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth/callback/google`
 
-That URI is Neon's callback, not the website. After Google returns, Neon sends the browser to the app origin (`/member/login`). That origin must be a trusted domain in the Neon Auth console, with the scheme and no trailing slash. Localhost is often already trusted. Add the production Vercel domain and any preview origins that should be able to sign in.
+That URI is Neon's callback, not the website. After Google returns, Neon sends the browser to the absolute `callbackURL` on this site (`/member/profile` by default). A relative or missing callback falls back to `/`. That origin must be a trusted domain in the Neon Auth console, with the scheme and no trailing slash. Localhost is often already trusted. Add the production Vercel domain and any preview origins that should be able to sign in.
 
 In the Neon Auth console, disable email and password sign-up. The API still rejects a session that is not a verified `@helixnmbu.no` Google account, including a missing or wrong hosted domain, an unverified email, a banned user, or a Google ID token whose audience is not `GOOGLE_CLIENT_ID`. The first successful link stores the Google subject on `identity.members`. Later requests keep that link while the Neon user is still that Google account with a verified Helix email. Changing the email or Google subject requires a fresh valid ID token. A client-supplied `hd` value is ignored.
 

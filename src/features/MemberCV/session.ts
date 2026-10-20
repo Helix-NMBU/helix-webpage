@@ -139,16 +139,57 @@ export async function confirmMemberSession(): Promise<void> {
   if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Sign-in failed. Use your Helix Google Workspace account.");
 }
 
-export async function startGoogleSignIn(): Promise<void> {
+const MEMBER_PROFILE_PATH = "/member/profile";
+
+function returnCandidate(source: unknown): string | null {
+  if (typeof source === "string") return source;
+  if (!source || typeof source !== "object") return null;
+  if ("redirect" in source && typeof source.redirect === "string") return source.redirect;
+  if ("next" in source && typeof source.next === "string") return source.next;
+  if (!("from" in source)) return null;
+  const from = source.from;
+  if (typeof from === "string") return from;
+  if (!from || typeof from !== "object" || !("pathname" in from) || typeof from.pathname !== "string") return null;
+  const search = "search" in from && typeof from.search === "string" ? from.search : "";
+  const hash = "hash" in from && typeof from.hash === "string" ? from.hash : "";
+  return `${from.pathname}${search}${hash}`;
+}
+
+// Neon treats a relative or missing callback as the site base URL (`/`).
+// Only a same-origin `/member/...` path is kept; everything else becomes the profile.
+export function memberSignInCallbackUrl(source: unknown, origin: string): string {
+  const fallback = new URL(MEMBER_PROFILE_PATH, origin).href;
+  const raw = returnCandidate(source)?.trim() ?? "";
+  if (!raw || raw.startsWith("//") || raw.includes("\\") || /%(?:25)*2f/i.test(raw) || /%(?:25)*5c/i.test(raw)) {
+    return fallback;
+  }
+  let target: URL;
+  let allowed: URL;
+  try {
+    target = new URL(raw, origin);
+    allowed = new URL(origin);
+  } catch {
+    return fallback;
+  }
+  if (target.origin !== allowed.origin || target.username || target.password) return fallback;
+  if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
+  return new URL(`${target.pathname}${target.search}${target.hash}`, origin).href;
+}
+
+export function googleSignInRequest(source: unknown, origin: string): {
+  provider: "google";
+  callbackURL: string;
+  errorCallbackURL: string;
+} {
+  const callbackURL = memberSignInCallbackUrl(source, origin);
+  return { provider: "google", callbackURL, errorCallbackURL: callbackURL };
+}
+
+export async function startGoogleSignIn(returnTo?: unknown): Promise<void> {
   if (!authClient) throw new Error("Member sign-in is not configured yet. Please contact Helix.");
-  const callbackURL = `${window.location.origin}/member/login`;
   let result: { error?: unknown } | undefined;
   try {
-    result = await authClient.signIn.social({
-      provider: "google",
-      callbackURL,
-      errorCallbackURL: callbackURL,
-    });
+    result = await authClient.signIn.social(googleSignInRequest(returnTo, window.location.origin));
   } catch (error) {
     console.error("Member auth sign-in failed.", authErrorDetail(error));
     throw new Error("Google sign-in failed. Please try again.");

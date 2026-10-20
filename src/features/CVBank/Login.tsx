@@ -49,7 +49,8 @@ export default function CVBankLogin() {
     setBusy(true);
     setError(null);
     try {
-      await startGoogleSignIn();
+      const params = new URLSearchParams(location.search);
+      await startGoogleSignIn(params.get("redirect") ?? params.get("next") ?? location.state);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Google sign-in failed. Please try again.");
       setBusy(false);
