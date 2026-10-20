@@ -24,6 +24,7 @@ import { MemberNavProvider } from './libs/components/navbar/member-nav.tsx'
 import Footer from '@libs/components/footer.tsx'
 import { hideNavbar as shouldHideNavbar, hideFooter as shouldHideFooter, knownRoutes } from './libs/lib/routes'
 import { PageLoader } from './libs/components/PageLoader.tsx'
+import { claimNeonAuthSession } from './features/MemberCV/session.ts'
 {/*import  Contactside  from './Contactside.tsx'*/}
 
 function AppContent() {
@@ -31,6 +32,8 @@ function AppContent() {
   const hideNavbar = shouldHideNavbar(location.pathname);
   const hideFooter = shouldHideFooter(location.pathname);
   const [loaderDone, setLoaderDone] = useState(() => !knownRoutes.has(location.pathname));
+
+  useEffect(() => { void claimNeonAuthSession(); }, []);
 
   return (
     <>

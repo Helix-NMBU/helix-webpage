@@ -70,10 +70,55 @@ export function memberLoadFailure(failure: unknown): { redirectTo: "/member/logi
   return { message: MEMBER_AUTH_UNAVAILABLE };
 }
 
+export const NEON_AUTH_SESSION_VERIFIER_PARAM = "neon_auth_session_verifier";
+
+type SessionReader = { getSession: () => Promise<AuthCall> };
+
+function verifierFrom(search: string): string | null {
+  const value = new URLSearchParams(search).get(NEON_AUTH_SESSION_VERIFIER_PARAM)?.trim();
+  return value || null;
+}
+
+let pendingClaim: { verifier: string; promise: Promise<boolean> } | null = null;
+
+// Google returns to Neon, which redirects here with a one-time verifier.
+// neon-js copies that verifier onto get-session, and the response Set-Cookie
+// is what puts the session on this origin. Any landing page has to run it.
+export function claimNeonAuthSession(
+  client: SessionReader | null = authClient,
+  search?: string,
+): Promise<boolean> {
+  const current = search ?? (typeof window === "undefined" ? "" : window.location.search);
+  const verifier = verifierFrom(current);
+  if (!client || !verifier) return Promise.resolve(false);
+  if (pendingClaim?.verifier === verifier) return pendingClaim.promise;
+  const promise = client.getSession().then((session) => {
+    if (session.error || !session.data?.user) {
+      console.error("Member session bootstrap failed.", {
+        reason: "verifier_exchange_failed",
+        status: authStatus(session.error),
+      });
+      return false;
+    }
+    return true;
+  }).catch((error: unknown) => {
+    console.error("Member session bootstrap failed.", {
+      reason: "verifier_exchange_failed",
+      status: authStatus(error),
+    });
+    return false;
+  }).finally(() => {
+    if (pendingClaim?.verifier === verifier) pendingClaim = null;
+  });
+  pendingClaim = { verifier, promise };
+  return promise;
+}
+
 export async function sessionTokenFromAuth(
   client: { getSession: () => Promise<AuthCall>; token: () => Promise<AuthCall> },
   boundUserId: { current: string | null },
 ): Promise<string> {
+  await claimNeonAuthSession(client);
   let session: AuthCall;
   try {
     session = await client.getSession();
@@ -127,16 +172,42 @@ export async function signOutMember(): Promise<void> {
   if (result.error) throw new Error("Could not sign out. Please try again.");
 }
 
-export async function confirmMemberSession(): Promise<void> {
-  if (!authClient) throw new Error("Member sign-in is not configured yet. Please contact Helix.");
-  const token = await authClient.token();
-  if (token.error || !token.data?.token) throw new Error("Could not start your member session. Please try again.");
-  const response = await fetch("/api/member-login", {
+export async function confirmMemberSession(
+  client: ({ token: () => Promise<AuthCall> } & Partial<SessionReader>) | null = authClient,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  if (!client) throw new Error("Member sign-in is not configured yet. Please contact Helix.");
+  if (client.getSession) await claimNeonAuthSession({ getSession: client.getSession });
+  let jwt: string | null = null;
+  try {
+    const token = await client.token();
+    if (!token.error && token.data?.token) jwt = token.data.token;
+  } catch {
+    jwt = null;
+  }
+  // The session cookie is stored for /api/auth, so this origin reads it there.
+  if (!jwt) {
+    const exchanged = await fetchImpl("/api/auth/token", { method: "GET", credentials: "include" });
+    const exchangedBody = await exchanged.json().catch(() => null);
+    const exchangedToken = exchangedBody && typeof exchangedBody === "object" && "token" in exchangedBody
+      ? exchangedBody.token
+      : undefined;
+    if (exchanged.ok && typeof exchangedToken === "string" && exchangedToken) jwt = exchangedToken;
+  }
+  const response = await fetchImpl("/api/member-login", {
     method: "POST",
-    headers: { Authorization: `Bearer ${token.data.token}` },
+    credentials: "include",
+    headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Sign-in failed. Use your Helix Google Workspace account.");
+  if (!response.ok) {
+    console.error("Member session bootstrap failed.", {
+      reason: jwt ? "member_login_rejected" : "no_token",
+      status: response.status,
+    });
+    const rejected = typeof body.error === "string" ? body.error : "Sign-in failed. Use your Helix Google Workspace account.";
+    throw new Error(jwt ? rejected : "Could not start your member session. Please try again.");
+  }
 }
 
 const MEMBER_PROFILE_PATH = "/member/profile";

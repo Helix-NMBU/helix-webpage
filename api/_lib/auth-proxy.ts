@@ -13,21 +13,11 @@ const FORWARDED_REQUEST_HEADERS = [
   "x-neon-client-info",
 ] as const;
 
-// Names set by neon-js (@neondatabase/auth) and Better Auth 1.7.
-// Secure cookies use a __Secure- or __Host- prefix. PKCE lives inside oauth_state.
-// Large session_data and account_data cookies may be split into numeric chunks.
-const AUTH_COOKIE_PREFIXES = ["neon-auth.", "better-auth."] as const;
-const AUTH_COOKIE_NAMES = new Set([
-  "session_token",
-  "session_data",
-  "account_data",
-  "dont_remember",
-  "oauth_state",
-  "state",
-  "local.session_data",
-  "session_challenge",
-  "session_challange",
-]);
+// Names set by neon-js (@neondatabase/auth 0.6) and Better Auth 1.7.
+// The installed SDK prefix is __Secure-neon-auth. Public docs also show
+// __Secure-neonauth (no hyphen). Chunks keep the same prefix, for example
+// session_token.0. PKCE lives inside oauth_state.
+const AUTH_COOKIE_PREFIXES = ["neon-auth.", "neonauth.", "better-auth."] as const;
 
 export const NEON_AUTH_FORWARDED_COOKIES = [
   "__Secure-neon-auth.session_token",
@@ -60,6 +50,9 @@ export const NEON_AUTH_FORWARDED_COOKIES = [
   "better-auth.dont_remember",
   "better-auth.oauth_state",
   "better-auth.state",
+  "__Secure-neon-auth.session_token.0",
+  "__Secure-neon-auth.session_data.0",
+  "__Secure-neonauth.session_token",
 ] as const;
 
 export type AuthProxyRequest = {
@@ -88,12 +81,8 @@ export function isForwardedAuthCookie(name: string): boolean {
   let bare = name.trim();
   if (bare.startsWith("__Secure-")) bare = bare.slice("__Secure-".length);
   else if (bare.startsWith("__Host-")) bare = bare.slice("__Host-".length);
-  const prefix = AUTH_COOKIE_PREFIXES.find((candidate) => bare.startsWith(candidate));
-  if (!prefix) return false;
-  const rest = bare.slice(prefix.length);
-  if (AUTH_COOKIE_NAMES.has(rest)) return true;
-  const chunk = /^(session_data|account_data)\.(\d+)$/.exec(rest);
-  return Boolean(chunk && (chunk[2] === "0" || /^[1-9]\d*$/.test(chunk[2])));
+  // Neon Auth's cookie prefix is neon-auth, including challenge, session, and chunks.
+  return AUTH_COOKIE_PREFIXES.some((prefix) => bare.startsWith(prefix));
 }
 
 export function forwardedAuthCookieHeader(cookieHeader: string | null): string {
@@ -259,11 +248,16 @@ function upstreamUrl(baseUrl: string, rawUrl: string): URL | null {
 export function rewriteAuthSetCookie(cookie: string, authPath: string): string {
   const base = authPath.replace(/\/$/, "") || "/";
   const withoutDomain = cookie.replace(/;\s*domain\s*=\s*[^;]*/gi, "");
-  return withoutDomain.replace(/;\s*path\s*=\s*("?)([^";]*)\1/gi, (full, quote: string, value: string) => {
+  const rewritten = withoutDomain.replace(/;\s*path\s*=\s*("?)([^";]*)\1/gi, (full, quote: string, value: string) => {
     const path = value.trim();
     if (path !== base && !path.startsWith(`${base}/`)) return full;
     return `; Path=${quote}/api/auth${path.slice(base.length)}${quote}`;
   });
+  const name = rewritten.slice(0, rewritten.indexOf("=")).trim();
+  if ((name.startsWith("__Secure-") || name.startsWith("__Host-")) && !/;\s*secure\b/i.test(rewritten)) {
+    return `${rewritten}; Secure`;
+  }
+  return rewritten;
 }
 
 export function rewriteAuthLocation(location: string, baseUrl: string): string {

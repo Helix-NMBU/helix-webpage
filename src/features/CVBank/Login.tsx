@@ -7,7 +7,7 @@ import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberLocale } from "../MemberCV/locale";
 import { LanguageSwitcher } from "../MemberCV/LanguageSwitcher";
 import { localizeCvError } from "../MemberCV/errors";
-import { authClient, confirmMemberSession, memberAuthConfigured, startGoogleSignIn } from "../MemberCV/session";
+import { authClient, claimNeonAuthSession, confirmMemberSession, memberAuthConfigured, startGoogleSignIn } from "../MemberCV/session";
 import "../Portal/portal.css";
 import "../MemberCV/member-cv.css";
 
@@ -28,6 +28,7 @@ export default function CVBankLogin() {
     if (!authClient) return;
     let cancelled = false;
     void (async () => {
+      await claimNeonAuthSession();
       const session = await authClient.getSession();
       if (cancelled || !session.data?.user) return;
       setBusy(true);

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { CvRequestError } from "./repository";
 import {
   MEMBER_AUTH_UNAVAILABLE,
+  claimNeonAuthSession,
+  confirmMemberSession,
   memberAuthFailure,
   memberLoadFailure,
   googleSignInRequest,
@@ -96,6 +98,77 @@ describe("member auth failures", () => {
       status: null,
       detail: "Failed to fetch",
     });
+    logged.mockRestore();
+  });
+});
+
+describe("member session claim", () => {
+  it("exchanges a callback verifier once and skips a page without one", async () => {
+    let release: (value: { data: { user: { id: string } } }) => void = () => undefined;
+    const getSession = vi.fn(() => new Promise<{ data: { user: { id: string } } }>((resolve) => { release = resolve; }));
+    await expect(claimNeonAuthSession({ getSession }, "")).resolves.toBe(false);
+    expect(getSession).not.toHaveBeenCalled();
+    const search = "?neon_auth_session_verifier=once";
+    const first = claimNeonAuthSession({ getSession }, search);
+    const second = claimNeonAuthSession({ getSession }, search);
+    expect(getSession).toHaveBeenCalledTimes(1);
+    release({ data: { user: { id: "member" } } });
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+  });
+
+  it("logs a failed verifier exchange without the verifier", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const secret = "verifier-secret";
+    await expect(claimNeonAuthSession({
+      getSession: async () => ({ error: { status: 401, message: secret } }),
+    }, `?neon_auth_session_verifier=${secret}`)).resolves.toBe(false);
+    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", {
+      reason: "verifier_exchange_failed",
+      status: 401,
+    });
+    expect(JSON.stringify(logged.mock.calls)).not.toContain(secret);
+    logged.mockRestore();
+  });
+
+  it("logs before showing the member-session error when no token is available", async () => {
+    const order: string[] = [];
+    const logged = vi.spyOn(console, "error").mockImplementation(() => { order.push("log"); });
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      order.push(String(input));
+      expect(init?.credentials).toBe("include");
+      return new Response(JSON.stringify({ error: "hidden" }), { status: 401 });
+    });
+    const failure = await confirmMemberSession({
+      token: async () => ({ error: { status: 400 } }),
+    }, fetchImpl).catch((error: unknown) => error);
+    expect(order).toEqual(["/api/auth/token", "/api/member-login", "log"]);
+    expect(failure).toEqual(new Error("Could not start your member session. Please try again."));
+    expect(logged).toHaveBeenCalledWith("Member session bootstrap failed.", { reason: "no_token", status: 401 });
+    expect(JSON.stringify(logged.mock.calls)).not.toContain("hidden");
+    logged.mockRestore();
+  });
+
+  it("posts the bearer token, and falls back to the session cookie when token() fails", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const bearer = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.credentials).toBe("include");
+      expect(init?.headers).toEqual({ Authorization: "Bearer member-jwt" });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    await confirmMemberSession({ token: async () => ({ data: { token: "member-jwt" } }) }, bearer);
+    const cookie = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/auth/token") {
+        expect(init?.credentials).toBe("include");
+        return Response.json({ token: "cookie-jwt" });
+      }
+      expect(init).toMatchObject({ headers: { Authorization: "Bearer cookie-jwt" }, credentials: "include" });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    await confirmMemberSession({ token: async () => { throw new Error("secret-token"); } }, cookie);
+    expect(cookie.mock.calls.map(([input]) => String(input))).toEqual(["/api/auth/token", "/api/member-login"]);
+    expect(logged).not.toHaveBeenCalled();
+    expect(JSON.stringify(bearer.mock.calls)).not.toContain("secret-token");
     logged.mockRestore();
   });
 });

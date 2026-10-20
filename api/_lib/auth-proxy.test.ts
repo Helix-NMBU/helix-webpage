@@ -88,14 +88,20 @@ describe("Neon auth proxy", () => {
         "_vercel_jwt=preview-secret",
         "theme=dark",
         "__Secure-neon-auth.session_token=session-value",
+        "__Secure-neon-auth.session_challenge=challenge-value",
+        "__Secure-neon-auth.session_token.0=token-chunk",
+        "__Secure-neonauth.session_token=docs-name",
         "__Secure-better-auth.oauth_state=pkce-state",
         "better-auth.session_data.0=chunk",
-        "neon-auth.not-a-session=nope",
+        "session_token=plain",
       ].join("; "),
     });
     const sent = fetchImpl.mock.calls[0][1]?.headers as Headers;
     expect(sent.get("cookie")).toBe([
       "__Secure-neon-auth.session_token=session-value",
+      "__Secure-neon-auth.session_challenge=challenge-value",
+      "__Secure-neon-auth.session_token.0=token-chunk",
+      "__Secure-neonauth.session_token=docs-name",
       "__Secure-better-auth.oauth_state=pkce-state",
       "better-auth.session_data.0=chunk",
     ].join("; "));
