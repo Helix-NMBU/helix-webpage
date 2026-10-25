@@ -27,7 +27,17 @@ function Workspace() {
   const request: SponsorTransport = useCallback(async <T,>(action: string, options?: RequestInit & { query?: Record<string, string> }): Promise<T> => {
     try { return await (isLocalSponsorMode() ? localSponsorRequest<T>(action, options) : sponsorRequest<T>(action, options)); }
     catch (failure) {
-      if (failure instanceof SponsorRequestError && [401, 403].includes(failure.status)) { setContext(null); setEnded(true); }
+      if (failure instanceof SponsorRequestError && failure.status === 401) { setContext(null); setEnded(true); }
+      else if (failure instanceof SponsorRequestError && failure.status === 403) {
+        // A permission failure can mean a request was reassigned. Preserve the
+        // unsent form unless a fresh session check also rejects workspace access.
+        try {
+          const current = await (isLocalSponsorMode() ? localSponsorRequest<SponsorContext>("session") : sponsorRequest<SponsorContext>("session"));
+          setContext(current);
+        } catch (sessionFailure) {
+          if (sessionFailure instanceof SponsorRequestError && [401, 403].includes(sessionFailure.status)) { setContext(null); setEnded(true); }
+        }
+      }
       throw failure;
     }
   }, []);
@@ -75,4 +85,4 @@ function Workspace() {
   </div>;
 }
 
-export default function SponsorWorkspace() { return <MemberThemeProvider><Workspace /></MemberThemeProvider>; }
+export default function SponsorWorkspace() { return <MemberThemeProvider><div className="member-platform portal-root min-h-screen bg-background text-foreground"><Workspace /></div></MemberThemeProvider>; }
