@@ -44,7 +44,7 @@ function MemberHome() {
   useEffect(() => watchMemberSession(() => navigate("/login", { replace: true })), [navigate]);
 
   return (
-    <section className="member-platform-home">
+    <section className="member-platform-home w-full">
       <div className="member-platform-home-intro">
         <span className="member-platform-logo"><img src="/Vector.png" alt="" /></span>
         <h1>Helix member platform</h1>
