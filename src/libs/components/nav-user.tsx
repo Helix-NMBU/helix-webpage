@@ -100,7 +100,7 @@ export function NavUser({
               }}
             >
               <UserRound />
-              My profile
+              Profile
             </Button>
             <Button
               variant="ghost"

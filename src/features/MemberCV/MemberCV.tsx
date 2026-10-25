@@ -44,6 +44,8 @@ import {
 } from "./profile-inputs";
 import { Alert, AlertDescription, AlertTitle } from "@libs/components/ui/alert";
 import { Badge } from "@libs/components/ui/badge";
+import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@libs/components/ui/tabs";
 import {
   Dialog,
   DialogClose,
@@ -66,8 +68,9 @@ import {
   type StaticMemberCopyKey,
   type MemberLocale,
 } from "./locale";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 import { memberPaths } from "../MemberPlatform/routes";
+import { useMemberAccount } from "../MemberPlatform/MemberAccountContext";
+import { accountInitials } from "../MemberPlatform/account";
 import { useMemberNavigation, type MemberEditorActions } from "../MemberPlatform/MemberNavigation";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
@@ -237,6 +240,7 @@ function Section({
   open,
   onOpenChange,
   locale,
+  expandable = true,
 }: {
   id: string;
   title: string;
@@ -245,9 +249,10 @@ function Section({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   locale: MemberLocale;
+  expandable?: boolean;
 }) {
   return (
-    <Collapsible open={open} onOpenChange={onOpenChange} asChild>
+    <Collapsible open={expandable ? open : true} onOpenChange={onOpenChange} asChild>
       <section
         className="mcv-section mcv-collapsible"
         id={`mcv-${id}`}
@@ -257,7 +262,7 @@ function Section({
           <CardHeader className="mcv-card-header">
             <CardTitle>
               <h2 id={`mcv-${id}-title`} tabIndex={-1}>
-                <CollapsibleTrigger asChild>
+                {expandable ? <CollapsibleTrigger asChild>
                   <Button
                     className="mcv-section-trigger"
                     variant="ghost"
@@ -274,14 +279,14 @@ function Section({
                       className={open ? "mcv-nav-chevron-open" : ""}
                     />
                   </Button>
-                </CollapsibleTrigger>
+                </CollapsibleTrigger> : title}
               </h2>
             </CardTitle>
           </CardHeader>
           <CollapsibleContent
             className="mcv-section-content"
             forceMount
-            aria-hidden={!open}
+            aria-hidden={expandable && !open}
           >
             <CardContent className="mcv-card-content">
               {hint && (
@@ -299,7 +304,8 @@ function Section({
 }
 
 export default function MemberCV() {
-  const { locale, setLocale, t } = useMemberLocale();
+  const { locale, t } = useMemberLocale();
+  const account = useMemberAccount();
   const paths = memberPaths();
   const platformNavigation = useMemberNavigation();
   const PageContainer = platformNavigation ? "div" : "main";
@@ -307,6 +313,7 @@ export default function MemberCV() {
   const editorActions = useRef<MemberEditorActions | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const [profileTab, setProfileTab] = useState("profile");
   const demo =
     import.meta.env.DEV &&
     new URLSearchParams(location.search).get("demo") === "1";
@@ -351,8 +358,8 @@ export default function MemberCV() {
         }
         return element.getClientRects().length > 0;
       };
-      const trigger = [...document.querySelectorAll<HTMLElement>(".mcv-member-actions .mcv-language-trigger")].find(shown);
-      (trigger ?? document.querySelector<HTMLElement>("[data-navbar-ref] .cursor-pointer"))?.focus();
+      const trigger = [...document.querySelectorAll<HTMLElement>('[aria-label="Profile menu"]')].find(shown);
+      (trigger ?? document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'))?.focus();
     }
   }, []);
   const repository = useMemo(
@@ -390,6 +397,7 @@ export default function MemberCV() {
   useEffect(() => {
     const section = location.hash.replace(/^#mcv-/, "");
     if (!editorLoaded || !["contact", "education", "experience", "projects", "languages", "links", "sharing", "publication"].includes(section)) return;
+    setProfileTab(section === "contact" ? "profile" : ["sharing", "publication"].includes(section) ? "sharing" : "cv");
     setOpenSections((previous) => ({ ...previous, [section]: true }));
     const frame = requestAnimationFrame(() => {
       document.getElementById(`mcv-${section}-title`)?.focus({ preventScroll: true });
@@ -810,15 +818,14 @@ export default function MemberCV() {
   return (
     <PageContainer className="mcv-page mcv-profile portal-root" lang={locale}>
       <div className="mcv-container">
-        <div className="mcv-account-actions">
+        {!platformNavigation && <div className="mcv-account-actions">
           {!platformNavigation && paths.home !== paths.profile
             ? <Button type="button" variant="ghost" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("home", event.currentTarget)}>{t("Member home")}</Button>
             : <span />}
           <div>
-            <LanguageSwitcher locale={locale} onChange={setLocale} />
             {!platformNavigation && <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("logout", event.currentTarget)}>{t("Sign out")}</Button>}
           </div>
-        </div>
+        </div>}
         {demo && (
           <Alert className="mcv-demo-banner" role="status">
             <AlertTitle>{t("Fictional local demo")}</AlertTitle>
@@ -829,19 +836,27 @@ export default function MemberCV() {
             </AlertDescription>
           </Alert>
         )}
-        <div className="mcv-intro">
-          <p className="mcv-eyebrow">{t("Your member profile")}</p>
-          {busy === "load" && !envelope ? (
-            <p role="status">{t("Verifying your Helix account…")}</p>
-          ) : (
-            <h1>{t("Build your CV")}</h1>
-          )}
-          <p>
-            {t(
-              "Save privately, preview your CV and choose when to share it with sponsors.",
-            )}
-          </p>
+        <div className="mcv-profile-heading">
+          <h1>Profile</h1>
+          <p>Manage your profile, CV and sponsor visibility.</p>
         </div>
+        {(account || envelope) && <Card className="mcv-profile-identity shadow-none">
+          <CardContent className="flex items-center gap-4 p-6">
+            <Avatar className="size-16 rounded-xl">
+              <AvatarFallback className="rounded-xl text-xl">
+                {accountInitials(draft?.fullName || account?.name || envelope?.identity.name || "Helix member")}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="break-words text-lg font-medium">{draft?.fullName || account?.name || envelope?.identity.name || "Helix member"}</p>
+                <Badge variant="secondary" className="font-normal">{account?.role ?? "Member"}</Badge>
+              </div>
+              {draft?.headline && <p className="break-words text-sm text-muted-foreground">{draft.headline}</p>}
+              <p className="break-all text-sm text-muted-foreground">{account?.email || envelope?.identity.email}</p>
+            </div>
+          </CardContent>
+        </Card>}
         {ended && (
           <Alert className="mcv-error" variant="destructive">
             <AlertDescription>
@@ -899,12 +914,17 @@ export default function MemberCV() {
           <Alert role="status" className="mcv-notice">
             <AlertDescription>
               {busy
-                ? t("Loading your private CV…")
+                ? t("Verifying your Helix account…")
                 : t("Your CV could not be opened.")}
             </AlertDescription>
           </Alert>
         ) : (
-          <>
+          <Tabs value={profileTab} onValueChange={setProfileTab} className="mcv-profile-tabs">
+            <TabsList aria-label="Profile sections">
+              <TabsTrigger value="profile">Profile</TabsTrigger>
+              <TabsTrigger value="cv">CV</TabsTrigger>
+              <TabsTrigger value="sharing">Sharing</TabsTrigger>
+            </TabsList>
             <div className="mcv-status" aria-live="polite">
               <div>
                 <Badge variant="outline" className="mcv-status-badge">
@@ -916,11 +936,6 @@ export default function MemberCV() {
                 </Badge>
 
                 <p className="mcv-status-detail">{t("Changes are saved automatically as a private draft.")}</p>
-                <p className="mcv-status-detail">
-                  {t("Draft revision {revision}", {
-                    revision: envelope.document.revision,
-                  })}
-                </p>
               </div>
               <div>
                 <Badge variant="outline" className="mcv-status-badge">
@@ -949,12 +964,13 @@ export default function MemberCV() {
               <div className="mcv-layout">
                 {!platformNavigation && <SectionNavigation
                   locale={locale}
-                  onNavigate={(key) =>
+                  onNavigate={(key) => {
+                    setProfileTab(key === "contact" ? "profile" : ["sharing", "publication"].includes(key) ? "sharing" : "cv");
                     setOpenSections((previous) => ({
                       ...previous,
                       [key]: true,
-                    }))
-                  }
+                    }));
+                  }}
                   statuses={getSectionStatuses(
                     draft,
                     sharing,
@@ -966,18 +982,15 @@ export default function MemberCV() {
                   className="mcv-form-fieldset"
                 >
                   <div className="mcv-editor">
+                    <TabsContent value="profile" className="mcv-profile-panel">
                     <Section
                       {...sectionProps("contact")}
-                      title={t("Contact and introduction")}
+                      expandable={false}
+                      title="Personal information"
                       hint={t(
                         "Your Workspace login address stays linked to your account. Contact details below are shared only when you choose.",
                       )}
                     >
-                      <p className="mcv-account">
-                        {t("Signed in as {email}", {
-                          email: envelope.identity.email,
-                        })}
-                      </p>
                       <div className="mcv-grid">
                         <Field
                           label={t("Full name")}
@@ -1027,13 +1040,13 @@ export default function MemberCV() {
                           onChange={(value) => edit("summary", value)}
                         />
                       </div>
-                      <OptionalReferencesInput
-                        value={draft.references ?? ""}
-                        onChange={(value) => edit("references", value)}
-                        locale={locale}
-                        disabled={Boolean(busy) || ended}
-                      />
                     </Section>
+                    </TabsContent>
+                    <TabsContent value="cv" className="mcv-profile-panel">
+                    <div className="space-y-1">
+                      <h2>Your CV</h2>
+                      <p className="text-sm text-muted-foreground">Add your education and experience. Your profile information is included in your CV.</p>
+                    </div>
                     {definitions.map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}
@@ -1171,8 +1184,20 @@ export default function MemberCV() {
                         </>}
                       </Section>
                     ))}
+                    <Card className="mcv-card">
+                      <CardContent className="mcv-card-content">
+                        <OptionalReferencesInput value={draft.references ?? ""} onChange={(value) => edit("references", value)} locale={locale} disabled={Boolean(busy) || ended} />
+                      </CardContent>
+                    </Card>
+                    </TabsContent>
+                    <TabsContent value="sharing" className="mcv-profile-panel">
+                    <div className="space-y-1">
+                      <h2>Sponsor visibility</h2>
+                      <p className="text-sm text-muted-foreground">Choose what sponsors can access, preview your CV and publish when you are ready.</p>
+                    </div>
                     <Section
                       {...sectionProps("sharing")}
+                      expandable={false}
                       title={t("Share with sponsors")}
                       hint={t(
                         "These choices apply when you publish. Email and phone choices also apply inside the generated CV.",
@@ -1208,6 +1233,7 @@ export default function MemberCV() {
                     </Section>
                     <Section
                       {...sectionProps("publication")}
+                      expandable={false}
                       title={t("Preview and publication")}
                     >
                       <p className="mcv-hint">
@@ -1297,11 +1323,12 @@ export default function MemberCV() {
                         </Button>
                       )}
                     </Section>
+                    </TabsContent>
                   </div>
                 </fieldset>
               </div>
             </form>
-          </>
+          </Tabs>
         )}
       </div>
       <Dialog
@@ -1331,7 +1358,6 @@ export default function MemberCV() {
                   {demo ? t("Demo CV preview") : t("Generated CV preview")}
                 </DialogTitle>
                 <div className="mcv-preview-controls">
-                  <LanguageSwitcher locale={locale} onChange={setLocale} appearance="on-light" />
                   <DialogClose asChild>
                     <Button ref={previewClose} variant="outline" type="button">
                       {t("Close preview")}
@@ -1395,7 +1421,6 @@ export default function MemberCV() {
               <DialogTitle className="mcv-dialog-title">
                 {t("Unsaved changes")}
               </DialogTitle>
-              <LanguageSwitcher locale={locale} onChange={setLocale} appearance="on-light" />
             </div>
             <DialogDescription>
               {confirmation === "reload"

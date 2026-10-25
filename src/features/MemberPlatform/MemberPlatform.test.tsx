@@ -150,9 +150,9 @@ describe("internal member platform", () => {
     expect(container.textContent).toContain("Finance");
     expect(container.textContent).toContain("Mechanical & Production");
     expect(container.querySelector('a[href^="/profile"]')).toBeNull();
-    expect(container.querySelector('[aria-label="My profile"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Profile"]')).toBeNull();
     await profileMenu();
-    const profile = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === "My profile");
+    const profile = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === "Profile");
     expect(profile).toBeDefined();
     await act(async () => profile?.click());
     expect(router.state.location.pathname).toBe("/profile");

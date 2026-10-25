@@ -31,7 +31,7 @@ function Workspace({ children }: { children: ReactNode }) {
   const profile = location.pathname === "/profile";
   const page = previewPage(location.pathname);
   const pageTitle = profile
-    ? "My profile"
+    ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
       : (page?.section.title ?? "Home");

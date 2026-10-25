@@ -1,7 +1,4 @@
-import { useState } from "react";
-
 export type MemberLocale = "nb" | "en";
-export const MEMBER_LOCALE_KEY = "helix-member-ui-language-v1";
 
 export const englishCopy = {
   References: "References",
@@ -530,62 +527,13 @@ export function memberText<Key extends MemberCopyKey>(
   });
 }
 
-export function browserMemberLocale(
-  languages: readonly string[],
-): MemberLocale {
-  for (const language of languages) {
-    const base = language.toLowerCase().split(/[-_]/)[0];
-    if (["nb", "nn", "no"].includes(base)) return "nb";
-    if (base === "en") return "en";
-  }
-  return "en";
-}
-
-type PreferenceStorage = Pick<Storage, "getItem" | "setItem">;
-export function initialMemberLocale(
-  storage: PreferenceStorage | null,
-  languages: readonly string[],
-): MemberLocale {
-  try {
-    const saved = storage?.getItem(MEMBER_LOCALE_KEY);
-    if (saved === "nb" || saved === "en") return saved;
-  } catch {
-    /* Language selection remains available when storage is blocked. */
-  }
-  return browserMemberLocale(languages);
-}
-export function persistMemberLocale(
-  storage: PreferenceStorage | null,
-  locale: MemberLocale,
-): void {
-  try {
-    storage?.setItem(MEMBER_LOCALE_KEY, locale);
-  } catch {
-    /* Keep the selection for this page even if persistence is unavailable. */
-  }
-}
-function preferenceStorage(): PreferenceStorage | null {
-  try {
-    return typeof window !== "undefined" ? window.localStorage : null;
-  } catch {
-    return null;
-  }
-}
-
 export function useMemberLocale() {
-  const [locale, updateLocale] = useState<MemberLocale>(() =>
-    initialMemberLocale(
-      preferenceStorage(),
-      typeof navigator !== "undefined" ? navigator.languages : [],
-    ),
-  );
-  const setLocale = (next: MemberLocale) => {
-    updateLocale(next);
-    persistMemberLocale(preferenceStorage(), next);
-  };
+  // The member platform uses English, including for returning members with a
+  // Norwegian browser or an old saved UI-language preference.
+  const locale: MemberLocale = "en";
   const t = <Key extends MemberCopyKey>(
     key: Key,
     ...args: CopyArguments<Key>
   ) => memberText(locale, key, ...args);
-  return { locale, setLocale, t };
+  return { locale, t };
 }
