@@ -56,11 +56,11 @@ describe("sponsor administration", () => {
     const change = { operation: "agreement", organizationId: ORG, tier: "platinum", startsAt: "2026-10-01", endsAt: "2027-10-01", revoked: false };
     expect((await call(change)).status).toBe(200);
     expect((await call({ ...change, tier: "bronze", revoked: true })).status).toBe(200);
-    const result = (await db.query("select tier, revoked_at from sponsor.agreements")).rows[0];
+    const result = (await db.query<{ tier: string; revoked_at: unknown }>("select tier, revoked_at from sponsor.agreements")).rows[0];
     expect(result.tier).toBe("bronze"); expect(result.revoked_at).not.toBeNull();
     expect((await call({ ...change, endsAt: change.startsAt })).status).toBe(400);
     expect((await call({ ...change, startsAt: "2026-02-31" })).status).toBe(400);
-    expect((await db.query("select count(*) from sponsor.agreements")).rows[0].count).toBe(1);
+    expect((await db.query<{ count: number }>("select count(*) from sponsor.agreements")).rows[0].count).toBe(1);
   });
   it("rejects privilege injection, duplicate invitations and missing organizations", async () => {
     const change = { operation: "contact", organizationId: ORG, name: "Alex", email: "alex@example.invalid", active: true };

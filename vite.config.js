@@ -5,10 +5,10 @@ import { fileURLToPath } from 'url';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(async ({ mode, command }) => {
   const env = loadEnv(mode, currentDirectory, '');
   const proxy = {};
-  if (mode !== 'member-local' && env.NEON_AUTH_BASE_URL) {
+  if (mode !== 'member-local' && mode !== 'sponsor-local' && env.NEON_AUTH_BASE_URL) {
     const target = new URL(env.NEON_AUTH_BASE_URL);
     const basePath = target.pathname.replace(/\/$/, '');
     proxy['/api/auth'] = {
@@ -17,8 +17,14 @@ export default defineConfig(({ mode }) => {
       rewrite: (requestPath) => requestPath.replace(/^\/api\/auth/, basePath),
     };
   }
+  const plugins = [react()];
+  if (command === 'serve' && mode === 'sponsor-local') {
+    const { createSponsorLocalPlugin } = await import('./scripts/sponsor-local-plugin.ts');
+    const { createSponsorHandler } = await import('./api/sponsor.ts');
+    plugins.push(createSponsorLocalPlugin(createSponsorHandler));
+  }
   return {
-    plugins: [react()],
+    plugins,
     resolve: {
       alias: {
         "@components": path.resolve(currentDirectory, './src/libs/components'),

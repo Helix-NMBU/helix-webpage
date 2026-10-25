@@ -36,7 +36,7 @@ async function fixture() {
     let status = 0; let result: unknown;
     const headers: Record<string, string> = {};
     const res = { setHeader(name: string, value: string) { headers[name] = value; }, status(code: number) { status = code; return res; }, json(value: unknown) { result = value; return res; } };
-    await handler({ method, headers: user ? { authorization: `Bearer ${user}` } : {}, query: { action, ...(id ? { id } : {}) }, body } as VercelRequest, res as unknown as VercelResponse);
+    await handler({ method, headers: user ? { authorization: `Bearer ${user}` } : {}, query: { action, ...(id ? { id } : {}) }, body } as unknown as VercelRequest, res as unknown as VercelResponse);
     return { status, result, headers };
   }
   async function create(user = USER) {

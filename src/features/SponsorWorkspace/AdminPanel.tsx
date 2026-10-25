@@ -63,7 +63,7 @@ export default function AdminPanel({ request }: { request: SponsorTransport }) {
               <Label htmlFor="contact-name">Contact name</Label><Input id="contact-name" maxLength={160} value={contact.name} onChange={(event) => setContact({ ...contact, name: event.target.value })} />
               <Label htmlFor="contact-email">Contact email</Label><Input id="contact-email" type="email" required maxLength={254} value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} />
               <div className="flex items-center gap-2"><Switch id="contact-active" checked={contact.active} onCheckedChange={(value) => setContact({ ...contact, active: value })} /><Label htmlFor="contact-active">Contact active</Label></div>
-              <p className="text-xs text-muted-foreground">Deactivation removes access on the next request. Provider identity provisioning is a separate operator step.</p>
+              <p className="text-xs text-muted-foreground">Deactivation removes access on the next request. Adding a contact does not send an invitation.</p>
               <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{contact.id ? "Save contact" : "Add contact"}</Button>{contact.id && <Button type="button" variant="ghost" onClick={() => setContact(blankContact)}>New contact</Button>}</div>
             </form>
             <form className="space-y-3 border-t pt-5" onSubmit={(event) => void save(event, { operation: "agreement", organizationId, ...agreement })}>
