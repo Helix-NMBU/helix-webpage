@@ -307,10 +307,11 @@ export function createGmailMessageActionHandler(
           return { action, id: input.id };
         }
         if (action !== "send") throw new MemberCvError(400, "Choose a valid Gmail action.");
-        if (input.mode !== "reply" && input.mode !== "forward") throw new MemberCvError(400, "Choose Reply or Forward.");
+        if (input.mode !== "new" && input.mode !== "reply" && input.mode !== "forward") throw new MemberCvError(400, "Choose New message, Reply, or Forward.");
         if (typeof input.body !== "string" || input.body.length > 100_000) throw new MemberCvError(400, "The message body is too long.");
         const to = recipientAddresses(input.to);
         let subject = typeof input.subject === "string" ? input.subject : "";
+        if (subject.length > 998) throw new MemberCvError(400, "The subject is too long.");
         let threadId: string | undefined;
         let replyHeaders: string[] = [];
         if (input.mode === "reply") {
@@ -323,7 +324,7 @@ export function createGmailMessageActionHandler(
           if (messageId) replyHeaders.push(`In-Reply-To: ${messageId}`);
           if (references.length) replyHeaders.push(`References: ${[...new Set(references)].join(" ")}`);
           if (!threadId || !messageId) throw new MemberCvError(502, "Google could not identify the conversation to reply to.");
-        } else if (subject && !/^fwd?:/i.test(subject)) {
+        } else if (input.mode === "forward" && subject && !/^fwd?:/i.test(subject)) {
           subject = `Fwd: ${subject}`;
         }
         const encodedSubject = mimeSubject(subject);

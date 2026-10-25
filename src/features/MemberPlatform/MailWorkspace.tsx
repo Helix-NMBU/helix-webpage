@@ -7,6 +7,7 @@ import {
   Inbox,
   LoaderCircle,
   MoreHorizontal,
+  PenSquare,
   Reply,
   Search,
   Send,
@@ -67,7 +68,7 @@ type GmailMessage = GmailMessageSummary & {
 };
 
 type MessageAction = "archive" | "trash" | "junk";
-type ComposeMode = "reply" | "forward";
+type ComposeMode = "new" | "reply" | "forward";
 
 const mailFolders: MailFolder[] = [
   { id: "inbox", label: "Inbox", icon: Inbox },
@@ -98,12 +99,10 @@ function sanitizeCss(css: string): string {
     .replace(/(?:^|[;{])\s*(?:behavior|-moz-binding)\s*:[^;}]+;?/gi, "");
 }
 
-function emailDocument(html: string, plainText: string, allowRemoteImages: boolean): { srcDoc: string; remoteImageCount: number } {
+function emailDocument(html: string, plainText: string): string {
   const source = html.trim() || `<pre>${escapeHtml(plainText)}</pre>`;
   const parsed = new DOMParser().parseFromString(source, "text/html");
   parsed.querySelectorAll("script, iframe, frame, frameset, object, embed, form, input, button, textarea, select, option, link, meta, base, svg, math, video, audio, source, track, canvas, portal").forEach((element) => element.remove());
-  let remoteImageCount = 0;
-
   parsed.querySelectorAll("*").forEach((element) => {
     for (const attribute of [...element.attributes]) {
       const name = attribute.name.toLowerCase();
@@ -127,15 +126,9 @@ function emailDocument(html: string, plainText: string, allowRemoteImages: boole
         try {
           const url = new URL(value, window.location.origin);
           if (url.protocol === "http:" || url.protocol === "https:") {
-            remoteImageCount += 1;
-            if (allowRemoteImages) {
-              element.setAttribute("src", url.href);
-              element.setAttribute("referrerpolicy", "no-referrer");
-              element.setAttribute("loading", "eager");
-            } else {
-              element.removeAttribute("src");
-              element.setAttribute("data-remote-image-hidden", "true");
-            }
+            element.setAttribute("src", url.href);
+            element.setAttribute("referrerpolicy", "no-referrer");
+            element.setAttribute("loading", "eager");
           } else if (url.protocol !== "data:" || !/^data:image\//i.test(value)) {
             element.removeAttribute("src");
           }
@@ -157,28 +150,14 @@ function emailDocument(html: string, plainText: string, allowRemoteImages: boole
   const htmlStyle = `${sanitizeCss(parsed.documentElement.getAttribute("style") ?? "")};height:100%!important;overflow:hidden!important`;
   const bodyStyle = `${sanitizeCss(parsed.body.getAttribute("style") ?? "")};box-sizing:border-box;height:100%!important;max-height:100%;overflow-x:auto!important;overflow-y:auto!important;overscroll-behavior-y:contain!important`;
   const shellStyles = "html{height:100%;overflow:hidden}body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
-  const imageSources = allowRemoteImages ? "data: https: http:" : "data:";
-  return {
-    srcDoc: `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`,
-    remoteImageCount,
-  };
+  return `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`;
 }
 
 function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }) {
-  const [allowRemoteImages, setAllowRemoteImages] = useState(true);
-  const { srcDoc, remoteImageCount } = useMemo(
-    () => emailDocument(html, plainText, allowRemoteImages),
-    [allowRemoteImages, html, plainText],
-  );
+  const srcDoc = useMemo(() => emailDocument(html, plainText), [html, plainText]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {remoteImageCount > 0 && (
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-2 text-xs text-muted-foreground">
-          <span>{allowRemoteImages ? "External images are loaded." : "External images are hidden."}</span>
-          <Button variant="outline" size="sm" className="h-7" onClick={() => setAllowRemoteImages((current) => !current)}>{allowRemoteImages ? "Hide images" : "Load images"}</Button>
-        </div>
-      )}
       <iframe
         title="Email content"
         sandbox=""
@@ -238,6 +217,7 @@ export function GmailLogo({ className }: { className?: string }) {
 function ConnectedMailSidebar({
   activeFolder,
   onFolderChange,
+  onNewMessage,
   onReconnect,
   search,
   onSearchChange,
@@ -251,6 +231,7 @@ function ConnectedMailSidebar({
 }: {
   activeFolder: string;
   onFolderChange: (folder: string) => void;
+  onNewMessage: () => void;
   onReconnect: () => void;
   search: string;
   onSearchChange: (search: string) => void;
@@ -265,7 +246,7 @@ function ConnectedMailSidebar({
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
   const [listScrolling, setListScrolling] = useState(false);
   const scrollIdleTimeout = useRef<number | null>(null);
-  const overflowFolders = mailFolders.filter((item) => !["inbox", "sent", "archive"].includes(item.id));
+  const overflowFolders = mailFolders.filter((item) => item.id !== "inbox");
 
   useEffect(() => () => {
     if (scrollIdleTimeout.current !== null) window.clearTimeout(scrollIdleTimeout.current);
@@ -287,7 +268,18 @@ function ConnectedMailSidebar({
           <div className="flex items-center justify-between gap-3">
             <div className="text-base font-medium text-foreground">{folder.label}</div>
             <div className="flex items-center gap-1">
-              {mailFolders.filter((item) => ["inbox", "sent", "archive"].includes(item.id)).map((item) => (
+              <SidebarMenuButton
+                type="button"
+                size="sm"
+                tooltip={{ children: "New message", hidden: false }}
+                aria-label="New message"
+                className="size-8 justify-center p-0"
+                onClick={onNewMessage}
+              >
+                <PenSquare />
+                <span className="sr-only">New message</span>
+              </SidebarMenuButton>
+              {mailFolders.filter((item) => item.id === "inbox").map((item) => (
                 <SidebarMenuButton
                   key={item.id}
                   type="button"
@@ -401,6 +393,16 @@ function formatMessageDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, sameDay ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric" }).format(date);
 }
 
+function formatMessageDetailDate(value: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.replace(/\s*\+\d{4}\s*$/, "");
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function displaySender(from: string): string {
   const bracketed = from.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
   if (bracketed) return bracketed[1].replace(/^['"]|['"]$/g, "").trim() || bracketed[2];
@@ -417,6 +419,59 @@ const emptyFolderMessage: Record<string, string> = {
   spam: "No messages in Spam.",
   trash: "Your trash is empty.",
 };
+
+function MessageComposer({
+  mode,
+  to,
+  onToChange,
+  subject,
+  onSubjectChange,
+  body,
+  onBodyChange,
+  error,
+  sending,
+  onCancel,
+  onSend,
+}: {
+  mode: ComposeMode;
+  to: string;
+  onToChange: (value: string) => void;
+  subject: string;
+  onSubjectChange: (value: string) => void;
+  body: string;
+  onBodyChange: (value: string) => void;
+  error: string | null;
+  sending: boolean;
+  onCancel: () => void;
+  onSend: () => void;
+}) {
+  const label = mode === "new" ? "New message" : mode === "reply" ? "Reply" : "Forward";
+  return (
+    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-5 md:p-8" aria-label={`${label} message`}>
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+        <h1 className="text-xl font-semibold tracking-tight">{label}</h1>
+        <label className="grid gap-1.5 text-sm font-medium">To
+          <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus />
+        </label>
+        {mode === "new" && (
+          <label className="grid gap-1.5 text-sm font-medium">Subject
+            <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={subject} onChange={(event) => onSubjectChange(event.target.value)} />
+          </label>
+        )}
+        <label className="grid gap-1.5 text-sm font-medium">Message
+          <textarea className="min-h-56 resize-y rounded-md border bg-background p-3 font-normal leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" value={body} onChange={(event) => onBodyChange(event.target.value)} />
+        </label>
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={sending}>Cancel</Button>
+          <Button onClick={onSend} disabled={sending || !to.trim() || (mode === "new" && !subject.trim())}>
+            {sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
   const [activeFolder, setActiveFolder] = useState("inbox");
@@ -439,6 +494,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
   const [composeTo, setComposeTo] = useState("");
+  const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeError, setComposeError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -586,15 +642,21 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   function startCompose(mode: ComposeMode) {
     setComposeMode(mode);
     setComposeError(null);
+    if (mode === "new") {
+      setSelectedMessageId(null);
+      setSelectedMessage(null);
+    }
+    setComposeSubject(selectedMessage?.subject ?? "");
     setComposeBody(!selectedMessage ? "" : mode === "forward"
-      ? `\n\n---------- Forwarded message ----------\nFrom: ${selectedMessage.from}\nDate: ${selectedMessage.date}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
-      : `\n\nOn ${selectedMessage.date}, ${selectedMessage.from} wrote:\n${selectedMessage.body.split("\n").map((line) => `> ${line}`).join("\n")}`);
+      ? `\n\n---------- Forwarded message ----------\nFrom: ${selectedMessage.from}\nDate: ${formatMessageDetailDate(selectedMessage.date)}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
+      : mode === "reply" ? `\n\nOn ${formatMessageDetailDate(selectedMessage.date)}, ${selectedMessage.from} wrote:\n${selectedMessage.body.split("\n").map((line) => `> ${line}`).join("\n")}` : "");
     const emailAddress = selectedMessage?.replyTo.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? "";
     setComposeTo(mode === "reply" ? emailAddress : "");
   }
 
   async function sendMessage() {
-    if (!selectedMessage || !composeMode) return;
+    if (!composeMode) return;
+    if (composeMode === "reply" && !selectedMessage) return;
     setSending(true);
     setComposeError(null);
     try {
@@ -604,15 +666,16 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         credentials: "include",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "send", mode: composeMode, to: composeTo, subject: selectedMessage.subject,
+          action: "send", mode: composeMode, to: composeTo, subject: composeSubject,
           body: composeBody,
-          ...(composeMode === "reply" ? { replyToMessageId: selectedMessage.id } : {}),
+          ...(composeMode === "reply" && selectedMessage ? { replyToMessageId: selectedMessage.id } : {}),
         }),
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || "Could not send this message.");
       setComposeMode(null);
       setComposeTo("");
+      setComposeSubject("");
       setComposeBody("");
     } catch (error) {
       setComposeError(error instanceof Error ? error.message : "Could not send this message.");
@@ -664,6 +727,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           <ConnectedMailSidebar
             activeFolder={activeFolder}
             onFolderChange={setActiveFolder}
+            onNewMessage={() => startCompose("new")}
             onReconnect={connectGmail}
             search={search}
             onSearchChange={setSearch}
@@ -676,7 +740,21 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             onLoadMore={loadMoreMessages}
           />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-live="polite">
-            {selectedMessageId ? (
+            {composeMode === "new" ? (
+              <MessageComposer
+                mode={composeMode}
+                to={composeTo}
+                onToChange={setComposeTo}
+                subject={composeSubject}
+                onSubjectChange={setComposeSubject}
+                body={composeBody}
+                onBodyChange={setComposeBody}
+                error={composeError}
+                sending={sending}
+                onCancel={() => setComposeMode(null)}
+                onSend={() => void sendMessage()}
+              />
+            ) : selectedMessageId ? (
               messageLoading ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading message…</div>
               ) : messageError ? (
@@ -696,26 +774,24 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                     </div>
                     <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
                       <p className="min-w-0 break-words font-medium">{selectedMessage.from}</p>
-                      <time className="text-xs text-muted-foreground" dateTime={selectedMessage.date}>{selectedMessage.date}</time>
+                      <time className="text-xs text-muted-foreground" dateTime={selectedMessage.date}>{formatMessageDetailDate(selectedMessage.date)}</time>
                     </div>
                     {actionError && <p className="mt-2 text-sm text-destructive" role="alert">{actionError}</p>}
                   </div>
                   {composeMode ? (
-                    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-5 md:p-8" aria-label={`${composeMode === "reply" ? "Reply" : "Forward"} message`}>
-                      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-                        <label className="grid gap-1.5 text-sm font-medium">To
-                          <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={composeTo} onChange={(event) => setComposeTo(event.target.value)} placeholder="name@example.com" autoFocus />
-                        </label>
-                        <label className="grid gap-1.5 text-sm font-medium">Message
-                          <textarea className="min-h-56 resize-y rounded-md border bg-background p-3 font-normal leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" value={composeBody} onChange={(event) => setComposeBody(event.target.value)} />
-                        </label>
-                        {composeError && <p className="text-sm text-destructive" role="alert">{composeError}</p>}
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" onClick={() => setComposeMode(null)} disabled={sending}>Cancel</Button>
-                          <Button onClick={() => void sendMessage()} disabled={sending || !composeTo.trim()}>{sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}</Button>
-                        </div>
-                      </div>
-                    </section>
+                    <MessageComposer
+                      mode={composeMode}
+                      to={composeTo}
+                      onToChange={setComposeTo}
+                      subject={composeSubject}
+                      onSubjectChange={setComposeSubject}
+                      body={composeBody}
+                      onBodyChange={setComposeBody}
+                      error={composeError}
+                      sending={sending}
+                      onCancel={() => setComposeMode(null)}
+                      onSend={() => void sendMessage()}
+                    />
                   ) : (
                     <EmailHtmlFrame html={selectedMessage.htmlBody} plainText={selectedMessage.body || selectedMessage.snippet} />
                   )}
