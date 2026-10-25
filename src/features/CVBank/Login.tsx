@@ -6,7 +6,8 @@ import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberLocale } from "../MemberCV/locale";
 import { LanguageSwitcher } from "../MemberCV/LanguageSwitcher";
 import { localizeCvError } from "../MemberCV/errors";
-import { authClient, ensureMemberLanding, loginAction, memberAuthConfigured, memberPageCopy, startGoogleSignIn, type MemberFrame } from "../MemberCV/session";
+import { authClient, ensureMemberLanding, loginAction, memberAuthConfigured, startGoogleSignIn, type MemberFrame } from "../MemberCV/session";
+import "@fontsource-variable/geist";
 import "../Portal/portal.css";
 import "../MemberCV/member-cv.css";
 import "./login.css";
@@ -62,18 +63,13 @@ export default function CVBankLogin() {
     <main className="member-login portal-root" lang={locale}>
       <div className="member-login-panel">
         <header className="member-login-header">
-          <a className="member-login-brand" href="https://helixnmbu.no" aria-label="Helix NMBU">
-            <span className="member-login-mark"><img src="/Vector.png" alt="" /></span>
-            <span>HELIX <span className="member-login-nmbu">NMBU</span></span>
-          </a>
           <LanguageSwitcher locale={locale} onChange={setLocale} />
         </header>
         <div className="member-login-center">
           <section className="member-login-form" aria-labelledby="member-login-title">
             <div className="member-login-intro">
-              <p className="member-login-eyebrow">{t("Member portal")}</p>
-              <h1 id="member-login-title">{t(memberPageCopy(frame))}</h1>
-              <p>{t("Use your @helixnmbu.no Google Workspace account.")}</p>
+              <h1 id="member-login-title">{t("Helix member platform")}</h1>
+              <p>{t("Sign in with your Helix account.")}</p>
             </div>
             {memberAuthConfigured && (frame === "loading" || busy) ? (
               <p role="status">{t("Verifying your Helix account…")}</p>
@@ -92,21 +88,14 @@ export default function CVBankLogin() {
                 <AlertDescription>{localizeCvError(error, locale)}</AlertDescription>
               </Alert>
             )}
-            <p className="member-login-privacy">
-              {t("Your profile starts as a private draft. You choose when to publish it to Talent Directory.")}
-            </p>
           </section>
         </div>
         <footer className="member-login-footer">
           <a href="https://helixnmbu.no">{t("Back to home")}</a>
         </footer>
       </div>
-      <div className="member-login-photo" aria-hidden="true">
-        <img src="/birk i bil.webp" alt="" />
-        <div className="member-login-photo-brand">
-          <img src="/Vector.png" alt="" />
-          <span>HELIX NMBU</span>
-        </div>
+      <div className="member-login-brand-panel" aria-hidden="true">
+        <img src="/Vector.png" alt="" />
       </div>
     </main>
   );

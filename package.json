@@ -17,6 +17,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1153.0",
     "@aws-sdk/s3-request-presigner": "^3.1153.0",
+    "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/montserrat": "^5.2.6",
     "@gsap/react": "^2.1.2",
     "@neondatabase/neon-js": "0.8.0-beta",

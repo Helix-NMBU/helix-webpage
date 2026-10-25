@@ -105,7 +105,7 @@ describe("member page landing", () => {
     expect(window.location.search).not.toContain("neon_auth_session_verifier");
     expect(posts).toBe(0);
     expect(container.textContent).toContain("Verifying your Helix account…");
-    expect(container.textContent).not.toContain("Sign in to build your CV");
+    expect(container.textContent).not.toContain("Sign in with Google");
 
     await act(async () => {
       container.querySelector("button")?.click();
@@ -126,7 +126,7 @@ describe("member page landing", () => {
     });
     expect(posts).toBe(1);
     expect(auth.getSession).toHaveBeenCalledTimes(1);
-    expect(container.textContent).not.toContain("Sign in to build your CV");
+    expect(container.textContent).not.toContain("Sign in with Google");
 
     await act(async () => { root.unmount(); });
     window.history.replaceState({}, "", "/member/profile?neon_auth_session_verifier=again");
@@ -136,6 +136,6 @@ describe("member page landing", () => {
     });
     expect(auth.getSession).toHaveBeenCalledTimes(1);
     expect(posts).toBe(1);
-    expect(container.textContent).not.toContain("Sign in to build your CV");
+    expect(container.textContent).not.toContain("Sign in with Google");
   });
 });
