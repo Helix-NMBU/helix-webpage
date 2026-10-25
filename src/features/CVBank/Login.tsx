@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberLocale } from "../MemberCV/locale";
 import { LanguageSwitcher } from "../MemberCV/LanguageSwitcher";
@@ -10,6 +9,7 @@ import { localizeCvError } from "../MemberCV/errors";
 import { authClient, ensureMemberLanding, loginAction, memberAuthConfigured, memberPageCopy, startGoogleSignIn, type MemberFrame } from "../MemberCV/session";
 import "../Portal/portal.css";
 import "../MemberCV/member-cv.css";
+import "./login.css";
 
 export default function CVBankLogin() {
   const { locale, setLocale, t } = useMemberLocale();
@@ -59,39 +59,29 @@ export default function CVBankLogin() {
   }
 
   return (
-    <main className="mcv-page portal-root" lang={locale}>
-      <header className="mcv-header">
-        <Link className="mcv-brand" to="/">
-          <img src="/Vector.png" alt="Helix" className="mcv-logo" />
-          <span>{t("Member portal")}</span>
-        </Link>
-        <div className="mcv-header-actions">
+    <main className="member-login portal-root" lang={locale}>
+      <div className="member-login-panel">
+        <header className="member-login-header">
+          <a className="member-login-brand" href="https://helixnmbu.no" aria-label="Helix NMBU">
+            <span className="member-login-mark"><img src="/Vector.png" alt="" /></span>
+            <span>HELIX <span className="member-login-nmbu">NMBU</span></span>
+          </a>
           <LanguageSwitcher locale={locale} onChange={setLocale} />
-          <Button asChild variant="outline" className="mcv-header-button">
-            <Link to="/">{t("Back to home")}</Link>
-          </Button>
-        </div>
-      </header>
-      <div className="mcv-container">
-        <Card className="mcv-login-card">
-          <CardHeader className="mcv-login-header">
-            <p className="mcv-eyebrow">{t("Member portal")}</p>
-            <CardTitle>
-              <h1>{t(memberPageCopy(frame))}</h1>
-            </CardTitle>
-            <CardDescription className="mcv-login-help">
-              {t("Use your @helixnmbu.no Google Workspace account. Your profile starts as a private draft. You choose when to publish it to Talent Directory.")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mcv-login-content">
-            {memberAuthConfigured && frame === "loading" ? (
+        </header>
+        <div className="member-login-center">
+          <section className="member-login-form" aria-labelledby="member-login-title">
+            <div className="member-login-intro">
+              <p className="member-login-eyebrow">{t("Member portal")}</p>
+              <h1 id="member-login-title">{t(memberPageCopy(frame))}</h1>
+              <p>{t("Use your @helixnmbu.no Google Workspace account.")}</p>
+            </div>
+            {memberAuthConfigured && (frame === "loading" || busy) ? (
               <p role="status">{t("Verifying your Helix account…")}</p>
             ) : memberAuthConfigured ? (
-              <div className="mcv-google-button" aria-busy={busy}>
-                {busy ? <p role="status">{t("Verifying your Helix account…")}</p> : (
-                  <Button type="button" onClick={() => void signIn()}>{t("Sign in with Google")}</Button>
-                )}
-              </div>
+              <Button type="button" variant="outline" className="member-login-google" onClick={() => void signIn()}>
+                <img src="/google-g.png" width="20" height="20" alt="" />
+                {t("Sign in with Google")}
+              </Button>
             ) : (
               <Alert variant="destructive" className="mcv-error">
                 <AlertDescription>{t("Member sign-in is not configured yet. Please contact Helix.")}</AlertDescription>
@@ -102,13 +92,21 @@ export default function CVBankLogin() {
                 <AlertDescription>{localizeCvError(error, locale)}</AlertDescription>
               </Alert>
             )}
-            {import.meta.env.DEV && (
-              <Button asChild variant="outline" className="mcv-demo-button">
-                <Link to="/member/profile?demo=1">{t("Open fictional local demo")}</Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+            <p className="member-login-privacy">
+              {t("Your profile starts as a private draft. You choose when to publish it to Talent Directory.")}
+            </p>
+          </section>
+        </div>
+        <footer className="member-login-footer">
+          <a href="https://helixnmbu.no">{t("Back to home")}</a>
+        </footer>
+      </div>
+      <div className="member-login-photo" aria-hidden="true">
+        <img src="/birk i bil.webp" alt="" />
+        <div className="member-login-photo-brand">
+          <img src="/Vector.png" alt="" />
+          <span>HELIX NMBU</span>
+        </div>
       </div>
     </main>
   );

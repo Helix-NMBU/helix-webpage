@@ -1,0 +1,159 @@
+/* Adapted from shadcn/ui login-02: https://ui.shadcn.com/blocks/login */
+.member-login {
+  display: grid;
+  min-height: 100svh;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.member-login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+  padding: 24px;
+}
+
+.member-login-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.member-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--primary);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-decoration: none;
+}
+
+.member-login-mark {
+  display: grid;
+  width: 36px;
+  height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+}
+
+.member-login-mark img { width: 16px; height: 27px; object-fit: contain; }
+.member-login-nmbu { font-weight: 400; }
+
+.member-login .mcv-language-trigger {
+  min-width: 100px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.member-login-center {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.member-login-form {
+  display: flex;
+  width: 100%;
+  max-width: 360px;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.member-login-intro { text-align: center; }
+.member-login-intro h1 {
+  margin: 12px 0;
+  color: var(--foreground);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+}
+
+.member-login-intro > p:last-child,
+.member-login-privacy {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.member-login-eyebrow {
+  margin: 0;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.member-login .member-login-google {
+  width: 100%;
+  min-height: 44px;
+  gap: 10px;
+  border: 1px solid #747775;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.member-login .member-login-google:hover { background: #f8faff; }
+.member-login-google img { flex-shrink: 0; }
+.member-login-privacy { text-align: center; }
+.member-login-footer { font-size: 13px; }
+.member-login-footer a { color: var(--muted-foreground); text-underline-offset: 4px; }
+.member-login-footer a:hover { color: var(--primary); }
+.member-login a:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.member-login-photo { display: none; }
+
+@media (min-width: 768px) {
+  .member-login-panel { padding: 40px; }
+}
+
+@media (min-width: 1024px) {
+  .member-login { grid-template-columns: 1fr 1fr; }
+  .member-login-photo {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    background: var(--primary);
+  }
+  .member-login-photo > img {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 48% center;
+  }
+  .member-login-photo::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    background: linear-gradient(180deg, rgb(0 46 196 / .1) 35%, rgb(0 18 76 / .8));
+  }
+  .member-login-photo-brand {
+    position: absolute;
+    z-index: 1;
+    bottom: 40px;
+    left: 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: #fff;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: .06em;
+  }
+  .member-login-photo-brand img { width: 28px; height: 46px; object-fit: contain; }
+}
