@@ -64,5 +64,4 @@ html[data-member-theme] .mcv-page .mcv-nav-link,
 html[data-member-theme] .mcv-nav-label { color: var(--foreground); }
 html[data-member-theme] .mcv-demo-label { font-family: inherit; }
 html[data-member-theme] .member-login-brand-icon,
-html[data-member-theme] .member-login-brand-panel,
-html[data-member-theme] .member-platform-logo { background: #002ec4; }
+html[data-member-theme] .member-login-brand-panel { background: #002ec4; }

@@ -57,15 +57,15 @@ describe("internal member platform", () => {
     await act(async () => root.render(<RouterProvider router={router} />));
   }
   async function profileMenu() {
-    await act(async () => container.querySelector('[aria-label="Profile menu"]')?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" })));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Profile menu"]')?.click());
   }
 
-  it.each(["/", "/profile", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
     expect(container.textContent).not.toContain("Private CV editor");
-    expect(container.textContent).not.toContain("Open profile and CV");
+    expect(container.textContent).not.toContain("What are we working on?");
     expect(container.querySelector('a[href="https://helixnmbu.no"]')).toBeNull();
   });
 
@@ -73,9 +73,9 @@ describe("internal member platform", () => {
     let release!: (landing: typeof signedIn) => void;
     session.landing.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
     await open("/");
-    expect(container.textContent).not.toContain("Open profile and CV");
+    expect(container.textContent).not.toContain("What are we working on?");
     await act(async () => release(signedIn));
-    expect(container.textContent).toContain("Open profile and CV");
+    expect(container.textContent).toContain("What are we working on?");
     expect(router.state.location.pathname).toBe("/");
   });
 
@@ -85,7 +85,7 @@ describe("internal member platform", () => {
     expect(router.state.location.pathname).toBe("/");
     session.landing.mockResolvedValue(signedOut);
     await profileMenu();
-    const signOut = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes("Sign out"));
+    const signOut = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent?.includes("Sign out"));
     await act(async () => signOut?.click());
     expect(session.signOut).toHaveBeenCalledOnce();
     expect(router.state.location.pathname).toBe("/login");
@@ -95,7 +95,9 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
     await profileMenu();
-    const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
+    const appearance = document.querySelector('[role="combobox"][aria-label="Appearance"]');
+    await act(async () => appearance?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
+    const dark = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent?.includes("Dark"));
     expect(dark).toBeDefined();
     await act(async () => dark?.click());
     expect(document.documentElement.dataset.memberTheme).toBe("dark");
@@ -108,14 +110,35 @@ describe("internal member platform", () => {
   it("lets the editor save or confirm unsaved changes before sidebar navigation or sign-out", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/profile");
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Overview"]')?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Home"]')?.click());
     expect(session.editorNavigate).toHaveBeenCalledWith("/", expect.any(HTMLButtonElement));
     expect(router.state.location.pathname).toBe("/profile");
     await profileMenu();
-    const signOut = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes("Sign out"));
+    const signOut = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent?.includes("Sign out"));
     await act(async () => signOut?.click());
     expect(session.editorSignOut).toHaveBeenCalledOnce();
     expect(session.signOut).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe("/profile");
+  });
+
+  it("keeps profile and CV access in the account panel and guards Settings navigation from the editor", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/");
+    expect(container.textContent).toContain("Business & Marketing");
+    expect(container.textContent).toContain("Finance");
+    expect(container.textContent).toContain("Mechanical & Production");
+    expect(container.querySelector('a[href^="/profile"]')).toBeNull();
+    expect(container.querySelector('[aria-label="My profile"]')).toBeNull();
+    await profileMenu();
+    const profile = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === "My profile");
+    expect(profile).toBeDefined();
+    await act(async () => profile?.click());
+    expect(router.state.location.pathname).toBe("/profile");
+    expect(container.textContent).toContain("Private CV editor");
+    await profileMenu();
+    const settings = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === "Settings");
+    await act(async () => settings?.click());
+    expect(session.editorNavigate).toHaveBeenCalledWith("/settings", expect.any(HTMLButtonElement));
     expect(router.state.location.pathname).toBe("/profile");
   });
 
@@ -134,10 +157,10 @@ describe("internal member platform", () => {
     await open("/");
     expect(router.state.location.pathname).toBe("/");
     expect(container.textContent).toContain("Try again");
-    expect(container.textContent).not.toContain("Open profile and CV");
+    expect(container.textContent).not.toContain("What are we working on?");
     session.landing.mockResolvedValue(signedIn);
     await act(async () => container.querySelector("button")?.click());
-    expect(container.textContent).toContain("Open profile and CV");
+    expect(container.textContent).toContain("What are we working on?");
   });
 
   it("changes only the internal host and rejects unsafe internal return URLs", () => {
