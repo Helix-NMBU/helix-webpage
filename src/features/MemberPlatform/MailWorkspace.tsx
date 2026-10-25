@@ -350,7 +350,7 @@ function ConnectedMailSidebar({
                       onClick={() => onMessageSelect(message.id)}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`truncate text-sm ${message.unread ? "font-semibold text-foreground" : "text-foreground/80"}`}>{message.from}</span>
+                        <span className={`truncate text-sm ${message.unread ? "font-semibold text-foreground" : "text-foreground/80"}`}>{displaySender(message.from)}</span>
                         <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={message.date}>{formatMessageDate(message.date)}</time>
                       </div>
                       <p className={`mt-1 truncate text-sm ${message.unread ? "font-semibold" : "font-medium"}`}>{message.subject}</p>
@@ -381,6 +381,13 @@ function formatMessageDate(value: string): string {
   if (Number.isNaN(date.getTime())) return value;
   const sameDay = date.toDateString() === new Date().toDateString();
   return new Intl.DateTimeFormat(undefined, sameDay ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric" }).format(date);
+}
+
+function displaySender(from: string): string {
+  const bracketed = from.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
+  if (bracketed) return bracketed[1].replace(/^['"]|['"]$/g, "").trim() || bracketed[2];
+  const bareAddress = from.match(/^\s*(.*?)\s+([^\s<>]+@[^\s<>]+)\s*$/);
+  return bareAddress ? bareAddress[1].trim() || bareAddress[2] : from;
 }
 
 const emptyFolderMessage: Record<string, string> = {
@@ -662,11 +669,11 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h1 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => startCompose("reply")}><Reply className="mr-2 size-4" />Reply</Button>
-                        <Button variant="outline" size="sm" onClick={() => startCompose("forward")}><Forward className="mr-2 size-4" />Forward</Button>
-                        <Button variant="outline" size="sm" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending}><Archive className="size-4" /></Button>
-                        <Button variant="outline" size="sm" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending}><ShieldAlert className="size-4" /></Button>
-                        <Button variant="outline" size="sm" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending}><Trash2 className="size-4" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Reply" title="Reply" onClick={() => startCompose("reply")}><Reply aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Forward" title="Forward" onClick={() => startCompose("forward")}><Forward aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending}><Archive aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending}><ShieldAlert aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending}><Trash2 aria-hidden="true" /></Button>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
