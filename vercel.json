@@ -4,7 +4,16 @@
   "devCommand": "npm run dev",
   "installCommand": "npm ci",
   "framework": "vite",
+  "functions": {
+    "api/member-cv.ts": {
+      "includeFiles": "api/_lib/fonts/*.ttf"
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth?__path=:path*"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

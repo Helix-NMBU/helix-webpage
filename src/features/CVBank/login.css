@@ -1,0 +1,114 @@
+/* Adapted from shadcn/ui login-02: https://ui.shadcn.com/blocks/login */
+.member-login.portal-root {
+  display: grid;
+  min-height: 100svh;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.member-login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  min-width: 0;
+  padding: 24px;
+}
+
+.member-login-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+.member-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.member-login-brand-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+}
+
+.member-login-brand-icon img { width: 11px; height: 18px; object-fit: contain; }
+
+.member-login-center {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.member-login-form {
+  display: flex;
+  width: 100%;
+  max-width: 360px;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.member-login-intro { text-align: center; }
+.member-login-intro h1 {
+  margin: 0 0 8px;
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.33;
+  letter-spacing: -.025em;
+}
+
+.member-login-intro > p:last-child {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.member-login .member-login-google {
+  width: 260px;
+  max-width: 100%;
+  align-self: center;
+  min-height: 44px;
+  gap: 10px;
+  border: 1px solid #747775;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.member-login .member-login-google:hover { background: #f8faff; }
+.member-login-google img { flex-shrink: 0; }
+.member-login a:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
+.member-login-brand-panel { display: none; }
+
+@media (min-width: 768px) {
+  .member-login-panel { padding: 40px; }
+}
+
+@media (min-width: 1024px) {
+  .member-login { grid-template-columns: 1fr 1fr; }
+  .member-login-brand-panel {
+    display: grid;
+    place-items: center;
+    background: var(--primary);
+  }
+  .member-login-brand-panel img {
+    width: 88px;
+    height: auto;
+  }
+}

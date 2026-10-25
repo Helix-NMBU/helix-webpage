@@ -20,14 +20,6 @@ const TRACKS = {
   },
 };
 
-const GRID_LINES = `
-  linear-gradient(rgba(253,253,253,0.16) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(253,253,253,0.16) 1px, transparent 1px),
-  linear-gradient(rgba(253,253,253,0.06) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(253,253,253,0.06) 1px, transparent 1px)
-`;
-const GRID_SIZE = "120px 120px, 120px 120px, 20px 20px, 20px 20px";
-
 // Tracks lie flat (rotateX) then spin around their own vertical axis (rotateZ,
 // applied inside that tilted frame) — a turntable, not a flipping card.
 const CSS = `

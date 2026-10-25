@@ -37,6 +37,8 @@ export const knownRoutes = new Set([
   "/cv-bank",
   "/cv-bank/login",
   "/cv-bank/profile",
+  "/member/login",
+  "/member/profile",
   "/recruitment",
   "/recruitment/login",
   "/Contactside",
@@ -49,12 +51,16 @@ const hiddenChromePaths = new Set([
   "/cv-bank",
   "/cv-bank/login",
   "/cv-bank/profile",
+  "/member/login",
+  "/member/profile",
 ]);
 
 const hiddenNavbarOnlyPaths = new Set<string>([]);
 
+const hiddenFooterOnlyPaths = new Set<string>([]);
+
 export function hideFooter(pathname: string): boolean {
-  return hiddenChromePaths.has(pathname);
+  return hiddenChromePaths.has(pathname) || hiddenFooterOnlyPaths.has(pathname);
 }
 
 export function hideNavbar(pathname: string): boolean {

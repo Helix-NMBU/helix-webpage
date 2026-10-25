@@ -1,0 +1,49 @@
+.member-platform.portal-root {
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.member-platform-status {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+.member-platform .mcv-profile { min-height: 0; }
+.member-platform .mcv-profile .mcv-container { max-width: 960px; padding: 32px 24px 64px; }
+.mcv-profile-heading { margin-bottom: 24px; }
+.mcv-profile-heading h1 { font-size: 30px; font-weight: 500; line-height: 1.2; letter-spacing: -0.025em; margin: 0 0 8px; }
+.mcv-profile-heading p { color: var(--muted-foreground); }
+.mcv-profile-identity { padding: 0; }
+.mcv-profile-tabs { display: flex; flex-direction: column; gap: 24px; }
+.mcv-profile-tabs > [role="tablist"] { align-self: flex-start; }
+.mcv-page .mcv-profile-tabs [role="tab"] { min-height: 28px; border-radius: var(--radius-md); white-space: nowrap; }
+.mcv-profile-panel[data-state="active"] { display: flex; flex-direction: column; gap: 24px; margin: 0; }
+.mcv-profile-panel[data-state="inactive"] { display: none; }
+.mcv-profile-tabs .mcv-editor { gap: 24px; }
+.mcv-profile-tabs .mcv-status { margin: 0; padding: 0 0 24px; border: 0; border-bottom: 1px solid var(--border); background: transparent; }
+.mcv-profile-tabs .mcv-status-detail { margin-bottom: 0; }
+.mcv-profile-tabs .mcv-card { padding: 24px; border-radius: var(--radius-xl); box-shadow: none; }
+.mcv-profile-tabs .mcv-card h2 { font-size: 16px; }
+@media (max-width: 640px) {
+  .member-platform .mcv-profile .mcv-container { padding: 24px 0 48px; }
+  .mcv-profile-tabs .mcv-card { padding: 20px 16px; }
+  .mcv-profile-identity > div { padding: 20px 16px; }
+}
+.mcv-account-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 32px; }
+.mcv-account-actions > div { display: flex; align-items: center; gap: 12px; }
+@media (max-width: 600px) {
+  .mcv-account-actions { flex-wrap: wrap; }
+}
+
+/* Content integration only. Sidebar geometry comes from sidebar-07. */
+.member-workspace-content .mcv-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "editor"; }
+.member-workspace-content .mcv-section-overview { display: none; }
+
+.member-platform [data-sonner-toaster] { font-family: var(--font-sans); }
+.member-platform [data-sonner-toast][data-styled="true"] {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+}

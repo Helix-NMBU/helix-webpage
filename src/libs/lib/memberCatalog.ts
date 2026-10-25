@@ -109,7 +109,8 @@ async function loadFromStatic(): Promise<MemberRecord[]> {
 
 async function resolveCvUrls(list: MemberRecord[], cvBucket?: string): Promise<MemberRecord[]> {
   const needsSigning = list.some((member) => member.cvUrl && !member.cvUrl.startsWith("http"));
-  if (!supabase || !cvBucket) {
+  const client = supabase;
+  if (!client || !cvBucket) {
     if (needsSigning) {
       console.warn("CV bucket missing or Supabase not configured; cannot sign CV URLs.");
     }
@@ -130,7 +131,7 @@ async function resolveCvUrls(list: MemberRecord[], cvBucket?: string): Promise<M
   const uniquePaths = Array.from(new Set(rawPaths));
   if (!uniquePaths.length) return list;
 
-  const { data: signedUrls, error: signError } = await supabase.storage
+  const { data: signedUrls, error: signError } = await client.storage
     .from(cvBucket)
     .createSignedUrls(uniquePaths, 60 * 60 * 6);
 
@@ -155,14 +156,15 @@ async function resolveCvUrls(list: MemberRecord[], cvBucket?: string): Promise<M
     const storagePath = extractStoragePath(member.cvUrl, cvBucket);
     const signed = map.get(storagePath);
     if (signed) return { ...member, cvUrl: signed };
-    const { data: publicData } = supabase.storage.from(cvBucket).getPublicUrl(storagePath);
+    const { data: publicData } = client.storage.from(cvBucket).getPublicUrl(storagePath);
     return publicData?.publicUrl ? { ...member, cvUrl: publicData.publicUrl } : member;
   });
 }
 
 async function resolveProfileImages(list: MemberRecord[], avatarBucket?: string): Promise<MemberRecord[]> {
   const needsSigning = list.some((member) => member.profileImage && !member.profileImage.startsWith("http"));
-  if (!supabase || !avatarBucket) {
+  const client = supabase;
+  if (!client || !avatarBucket) {
     if (needsSigning) {
       console.warn("Avatar bucket missing or Supabase not configured; cannot sign profile images.");
     }
@@ -183,7 +185,7 @@ async function resolveProfileImages(list: MemberRecord[], avatarBucket?: string)
   const uniquePaths = Array.from(new Set(rawPaths));
   if (!uniquePaths.length) return list;
 
-  const { data: signedUrls, error: signError } = await supabase.storage
+  const { data: signedUrls, error: signError } = await client.storage
     .from(avatarBucket)
     .createSignedUrls(uniquePaths, 60 * 60 * 6);
 
@@ -208,7 +210,7 @@ async function resolveProfileImages(list: MemberRecord[], avatarBucket?: string)
     const storagePath = extractStoragePath(member.profileImage, avatarBucket);
     const signed = map.get(storagePath);
     if (signed) return { ...member, profileImage: signed };
-    const { data: publicData } = supabase.storage.from(avatarBucket).getPublicUrl(storagePath);
+    const { data: publicData } = client.storage.from(avatarBucket).getPublicUrl(storagePath);
     return publicData?.publicUrl ? { ...member, profileImage: publicData.publicUrl } : member;
   });
 }
