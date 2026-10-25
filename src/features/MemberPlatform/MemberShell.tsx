@@ -75,9 +75,9 @@ function Workspace({ children }: { children: ReactNode }) {
         onSignOut={() => void logout()}
         disabled={disabled}
       />
-      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "min-h-0 overflow-hidden" : ""}`}>
+      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : ""}`}>
         {mail ? (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             {error && (
               <Alert variant="destructive" className="m-4 mb-0">
                 <AlertDescription>{error}</AlertDescription>

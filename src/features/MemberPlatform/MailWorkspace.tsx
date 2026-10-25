@@ -152,12 +152,14 @@ function emailDocument(html: string, plainText: string, allowRemoteImages: boole
     const css = sanitizeCss(style.textContent ?? "");
     return `<style>${css.replace(/<\/style/gi, "<\\/style")}</style>`;
   }).join("");
-  const htmlAttributes = safeDocumentAttributes(parsed.documentElement, ["lang", "dir", "class", "style"]);
-  const bodyAttributes = safeDocumentAttributes(parsed.body, ["id", "lang", "dir", "class", "style"]);
-  const shellStyles = "html{height:100%;overscroll-behavior-y:contain}body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere;overscroll-behavior-y:contain}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
+  const htmlAttributes = safeDocumentAttributes(parsed.documentElement, ["lang", "dir", "class"]);
+  const bodyAttributes = safeDocumentAttributes(parsed.body, ["id", "lang", "dir", "class"]);
+  const htmlStyle = `${sanitizeCss(parsed.documentElement.getAttribute("style") ?? "")};height:100%!important;overflow:hidden!important`;
+  const bodyStyle = `${sanitizeCss(parsed.body.getAttribute("style") ?? "")};box-sizing:border-box;height:100%!important;max-height:100%;overflow-x:auto!important;overflow-y:auto!important;overscroll-behavior-y:contain!important`;
+  const shellStyles = "html{height:100%;overflow:hidden}body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
   const imageSources = allowRemoteImages ? "data: https: http:" : "data:";
   return {
-    srcDoc: `<!doctype html><html ${htmlAttributes}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body ${bodyAttributes}>${parsed.body.innerHTML}</body></html>`,
+    srcDoc: `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`,
     remoteImageCount,
   };
 }
@@ -182,7 +184,7 @@ function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }
         sandbox=""
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}
-        className="min-h-0 w-full flex-1 overscroll-contain border-0 bg-white"
+        className="h-full min-h-0 w-full flex-1 border-0 bg-white"
       />
     </div>
   );
@@ -327,7 +329,7 @@ function ConnectedMailSidebar({
             />
           </div>
         </SidebarHeader>
-        <SidebarContent className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+        <SidebarContent className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain">
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
               {error ? (
@@ -620,7 +622,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {connectionState === "checking" && connectedOverride === undefined ? (
         <main className="flex min-w-0 flex-1 items-center justify-center" aria-live="polite">
           <p className="text-sm text-muted-foreground">Checking your Gmail connection…</p>
