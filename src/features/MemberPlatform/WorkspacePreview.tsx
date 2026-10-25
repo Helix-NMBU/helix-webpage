@@ -280,26 +280,6 @@ export function TeamWorkspacePreview() {
   );
 }
 
-function ChatGPTLogo({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 32 32" fill="none" role="img" aria-label="ChatGPT">
-      <path
-        d="M16 4.25a6.1 6.1 0 0 1 5.8 4.2 6.1 6.1 0 0 1 5.45 6.95 6.1 6.1 0 0 1-3.1 7.9 6.1 6.1 0 0 1-7.83 3.26 6.1 6.1 0 0 1-7.57-3.8 6.1 6.1 0 0 1-3.9-7.52 6.1 6.1 0 0 1 4.06-7.44A6.1 6.1 0 0 1 16 4.25Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m16 4.25.05 8.05 6.96-3.85M27.25 15.4l-6.95 3.96.02 8.05M16.3 27.15l-6.96-3.9.08-8.03M4.75 15.25l6.98 3.98 6.92-3.98V7.28M9.05 8.6l6.97 4.02 6.93-4.02M7.85 23.55l-.05-8.03 6.92-4.03"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export function MemberSettingsPreview() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">("checking");
@@ -350,8 +330,8 @@ export function MemberSettingsPreview() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div id="chatgpt" className="flex flex-wrap items-center gap-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background" aria-hidden="true">
-              <ChatGPTLogo className="size-6" />
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-border">
+              <img src="/openai-logo.png" alt="ChatGPT" className="size-7 rounded-md object-contain" />
             </div>
             <div className="min-w-0 flex-1 space-y-1">
               <p className="font-medium">ChatGPT</p>
