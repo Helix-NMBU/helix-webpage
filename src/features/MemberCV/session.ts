@@ -547,10 +547,11 @@ export function googleSignInRequest(source: unknown, origin: string): {
   provider: "google";
   callbackURL: string;
   errorCallbackURL: string;
+  additionalParams: { prompt: "select_account" };
 } {
   const callbackURL = memberSignInCallbackUrl(source, origin);
   const errorCallbackURL = isMemberPlatform(origin) ? new URL(memberPaths(origin).login, origin).href : callbackURL;
-  return { provider: "google", callbackURL, errorCallbackURL };
+  return { provider: "google", callbackURL, errorCallbackURL, additionalParams: { prompt: "select_account" } };
 }
 
 export async function startGoogleSignIn(returnTo?: unknown): Promise<void> {
