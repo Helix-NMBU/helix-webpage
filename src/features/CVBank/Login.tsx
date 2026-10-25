@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Alert, AlertDescription } from "@libs/components/ui/alert";
+import { LoaderCircle } from "lucide-react";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { Button } from "@libs/components/ui/button";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { memberPaths } from "../MemberPlatform/routes";
@@ -22,6 +23,13 @@ export default function CVBankLogin() {
   const [busy, setBusy] = useState(false);
   const [frame, setFrame] = useState<MemberFrame>("loading");
   const destination = memberLoginDestination(location.state);
+  const notify = useNotify();
+  useEffect(() => {
+    if (error) notify("Could not sign in", localizeCvError(error, locale), { id: "member-sign-in", variant: "error", href: null });
+  }, [error, notify]);
+  useEffect(() => {
+    if (!memberAuthConfigured) notify("Sign-in unavailable", memberText(locale, "Member sign-in is not configured yet. Please contact Helix."), { id: "member-auth-configuration", variant: "error", href: null });
+  }, [notify]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -44,6 +52,10 @@ export default function CVBankLogin() {
       }
       setFrame(action === "form" ? "signed-out" : "loading");
       if (action === "form" && landing.error) setError(landing.error);
+    }).catch(() => {
+      if (cancelled) return;
+      setFrame("signed-out");
+      setError("Google sign-in failed. Please try again.");
     });
     return () => { cancelled = true; };
   }, [destination, location.search, navigate]);
@@ -76,23 +88,10 @@ export default function CVBankLogin() {
               <h1 id="member-login-title">{t("Log in to your account")}</h1>
               <p>{t("Sign in with your Helix account.")}</p>
             </div>
-            {memberAuthConfigured && (frame === "loading" || busy) ? (
-              <p role="status">{t("Verifying your Helix account…")}</p>
-            ) : memberAuthConfigured ? (
-              <Button type="button" variant="outline" className="member-login-google" onClick={() => void signIn()}>
-                <img src="/google-g.png" width="20" height="20" alt="" />
-                {t("Sign in with Google")}
-              </Button>
-            ) : (
-              <Alert variant="destructive" className="mcv-error">
-                <AlertDescription>{t("Member sign-in is not configured yet. Please contact Helix.")}</AlertDescription>
-              </Alert>
-            )}
-            {error && (
-              <Alert variant="destructive" className="mcv-error">
-                <AlertDescription>{localizeCvError(error, locale)}</AlertDescription>
-              </Alert>
-            )}
+            <Button type="button" variant="outline" className="member-login-google" disabled={!memberAuthConfigured || frame === "loading" || busy} onClick={() => void signIn()}>
+              {frame === "loading" || busy ? <LoaderCircle className="size-5 animate-spin" aria-hidden="true" /> : <img src="/google-g.png" width="20" height="20" alt="" />}
+              {t("Sign in with Google")}
+            </Button>
           </section>
         </div>
       </div>

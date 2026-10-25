@@ -4,6 +4,7 @@ import { Checkbox } from "@libs/components/ui/checkbox";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { FieldTranslations } from "./CvTranslations";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 import {
   Collapsible,
   CollapsibleContent,
@@ -156,6 +157,7 @@ function DateInput({
   disabled: boolean;
 }) {
   const id = useId();
+  const notify = useNotify();
   const parts = profileDateParts(value);
   const [textMode, setTextMode] = useState(parts.legacy);
   const t = (key: StaticMemberCopyKey) => memberText(locale, key);
@@ -198,7 +200,7 @@ function DateInput({
                 placeholder={key === "day" ? "DD" : key === "month" ? "MM" : "YYYY"}
                 aria-label={`${label} · ${t(key === "day" ? "Day (optional)" : key === "month" ? "Month" : "Year")}`}
                 aria-invalid={invalid && validation === key ? true : undefined}
-                aria-describedby={`${id}-note${invalid ? ` ${id}-error` : ""}`}
+                aria-describedby={`${id}-note`}
                 value={parts[key]}
                 onChange={(event) => {
                   const next = event.target.value;
@@ -206,6 +208,7 @@ function DateInput({
                     changePart(key, next);
                 }}
                 onBlur={() => {
+                  if (invalid && error) notify("Check date", `${label}: ${error}`, { id: `date-validation-${id}`, variant: "error" });
                   if (
                     key !== "year" &&
                     /^\d$/.test(parts[key]) &&
@@ -221,11 +224,6 @@ function DateInput({
               ? memberText(locale, "Current date: {date}. Enter a year to replace it.", { date: value })
               : t("Day is optional. Use day, month, year.")}
           </p>
-          {invalid && (
-            <p id={`${id}-error`} className="mcv-date-error" role="alert">
-              {error}
-            </p>
-          )}
         </>
       )}
       <Button
@@ -244,6 +242,7 @@ function DateInput({
 export function PeriodInputs({
   startDate,
   endDate,
+  endLabel,
   onChange,
   ongoingLabel,
   previousEndDate,
@@ -252,6 +251,7 @@ export function PeriodInputs({
 }: {
   startDate: string;
   endDate: string;
+  endLabel?: string;
   onChange: (key: "startDate" | "endDate", value: string) => void;
   ongoingLabel?: string;
   previousEndDate?: string;
@@ -293,7 +293,7 @@ export function PeriodInputs({
         />
         {!ongoing && (
           <DateInput
-            label={ongoingLabel ? t("End date") : t("End or expected end")}
+            label={endLabel ?? (ongoingLabel ? t("End date") : t("End or expected end"))}
             value={endDate}
             onChange={(value) => onChange("endDate", value)}
             locale={locale}

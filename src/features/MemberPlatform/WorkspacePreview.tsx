@@ -11,15 +11,6 @@ import {
   CardTitle,
 } from "@libs/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@libs/components/ui/dialog";
-import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
@@ -50,6 +41,15 @@ import {
   getCachedGmailConnection,
   setCachedGmailConnection,
 } from "./gmail-session-cache";
+import { useNotify } from "./MemberNotifications";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@libs/components/ui/dialog";
 
 const suggestions = [
   "Summarize Helix team updates",
@@ -210,9 +210,6 @@ export function WorkspaceHomePreview() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5 text-sm">
-        <span className="text-muted-foreground">
-          ChatGPT is not connected
-        </span>
         <Button asChild variant="ghost" size="sm">
           <Link to="/settings#chatgpt">
             AI settings
@@ -286,10 +283,10 @@ export function TeamWorkspacePreview() {
 }
 
 export function MemberSettingsPreview() {
-  const [connectionOpen, setConnectionOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const notify = useNotify();
   const account = useMemberAccount();
   const accountEmail = account?.email ?? "";
   const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">(() => {
@@ -375,28 +372,9 @@ export function MemberSettingsPreview() {
               <p className="font-medium">ChatGPT</p>
               <p className="text-sm text-muted-foreground">Not connected</p>
             </div>
-            <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline">Connect</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Connect your ChatGPT account</DialogTitle>
-                  <DialogDescription>
-                    Manage the ChatGPT account used with the Helix assistant.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3 py-2 text-sm">
-                  <p className="text-muted-foreground">
-                    ChatGPT connections are currently unavailable. Please try
-                    again later.
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button onClick={() => setConnectionOpen(false)}>Close</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button size="sm" variant="outline" onClick={() => notify("Connection unavailable", "ChatGPT connections are currently unavailable. Please try again later.", { id: "chatgpt-connection", variant: "info", href: "/settings#chatgpt" })}>
+              Connect ChatGPT
+            </Button>
           </div>
           <Separator />
           <div className="flex flex-wrap items-center gap-3">

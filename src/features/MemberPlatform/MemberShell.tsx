@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@libs/components/ui/sidebar";
-import { Alert, AlertDescription } from "@libs/components/ui/alert";
+import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
@@ -27,7 +27,7 @@ function Workspace({ children }: { children: ReactNode }) {
   const { setOpenMobile, isMobile } = useSidebar();
   const navigation = useMemberNavigation();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const notify = useNotify();
   const profile = location.pathname === "/profile";
   const mail = location.pathname.startsWith("/mail");
   const page = previewPage(location.pathname);
@@ -58,12 +58,11 @@ function Workspace({ children }: { children: ReactNode }) {
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       await signOutMember();
       navigate("/login", { replace: true });
     } catch {
-      setError("Could not sign out. Please try again.");
+      notify("Could not sign out", "Please try again.", { variant: "error", href: null });
       setBusy(false);
     }
   }
@@ -78,11 +77,6 @@ function Workspace({ children }: { children: ReactNode }) {
       <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : ""}`}>
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-            {error && (
-              <Alert variant="destructive" className="m-4 mb-0">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
             {children}
           </div>
         ) : (
@@ -121,11 +115,6 @@ function Workspace({ children }: { children: ReactNode }) {
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
               {children}
             </div>
           </>

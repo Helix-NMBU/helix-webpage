@@ -63,6 +63,7 @@ describe("member page landing", () => {
   let releaseSession: (value: { data: { user: { id: string } } }) => void;
 
   beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     clearMemberLanding();
     posts = 0;
     releaseSession = () => undefined;
@@ -104,7 +105,9 @@ describe("member page landing", () => {
     expect(auth.getSession).toHaveBeenCalledTimes(1);
     expect(window.location.search).not.toContain("neon_auth_session_verifier");
     expect(posts).toBe(0);
-    expect(container.textContent).toContain("Verifying your Helix account…");
+    expect(container.querySelector(".mcv-notice")).toBeNull();
+    const signOut = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Sign out");
+    expect(signOut?.disabled).toBe(true);
     expect(container.textContent).not.toContain("Sign in with Google");
 
     await act(async () => {

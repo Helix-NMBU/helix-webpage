@@ -6,10 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNotificationsPage, MemberNotificationsProvider, useMemberNotifications } from "./MemberNotifications";
 
+const retry = vi.fn();
 function SendNotification() {
   const notifications = useMemberNotifications();
   const sequence = useRef(0);
-  return <><button onClick={() => notifications?.notify(`CV update ${++sequence.current}`, "Your CV visibility changed.")}>Publish CV</button><output>{notifications?.unread} unread</output></>;
+  return <>
+    <button onClick={() => notifications?.notify(`CV update ${++sequence.current}`, "Your CV visibility changed.")}>Publish CV</button>
+    <button onClick={() => notifications?.notify("Save delayed", "Try again.", { id: "save-status", variant: "warning", href: null, action: { label: "Retry", onClick: retry } })}>Warn</button>
+    <button onClick={() => notifications?.notify("Save failed", "Your input has been kept.", { id: "save-status", variant: "error", href: null, action: { label: "Retry", onClick: retry } })}>Fail</button>
+    <output>{notifications?.unread} unread</output>
+  </>;
 }
 
 describe("member notifications", () => {
@@ -17,6 +23,7 @@ describe("member notifications", () => {
   let container: HTMLDivElement;
   let router: ReturnType<typeof createMemoryRouter>;
   beforeEach(() => {
+    retry.mockReset();
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = document.createElement("div");
     document.body.append(container);
@@ -32,7 +39,12 @@ describe("member notifications", () => {
     await act(async () => root.render(<MemberThemeProvider><MemberNotificationsProvider key={member}><SendNotification /><RouterProvider router={router} /></MemberNotificationsProvider></MemberThemeProvider>));
   }
   const button = (name: string) => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === name)!;
-  async function click(name: string) { await act(async () => button(name).click()); }
+  async function click(name: string) {
+    await act(async () => {
+      button(name).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
   async function openNotifications(count: number) {
     await render();
     for (let i = 0; i < count; i++) await click("Publish CV");
@@ -92,5 +104,21 @@ describe("member notifications", () => {
     await act(async () => router.navigate("/notifications"));
     expect(rows()).toHaveLength(0);
     expect(container.textContent).toContain("You're all caught up");
+  });
+  it("updates recurring status notifications and keeps recovery actions in the popup and feed", async () => {
+    await render();
+    await click("Warn");
+    expect(container.querySelector('[data-sonner-toast]')?.getAttribute("data-type")).toBe("warning");
+    await click("Fail");
+    expect(container.querySelector("output")?.textContent).toBe("1 unread");
+    const popup = container.querySelector('[data-sonner-toast][data-type="error"]');
+    expect(popup?.textContent).toContain("Save failed");
+    await act(async () => popup?.querySelector<HTMLButtonElement>('[data-button]')?.click());
+    expect(retry).toHaveBeenCalledOnce();
+    await act(async () => router.navigate("/notifications"));
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0].textContent).toContain("Your input has been kept.");
+    await act(async () => rows()[0].querySelector<HTMLButtonElement>('button:not([role="checkbox"])')?.click());
+    expect(retry).toHaveBeenCalledTimes(2);
   });
 });

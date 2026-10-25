@@ -8,24 +8,44 @@ import { Card, CardContent } from "@libs/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { useMemberTheme } from "./MemberTheme";
 
-type MemberNotification = { id: string; title: string; description: string; createdAt: string };
+type NotificationOptions = {
+  id?: string;
+  variant?: "success" | "info" | "warning" | "error";
+  action?: { label: string; onClick: () => void };
+  href?: string | null;
+};
+type MemberNotification = NotificationOptions & { id: string; title: string; description: string; createdAt: string };
+type Notify = (title: string, description: string, options?: NotificationOptions) => void;
 type NotificationsContextValue = {
   items: MemberNotification[];
   unread: number;
-  notify: (title: string, description: string) => void;
+  notify: Notify;
   markRead: (ids: readonly string[]) => void;
 };
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
-/** Session-scoped messages. Remount this provider when the verified member changes. */
-export function MemberNotificationsProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<MemberNotification[]>([]);
-  const toastIds = useRef<(string | number)[]>([]);
+function showNotification(title: string, description: string, options: NotificationOptions = {}) {
+  return toast[options.variant ?? "success"](title, {
+    id: options.id,
+    description,
+    duration: options.variant === "error" || options.variant === "warning" ? 8000 : 5000,
+    action: options.action,
+  });
+}
+
+export function MemberNotificationToaster() {
   const { theme } = useMemberTheme();
-  const notify = useCallback((title: string, description: string) => {
-    const notification = { id: crypto.randomUUID(), title, description, createdAt: new Date().toISOString() };
-    setItems((previous) => [notification, ...previous].slice(0, 50));
-    toastIds.current.push(toast.success(title, { description, duration: 5000 }));
+  return <Toaster theme={theme} position="top-right" closeButton />;
+}
+
+/** Session-scoped messages. Remount this provider when the verified member changes. */
+export function MemberNotificationsProvider({ children, renderToaster = true }: { children: ReactNode; renderToaster?: boolean }) {
+  const [items, setItems] = useState<MemberNotification[]>([]);
+  const toastIds = useRef(new Set<string | number>());
+  const notify = useCallback<Notify>((title, description, options = {}) => {
+    const notification = { href: "/profile", ...options, id: options.id ?? crypto.randomUUID(), title, description, createdAt: new Date().toISOString() };
+    setItems((previous) => [notification, ...previous.filter((item) => item.id !== notification.id)].slice(0, 50));
+    toastIds.current.add(showNotification(title, description, { ...options, id: notification.id }));
   }, []);
   const markRead = useCallback((ids: readonly string[]) => {
     const selected = new Set(ids);
@@ -34,11 +54,17 @@ export function MemberNotificationsProvider({ children }: { children: ReactNode 
   useEffect(() => () => { toastIds.current.forEach((id) => toast.dismiss(id)); }, []);
   return <NotificationsContext.Provider value={{ items, unread: items.length, notify, markRead }}>
     {children}
-    <Toaster theme={theme} position="top-right" closeButton />
+    {renderToaster && <MemberNotificationToaster />}
   </NotificationsContext.Provider>;
 }
 
 export function useMemberNotifications() { return useContext(NotificationsContext); }
+
+/** Also supports sign-in and access errors before a member has been verified. */
+export function useNotify(): Notify {
+  const notifications = useMemberNotifications();
+  return notifications?.notify ?? showNotification;
+}
 
 export function MemberNotificationsPage() {
   const notifications = useMemberNotifications();
@@ -78,7 +104,8 @@ export function MemberNotificationsPage() {
         <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-4">
         <div className="min-w-0 space-y-1"><h2 className="text-sm font-medium">{item.title}</h2><p className="text-sm text-muted-foreground">{item.description}</p>
           <time className="block text-xs text-muted-foreground" dateTime={item.createdAt}>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</time></div>
-        <Button variant="outline" size="sm" onClick={() => navigate("/profile")}>View profile</Button>
+        {item.action ? <Button variant="outline" size="sm" onClick={item.action.onClick}>{item.action.label}</Button>
+          : item.href && <Button variant="outline" size="sm" onClick={() => navigate(item.href!)}>{item.href === "/profile" ? "View profile" : "View"}</Button>}
         </div>
       </article>)}
     </CardContent></Card></> : <Empty className="min-h-72 border border-solid"><EmptyHeader><EmptyTitle>You're all caught up</EmptyTitle><EmptyDescription>Your notifications will appear here.</EmptyDescription></EmptyHeader></Empty>}
