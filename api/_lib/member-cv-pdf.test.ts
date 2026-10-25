@@ -78,6 +78,21 @@ function sample(): CvData {
 }
 
 describe("generated member CV PDFs", () => {
+  it("renders the selected language, manual translations and privacy choices into the actual PDF", async () => {
+    const cv = { ...emptyCv("Alex", "alex@example.invalid"), cvLanguage: "nb" as const,
+      phone: "+47 12345678", headline: "Maskiningeniørstudent", summary: "Utvikler hjuloppheng.",
+      education: [{ id: "e", institution: "NMBU", degree: "Maskinteknikk", startDate: "2023", endDate: "2028", description: "Mekanikk." }],
+      translations: { en: { headline: "Mechanical engineering student", summary: "Developing suspension.", "education:e:degree": "Mechanical engineering" } },
+    };
+    const english = await inspect(await generateCvPdf(cv, { cv: true, email: false, phone: false }, "en"));
+    expect(english.pdf.catalog.get(PDFName.of("Lang"))?.toString()).toBe("(en-GB)");
+    for (const value of ["Education", "Mechanical engineering student", "Developing suspension.", "Mechanical engineering"]) expect(english.text).toContain(value);
+    for (const value of ["Utdanning", "Maskiningeniørstudent", "alex@example.invalid", "+47 12345678"]) expect(english.text).not.toContain(value);
+    const norwegian = await inspect(await generateCvPdf(cv, shared, "nb"));
+    expect(norwegian.pdf.catalog.get(PDFName.of("Lang"))?.toString()).toBe("(nb-NO)");
+    for (const value of ["Utdanning", "Maskiningeniørstudent", "Utvikler hjuloppheng.", "Maskinteknikk", "alex@example.invalid", "+47 12345678"]) expect(norwegian.text).toContain(value);
+  });
+
   it("renders all fields and sections with Norwegian and other supported letters", async () => {
     const { pdf, text, urls } = await inspect(await generateCvPdf(sample(), shared));
     // The reference's larger name, section rules and generous spacing place
@@ -117,7 +132,7 @@ describe("generated member CV PDFs", () => {
     Object.assign(cv.experience[0], { employmentType: "Part-time", location: "Trondheim", locationType: "Hybrid", startDate: "2025-06", endDate: "Present" });
     Object.assign(cv.projects[0], { startDate: "2026-08", endDate: "Present" });
     const { pdf, text } = await inspect(await generateCvPdf(validateCvData(cv, true), { cv: true, email: false, phone: false }));
-    for (const expected of ["Studieretning: Autonom styring", "Karakter: A / 4.5", "Aktiviteter: Studentforening for robotikk", "Part-time | Trondheim | Hybrid", "06.2025 - Nå", "S27 | 08.2026 - Nå"]) expect(text).toContain(expected);
+    for (const expected of ["Studieretning: Autonom styring", "Karakter: A / 4.5", "Aktiviteter: Studentforening for robotikk", "Deltid | Trondheim | Hybrid", "06.2025 - Nå", "S27 | 08.2026 - Nå"]) expect(text).toContain(expected);
     expect(text).not.toContain(cv.contactEmail);
     expect(text).not.toContain(cv.phone);
     expect(pdf.getTitle()).not.toContain(cv.contactEmail);
@@ -147,7 +162,7 @@ describe("generated member CV PDFs", () => {
     cv.projects = [{ id: "p", name: "", role: "", season: "", description: "", url: "", startDate: "2026", endDate: "Present" }];
     const { pdf, text } = await inspect(await generateCvPdf(validateCvData(cv), shared));
     expect(pdf.getPageCount()).toBeGreaterThan(1);
-    for (const expected of ["Utdanning", "Aktiviteter:", "AKTIVITETSSLUTT", "Erfaring", "Internship | Ås | Remote", "Prosjekter", "2026 - Nå"]) expect(text).toContain(expected);
+    for (const expected of ["Utdanning", "Aktiviteter:", "AKTIVITETSSLUTT", "Erfaring", "Praksis | Ås | Fjernarbeid", "Prosjekter", "2026 - Nå"]) expect(text).toContain(expected);
     expect(text.match(/Deltok i studentforening\./g)).toHaveLength(100);
     expect(text).not.toContain("undefined");
   });
@@ -187,7 +202,7 @@ describe("generated member CV PDFs", () => {
     const original = structuredClone(cv);
     const { text, urls } = await inspect(await generateCvPdf(validateCvData(cv, true), { cv: true, email: false, phone: false }));
     expect(text.match(/^Helix NMBU$/gm)).toHaveLength(1);
-    for (const expected of ["Erfaring", "Gruppeleder", "Gruppemedlem", "01.08.2026 - Nå", "08.2025 - 06.2026", "Ledet testarbeidet.", "Målte sensorrespons.", "Avdeling: Elektronikk | Sesong: S27", "Part-time | Ås | On-site", "https://example.com/elektronikk", "Prosjekter", "Testansvarlig", "Prøvde sensorer og dokumenterte resultater."]) expect(text.replace(/\n/g, " ")).toContain(expected);
+    for (const expected of ["Erfaring", "Gruppeleder", "Gruppemedlem", "01.08.2026 - Nå", "08.2025 - 06.2026", "Ledet testarbeidet.", "Målte sensorrespons.", "Avdeling: Elektronikk | Sesong: S27", "Deltid | Ås | På arbeidsplassen", "https://example.com/elektronikk", "Prosjekter", "Testansvarlig", "Prøvde sensorer og dokumenterte resultater."]) expect(text.replace(/\n/g, " ")).toContain(expected);
     expect(text.indexOf("Gruppeleder")).toBeLessThan(text.indexOf("Gruppemedlem"));
     expect(text.indexOf("Gruppemedlem")).toBeLessThan(text.indexOf("Prosjekter"));
     expect(text).not.toContain("Helix og prosjekter");

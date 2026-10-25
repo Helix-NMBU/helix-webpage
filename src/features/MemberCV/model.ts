@@ -1,4 +1,5 @@
 import type { CvData, CvSharing } from "./types.js";
+import { validateTranslations } from "./translations.js";
 
 export function emptyCv(fullName = "", contactEmail = ""): CvData {
   return { fullName, contactEmail, phone: "", city: "", headline: "", summary: "", fieldOfStudy: "", graduationYear: "", education: [], experience: [], projects: [], skills: [], languages: [], links: [] };
@@ -75,6 +76,15 @@ export function validateCvData(value: unknown, forPublication = false): CvData {
   if (result.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(result.contactEmail)) throw new Error("Enter a valid contact email.");
   if (result.graduationYear && !/^(19|20|21)\d{2}$/.test(result.graduationYear)) throw new Error("Enter a four-digit graduation year.");
   if (forPublication && (!result.fullName || !result.education.some((e) => e.institution && e.degree))) throw new Error("Add your name and an education entry with institution and degree before publishing.");
+  if (row.cvLanguage !== undefined) {
+    if (row.cvLanguage !== "en" && row.cvLanguage !== "nb") throw new Error("Invalid CV data.");
+    result.cvLanguage = row.cvLanguage;
+  }
+  if (row.cvRegistered !== undefined) {
+    if (typeof row.cvRegistered !== "boolean") throw new Error("Invalid CV data.");
+    result.cvRegistered = row.cvRegistered;
+  }
+  if (row.translations !== undefined) result.translations = validateTranslations(row.translations, result);
   return result;
 }
 

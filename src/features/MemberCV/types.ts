@@ -3,15 +3,20 @@ export type CvExperience = { id: string; organization: string; title: string; st
 export type CvProject = { id: string; name: string; role: string; season: string; description: string; url: string; startDate?: string; endDate?: string };
 export type CvLanguage = { id: string; name: string; level: string };
 export type CvLink = { id: string; label: string; url: string };
+export type CvOutputLanguage = "en" | "nb";
+export type CvTranslations = Partial<Record<CvOutputLanguage, Record<string, string>>>;
 export type CvData = {
   fullName: string; contactEmail: string; phone: string; city: string; headline: string; summary: string;
   fieldOfStudy: string; graduationYear: string;
   references?: string;
+  cvLanguage?: CvOutputLanguage;
+  cvRegistered?: boolean;
+  translations?: CvTranslations;
   education: CvEducation[]; experience: CvExperience[]; projects: CvProject[];
   skills: string[]; languages: CvLanguage[]; links: CvLink[];
 };
 export type CvSharing = { cv: boolean; email: boolean; phone: boolean };
-export type CvRecord = { draft: CvData; sharing: CvSharing; revision: number; publishedRevision: number | null; publishedAt: string | null };
+export type CvRecord = { draft: CvData; sharing: CvSharing; revision: number; publishedRevision: number | null; publishedAt: string | null; cvVisible?: boolean };
 export type CvEnvelope = { document: CvRecord; identity: { email: string; name: string; helixRole?: string | null }; cleanupPending?: boolean };
-export type CvMutation = { action: "save" | "publish" | "withdraw" | "preview"; draft?: CvData; sharing?: CvSharing; expectedRevision?: number };
-export type PdfRenderer = (data: CvData, sharing: CvSharing) => Promise<Uint8Array>;
+export type CvMutation = { action: "save" | "publish" | "withdraw" | "preview"; draft?: CvData; sharing?: CvSharing; expectedRevision?: number; language?: CvOutputLanguage };
+export type PdfRenderer = (data: CvData, sharing: CvSharing, language?: CvOutputLanguage) => Promise<Uint8Array>;

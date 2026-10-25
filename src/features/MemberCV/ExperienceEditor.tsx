@@ -11,19 +11,21 @@ import { groupExperience } from "./experience";
 import { memberText, type MemberLocale } from "./locale";
 import type { CvExperience } from "./types";
 import { currentPeriod } from "./profile-inputs";
+import { FieldTranslations } from "./CvTranslations";
 
 type ExperienceField = Exclude<keyof CvExperience, "id">;
 
-function TextField({ label, value, onChange, maxLength = 500, disabled }: {
+function TextField({ label, value, onChange, maxLength = 500, disabled, translationKey }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   maxLength?: number;
   disabled: boolean;
+  translationKey?: string;
 }) {
   const id = useId();
   return <div className="mcv-field">
-    <Label htmlFor={id}>{label}</Label>
+    <div className="flex items-center justify-between gap-2"><Label htmlFor={id}>{label}</Label><FieldTranslations path={translationKey} label={label} value={value} maxLength={maxLength} /></div>
     <Input id={id} value={value} maxLength={maxLength} disabled={disabled}
       onChange={(event) => onChange(event.target.value)} />
   </div>;
@@ -46,8 +48,8 @@ function RoleDetails({ role, locale, disabled, onChange }: {
     </CollapsibleTrigger>
     <CollapsibleContent forceMount className="mcv-role-details-content" aria-hidden={!open}>
       <div className="mcv-grid">
-        <TextField label={t("Department")} disabled={disabled} value={role.department ?? ""} onChange={(value) => onChange("department", value)} />
-        <TextField label={t("Season")} disabled={disabled} value={role.season ?? ""} maxLength={30} onChange={(value) => onChange("season", value)} />
+        <TextField label={t("Department")} translationKey={`experience:${role.id}:department`} disabled={disabled} value={role.department ?? ""} onChange={(value) => onChange("department", value)} />
+        <TextField label={t("Season")} translationKey={`experience:${role.id}:season`} disabled={disabled} value={role.season ?? ""} maxLength={30} onChange={(value) => onChange("season", value)} />
         <TextField label={t("Role link")} disabled={disabled} value={role.url ?? ""} maxLength={2000} onChange={(value) => onChange("url", value)} />
       </div>
     </CollapsibleContent>
@@ -141,19 +143,19 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
                 }}>{memberText(locale, "Remove")}</Button>
             </div>
             <div className="mcv-grid">
-              <TextField label={memberText(locale, "Job title")} disabled={disabled} value={role.title} onChange={(value) => change("title", value)} />
-              <TextField label={memberText(locale, "Company or organisation")} disabled={disabled} value={role.organization}
+              <TextField label={memberText(locale, "Job title")} translationKey={`experience:${role.id}:title`} disabled={disabled} value={role.title} onChange={(value) => change("title", value)} />
+              <TextField label={memberText(locale, "Company or organisation")} translationKey={`experience:${role.id}:organization`} disabled={disabled} value={role.organization}
                 onChange={(value) => change("organization", value)} />
-              <ChoiceInput label={memberText(locale, "Employment type")} value={role.employmentType ?? ""} options={employmentTypes}
+              <ChoiceInput label={memberText(locale, "Employment type")} translationKey={`experience:${role.id}:employmentType`} value={role.employmentType ?? ""} options={employmentTypes}
                 locale={locale} disabled={disabled} onChange={(value) => change("employmentType", value)} />
-              <TextField label={memberText(locale, "Location")} disabled={disabled} value={role.location ?? ""} onChange={(value) => change("location", value)} />
-              <ChoiceInput label={memberText(locale, "Location type")} value={role.locationType ?? ""} options={locationTypes}
+              <TextField label={memberText(locale, "Location")} translationKey={`experience:${role.id}:location`} disabled={disabled} value={role.location ?? ""} onChange={(value) => change("location", value)} />
+              <ChoiceInput label={memberText(locale, "Location type")} translationKey={`experience:${role.id}:locationType`} value={role.locationType ?? ""} options={locationTypes}
                 locale={locale} disabled={disabled} onChange={(value) => change("locationType", value)} />
               <PeriodInputs startDate={role.startDate} endDate={role.endDate} locale={locale} disabled={disabled}
                 previousEndDate={previousEndDates.current.get(role.id)}
                 ongoingLabel={memberText(locale, "I currently work here")} onChange={change} />
               <div className="mcv-field mcv-full">
-                <Label htmlFor={`${id}-${role.id}-description`}>{memberText(locale, "Description")}</Label>
+                <div className="flex items-center justify-between gap-2"><Label htmlFor={`${id}-${role.id}-description`}>{memberText(locale, "Description")}</Label><FieldTranslations path={`experience:${role.id}:description`} label="Description" value={role.description} maxLength={8000} /></div>
                 <Textarea id={`${id}-${role.id}-description`} rows={4} value={role.description} maxLength={8000} disabled={disabled}
                   onChange={(event) => change("description", event.target.value)} />
               </div>

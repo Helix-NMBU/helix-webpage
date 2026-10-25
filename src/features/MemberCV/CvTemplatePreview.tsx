@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { localizedCv } from "./translations";
 import { sharedCvData } from "./model";
 import { groupExperience } from "./experience";
 import { memberText, type MemberLocale, type StaticMemberCopyKey } from "./locale";
@@ -24,7 +25,7 @@ function SafeLink({ value, label }: { value: string; label?: string }) {
 /** The document preview uses authored content and the same contact redaction as PDF export. */
 export function CvTemplatePreview({ data, sharing, locale }: { data: CvData; sharing: CvSharing; locale: MemberLocale }) {
   const id = useId();
-  const cv = sharedCvData(data, sharing);
+  const cv = localizedCv(sharedCvData(data, sharing), locale);
   const t = (key: StaticMemberCopyKey) => memberText(locale, key);
   const choice = (value: string | undefined, options: readonly StaticMemberCopyKey[]) =>
     value && options.includes(value as StaticMemberCopyKey) ? t(value as StaticMemberCopyKey) : value;

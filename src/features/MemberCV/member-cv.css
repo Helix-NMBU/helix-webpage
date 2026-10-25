@@ -102,10 +102,10 @@
   font-size: 17px;
   line-height: 1.6;
 }
-.mcv-page button:not([data-slot="checkbox"]):not(.mcv-profile-edit),
+.mcv-page button:not([data-slot="checkbox"]):not(.mcv-profile-edit):not(.cv-control),
 .mcv-page .mcv-header-button,
 .mcv-page .mcv-demo-button,
-.mcv-dialog button:not([data-slot="checkbox"]):not(.mcv-profile-edit) {
+.mcv-dialog button:not([data-slot="checkbox"]):not(.mcv-profile-edit):not(.cv-control) {
   min-height: 44px;
   height: auto;
   border-radius: 12px;
@@ -481,7 +481,7 @@
   font-display: swap;
 }
 .mcv-template-document {
-  --cv-blue: var(--primary, #002ec4);
+  --cv-blue: #002ec4;
   width: 100%;
   max-width: 740px;
   min-width: 0;
@@ -1309,4 +1309,16 @@
 body:has(.mcv-profile) button[aria-label="Scroll to top"] {
   background: #002ec4;
   color: #fff;
+}
+
+/* The CV editor uses the same shadcn controls as the member platform. */
+.mcv-wizard { font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif; }
+.mcv-wizard .mcv-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "editor"; }
+.mcv-wizard .mcv-card { padding: 20px; border-radius: var(--radius-xl); }
+.mcv-wizard .mcv-card h2 { font-size: 16px; font-weight: 500; }
+.mcv-wizard .mcv-field, .mcv-wizard .mcv-field [data-slot="label"] { color: var(--foreground); }
+.mcv-wizard .mcv-field input, .mcv-wizard .mcv-field textarea { border-radius: var(--radius-md); }
+.mcv-wizard .cv-translations-trigger { height: 24px; padding: 0 6px; font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+@media (max-width: 640px) {
+  .mcv-wizard .mcv-card { padding: 16px; }
 }

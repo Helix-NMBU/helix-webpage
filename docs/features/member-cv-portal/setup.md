@@ -81,6 +81,16 @@ The sign-in and CV responses read this value from the server-verified member row
 
 The profile card's Edit modal changes the CV draft's name, phone number, field of study and graduation year. It uses the existing revision-checked private save, preserving other draft data and the current published version.
 
+## CV setup and language output
+
+The profile page shows the member card followed by a CV entry. Setup and Edit use a modal with clickable Introduction, Education, Experience, Projects, Languages, Links, and Review & sharing steps. Autosave keeps unfinished work private. `cvRegistered: false` keeps a new draft in the empty state until the member finishes setup. Older drafts with CV content remain accessible without this flag.
+
+`cvLanguage` is `nb` or `en`. Free-text translations are stored in `draft.translations` by language and stable field path, such as `education:{entryId}:degree`. Each translatable field opens a Translations popover for the other language. Missing translations fall back to the original text. Changing the original language preserves the previous version. Validation accepts only Norwegian and English, enforces the original field limits, and ignores obsolete or protected field paths. These optional JSON properties need no database migration.
+
+The preview document uses the selected language and current sharing choices. The download icon always generates Norwegian; its shadcn DropdownMenu offers Norwegian and English. Browser development mode and the authenticated API use the same PDF renderer. PDF generation and fonts load on demand in the browser. The HTML document preview works in browsers without an embedded PDF viewer; its layout can flow differently from PDF pagination.
+
+The CV entry's directory switch publishes the current CV with CV sharing enabled, or withdraws the published profile. Name and education requirements still apply to publication. The API returns `cvVisible` from the actual published revision and file path; draft edits do not change it. Email and phone sharing retain their separate choices. Later edits stay private until the member publishes the new version in Review & sharing.
+
 ## Files
 
 The bucket `member-cvs` is private. The server uploads only generated PDFs (`application/pdf`, `%PDF-` header, at most 5 MB) under `{memberId}/{uuid}.pdf`. `GET /api/member-cv-file` checks the session and returns a presigned GET that lasts 120 seconds, and only for the caller's current published path. Preview (`POST /api/member-cv` with `action=preview`) returns PDF bytes and does not write storage.

@@ -15,10 +15,13 @@ import {
   createCvRepository,
   CvRequestError,
 } from "./repository";
-import type { CvData, CvEnvelope, CvExperience, CvMutation, CvSharing } from "./types";
+import type { CvData, CvEnvelope, CvExperience, CvMutation, CvSharing, CvOutputLanguage } from "./types";
 import { classifyCvRequestFailure, createPrivateAutosave, cvSnapshotKey, type CvAutosaveState } from "./autosave";
 import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
+import { ButtonGroup } from "@libs/components/ui/button-group";
+import { Switch } from "@libs/components/ui/switch";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { Input } from "@libs/components/ui/input";
 import { Textarea } from "@libs/components/ui/textarea";
 import {
@@ -35,7 +38,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@libs/components/ui/collapsible";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Download, Eye } from "lucide-react";
 import { ChoiceInput, OptionalGradeInput, PeriodInputs } from "./ProfileInputs";
 import {
   employmentTypes,
@@ -43,9 +46,8 @@ import {
   languageLevels,
 } from "./profile-inputs";
 import { Alert, AlertDescription } from "@libs/components/ui/alert";
-import { Badge } from "@libs/components/ui/badge";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@libs/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import {
   Dialog,
   DialogClose,
@@ -56,12 +58,11 @@ import {
   DialogTitle,
 } from "@libs/components/ui/dialog";
 import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
-import { SectionNavigation } from "./SectionNavigation";
 import { ExperienceEditor } from "./ExperienceEditor";
-import { CvTemplatePreview } from "./CvTemplatePreview";
 import { OptionalReferencesInput } from "./OptionalReferencesInput";
 import { moveProjectRoleToExperience } from "./experience";
-import { getSectionStatuses } from "./section-status";
+import { changeCvLanguage, hasRegisteredCv } from "./translations";
+import { CvTranslationsProvider, FieldTranslations } from "./CvTranslations";
 import {
   useMemberLocale,
   memberText,
@@ -72,13 +73,28 @@ import { memberPaths } from "../MemberPlatform/routes";
 import { useMemberAccount } from "../MemberPlatform/MemberAccountContext";
 import { accountInitials } from "../MemberPlatform/account";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
-import { EditProfileDialog, type ProfileDetails } from "./EditProfileDialog";
+import { CvTemplatePreview } from "./CvTemplatePreview";
+import { EditProfileDialog } from "./EditProfileDialog";
 import { useMemberNavigation, type MemberEditorActions } from "../MemberPlatform/MemberNavigation";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
 import "./member-cv.css";
 
 type Row = { id: string; [key: string]: string | undefined };
+const cvSteps = [
+  { id: "intro", label: "Introduction" }, { id: "education", label: "Education" },
+  { id: "experience", label: "Experience" }, { id: "projects", label: "Projects" },
+  { id: "languages", label: "Languages" },
+  { id: "links", label: "Links" }, { id: "review", label: "Review & sharing" },
+] as const;
+type CvStep = typeof cvSteps[number]["id"];
+
+function CvLanguageSelect({ value, onChange, label, disabled }: { value: CvOutputLanguage; onChange: (language: CvOutputLanguage) => void; label: string; disabled?: boolean }) {
+  return <Select value={value} onValueChange={(next) => onChange(next as CvOutputLanguage)} disabled={disabled}>
+    <SelectTrigger aria-label={label} className="cv-control w-36"><SelectValue /></SelectTrigger>
+    <SelectContent><SelectItem value="en">English</SelectItem><SelectItem value="nb">Norwegian</SelectItem></SelectContent>
+  </Select>;
+}
 type FieldDefinition = {
   key: string;
   label: StaticMemberCopyKey;
@@ -198,6 +214,7 @@ function Field({
   maxLength = 500,
   placeholder,
   type = "text",
+  translationKey,
 }: {
   label: string;
   value: string;
@@ -206,11 +223,12 @@ function Field({
   maxLength?: number;
   placeholder?: string;
   type?: string;
+  translationKey?: string;
 }) {
   const id = useId();
   return (
     <div className={multiline ? "mcv-field mcv-full" : "mcv-field"}>
-      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center justify-between gap-2"><Label htmlFor={id}>{label}</Label><FieldTranslations path={translationKey} label={label} value={value} maxLength={multiline && maxLength === 500 ? 8000 : maxLength} /></div>
       {multiline ? (
         <Textarea
           id={id}
@@ -315,21 +333,20 @@ export default function MemberCV() {
   const editorActions = useRef<MemberEditorActions | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const [profileTab, setProfileTab] = useState("profile");
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState<CvStep>("intro");
+  const [outputLanguage, setOutputLanguage] = useState<CvOutputLanguage>("en");
   const demo =
     import.meta.env.DEV &&
     (isLocalMemberMode() || new URLSearchParams(location.search).get("demo") === "1");
   const sharingId = useId();
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    contact: true,
-  });
   function sectionProps(id: string) {
     return {
       id,
       locale,
-      open: openSections[id] ?? false,
-      onOpenChange: (open: boolean) =>
-        setOpenSections((previous) => ({ ...previous, [id]: open })),
+      open: true,
+      expandable: false,
+      onOpenChange: () => undefined,
     };
   }
   const boundUserId = useRef<string | null>(null);
@@ -385,10 +402,12 @@ export default function MemberCV() {
   const [ended, setEnded] = useState(false);
   const [preview, setPreview] = useState<{
     url?: string;
+    language: CvOutputLanguage;
     draft: CvData;
     sharing: CvSharing;
   } | null>(null);
   const previewUrl = useRef<string | null>(null);
+  const previewGeneration = useRef(0);
   const generation = useRef(0);
   const autosave = useRef<ReturnType<typeof createPrivateAutosave> | null>(null);
   const acknowledgedInput = useRef<string | null>(null);
@@ -400,8 +419,11 @@ export default function MemberCV() {
   useEffect(() => {
     const section = location.hash.replace(/^#mcv-/, "");
     if (!editorLoaded || !["contact", "education", "experience", "projects", "languages", "links", "sharing", "publication"].includes(section)) return;
-    setProfileTab(section === "contact" ? "profile" : "cv");
-    setOpenSections((previous) => ({ ...previous, [section]: true }));
+    if (section !== "contact") {
+      setDraft((previous) => previous && !hasRegisteredCv(previous) ? { ...previous, cvRegistered: false, cvLanguage: previous.cvLanguage ?? "nb" } : previous);
+      setSetupOpen(true);
+      setWizardStep(cvSteps.some((step) => step.id === section) ? section as CvStep : "review");
+    }
     const frame = requestAnimationFrame(() => {
       document.getElementById(`mcv-${section}-title`)?.focus({ preventScroll: true });
       document.getElementById(`mcv-${section}`)?.scrollIntoView({ block: "start", behavior: "instant" });
@@ -426,6 +448,7 @@ export default function MemberCV() {
   );
 
   function clearPreview() {
+    previewGeneration.current++;
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = null;
     setPreview(null);
@@ -579,14 +602,16 @@ export default function MemberCV() {
     action: CvMutation["action"],
     download = false,
     opener?: HTMLElement,
-    profileChanges?: ProfileDetails,
+    profileChanges?: Partial<CvData>,
+    language: CvOutputLanguage = outputLanguage,
+    sharingChanges?: Partial<CvSharing>,
   ) {
     if (!draft || !envelope || busy || ended || manualOperation.current) return;
     const current = generation.current;
     const controller = autosave.current;
     manualOperation.current = true;
     controller?.setBlocked(true);
-    if (action === "preview" && !download)
+    if (action === "preview" && !download && !preview)
       previewOpener.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     setBusy(action);
     setNotice("");
@@ -603,32 +628,32 @@ export default function MemberCV() {
       }
       const live = latestInput.current;
       if (!live.draft) return;
-      const submitted = { draft: structuredClone({ ...live.draft, ...profileChanges }), sharing: { ...live.sharing } };
+      const submitted = { draft: structuredClone({ ...live.draft, ...profileChanges }), sharing: { ...live.sharing, ...sharingChanges } };
       const mutation = validateProfileMutation({
         action,
         ...(action === "withdraw" ? {} : submitted),
         expectedRevision: saved.document.revision,
+        ...(action === "preview" ? { language } : {}),
       }, saved.document.draft);
       setError(null);
       if (action === "preview") {
-        clearPreview();
-        if (demo) setPreview(submitted);
-        else {
+        const request = ++previewGeneration.current;
           submittedRequest = true;
           const blob = await repository.preview(mutation);
-          if (generation.current !== current) return;
+          if (generation.current !== current || request !== previewGeneration.current) return;
           const url = URL.createObjectURL(blob);
           if (download) {
             const anchor = document.createElement("a");
             anchor.href = url;
-            anchor.download = "Helix-CV.pdf";
+            anchor.download = `CV-${submitted.draft.fullName.replace(/[^\p{L}\p{N} ._-]/gu, "").slice(0, 80) || "Helix"}-${language}.pdf`;
             anchor.click();
             window.setTimeout(() => URL.revokeObjectURL(url), 1000);
           } else {
+            const previousUrl = previewUrl.current;
             previewUrl.current = url;
-            setPreview({ url, ...submitted });
+            setPreview({ url, language, ...submitted });
+            if (previousUrl) URL.revokeObjectURL(previousUrl);
           }
-        }
       } else {
         submittedRequest = true;
         const result = await repository.mutate(mutation);
@@ -663,35 +688,6 @@ export default function MemberCV() {
         ? "Another session saved a newer version. Your input has been kept. Copy any changes you need, then reload the saved draft before saving again."
         : failure instanceof Error ? failure.message : "The request failed. Your input has been kept.");
       return false;
-    } finally {
-      finishManual(current);
-    }
-  }
-
-  async function downloadPublished() {
-    if (!draft || !envelope || busy || ended || demo || manualOperation.current) return;
-    const current = generation.current;
-    const controller = autosave.current;
-    manualOperation.current = true;
-    controller?.setBlocked(true);
-    setBusy("file");
-    setError(null);
-    try {
-      const file = await repository.downloadPublished();
-      if (generation.current !== current) return;
-      const anchor = document.createElement("a");
-      anchor.href = file.url;
-      anchor.rel = "noopener";
-      anchor.target = "_blank";
-      anchor.click();
-    } catch (failure) {
-      if (generation.current !== current) return;
-      if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
-        autosave.current?.dispose();
-        setEnded(true);
-        clearPreview();
-      }
-      setError(failure instanceof Error ? failure.message : "Could not load your CV.");
     } finally {
       finishManual(current);
     }
@@ -804,7 +800,7 @@ export default function MemberCV() {
         ...previous.experience.slice(0, insertAt), role, ...previous.experience.slice(insertAt),
       ] };
     });
-    setOpenSections((previous) => ({ ...previous, experience: true }));
+    setWizardStep("experience");
   }
 
   function moveProjectRole(projectId: string) {
@@ -815,10 +811,24 @@ export default function MemberCV() {
       if (!current) return;
       moveProjectRoleToExperience(current, projectId, roleId);
       setDraft((previous) => previous ? moveProjectRoleToExperience(previous, projectId, roleId) : previous);
-      setOpenSections((previous) => ({ ...previous, experience: true }));
+      setWizardStep("experience");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "The request failed. Your input has been kept.");
     }
+  }
+
+  function openCvSetup() {
+    if (!draft || busy || ended) return;
+    if (!hasRegisteredCv(draft)) setDraft((previous) => previous ? { ...previous, cvRegistered: false, cvLanguage: previous.cvLanguage ?? "nb" } : previous);
+    setWizardStep("intro");
+    setSetupOpen(true);
+  }
+  function nextCvStep(offset: number) {
+    const index = cvSteps.findIndex((step) => step.id === wizardStep);
+    setWizardStep(cvSteps[Math.max(0, Math.min(cvSteps.length - 1, index + offset))].id);
+  }
+  async function finishCvSetup() {
+    if (await run("save", false, undefined, { cvRegistered: true })) setSetupOpen(false);
   }
 
   return (
@@ -836,12 +846,6 @@ export default function MemberCV() {
           <h1>Profile</h1>
           <p>Manage your profile, CV and sponsor visibility.</p>
         </div>
-        <Tabs value={profileTab} onValueChange={setProfileTab} className="mcv-profile-tabs">
-          <TabsList aria-label="Profile sections">
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="cv">CV</TabsTrigger>
-          </TabsList>
-          <TabsContent value="profile" className="mcv-profile-panel">
         {(account || envelope) && <Card className="mcv-profile-identity shadow-none" id="mcv-contact" aria-labelledby="mcv-contact-title">
           <CardContent className="space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
@@ -868,7 +872,36 @@ export default function MemberCV() {
             </dl>
           </CardContent>
         </Card>}
-          </TabsContent>
+        {draft && envelope && !ended && <section className="mt-8 space-y-4" aria-labelledby="member-cv-title">
+          <h2 id="member-cv-title" className="text-xl font-medium">CV</h2>
+          {hasRegisteredCv(draft) ? <Card className="gap-0 py-0 shadow-none"><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <div className="space-y-3">
+              <p className="font-medium">CV {draft.fullName || account?.name || "Helix member"}</p>
+              <div className="flex items-center gap-2">
+                <Switch id={`${sharingId}-directory`} className="cv-control" checked={envelope.document.cvVisible ?? envelope.document.publishedRevision !== null}
+                  disabled={Boolean(busy)} onCheckedChange={(visible) => void run(visible ? "publish" : "withdraw", false, undefined, { cvRegistered: true }, "nb", visible ? { cv: true } : undefined)} />
+                <Label htmlFor={`${sharingId}-directory`} className="text-xs font-normal text-muted-foreground">Visible in Talent Directory</Label>
+              </div>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Preview CV" title="Preview CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", false, event.currentTarget)}><Eye aria-hidden="true" /></Button>
+              <ButtonGroup aria-label="Download CV">
+                <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Download Norwegian CV" title="Download Norwegian CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", true, event.currentTarget, undefined, "nb")}><Download aria-hidden="true" /></Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="cv-control h-8 w-7" aria-label="Download language" title="Download language" disabled={Boolean(busy)}><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => void run("preview", true, undefined, undefined, "nb")}>Norwegian</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void run("preview", true, undefined, undefined, "en")}>English</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </ButtonGroup>
+              <Button variant="outline" size="sm" className="cv-control" aria-label="Edit CV" disabled={Boolean(busy)} onClick={openCvSetup}>Edit</Button>
+            </div>
+          </CardContent></Card> : <Card className="gap-0 py-0 shadow-none"><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <p className="text-sm text-muted-foreground">No CV registered. Set up your CV now.</p>
+            <Button onClick={openCvSetup} disabled={Boolean(busy)}>Set up CV</Button>
+          </CardContent></Card>}
+        </section>}
         {ended && (
           <Alert className="mcv-error" variant="destructive">
             <AlertDescription>
@@ -922,86 +955,54 @@ export default function MemberCV() {
             <AlertDescription>{t(notice)}</AlertDescription>
           </Alert>
         )}
-        {ended ? null : !draft || !envelope ? (
-          <Alert role="status" className="mcv-notice">
-            <AlertDescription>
-              {busy
-                ? t("Verifying your Helix account…")
-                : t("Your CV could not be opened.")}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <TabsContent value="cv" className="mcv-profile-panel">
-            <div className="mcv-status" aria-live="polite">
-              <div>
-                <Badge variant="outline" className="mcv-status-badge">
-                  {savingState.saving || busy === "save"
-                    ? t("Saving draft…")
-                    : savingState.paused
-                      ? t("Automatic saving paused. Your input is kept.")
-                      : dirty ? t("Changes waiting to be saved") : t("All changes saved")}
-                </Badge>
-
-                <p className="mcv-status-detail">{t("Changes are saved automatically as a private draft.")}</p>
-              </div>
-              <div>
-                <Badge variant="outline" className="mcv-status-badge">
-                  {envelope.document.publishedRevision === null
-                    ? t("Not published")
-                    : t("Published in Talent Directory")}
-                </Badge>
-
-                <p className="mcv-status-detail">
-                  {envelope.document.publishedRevision === null
-                    ? t("Only you can access this draft.")
-                    : t(
-                        "Published version {revision}. Draft changes stay private until republished.",
-                        { revision: envelope.document.publishedRevision },
-                      )}
-                </p>
-              </div>
-            </div>
+        {!ended && (!draft || !envelope) && <Alert role="status" className="mcv-notice"><AlertDescription>{busy ? t("Verifying your Helix account…") : t("Your CV could not be opened.")}</AlertDescription></Alert>}
+      </div>
+      <Dialog open={setupOpen} onOpenChange={(open) => { if (!busy) setSetupOpen(open); }}>
+        {draft && envelope && <DialogContent className="portal-root mcv-wizard flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl" showCloseButton={!busy}>
+          <CvTranslationsProvider draft={draft} disabled={Boolean(busy) || ended} onChange={(value) => edit("translations", value)}>
+            <DialogHeader className="border-b p-5 pr-12">
+              <DialogTitle>{hasRegisteredCv(draft) ? "Edit CV" : "Set up CV"}</DialogTitle>
+              <DialogDescription>Fill out each section, or choose a step to update it.</DialogDescription>
+            </DialogHeader>
+            <nav aria-label="CV setup steps" className="flex flex-wrap gap-2 border-b p-4">
+              {cvSteps.map((step, index) => <Button key={step.id} type="button" size="sm" variant={wizardStep === step.id ? "secondary" : "ghost"}
+                aria-current={wizardStep === step.id ? "step" : undefined} disabled={Boolean(busy) || ended} onClick={() => setWizardStep(step.id)}>{index + 1}. {step.label}</Button>)}
+            </nav>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {ended && <Alert variant="destructive" className="mb-4"><AlertDescription>Your session has ended. Close this form and sign in again to continue.</AlertDescription></Alert>}
+              <p className="mb-4 text-xs text-muted-foreground" role="status">{savingState.saving || busy === "save" ? "Saving…" : savingState.paused ? "Automatic saving paused. Your input is kept." : dirty ? "Changes waiting to be saved" : "All changes saved"}</p>
+              {error && <Alert variant="destructive" className="mb-4"><AlertDescription>{localizeCvError(error, locale)}</AlertDescription>
+                <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={(event) => void reload(event.currentTarget)}>Reload saved draft</Button>
+              </Alert>}
             <form
               noValidate
               onSubmit={(event) => {
                 event.preventDefault();
-                void run("save");
+                if (wizardStep === "review") void finishCvSetup();
+                else nextCvStep(1);
               }}
             >
               <div className="mcv-layout">
-                {!platformNavigation && <SectionNavigation
-                  locale={locale}
-                  onNavigate={(key) => {
-                    setProfileTab(key === "contact" ? "profile" : "cv");
-                    setOpenSections((previous) => ({
-                      ...previous,
-                      [key]: true,
-                    }));
-                  }}
-                  statuses={getSectionStatuses(
-                    draft,
-                    sharing,
-                    envelope.document,
-                  )}
-                />}
                 <fieldset
                   disabled={Boolean(busy) || ended}
                   className="mcv-form-fieldset"
                 >
                   <div className="mcv-editor">
-                    <div className="space-y-1">
-                      <h2>Your CV</h2>
-                      <p className="text-sm text-muted-foreground">Add your education and experience. Your profile information is included in your CV.</p>
-                    </div>
-                    <Card className="mcv-card">
-                      <CardContent className="mcv-card-content mcv-grid">
-                        <Field label="CV headline" value={draft.headline} onChange={(value) => edit("headline", value)} />
+                    {wizardStep === "intro" && <div className="space-y-4">
+                      <div className="grid gap-2"><Label>Original CV language</Label>
+                        <CvLanguageSelect label="Original CV language" value={draft.cvLanguage ?? "en"} disabled={Boolean(busy)}
+                          onChange={(language) => setDraft((previous) => previous ? changeCvLanguage(previous, language) : previous)} />
+                      </div>
+                      <Card className="mcv-card"><CardContent className="mcv-card-content mcv-grid">
+                        <Field label="Name" value={draft.fullName} translationKey="fullName" onChange={(value) => edit("fullName", value)} />
+                        <Field label="CV headline" value={draft.headline} translationKey="headline" onChange={(value) => edit("headline", value)} />
+                        <Field label="Field of study" value={draft.fieldOfStudy} translationKey="fieldOfStudy" onChange={(value) => edit("fieldOfStudy", value)} />
                         <Field label={t("Contact email")} type="email" value={draft.contactEmail} onChange={(value) => edit("contactEmail", value)} />
-                        <Field label={t("City")} value={draft.city} onChange={(value) => edit("city", value)} />
-                        <Field label={t("Introduction")} value={draft.summary} multiline onChange={(value) => edit("summary", value)} />
-                      </CardContent>
-                    </Card>
-                    {definitions.map(({ key, title, singular, fields }) => (
+                        <Field label={t("City")} translationKey="city" value={draft.city} onChange={(value) => edit("city", value)} />
+                        <Field label={t("Introduction")} value={draft.summary} translationKey="summary" multiline onChange={(value) => edit("summary", value)} />
+                      </CardContent></Card>
+                    </div>}
+                    {definitions.filter(({ key }) => key === wizardStep).map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}
                         {...sectionProps(key)}
@@ -1078,6 +1079,7 @@ export default function MemberCV() {
                                   <ChoiceInput
                                     key={field.key}
                                     label={t(field.label)}
+                                    translationKey={field.key === "url" ? undefined : `${key}:${row.id}:${field.key}`}
                                     value={row[field.key] ?? ""}
                                     onChange={change}
                                     options={field.choices}
@@ -1089,6 +1091,7 @@ export default function MemberCV() {
                                     {...field}
                                     key={field.key}
                                     label={t(field.label)}
+                                    translationKey={field.key === "url" ? undefined : `${key}:${row.id}:${field.key}`}
                                     placeholder={
                                       field.placeholder
                                         ? t(field.placeholder)
@@ -1110,6 +1113,7 @@ export default function MemberCV() {
                             {key === "education" && (
                               <OptionalGradeInput
                                 value={row.grade ?? ""}
+                                translationKey={`education:${row.id}:grade`}
                                 onChange={(value) =>
                                   changeRowField(key, row.id, "grade", value)
                                 }
@@ -1138,6 +1142,7 @@ export default function MemberCV() {
                         </>}
                       </Section>
                     ))}
+                    {wizardStep === "review" && <div className="space-y-6">
                     <Card className="mcv-card">
                       <CardContent className="mcv-card-content">
                         <OptionalReferencesInput value={draft.references ?? ""} onChange={(value) => edit("references", value)} locale={locale} disabled={Boolean(busy) || ended} />
@@ -1194,11 +1199,6 @@ export default function MemberCV() {
                         )}
                       </p>
                       <div className="mcv-actions">
-                        <Button type="submit" className="mcv-primary">
-                          {busy === "save"
-                            ? t("Saving…")
-                            : savingState.paused ? t("Retry saving") : t("Save private draft")}
-                        </Button>
                         <Button
                           variant="outline"
                           type="button"
@@ -1210,31 +1210,11 @@ export default function MemberCV() {
                             ? t("Generating…")
                             : "Preview CV"}
                         </Button>
-                        {!demo && (
-                          <Button
-                            variant="outline"
-                            type="button"
-                            onClick={() => void run("preview", true)}
-                          >
-                            {t("Download PDF")}
-                          </Button>
-                        )}
-                        {!demo && envelope.document.publishedRevision !== null && (
-                          <Button
-                            variant="outline"
-                            type="button"
-                            onClick={() => void downloadPublished()}
-                          >
-                            {busy === "file"
-                              ? t("Opening published CV…")
-                              : t("Download published CV")}
-                          </Button>
-                        )}
                         <Button
                           variant="default"
                           type="button"
                           className="mcv-primary"
-                          onClick={() => void run("publish")}
+                          onClick={() => void run("publish", false, undefined, { cvRegistered: true })}
                         >
                           {busy === "publish"
                             ? t("Publishing…")
@@ -1259,14 +1239,20 @@ export default function MemberCV() {
                         )}
                       </p>
                     </Section>
+                    </div>}
                   </div>
                 </fieldset>
               </div>
             </form>
-          </TabsContent>
-        )}
-        </Tabs>
-      </div>
+            </div>
+            <DialogFooter className="flex-row flex-wrap items-center justify-end border-t p-4">
+              <Button type="button" variant="outline" disabled={Boolean(busy) || wizardStep === cvSteps[0].id} onClick={() => nextCvStep(-1)}>Back</Button>
+              {wizardStep !== "review" && <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => nextCvStep(1)}>Next</Button>}
+              <Button type="button" disabled={Boolean(busy) || ended} onClick={() => void finishCvSetup()}>{busy === "save" ? "Saving…" : wizardStep === "review" ? "Finish" : "Save and close"}</Button>
+            </DialogFooter>
+          </CvTranslationsProvider>
+        </DialogContent>}
+      </Dialog>
       <Dialog
         open={Boolean(preview)}
         onOpenChange={(open) => {
@@ -1294,6 +1280,7 @@ export default function MemberCV() {
                   {t("Generated CV preview")}
                 </DialogTitle>
                 <div className="mcv-preview-controls">
+                  <CvLanguageSelect label="Preview language" value={preview.language} disabled={Boolean(busy)} onChange={(language) => { setOutputLanguage(language); void run("preview", false, undefined, undefined, language); }} />
                   <DialogClose asChild>
                     <Button ref={previewClose} variant="outline" type="button">
                       {t("Close preview")}
@@ -1309,26 +1296,10 @@ export default function MemberCV() {
                   ` ${t("CV download is currently off for sponsors.")}`}
               </DialogDescription>
             </DialogHeader>
-            {preview.url ? (
-              <>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="mcv-preview-download"
-                >
-                  <a href={preview.url} download="Helix-CV.pdf">
-                    {t("Download this PDF")}
-                  </a>
-                </Button>
-                <iframe src={preview.url} title={t("Generated CV PDF")} />
-              </>
-            ) : (
-              <CvTemplatePreview
-                data={preview.draft}
-                sharing={preview.sharing}
-                locale={locale}
-              />
-            )}
+            {preview.url && <>
+              <Button asChild variant="outline" className="mcv-preview-download"><a href={preview.url} download={`Helix-CV-${preview.language}.pdf`}>{t("Download this PDF")}</a></Button>
+              <CvTemplatePreview data={preview.draft} sharing={preview.sharing} locale={preview.language} />
+            </>}
           </DialogContent>
         )}
       </Dialog>

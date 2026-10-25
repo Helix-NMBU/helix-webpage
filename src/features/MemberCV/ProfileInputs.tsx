@@ -3,6 +3,7 @@ import { Button } from "@libs/components/ui/button";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
+import { FieldTranslations } from "./CvTranslations";
 import {
   Collapsible,
   CollapsibleContent,
@@ -36,6 +37,7 @@ export function ChoiceInput({
   options,
   locale,
   disabled,
+  translationKey,
 }: {
   label: string;
   value: string;
@@ -43,6 +45,7 @@ export function ChoiceInput({
   options: readonly StaticMemberCopyKey[];
   locale: MemberLocale;
   disabled: boolean;
+  translationKey?: string;
 }) {
   const id = useId();
   const [customMode, setCustomMode] = useState(false);
@@ -52,7 +55,7 @@ export function ChoiceInput({
   );
   return (
     <div className="mcv-field">
-      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center justify-between gap-2"><Label htmlFor={id}>{label}</Label><FieldTranslations path={translationKey} label={label} value={value} maxLength={100} /></div>
       <Select
         value={profileChoiceSelection(value, options, customMode)}
         disabled={disabled}
@@ -107,11 +110,13 @@ export function OptionalGradeInput({
   onChange,
   locale,
   disabled,
+  translationKey,
 }: {
   value: string;
   onChange: (value: string) => void;
   locale: MemberLocale;
   disabled: boolean;
+  translationKey?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(Boolean(value));
@@ -124,7 +129,7 @@ export function OptionalGradeInput({
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent forceMount className="mcv-optional-grade-content">
-        <Label htmlFor={id}>{t("Grade")}</Label>
+        <div className="flex items-center justify-between gap-2"><Label htmlFor={id}>{t("Grade")}</Label><FieldTranslations path={translationKey} label="Grade" value={value} maxLength={100} /></div>
         <Input
           id={id}
           value={value}

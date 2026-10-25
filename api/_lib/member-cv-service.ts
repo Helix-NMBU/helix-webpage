@@ -44,7 +44,7 @@ function database(): CvDatabase {
 
 export function envelope(document: StoredCv, identity: WorkspaceIdentity): CvEnvelope {
   const { publishedPath: _path, ...record } = document;
-  return { document: record, identity: { email: identity.email, name: identity.name,
+  return { document: { ...record, cvVisible: record.publishedRevision !== null && Boolean(document.publishedPath) }, identity: { email: identity.email, name: identity.name,
     ...(identity.helixRole !== undefined ? { helixRole: identity.helixRole } : {}),
   } };
 }

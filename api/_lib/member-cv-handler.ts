@@ -22,7 +22,7 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       if (body.action === "preview") {
         const draft = parseData(body.draft);
         const sharing = parseSharing(body.sharing);
-        const bytes = await renderPdf(sharedCvData(draft, sharing), sharing);
+        const bytes = await renderPdf(sharedCvData(draft, sharing), sharing, body.language ?? draft.cvLanguage ?? "en");
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", 'inline; filename="helix-cv.pdf"');
         return res.status(200).send(Buffer.from(bytes));
@@ -38,7 +38,7 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       if (body.action === "save") return respond(await services.commit(identity.userId, { action: "save", expectedRevision, draft, sharing }));
       let path: string | null = null;
       if (sharing.cv) {
-        const bytes = await renderPdf(sharedCvData(draft, sharing), sharing);
+        const bytes = await renderPdf(sharedCvData(draft, sharing), sharing, body.language ?? draft.cvLanguage ?? "en");
         if (!bytes.length || bytes.length > 5242880) throw new MemberCvError(400, "The generated PDF must be smaller than 5 MB.");
         path = services.newPath(identity.userId);
         await services.prepareUpload(identity.userId, path, expectedRevision);
@@ -76,6 +76,7 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
 function parseMutation(value: unknown): CvMutation {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Invalid request.");
   const body = value as CvMutation;
+  if (body.language !== undefined && body.language !== "en" && body.language !== "nb") throw new MemberCvError(400, "Invalid request.");
   if (!["save", "publish", "withdraw", "preview"].includes(body.action) || JSON.stringify(value).length > 120000) throw new MemberCvError(400, "Invalid or oversized CV request.");
   return body;
 }

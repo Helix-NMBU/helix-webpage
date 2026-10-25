@@ -63,7 +63,9 @@ export function createDemoRepository(
   });
   function read(): CvEnvelope {
     const saved = storage.getItem(DEMO_STORAGE_KEY);
-    return saved ? (JSON.parse(saved) as CvEnvelope) : initial();
+    if (!saved) return initial();
+    const envelope = JSON.parse(saved) as CvEnvelope & { published?: { sharing: { cv: boolean } } };
+    return { ...envelope, document: { ...envelope.document, cvVisible: envelope.document.publishedRevision !== null && Boolean(envelope.published?.sharing.cv ?? envelope.document.sharing.cv) } };
   }
   return {
     load: async () => read(),
@@ -82,10 +84,12 @@ export function createDemoRepository(
         if (mutation.sharing) document.sharing = mutation.sharing;
       }
       if (mutation.action === "publish") {
+        document.cvVisible = Boolean(mutation.sharing?.cv);
         document.publishedRevision = nextRevision;
         document.publishedAt = new Date().toISOString();
       }
       if (mutation.action === "withdraw") {
+        document.cvVisible = false;
         document.publishedRevision = null;
         document.publishedAt = null;
       }
@@ -106,10 +110,10 @@ export function createDemoRepository(
       );
       return result;
     },
-    preview: async () => {
-      throw new Error(
-        "Could not load your CV.",
-      );
+    preview: async (mutation) => {
+      if (!mutation.draft || !mutation.sharing) throw new Error("Could not load your CV.");
+      const { generateBrowserCvPdf } = await import("./browser-pdf");
+      return generateBrowserCvPdf(validateMutation(mutation).draft!, mutation.sharing, mutation.language ?? mutation.draft.cvLanguage ?? "en");
     },
     downloadPublished: async () => {
       throw new Error(
