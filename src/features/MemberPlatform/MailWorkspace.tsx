@@ -83,6 +83,21 @@ function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
 }
 
+function safeDocumentAttributes(element: Element, names: string[]): string {
+  return names.flatMap((name) => {
+    const value = element.getAttribute(name);
+    return value === null ? [] : [`${name}="${escapeHtml(value)}"`];
+  }).join(" ");
+}
+
+function sanitizeCss(css: string): string {
+  return css
+    .replace(/@import\s+(?:url\([^)]*\)|["'][^"']*["'])[^;]*;?/gi, "")
+    .replace(/expression\s*\([^)]*\)/gi, "")
+    .replace(/url\(\s*(['"]?)\s*(?:javascript|vbscript):[^)]*\)/gi, "url()")
+    .replace(/(?:^|[;{])\s*(?:behavior|-moz-binding)\s*:[^;}]+;?/gi, "");
+}
+
 function emailDocument(html: string, plainText: string, allowRemoteImages: boolean): { srcDoc: string; remoteImageCount: number } {
   const source = html.trim() || `<pre>${escapeHtml(plainText)}</pre>`;
   const parsed = new DOMParser().parseFromString(source, "text/html");
@@ -95,8 +110,8 @@ function emailDocument(html: string, plainText: string, allowRemoteImages: boole
       const value = attribute.value.trim();
       if (name.startsWith("on") || ["srcdoc", "formaction", "xlink:href"].includes(name)) {
         element.removeAttribute(attribute.name);
-      } else if (name === "style" && /url\s*\(|expression\s*\(|javascript:|@import|behavior\s*:/i.test(value)) {
-        element.removeAttribute(attribute.name);
+      } else if (name === "style") {
+        element.setAttribute(attribute.name, sanitizeCss(value));
       } else if (name === "href") {
         try {
           const url = new URL(value, window.location.origin);
@@ -116,6 +131,7 @@ function emailDocument(html: string, plainText: string, allowRemoteImages: boole
             if (allowRemoteImages) {
               element.setAttribute("src", url.href);
               element.setAttribute("referrerpolicy", "no-referrer");
+              element.setAttribute("loading", "eager");
             } else {
               element.removeAttribute("src");
               element.setAttribute("data-remote-image-hidden", "true");
@@ -133,20 +149,21 @@ function emailDocument(html: string, plainText: string, allowRemoteImages: boole
   });
 
   const styles = [...parsed.querySelectorAll("style")].map((style) => {
-    const css = style.textContent ?? "";
-    if (/url\s*\(|expression\s*\(|javascript:|@import|behavior\s*:/i.test(css)) return "";
+    const css = sanitizeCss(style.textContent ?? "");
     return `<style>${css.replace(/<\/style/gi, "<\\/style")}</style>`;
   }).join("");
-  const shellStyles = "body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
+  const htmlAttributes = safeDocumentAttributes(parsed.documentElement, ["lang", "dir", "class", "style"]);
+  const bodyAttributes = safeDocumentAttributes(parsed.body, ["id", "lang", "dir", "class", "style"]);
+  const shellStyles = "html{height:100%;overscroll-behavior-y:contain}body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere;overscroll-behavior-y:contain}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
   const imageSources = allowRemoteImages ? "data: https: http:" : "data:";
   return {
-    srcDoc: `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body>${parsed.body.innerHTML}</body></html>`,
+    srcDoc: `<!doctype html><html ${htmlAttributes}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body ${bodyAttributes}>${parsed.body.innerHTML}</body></html>`,
     remoteImageCount,
   };
 }
 
 function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }) {
-  const [allowRemoteImages, setAllowRemoteImages] = useState(false);
+  const [allowRemoteImages, setAllowRemoteImages] = useState(true);
   const { srcDoc, remoteImageCount } = useMemo(
     () => emailDocument(html, plainText, allowRemoteImages),
     [allowRemoteImages, html, plainText],
@@ -154,10 +171,10 @@ function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {remoteImageCount > 0 && !allowRemoteImages && (
+      {remoteImageCount > 0 && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-2 text-xs text-muted-foreground">
-          <span>External images are hidden for privacy.</span>
-          <Button variant="outline" size="sm" className="h-7" onClick={() => setAllowRemoteImages(true)}>Load images</Button>
+          <span>{allowRemoteImages ? "External images are loaded." : "External images are hidden."}</span>
+          <Button variant="outline" size="sm" className="h-7" onClick={() => setAllowRemoteImages((current) => !current)}>{allowRemoteImages ? "Hide images" : "Load images"}</Button>
         </div>
       )}
       <iframe
@@ -165,7 +182,7 @@ function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }
         sandbox=""
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}
-        className="min-h-0 w-full flex-1 border-0 bg-white"
+        className="min-h-0 w-full flex-1 overscroll-contain border-0 bg-white"
       />
     </div>
   );
@@ -310,7 +327,7 @@ function ConnectedMailSidebar({
             />
           </div>
         </SidebarHeader>
-        <SidebarContent className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <SidebarContent className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
               {error ? (
