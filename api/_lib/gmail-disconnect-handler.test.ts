@@ -19,6 +19,7 @@ function store(refreshToken: string | null): GmailConnectionStore {
     memberEmail: vi.fn(async () => "member@helixnmbu.no"),
     save: vi.fn(async () => undefined),
     read: vi.fn(async () => null),
+    readCredentials: vi.fn(async () => null),
     disconnect: vi.fn(async () => refreshToken),
   };
 }
