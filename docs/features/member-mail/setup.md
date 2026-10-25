@@ -12,6 +12,7 @@ Create a separate OAuth client for the Gmail connection in the Google Cloud proj
 4. Add these exact authorized redirect URIs:
 
    - Local: `http://localhost:5190/api/gmail-callback`
+   - Branch preview (`internal-member-platform-mvp`): `https://helix-webpage-git-internal-member-platform-mvp-helix-nmbu.vercel.app/api/gmail-callback`
    - Production: `https://internal.helixnmbu.no/api/gmail-callback`
 
 The initial connection requests only `https://www.googleapis.com/auth/gmail.readonly`, with offline access so the eventual server-side mirror can refresh access without the member being present. Sending mail should be added later as incremental authorization when that feature is ready.
