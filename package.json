@@ -6,9 +6,10 @@
   "scripts": {
     "preinstall": "npx only-allow npm",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-deployment-size.mjs",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:deployment-size": "node scripts/check-deployment-size.mjs"
   },
   "dependencies": {
     "@fontsource/montserrat": "^5.2.6",

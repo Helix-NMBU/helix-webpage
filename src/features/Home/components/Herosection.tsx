@@ -43,7 +43,7 @@ export default function HeroSection() {
         ref={bgRef}
         className="absolute inset-0 bg-no-repeat bg-cover will-change-transform"
         style={{
-          backgroundImage: "url('/lagbilde.jpg')",
+          backgroundImage: "url('/lagbilde.webp')",
           backgroundPosition: "center 42%",
         }}
       />

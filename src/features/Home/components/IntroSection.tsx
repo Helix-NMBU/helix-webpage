@@ -7,10 +7,10 @@ import { Link } from "react-router-dom";
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const carouselImages = [
-  { src: "/P1010055 1.png", alt: "Race day" },
-  { src: "/peder.png", alt: "Garage" },
-  { src: "/tilt.png", alt: "Helix car" },
-  { src: "/cost.png", alt: "Cost event" },
+  { src: "/P1010055 1.webp", alt: "Race day" },
+  { src: "/peder.webp", alt: "Garage" },
+  { src: "/tilt.webp", alt: "Helix car" },
+  { src: "/cost.webp", alt: "Cost event" },
 ];
 
 const CYCLE_MS = 4000;

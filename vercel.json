@@ -9,5 +9,68 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "ignoreCommand": "sh scripts/ignore-docs-build.sh",
+  "redirects": [
+    {
+      "source": "/P1010055 1.png",
+      "destination": "/P1010055 1.webp",
+      "permanent": true
+    },
+    {
+      "source": "/P1010366 1.png",
+      "destination": "/P1010366 1.webp",
+      "permanent": true
+    },
+    {
+      "source": "/Silverstone.png",
+      "destination": "/Silverstone.webp",
+      "permanent": true
+    },
+    {
+      "source": "/Sponsors.png",
+      "destination": "/Sponsors.webp",
+      "permanent": true
+    },
+    {
+      "source": "/birk i bil.jpg",
+      "destination": "/birk i bil.webp",
+      "permanent": true
+    },
+    {
+      "source": "/cars/Arken.png",
+      "destination": "/cars/Arken.webp",
+      "permanent": true
+    },
+    {
+      "source": "/cars/Børsen.png",
+      "destination": "/cars/Børsen.webp",
+      "permanent": true
+    },
+    {
+      "source": "/cars/Casino.png",
+      "destination": "/cars/Casino.webp",
+      "permanent": true
+    },
+    {
+      "source": "/cost.png",
+      "destination": "/cost.webp",
+      "permanent": true
+    },
+    {
+      "source": "/lagbilde.jpg",
+      "destination": "/lagbilde.webp",
+      "permanent": true
+    },
+    {
+      "source": "/peder.png",
+      "destination": "/peder.webp",
+      "permanent": true
+    },
+    {
+      "source": "/tilt.png",
+      "destination": "/tilt.webp",
+      "permanent": true
+    }
   ]
 }

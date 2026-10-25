@@ -2,7 +2,7 @@ import { useState } from "react";
 
 const PHOTOS = [
   { src: "/nav_pictures/garage.jpg", alt: "In the garage" },
-  { src: "/birk i bil.jpg", alt: "Driver in the car" },
+  { src: "/birk i bil.webp", alt: "Driver in the car" },
   { src: "/nav_pictures/silverstone.jpg", alt: "Silverstone" },
   { src: "/lagbilde_1.jpg", alt: "Team photo" },
   { src: "/formula-student uk.avif", alt: "Formula Student UK" },
