@@ -42,7 +42,7 @@ import {
   locationTypes,
   languageLevels,
 } from "./profile-inputs";
-import { Alert, AlertDescription, AlertTitle } from "@libs/components/ui/alert";
+import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Badge } from "@libs/components/ui/badge";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@libs/components/ui/tabs";
@@ -71,6 +71,7 @@ import {
 import { memberPaths } from "../MemberPlatform/routes";
 import { useMemberAccount } from "../MemberPlatform/MemberAccountContext";
 import { accountInitials } from "../MemberPlatform/account";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { useMemberNavigation, type MemberEditorActions } from "../MemberPlatform/MemberNavigation";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
@@ -316,7 +317,7 @@ export default function MemberCV() {
   const [profileTab, setProfileTab] = useState("profile");
   const demo =
     import.meta.env.DEV &&
-    new URLSearchParams(location.search).get("demo") === "1";
+    (isLocalMemberMode() || new URLSearchParams(location.search).get("demo") === "1");
   const sharingId = useId();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     contact: true,
@@ -365,7 +366,7 @@ export default function MemberCV() {
   const repository = useMemo(
     () =>
       demo
-        ? createDemoRepository(localStorage, import.meta.env.DEV)
+        ? createDemoRepository(localStorage, import.meta.env.DEV, isLocalMemberMode() ? fictionalCv() : undefined)
         : createCvRepository(() => memberSessionToken(boundUserId)),
     [demo],
   );
@@ -743,7 +744,7 @@ export default function MemberCV() {
       if (generation.current !== current) return;
       if (hasUnsavedInput(saved) && !(await confirmUnsaved(action, opener))) return;
       if (generation.current !== current) return;
-      if (!demo && action === "logout") await signOutMember();
+      if ((!demo || isLocalMemberMode()) && action === "logout") await signOutMember();
       generation.current++;
       controller?.dispose();
       clearPreview();
@@ -826,16 +827,6 @@ export default function MemberCV() {
             {!platformNavigation && <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("logout", event.currentTarget)}>{t("Sign out")}</Button>}
           </div>
         </div>}
-        {demo && (
-          <Alert className="mcv-demo-banner" role="status">
-            <AlertTitle>{t("Fictional local demo")}</AlertTitle>
-            <AlertDescription>
-              {t(
-                "This demo saves only in this browser. It does not verify Google, Neon or sponsor access. PDF generation is replaced by an HTML preview.",
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
         <div className="mcv-profile-heading">
           <h1>Profile</h1>
           <p>Manage your profile, CV and sponsor visibility.</p>
@@ -1256,9 +1247,7 @@ export default function MemberCV() {
                         >
                           {busy === "preview"
                             ? t("Generating…")
-                            : demo
-                              ? t("Preview demo CV")
-                              : t("Preview PDF")}
+                            : "Preview CV"}
                         </Button>
                         {!demo && (
                           <Button
@@ -1308,20 +1297,6 @@ export default function MemberCV() {
                           "Publication saves and shares this version. Later draft edits stay private. Withdrawal keeps your draft and prevents new access. Files already downloaded cannot be recalled.",
                         )}
                       </p>
-                      {demo && (
-                        <Button
-                          variant="outline"
-                          type="button"
-                          onClick={() => {
-                            setDraft(fictionalCv());
-                            setNotice(
-                              "Fictional example added. Save or publish to keep it.",
-                            );
-                          }}
-                        >
-                          {t("Fill fictional example")}
-                        </Button>
-                      )}
                     </Section>
                     </TabsContent>
                   </div>
@@ -1355,7 +1330,7 @@ export default function MemberCV() {
             <DialogHeader className="mcv-preview-header">
               <div className="mcv-preview-title-row">
                 <DialogTitle className="mcv-dialog-title">
-                  {demo ? t("Demo CV preview") : t("Generated CV preview")}
+                  {t("Generated CV preview")}
                 </DialogTitle>
                 <div className="mcv-preview-controls">
                   <DialogClose asChild>

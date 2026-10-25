@@ -31,7 +31,7 @@ export function fictionalCv(): CvData {
     projects: [
       {
         id: "demo-project",
-        name: "Fictional suspension project",
+        name: "Suspension project",
         role: "Design team member",
         season: "2026",
         description:
@@ -47,13 +47,14 @@ export function fictionalCv(): CvData {
 export function createDemoRepository(
   storage: Pick<Storage, "getItem" | "setItem">,
   enabled: boolean,
+  initialDraft?: CvData,
 ): CvRepository {
   if (!import.meta.env.DEV || !enabled)
     throw new Error("The fictional demo is only available in development.");
   const initial = (): CvEnvelope => ({
     identity: { name: "Alex Example", email: "alex@example.invalid" },
     document: {
-      draft: emptyCv("Alex Example", "alex@example.invalid"),
+      draft: initialDraft ?? emptyCv("Alex Example", "alex@example.invalid"),
       sharing: { ...privateSharing },
       revision: 0,
       publishedRevision: null,
@@ -107,12 +108,12 @@ export function createDemoRepository(
     },
     preview: async () => {
       throw new Error(
-        "The fictional demo uses an HTML preview. Server PDF generation needs the configured application.",
+        "Could not load your CV.",
       );
     },
     downloadPublished: async () => {
       throw new Error(
-        "The fictional demo uses an HTML preview. Server PDF generation needs the configured application.",
+        "Could not load your CV.",
       );
     },
   };

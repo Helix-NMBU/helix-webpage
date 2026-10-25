@@ -8,7 +8,7 @@ const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, currentDirectory, '');
   const proxy = {};
-  if (env.NEON_AUTH_BASE_URL) {
+  if (mode !== 'member-local' && env.NEON_AUTH_BASE_URL) {
     const target = new URL(env.NEON_AUTH_BASE_URL);
     const basePath = target.pathname.replace(/\/$/, '');
     proxy['/api/auth'] = {

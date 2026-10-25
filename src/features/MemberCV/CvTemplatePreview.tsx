@@ -36,7 +36,6 @@ export function CvTemplatePreview({ data, sharing, locale }: { data: CvData; sha
   const languages = cv.languages.filter(hasContent);
   const links = cv.links.filter(hasContent);
   return <>
-    <p className="mcv-demo-label">{t("Fictional demo · HTML preview")}</p>
     <article className="mcv-template-document" lang={locale}>
       {(cv.headline || cv.city || cv.contactEmail || cv.phone || cv.fullName || cv.summary || cv.fieldOfStudy || cv.graduationYear) && (
         <header className="mcv-template-introduction">

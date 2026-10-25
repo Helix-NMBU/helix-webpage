@@ -1,5 +1,13 @@
 # Helix Webpage
 
+## Local member platform
+
+Run `npm run dev:member`, then open http://127.0.0.1:5190/profile. Home, Profile, Settings and team navigation use the normal member-platform routes.
+
+This command opens a local Admin account, Alex Example, with sample CV data. Profile edits, sharing choices and publication state persist in this browser. Sign-out and sign-in use the local account. CV previews render in the browser; PDF downloads and external services require the configured application.
+
+The local account works only in Vite's `member-local` development mode on loopback. It does not use Google, Neon or production data, and it cannot bypass authentication in a production build. Keep environment explanations in documentation and terminal output, not in the product UI.
+
 ## Member CV portal
 
 Members edit a private CV at `/member/profile` and sign in with a Helix Google Workspace account through Neon. Environment variables, the Google redirect URI, and the SQL migration are documented in [docs/features/member-cv-portal/setup.md](docs/features/member-cv-portal/setup.md).

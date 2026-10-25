@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { memberPaths } from "../MemberPlatform/routes";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { memberText, type StaticMemberCopyKey } from "../MemberCV/locale";
 import { localizeCvError } from "../MemberCV/errors";
 import { authClient, ensureMemberLanding, loginAction, memberAuthConfigured, startGoogleSignIn, type MemberFrame } from "../MemberCV/session";
@@ -29,7 +30,7 @@ export default function CVBankLogin() {
       setError("Google sign-in failed. Please try again.");
       return;
     }
-    if (!authClient) {
+    if (!authClient && !isLocalMemberMode()) {
       setFrame("signed-out");
       return;
     }

@@ -3,6 +3,7 @@ import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/ada
 import { CvRequestError } from "./repository";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
 import { readMemberAccount, type MemberAccount } from "../MemberPlatform/account";
+import { isLocalMemberMode, localMemberAccount, localMemberSignedIn, setLocalMemberSignedIn } from "../MemberPlatform/local-mode";
 
 // neon-js rejects a protocol-less base URL. `/api/auth` is expanded to the
 // current origin so one value works for every preview and production host.
@@ -16,11 +17,11 @@ export function resolveMemberAuthUrl(configured: string, origin?: string): strin
   return new URL(path, base).href.replace(/\/$/, "");
 }
 
-const authUrl = import.meta.env.VITE_NEON_AUTH_URL
+const authUrl = !isLocalMemberMode() && import.meta.env.VITE_NEON_AUTH_URL
   ? resolveMemberAuthUrl(import.meta.env.VITE_NEON_AUTH_URL)
   : null;
 
-export const memberAuthConfigured = Boolean(authUrl);
+export const memberAuthConfigured = Boolean(authUrl) || isLocalMemberMode();
 
 export const authClient = authUrl
   ? createAuthClient(authUrl, {
@@ -371,6 +372,11 @@ export function ensureMemberLanding(
   fetchImpl: typeof fetch = fetch,
   search?: string,
 ): Promise<MemberLanding> {
+  if (isLocalMemberMode()) {
+    return Promise.resolve(localMemberSignedIn() ? {
+      phase: "signed-in", userId: "local-member", token: null, status: 200, error: null, account: localMemberAccount,
+    } : signedOutLanding());
+  }
   if (sessionRejected) return Promise.resolve(signedOutLanding());
   if (!landingPromise) {
     let run: Promise<MemberLanding>;
@@ -441,6 +447,7 @@ export async function memberSessionToken(boundUserId: { current: string | null }
 }
 
 export function watchMemberSession(onEnd: () => void, client: MemberClient | null = authClient, boundUserId?: { current: string | null }): () => void {
+  if (isLocalMemberMode()) return () => undefined;
   if (!client?.getSession) return () => undefined;
   const readSession = client.getSession.bind(client);
   let active = true;
@@ -474,6 +481,10 @@ export function watchMemberSession(onEnd: () => void, client: MemberClient | nul
 
 export async function signOutMember(): Promise<void> {
   clearMemberLanding();
+  if (isLocalMemberMode()) {
+    setLocalMemberSignedIn(false);
+    return;
+  }
   if (!authClient) return;
   const result = await authClient.signOut();
   if (result.error) throw new Error("Could not sign out. Please try again.");
@@ -539,6 +550,11 @@ export function googleSignInRequest(source: unknown, origin: string): {
 }
 
 export async function startGoogleSignIn(returnTo?: unknown): Promise<void> {
+  if (isLocalMemberMode()) {
+    setLocalMemberSignedIn(true);
+    window.location.assign(memberSignInCallbackUrl(returnTo, window.location.origin));
+    return;
+  }
   if (!authClient) throw new Error("Member sign-in is not configured yet. Please contact Helix.");
   let result: { error?: unknown } | undefined;
   try {

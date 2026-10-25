@@ -98,9 +98,6 @@ export const englishCopy = {
   "Build your CV": "Build your CV",
   "Save privately, preview your CV and choose when to share it with sponsors.":
     "Save privately, preview your CV and choose when to share it with sponsors.",
-  "Fictional local demo": "Fictional local demo",
-  "This demo saves only in this browser. It does not verify Google, Neon or sponsor access. PDF generation is replaced by an HTML preview.":
-    "This demo saves only in this browser. It does not verify Google, Neon or sponsor access. PDF generation is replaced by an HTML preview.",
   "Your session has ended. Editing is locked.":
     "Your session has ended. Editing is locked.",
   "Sign in again": "Sign in again",
@@ -194,7 +191,6 @@ export const englishCopy = {
   "Saving…": "Saving…",
   "Save private draft": "Save private draft",
   "Generating…": "Generating…",
-  "Preview demo CV": "Preview demo CV",
   "Preview PDF": "Preview PDF",
   "Download PDF": "Download PDF",
   "Download published CV": "Download published CV",
@@ -205,9 +201,7 @@ export const englishCopy = {
   "Withdraw published profile": "Withdraw published profile",
   "Publication saves and shares this version. Later draft edits stay private. Withdrawal keeps your draft and prevents new access. Files already downloaded cannot be recalled.":
     "Publication saves and shares this version. Later draft edits stay private. Withdrawal keeps your draft and prevents new access. Files already downloaded cannot be recalled.",
-  "Fill fictional example": "Fill fictional example",
   "CV preview": "CV preview",
-  "Demo CV preview": "Demo CV preview",
   "Generated CV preview": "Generated CV preview",
   "Close preview": "Close preview",
   "This preview follows your current email and phone sharing choices.":
@@ -216,7 +210,6 @@ export const englishCopy = {
     "CV download is currently off for sponsors.",
   "Download this PDF": "Download this PDF",
   "Generated CV PDF": "Generated CV PDF",
-  "Fictional demo · HTML preview": "Fictional demo · HTML preview",
   "Your name": "Your name",
   "Private draft saved. Your published version has not changed.":
     "Private draft saved. Your published version has not changed.",
@@ -225,8 +218,6 @@ export const englishCopy = {
   "Profile withdrawn from Talent Directory. Your private draft is kept.":
     "Profile withdrawn from Talent Directory. Your private draft is kept.",
   "Saved draft reloaded.": "Saved draft reloaded.",
-  "Fictional example added. Save or publish to keep it.":
-    "Fictional example added. Save or publish to keep it.",
   "Reloading replaces your unsaved input with the saved draft. Continue?":
     "Reloading replaces your unsaved input with the saved draft. Continue?",
   "Your latest changes are not saved. Sign out anyway?":
@@ -242,7 +233,6 @@ export const englishCopy = {
   "Verifying your Helix account…": "Verifying your Helix account…",
   "Member sign-in is not configured yet. Please contact Helix.":
     "Member sign-in is not configured yet. Please contact Helix.",
-  "Open fictional local demo": "Open fictional local demo",
 } as const;
 
 export type MemberCopyKey = keyof typeof englishCopy;
@@ -344,9 +334,6 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Build your CV": "Lag CV-en din",
   "Save privately, preview your CV and choose when to share it with sponsors.":
     "Lagre et privat utkast, forhåndsvis CV-en og velg når du vil dele den med sponsorer.",
-  "Fictional local demo": "Lokal demo med fiktive opplysninger",
-  "This demo saves only in this browser. It does not verify Google, Neon or sponsor access. PDF generation is replaced by an HTML preview.":
-    "Demoen lagrer bare i denne nettleseren. Den bekrefter ikke innlogging med Google, lagring i Neon eller sponsortilgang. CV-en forhåndsvises som HTML i stedet for PDF.",
   "Your session has ended. Editing is locked.":
     "Du er ikke lenger innlogget. Du må logge inn igjen for å redigere.",
   "Sign in again": "Logg inn igjen",
@@ -441,7 +428,6 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Saving…": "Lagrer…",
   "Save private draft": "Lagre privat utkast",
   "Generating…": "Lager forhåndsvisning…",
-  "Preview demo CV": "Forhåndsvis demo-CV",
   "Preview PDF": "Forhåndsvis PDF",
   "Download PDF": "Last ned PDF",
   "Download published CV": "Last ned publisert CV",
@@ -452,9 +438,7 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Withdraw published profile": "Trekk tilbake publisert profil",
   "Publication saves and shares this version. Later draft edits stay private. Withdrawal keeps your draft and prevents new access. Files already downloaded cannot be recalled.":
     "Publisering lagrer og deler denne versjonen. Senere endringer i utkastet forblir private. Når du trekker tilbake profilen, beholder du utkastet og stenger for ny tilgang. Filer som allerede er lastet ned, kan ikke trekkes tilbake.",
-  "Fill fictional example": "Fyll inn fiktivt eksempel",
   "CV preview": "Forhåndsvisning av CV",
-  "Demo CV preview": "Forhåndsvisning av demo-CV",
   "Generated CV preview": "Forhåndsvisning av generert CV",
   "Close preview": "Lukk forhåndsvisning",
   "This preview follows your current email and phone sharing choices.":
@@ -463,7 +447,6 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
     "CV-nedlasting er av for sponsorer.",
   "Download this PDF": "Last ned denne PDF-en",
   "Generated CV PDF": "Generert CV som PDF",
-  "Fictional demo · HTML preview": "Fiktiv demo · HTML-forhåndsvisning",
   "Your name": "Ditt navn",
   "Private draft saved. Your published version has not changed.":
     "Det private utkastet er lagret. Den publiserte versjonen er uendret.",
@@ -472,8 +455,6 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Profile withdrawn from Talent Directory. Your private draft is kept.":
     "Profilen er trukket tilbake fra talentoversikten. Det private utkastet beholdes.",
   "Saved draft reloaded.": "Det lagrede utkastet er lastet inn.",
-  "Fictional example added. Save or publish to keep it.":
-    "Det fiktive eksempelet er fylt inn. Lagre eller publiser for å beholde det.",
   "Reloading replaces your unsaved input with the saved draft. Continue?":
     "Når du laster inn på nytt, blir ulagrede endringer erstattet med det lagrede utkastet. Vil du fortsette?",
   "Your latest changes are not saved. Sign out anyway?":
@@ -489,7 +470,6 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Verifying your Helix account…": "Bekrefter Helix-kontoen din…",
   "Member sign-in is not configured yet. Please contact Helix.":
     "Medlemsinnlogging er ikke satt opp ennå. Kontakt Helix.",
-  "Open fictional local demo": "Åpne lokal demo med fiktive opplysninger",
 };
 
 type PlaceholderNames<Text extends string> =
