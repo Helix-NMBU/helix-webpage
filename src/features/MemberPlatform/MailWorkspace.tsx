@@ -45,7 +45,7 @@ const mailFolders: MailFolder[] = [
   { id: "trash", label: "Trash", icon: Trash2 },
 ];
 
-function GmailLogo({ className }: { className?: string }) {
+export function GmailLogo({ className }: { className?: string }) {
   return (
     <svg
       className={className}
