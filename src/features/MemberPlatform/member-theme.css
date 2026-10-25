@@ -59,8 +59,8 @@ html[data-member-theme="dark"] body:has(.member-platform) {
   --card-foreground: #ededed;
   --popover: #191919;
   --popover-foreground: #ededed;
-  --primary: #8aa4ff;
-  --primary-foreground: #101a40;
+  --primary: #fff;
+  --primary-foreground: #101010;
   --secondary: #202020;
   --secondary-foreground: #ededed;
   --muted: #202020;
@@ -69,17 +69,17 @@ html[data-member-theme="dark"] body:has(.member-platform) {
   --accent-foreground: #f5f5f5;
   --border: #2c2c2c;
   --input: #424242;
-  --ring: #8aa4ff;
+  --ring: #fff;
   --destructive: #ff8f8f;
   --destructive-foreground: #101010;
   --sidebar: #171717;
   --sidebar-foreground: #ddd;
-  --sidebar-primary: #8aa4ff;
-  --sidebar-primary-foreground: #101a40;
+  --sidebar-primary: #fff;
+  --sidebar-primary-foreground: #101010;
   --sidebar-accent: #282828;
   --sidebar-accent-foreground: #fff;
   --sidebar-border: #2c2c2c;
-  --sidebar-ring: #8aa4ff;
+  --sidebar-ring: #fff;
   --platform-canvas: #1c1c1c;
   color-scheme: dark;
 }
