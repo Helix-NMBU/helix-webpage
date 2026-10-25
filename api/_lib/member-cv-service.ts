@@ -11,7 +11,7 @@ import { withVerifyFullSsl } from "./pg-ssl.js";
 export { MemberCvError } from "./member-cv-error.js";
 export type WorkspaceIdentity = { userId: string; googleSub: string; email: string; name: string; helixRole?: string | null };
 export type StoredCv = CvRecord & { publishedPath: string | null };
-export type CvCommit = { action: "save" | "publish" | "withdraw"; expectedRevision: number; draft?: CvData; sharing?: CvSharing; path?: string | null };
+export type CvCommit = { action: "save" | "publish" | "withdraw" | "delete"; expectedRevision: number; draft?: CvData; sharing?: CvSharing; path?: string | null };
 export interface CvServices {
   authenticate(token: string): Promise<WorkspaceIdentity>;
   read(userId: string): Promise<StoredCv>;
@@ -157,10 +157,21 @@ export function createCvServices(deps: {
     },
     async commit(userId, change) {
       try {
-        const saved = await db.query<{ commit_member_cv: Record<string, unknown> }>(
-          "select cv.commit_member_cv($1, $2, $3, $4::jsonb, $5::jsonb, $6) as commit_member_cv",
-          [userId, change.action, change.expectedRevision, change.draft ? JSON.stringify(change.draft) : null, change.sharing ? JSON.stringify(change.sharing) : null, change.path ?? null],
-        );
+        // Both calls share one SQL statement and transaction. If the reset fails,
+        // withdrawal and its file-retirement changes roll back too.
+        const saved = change.action === "delete"
+          ? await db.query<{ commit_member_cv: Record<string, unknown> }>(
+            `with withdrawn as materialized (
+              select cv.commit_member_cv($1, 'withdraw', $2, null, null, null) as document
+            )
+            select cv.commit_member_cv($1, 'save', (document->>'revision')::integer, $3::jsonb, $4::jsonb, null) as commit_member_cv
+            from withdrawn`,
+            [userId, change.expectedRevision, change.draft ? JSON.stringify(change.draft) : null, change.sharing ? JSON.stringify(change.sharing) : null],
+          )
+          : await db.query<{ commit_member_cv: Record<string, unknown> }>(
+            "select cv.commit_member_cv($1, $2, $3, $4::jsonb, $5::jsonb, $6) as commit_member_cv",
+            [userId, change.action, change.expectedRevision, change.draft ? JSON.stringify(change.draft) : null, change.sharing ? JSON.stringify(change.sharing) : null, change.path ?? null],
+          );
         if (!saved.rows[0]?.commit_member_cv) throw new Error("empty");
         return record(saved.rows[0].commit_member_cv);
       } catch (error) {

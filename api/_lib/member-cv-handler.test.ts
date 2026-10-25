@@ -33,7 +33,7 @@ function fixture() {
       if (change.path && candidates.get(change.path) !== "pending") throw new MemberCvError(409, "Upload candidate cancelled.");
       if (change.draft) state.draft = structuredClone(change.draft);
       if (change.sharing) state.sharing = structuredClone(change.sharing);
-      state.revision++;
+      state.revision += change.action === "delete" ? 2 : 1;
       if (change.action !== "save") {
         if (state.publishedPath) retired.add(state.publishedPath);
         state.publishedPath = change.path ?? null;
@@ -149,6 +149,21 @@ describe("member CV handler", () => {
     expect(saved.body).toMatchObject({ document: { cvVisible: true, sharing: { cv: false } } });
     const withdrawn = await f.request({ action: "withdraw", expectedRevision: 2 });
     expect(withdrawn.body).toMatchObject({ document: { cvVisible: false } });
+  });
+  it("deletes CV content and publication while preserving saved personal details and ignoring forged payloads", async () => {
+    const f = fixture();
+    const draft = { ...publishedData(), fieldOfStudy: "Robotics", graduationYear: "2028", summary: "CV summary", translations: { nb: { summary: "CV-tekst" } } };
+    await f.request({ action: "publish", draft, sharing: { cv: true, email: true, phone: true }, expectedRevision: 0 });
+    f.render.mockClear();
+    expect((await f.request({ action: "delete", expectedRevision: 0 })).status).toBe(409);
+    expect(f.state().draft.summary).toBe("CV summary");
+    const removed = await f.request({ action: "delete", expectedRevision: 1, draft: { fullName: "Forged" } });
+    expect(removed.status).toBe(200);
+    expect(removed.body).toMatchObject({ document: { cvVisible: false, publishedRevision: null, draft: { fullName: "Åse Ødegård", phone: "+47 12345678", fieldOfStudy: "Robotics", graduationYear: "2028", cvRegistered: false, education: [], summary: "" } } });
+    expect(f.state().draft.translations).toBeUndefined();
+    expect(f.snapshot()).toBeNull();
+    expect(f.stored.size).toBe(0);
+    expect(f.render).not.toHaveBeenCalled();
   });
   it("removes a newly generated PDF when a stale publication loses its revision race", async () => {
     const f = fixture();

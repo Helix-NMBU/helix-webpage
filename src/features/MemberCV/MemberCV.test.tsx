@@ -61,6 +61,17 @@ describe("member profile", () => {
   }
   async function click(name: string) { await act(async () => button(name).click()); }
 
+  async function cvMenu(name: string) {
+    await act(async () => button("CV actions").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(element => element.textContent === name)!;
+    await act(async () => item.click());
+  }
+  async function chooseDownloadLanguage(name: string) {
+    await act(async () => button("Download language").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(element => element.textContent === name)!;
+    await act(async () => option.click());
+  }
+
   it("keeps the platform in English and places the CV entry below the profile", async () => {
     await open();
     expect(container.querySelector("h1")?.textContent).toBe("Profile");
@@ -76,8 +87,8 @@ describe("member profile", () => {
     expect(container.querySelector('[aria-label="Language"]')).toBeNull();
     expect(container.querySelector("textarea")).toBeNull();
     const actions = [...container.querySelectorAll('[aria-labelledby="member-cv-title"] button')].map(item => item.getAttribute("aria-label"));
-    expect(actions.indexOf("Edit CV")).toBeLessThan(actions.indexOf("Preview CV"));
-    await click("Edit CV");
+    expect(actions.filter(Boolean)).toEqual(["Preview CV", "CV actions"]);
+    await cvMenu("Edit");
     expect([...document.querySelectorAll('[aria-label="CV setup steps"] button')].map(item => item.textContent)).toEqual(["1. Introduction", "2. Education", "3. Experience", "4. Projects", "5. Languages", "6. Links", "7. Review & sharing"]);
     await click("2. Education");
     await click("Remove education 1");
@@ -124,7 +135,8 @@ describe("member profile", () => {
 
   it("downloads Norwegian by default and publishes or withdraws through the directory switch", async () => {
     await open();
-    await click("Download Norwegian CV");
+    await cvMenu("Download");
+    await click("Download");
     expect(generateBrowserCvPdf).toHaveBeenLastCalledWith(expect.anything(), privateSharing, "nb");
     const toggle = () => container.querySelector<HTMLButtonElement>('[role="switch"]')!;
     expect(toggle().getAttribute("aria-checked")).toBe("false");
@@ -141,15 +153,41 @@ describe("member profile", () => {
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.publishedRevision).toBeNull();
   });
 
-  it("offers English and Norwegian in the download dropdown without changing the default icon action", async () => {
+  it("offers Edit, Download and Delete in the menu and asks for download language in a modal", async () => {
     await open();
-    await act(async () => button("Download language").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await act(async () => button("CV actions").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     const options = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-    expect(options.map(item => item.textContent)).toEqual(["Norwegian", "English"]);
-    await act(async () => options.find(item => item.textContent === "English")!.click());
+    expect(options.map(item => item.textContent)).toEqual(["Edit", "Download", "Delete"]);
+    await act(async () => options.find(item => item.textContent === "Download")!.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose the language for your CV.");
+    expect(document.querySelector('[aria-label="Download language"]')?.textContent).toContain("Norwegian");
+    await chooseDownloadLanguage("English");
+    await click("Download");
     expect(generateBrowserCvPdf).toHaveBeenLastCalledWith(expect.anything(), privateSharing, "en");
-    await click("Download Norwegian CV");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await cvMenu("Download");
+    await click("Download");
     expect(generateBrowserCvPdf).toHaveBeenLastCalledWith(expect.anything(), privateSharing, "nb");
+  });
+
+  it("requires delete confirmation, preserves profile details, and removes a published CV", async () => {
+    await open();
+    await act(async () => container.querySelector<HTMLButtonElement>('[role="switch"]')!.click());
+    await cvMenu("Delete");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Delete CV?");
+    expect(document.activeElement?.textContent).toBe("Cancel");
+    const before = localStorage.getItem(DEMO_STORAGE_KEY);
+    await click("Cancel");
+    expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBe(before);
+    await cvMenu("Delete");
+    await click("Delete CV");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).toContain("No CV yet");
+    const saved = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!);
+    expect(saved.document.draft).toMatchObject({ fullName: "Alex Example", fieldOfStudy: "Mechanical engineering", graduationYear: "2028", cvRegistered: false, education: [], projects: [], languages: [], skills: [], summary: "", headline: "" });
+    expect(saved.document.publishedRevision).toBeNull();
+    expect(saved.published).toBeNull();
+    expect(saved.document.sharing).toEqual(privateSharing);
   });
 
   it("ends the local account session when signing out from the profile editor", async () => {

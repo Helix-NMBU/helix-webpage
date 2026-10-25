@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
-import { emptyCv } from "../src/features/MemberCV/model.js";
+import { createCvServices } from "../api/_lib/member-cv-service.js";
+import { emptyCv, withoutCv, privateSharing } from "../src/features/MemberCV/model.js";
 import type { CvData } from "../src/features/MemberCV/types.js";
 
 const authUser = "10000000-0000-4000-8000-000000000001";
@@ -134,7 +135,7 @@ describe("member CV schema", () => {
     expect(published.linkedin).toBe("https://www.linkedin.com/in/ase");
     expect(published.career_entries).toEqual([expect.objectContaining({ title: "Team lead" })]);
     await commit("withdraw", revision + 1, null);
-    const publications = (await db.query("select snapshot, path from cv.publications where member_id = $1", [member])).rows;
+    const publications = (await db.query<{ snapshot: unknown; path: string | null }>("select snapshot, path from cv.publications where member_id = $1", [member])).rows;
     expect(publications.length).toBeGreaterThan(0);
     for (const row of publications) expect(row).toEqual({ snapshot: null, path: null });
     expect((await db.query(
@@ -164,4 +165,32 @@ describe("member CV schema", () => {
     expect((await db.query("select not_before > clock_timestamp() + interval '14 minutes' as deferred from cv.file_cleanup where path = $1", [path])).rows).toEqual([{ deferred: true }]);
     await expect(db.query("select cv.commit_member_cv($1,'publish',$2,$3::jsonb,$4::jsonb,$5)", [member, revision, JSON.stringify(cv), JSON.stringify(sharing), path])).rejects.toThrow("Upload candidate cancelled or expired");
   });
+  it("atomically deletes a published CV and rolls withdrawal back if resetting its draft fails", async () => {
+    const services = createCvServices({ db, storage: { putPdf: async () => undefined, remove: async () => undefined, presign: async () => "unused" } });
+    let revision = Number((await db.query<{ revision: number }>("select revision from cv.documents where member_id = $1", [member])).rows[0].revision);
+    const path = `${member}/40000000-0000-4000-8000-000000000001.pdf`;
+    await commit("publish", revision, cv, sharing, path);
+    const deleted = await services.commit(member, { action: "delete", expectedRevision: revision + 1, draft: withoutCv(cv), sharing: privateSharing });
+    expect(deleted.draft).toEqual(withoutCv(cv));
+    expect(deleted.revision).toBe(revision + 3);
+    expect(deleted.publishedPath).toBeNull();
+    expect(deleted.publishedRevision).toBeNull();
+    expect((await db.query("select visible, cv_path from cv.directory_entries where member_id = $1", [member])).rows[0]).toEqual({ visible: false, cv_path: null });
+    expect((await db.query<{ snapshot: unknown; path: string | null }>("select snapshot, path from cv.publications where member_id = $1", [member])).rows.every((item) => item.snapshot === null && item.path === null)).toBe(true);
+    expect((await db.query("select path from cv.file_cleanup where path = $1", [path])).rows).toEqual([{ path }]);
+
+    revision = deleted.revision;
+    const secondPath = `${member}/40000000-0000-4000-8000-000000000002.pdf`;
+    await commit("publish", revision, cv, sharing, secondPath);
+    await expect(services.commit(member, { action: "delete", expectedRevision: revision })).rejects.toMatchObject({ status: 409 });
+    // Missing reset data fails after withdrawal has run, so this checks transaction rollback.
+    await expect(services.commit(member, { action: "delete", expectedRevision: revision + 1, sharing: privateSharing })).rejects.toMatchObject({ status: 503 });
+    const retained = await services.read(member);
+    expect(retained.revision).toBe(revision + 1);
+    expect(retained.draft).toEqual(cv);
+    expect(retained.publishedPath).toBe(secondPath);
+    expect((await db.query("select visible, cv_path from cv.directory_entries where member_id = $1", [member])).rows[0]).toEqual({ visible: true, cv_path: secondPath });
+    expect((await db.query("select path from cv.file_cleanup where path = $1", [secondPath])).rows).toEqual([]);
+  });
+
 });

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { sharedCvData, validateCvData, validateSharing } from "../../src/features/MemberCV/model.js";
+import { sharedCvData, validateCvData, validateSharing, withoutCv, privateSharing } from "../../src/features/MemberCV/model.js";
 import type { CvMutation, PdfRenderer } from "../../src/features/MemberCV/types.js";
 import { bearer, envelope, MemberCvError, neonCvServices, type CvServices } from "./member-cv-service.js";
 
@@ -29,6 +29,11 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       }
       if (!Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 0) throw new MemberCvError(400, "A valid saved revision is required.");
       const expectedRevision = body.expectedRevision as number;
+      if (body.action === "delete") {
+        const current = await services.read(identity.userId);
+        return respond(await services.commit(identity.userId, { action: "delete", expectedRevision,
+          draft: withoutCv(current.draft), sharing: { ...privateSharing } }));
+      }
       if (body.action === "withdraw") {
         const saved = await services.commit(identity.userId, { action: "withdraw", expectedRevision });
         return respond(saved);
@@ -77,7 +82,7 @@ function parseMutation(value: unknown): CvMutation {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Invalid request.");
   const body = value as CvMutation;
   if (body.language !== undefined && body.language !== "en" && body.language !== "nb") throw new MemberCvError(400, "Invalid request.");
-  if (!["save", "publish", "withdraw", "preview"].includes(body.action) || JSON.stringify(value).length > 120000) throw new MemberCvError(400, "Invalid or oversized CV request.");
+  if (!["save", "publish", "withdraw", "delete", "preview"].includes(body.action) || JSON.stringify(value).length > 120000) throw new MemberCvError(400, "Invalid or oversized CV request.");
   return body;
 }
 function parseData(value: unknown, publication = false) {

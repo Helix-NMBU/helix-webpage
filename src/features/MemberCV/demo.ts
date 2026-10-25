@@ -1,4 +1,4 @@
-import { emptyCv, privateSharing } from "./model";
+import { emptyCv, privateSharing, withoutCv } from "./model";
 import {
   CvRequestError,
   validateMutation,
@@ -83,12 +83,17 @@ export function createDemoRepository(
         if (mutation.draft) document.draft = mutation.draft;
         if (mutation.sharing) document.sharing = mutation.sharing;
       }
+      if (mutation.action === "delete") {
+        document.draft = withoutCv(envelope.document.draft);
+        document.sharing = { ...privateSharing };
+        document.revision++;
+      }
       if (mutation.action === "publish") {
         document.cvVisible = Boolean(mutation.sharing?.cv);
         document.publishedRevision = nextRevision;
         document.publishedAt = new Date().toISOString();
       }
-      if (mutation.action === "withdraw") {
+      if (mutation.action === "withdraw" || mutation.action === "delete") {
         document.cvVisible = false;
         document.publishedRevision = null;
         document.publishedAt = null;
@@ -99,7 +104,7 @@ export function createDemoRepository(
       const published =
         mutation.action === "publish"
           ? { draft: document.draft, sharing: document.sharing }
-          : mutation.action === "withdraw"
+          : mutation.action === "withdraw" || mutation.action === "delete"
             ? null
             : previous
               ? (JSON.parse(previous) as { published?: unknown }).published

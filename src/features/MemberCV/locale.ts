@@ -217,6 +217,7 @@ export const englishCopy = {
     "Published. Sponsors with Talent Directory access can see this version with your sharing choices.",
   "Profile withdrawn from Talent Directory. Your private draft is kept.":
     "Profile withdrawn from Talent Directory. Your private draft is kept.",
+  "CV deleted. Your profile details have been kept.": "CV deleted. Your profile details have been kept.",
   "Saved draft reloaded.": "Saved draft reloaded.",
   "Reloading replaces your unsaved input with the saved draft. Continue?":
     "Reloading replaces your unsaved input with the saved draft. Continue?",
@@ -454,6 +455,7 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
     "Publisert. Sponsorer med tilgang til talentoversikten kan se denne versjonen med delingsvalgene dine.",
   "Profile withdrawn from Talent Directory. Your private draft is kept.":
     "Profilen er trukket tilbake fra talentoversikten. Det private utkastet beholdes.",
+  "CV deleted. Your profile details have been kept.": "CV-en er slettet. Profilopplysningene dine er beholdt.",
   "Saved draft reloaded.": "Det lagrede utkastet er lastet inn.",
   "Reloading replaces your unsaved input with the saved draft. Continue?":
     "Når du laster inn på nytt, blir ulagrede endringer erstattet med det lagrede utkastet. Vil du fortsette?",

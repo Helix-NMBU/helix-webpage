@@ -5,6 +5,13 @@ export function emptyCv(fullName = "", contactEmail = ""): CvData {
   return { fullName, contactEmail, phone: "", city: "", headline: "", summary: "", fieldOfStudy: "", graduationYear: "", education: [], experience: [], projects: [], skills: [], languages: [], links: [] };
 }
 
+/** Remove CV content while retaining the personal details shown on the profile card. */
+export function withoutCv(data: CvData): CvData {
+  return { ...emptyCv(data.fullName, data.contactEmail), phone: data.phone, city: data.city,
+    fieldOfStudy: data.fieldOfStudy, graduationYear: data.graduationYear,
+    ...(data.cvLanguage ? { cvLanguage: data.cvLanguage } : {}), cvRegistered: false };
+}
+
 export const privateSharing: CvSharing = { cv: false, email: false, phone: false };
 
 function object(value: unknown): Record<string, unknown> {

@@ -19,7 +19,6 @@ import type { CvData, CvEnvelope, CvExperience, CvMutation, CvSharing, CvOutputL
 import { classifyCvRequestFailure, createPrivateAutosave, cvSnapshotKey, type CvAutosaveState } from "./autosave";
 import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
-import { ButtonGroup } from "@libs/components/ui/button-group";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@libs/components/ui/empty";
 import { useMemberNotifications } from "../MemberPlatform/MemberNotifications";
 import { Switch } from "@libs/components/ui/switch";
@@ -40,7 +39,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@libs/components/ui/collapsible";
-import { ChevronDown, Download, Eye, FileText } from "lucide-react";
+import { ChevronDown, Ellipsis, Eye, FileText } from "lucide-react";
 import { ChoiceInput, OptionalGradeInput, PeriodInputs } from "./ProfileInputs";
 import {
   employmentTypes,
@@ -338,6 +337,11 @@ export default function MemberCV() {
   const navigate = useNavigate();
   const [setupOpen, setSetupOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<CvStep>("intro");
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [downloadLanguage, setDownloadLanguage] = useState<CvOutputLanguage>("nb");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const actionsTrigger = useRef<HTMLButtonElement | null>(null);
+  const deleteCancel = useRef<HTMLButtonElement | null>(null);
   const [outputLanguage, setOutputLanguage] = useState<CvOutputLanguage>("en");
   const demo =
     import.meta.env.DEV &&
@@ -381,7 +385,7 @@ export default function MemberCV() {
         return element.getClientRects().length > 0;
       };
       const trigger = [...document.querySelectorAll<HTMLElement>('[aria-label="Profile menu"]')].find(shown);
-      (trigger ?? document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'))?.focus();
+      (document.querySelector<HTMLElement>('[aria-labelledby="member-cv-title"] [data-slot="empty"] button') ?? trigger)?.focus();
     }
   }, []);
   const repository = useMemo(
@@ -634,7 +638,7 @@ export default function MemberCV() {
       const submitted = { draft: structuredClone({ ...live.draft, ...profileChanges }), sharing: { ...live.sharing, ...sharingChanges } };
       const mutation = validateProfileMutation({
         action,
-        ...(action === "withdraw" ? {} : submitted),
+        ...(["withdraw", "delete"].includes(action) ? {} : submitted),
         expectedRevision: saved.document.revision,
         ...(action === "preview" ? { language } : {}),
       }, saved.document.draft);
@@ -662,18 +666,22 @@ export default function MemberCV() {
         const result = await repository.mutate(mutation);
         if (generation.current !== current) return;
         setEnvelope(result);
-        controller?.acknowledge(result, action === "withdraw" ? undefined : submitted);
+        if (action === "delete") {
+          controller?.reset(result);
+          clearPreview();
+          setSetupOpen(false);
+        } else controller?.acknowledge(result, action === "withdraw" ? undefined : submitted);
         if (action !== "withdraw") {
-          acknowledgedInput.current = cvSnapshotKey(submitted);
+          acknowledgedInput.current = cvSnapshotKey(action === "delete" ? { draft: result.document.draft, sharing: result.document.sharing } : submitted);
           setDraft(result.document.draft);
           setSharing(result.document.sharing);
         }
-        const message = action === "save"
+        const message = action === "delete" ? "CV deleted. Your profile details have been kept." : action === "save"
           ? "Private draft saved. Your published version has not changed."
           : action === "publish"
             ? "Published. Sponsors with Talent Directory access can see this version with your sharing choices."
             : "Profile withdrawn from Talent Directory. Your private draft is kept.";
-        const title = action === "save" ? "Changes saved" : action === "publish"
+        const title = action === "delete" ? "CV deleted" : action === "save" ? "Changes saved" : action === "publish"
           ? `${submitted.sharing.cv ? "CV" : "Profile"} visible in Talent Directory` : "CV hidden from Talent Directory";
         if (notifications) notifications.notify(title, t(message));
         else setNotice(message);
@@ -892,18 +900,15 @@ export default function MemberCV() {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline" size="sm" className="cv-control" aria-label="Edit CV" disabled={Boolean(busy)} onClick={openCvSetup}>Edit</Button>
               <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Preview CV" title="Preview CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", false, event.currentTarget)}><Eye aria-hidden="true" /></Button>
-              <ButtonGroup aria-label="Download CV">
-                <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Download Norwegian CV" title="Download Norwegian CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", true, event.currentTarget, undefined, "nb")}><Download aria-hidden="true" /></Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="cv-control h-8 w-7" aria-label="Download language" title="Download language" disabled={Boolean(busy)}><ChevronDown aria-hidden="true" /></Button></DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => void run("preview", true, undefined, undefined, "nb")}>Norwegian</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => void run("preview", true, undefined, undefined, "en")}>English</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </ButtonGroup>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button ref={actionsTrigger} variant="outline" size="icon" className="cv-control size-8" aria-label="CV actions" title="CV actions" disabled={Boolean(busy)}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={openCvSetup}>Edit</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { setDownloadLanguage("nb"); setDownloadOpen(true); }}>Download</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => setDeleteOpen(true)}>Delete</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardContent></Card> : <Empty className="min-h-80 border border-solid bg-card">
             <EmptyHeader>
@@ -969,8 +974,32 @@ export default function MemberCV() {
         )}
         {!ended && (!draft || !envelope) && <Alert role="status" className="mcv-notice"><AlertDescription>{busy ? t("Verifying your Helix account…") : t("Your CV could not be opened.")}</AlertDescription></Alert>}
       </div>
+      <Dialog open={downloadOpen} onOpenChange={(open) => { if (!busy) setDownloadOpen(open); }}>
+        <DialogContent className="portal-root" showCloseButton={!busy} onCloseAutoFocus={(event) => { event.preventDefault(); restoreOpener(actionsTrigger.current); }}>
+          <DialogHeader><DialogTitle>Download CV</DialogTitle><DialogDescription>Choose the language for your CV.</DialogDescription></DialogHeader>
+          <div className="grid gap-2"><Label>Language</Label><CvLanguageSelect label="Download language" value={downloadLanguage} onChange={setDownloadLanguage} disabled={Boolean(busy) || ended} /></div>
+          {error && <Alert variant="destructive"><AlertDescription>{localizeCvError(error, locale)}</AlertDescription></Alert>}
+          <DialogFooter>
+            <Button variant="outline" disabled={Boolean(busy)} onClick={() => setDownloadOpen(false)}>Cancel</Button>
+            <Button disabled={Boolean(busy) || ended} onClick={async () => { if (await run("preview", true, undefined, undefined, downloadLanguage)) setDownloadOpen(false); }}>{busy === "preview" ? "Downloading…" : "Download"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deleteOpen} onOpenChange={(open) => { if (!busy) setDeleteOpen(open); }}>
+        <DialogContent className="portal-root" showCloseButton={!busy}
+          onOpenAutoFocus={(event) => { event.preventDefault(); deleteCancel.current?.focus(); }}
+          onCloseAutoFocus={(event) => { event.preventDefault(); restoreOpener(actionsTrigger.current); }}>
+          <DialogHeader><DialogTitle>Delete CV?</DialogTitle><DialogDescription>This will delete your CV and remove it from Talent Directory. Your profile details will be kept. This cannot be undone.</DialogDescription></DialogHeader>
+          {error && <Alert variant="destructive"><AlertDescription>{localizeCvError(error, locale)}</AlertDescription></Alert>}
+          <DialogFooter>
+            <Button ref={deleteCancel} variant="outline" disabled={Boolean(busy)} onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" disabled={Boolean(busy) || ended} onClick={async () => { if (await run("delete")) setDeleteOpen(false); }}>{busy === "delete" ? "Deleting…" : "Delete CV"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={setupOpen} onOpenChange={(open) => { if (!busy) setSetupOpen(open); }}>
-        {draft && envelope && <DialogContent className="portal-root mcv-wizard flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl" showCloseButton={!busy}>
+        {draft && envelope && <DialogContent className="portal-root mcv-wizard flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl" showCloseButton={!busy}
+          onCloseAutoFocus={(event) => { event.preventDefault(); restoreOpener(actionsTrigger.current); }}>
           <CvTranslationsProvider draft={draft} disabled={Boolean(busy) || ended} onChange={(value) => edit("translations", value)}>
             <DialogHeader className="border-b p-5 pr-12">
               <DialogTitle>{hasRegisteredCv(draft) ? "Edit CV" : "Set up CV"}</DialogTitle>
