@@ -65,7 +65,7 @@
 .member-icon-rail button { width: 40px; height: 40px; border-radius: 12px; box-shadow: none; }
 .member-icon-rail button svg { width: 21px; height: 21px; stroke-width: 1.65; }
 .member-icon-rail .member-rail-logo { background: #002ec4; }
-.member-rail-logo img { width: 18px; height: 30px; object-fit: contain; }
+.member-rail-logo img { width: 14px; height: 24px; object-fit: contain; }
 .member-rail-links { display: grid; gap: 12px; }
 .member-rail-links button { color: var(--muted-foreground); }
 .member-rail-links button[data-active="true"] { color: var(--foreground); background: var(--sidebar-accent); }
