@@ -26,9 +26,7 @@ body:has(.portal-root) {
   --sidebar-border: rgba(255, 255, 255, .2);
   --sidebar-ring: #fdfdfd;
 
-  /* Tailwind's `@theme inline` bakes some `--color-*` tokens (border, background, ...)
-     into real inherited custom properties that don't track the semantic vars above once
-     re-declared in a nested scope like this one, so they're repeated explicitly here. */
+  /* Prose styles and custom CSS also consume these color aliases directly. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

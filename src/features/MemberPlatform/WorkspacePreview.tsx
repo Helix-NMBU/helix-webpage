@@ -53,9 +53,11 @@ import {
 import { previewPage, previewTeams } from "./workspace-preview-data";
 
 const suggestions = [
-  "Give me a workspace summary",
-  "Draft a sponsor update",
-  "What needs approval?",
+  "Summarize Helix team updates",
+  "Draft a Helix sponsor update",
+  "What needs approval in Helix?",
+  "Show the Helix production plan",
+  "Help plan Helix's next campaign",
 ];
 
 export function WorkspaceHomePreview() {
@@ -66,11 +68,15 @@ export function WorkspaceHomePreview() {
   );
   const form = useRef<HTMLFormElement>(null);
 
+  function send(message: string) {
+    if (!message.trim()) return;
+    setTurn({ question: message, scope });
+    setText("");
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!text.trim()) return;
-    setTurn({ question: text.trim(), scope });
-    setText("");
+    send(text.trim());
   }
 
   return (
@@ -114,15 +120,17 @@ export function WorkspaceHomePreview() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm leading-6">
-              <p>
-                {turn.scope === "business-marketing"
-                  ? "The partner spotlight is planned for the newsletter. The workshop stories campaign is ready for review."
-                  : turn.scope === "finance"
-                    ? "Two example expense claims are ready for review. The event budget also needs a decision."
-                    : turn.scope === "mechanical-production"
-                      ? "The frame assembly is in workshop preparation. The mounting bracket is ready for design review."
-                      : "The workshop stories campaign is ready for review. Finance has two example expense claims awaiting review, and the production team is preparing the frame assembly."}
-              </p>
+              <div className="typeset typeset-chat">
+                <p>
+                  {turn.scope === "business-marketing"
+                    ? "The partner spotlight is planned for the newsletter. The workshop stories campaign is ready for review."
+                    : turn.scope === "finance"
+                      ? "Two example expense claims are ready for review. The event budget also needs a decision."
+                      : turn.scope === "mechanical-production"
+                        ? "The frame assembly is in workshop preparation. The mounting bracket is ready for design review."
+                        : "The workshop stories campaign is ready for review. Finance has two example expense claims awaiting review, and the production team is preparing the frame assembly."}
+                </p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {previewTeams
                   .filter(
@@ -144,6 +152,23 @@ export function WorkspaceHomePreview() {
       )}
 
       <div className="space-y-3">
+        <div
+          className="no-scrollbar flex scroll-fade-x gap-2 overflow-x-auto overscroll-x-contain py-1"
+          role="group"
+          aria-label="Helix suggestions"
+        >
+          {suggestions.map((suggestion) => (
+            <Button
+              key={suggestion}
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => send(suggestion)}
+            >
+              {suggestion}
+            </Button>
+          ))}
+        </div>
         <form ref={form} onSubmit={submit}>
           <InputGroup className="rounded-xl bg-background shadow-sm">
             <InputGroupTextarea
@@ -194,22 +219,6 @@ export function WorkspaceHomePreview() {
             </InputGroupAddon>
           </InputGroup>
         </form>
-        <div className="flex flex-wrap gap-2">
-          {suggestions.map((suggestion) => (
-            <Button
-              key={suggestion}
-              variant="outline"
-              size="sm"
-              className="h-auto whitespace-normal py-2 font-normal"
-              onClick={() => {
-                setText(suggestion);
-                form.current?.querySelector("textarea")?.focus();
-              }}
-            >
-              {suggestion}
-            </Button>
-          ))}
-        </div>
         <p className="text-xs leading-5 text-muted-foreground">
           Example mode. Prompts stay on this page and are not sent to an AI
           service.

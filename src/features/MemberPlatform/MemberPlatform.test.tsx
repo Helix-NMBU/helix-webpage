@@ -142,6 +142,19 @@ describe("internal member platform", () => {
     expect(router.state.location.pathname).toBe("/profile");
   });
 
+  it("sends the Helix suggestion as the message in one click", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/");
+    const prompt = "Draft a Helix sponsor update";
+    const suggestion = [...container.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent === prompt);
+    expect(suggestion).toBeDefined();
+    await act(async () => suggestion?.click());
+    const reply = container.querySelector('[aria-live="polite"]');
+    expect(reply?.firstElementChild?.textContent).toBe(prompt);
+    expect(reply?.textContent).toContain("Example response");
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Ask Helix"]')?.value).toBe("");
+  });
+
   it("preserves the one-time verifier when redirecting old profile links", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/member/profile?neon_auth_session_verifier=test#contact");

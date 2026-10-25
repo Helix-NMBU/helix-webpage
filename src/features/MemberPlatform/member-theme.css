@@ -3,6 +3,14 @@ html[data-member-theme] {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
   --default-font-family: var(--font-sans);
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -12,6 +20,25 @@ html[data-member-theme] body,
 html[data-member-theme] .portal-root { font-family: var(--font-sans); }
 html[data-member-theme] .portal-root,
 html[data-member-theme] body:has(.member-platform) {
+  --background: #fff;
+  --foreground: #18181b;
+  --card: #fff;
+  --card-foreground: #18181b;
+  --popover: #fff;
+  --popover-foreground: #18181b;
+  --primary: #002ec4;
+  --primary-foreground: #fff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --border: #e4e4e7;
+  --input: #d4d4d8;
+  --ring: #002ec4;
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: #fff;
   --sidebar: #fafafa;
   --sidebar-foreground: #27272a;
   --sidebar-primary: #002ec4;
@@ -44,6 +71,7 @@ html[data-member-theme="dark"] body:has(.member-platform) {
   --input: #424242;
   --ring: #8aa4ff;
   --destructive: #ff8f8f;
+  --destructive-foreground: #101010;
   --sidebar: #171717;
   --sidebar-foreground: #ddd;
   --sidebar-primary: #8aa4ff;
@@ -65,3 +93,11 @@ html[data-member-theme] .mcv-nav-label { color: var(--foreground); }
 html[data-member-theme] .mcv-demo-label { font-family: inherit; }
 html[data-member-theme] .member-login-brand-icon,
 html[data-member-theme] .member-login-brand-panel { background: #002ec4; }
+
+/* Reading rhythm for assistant prose; controls keep their component typography. */
+html[data-member-theme] .typeset-chat {
+  --typeset-font-body: var(--font-sans);
+  --typeset-font-heading: var(--font-sans);
+  --typeset-leading: 1.6;
+  --typeset-flow: 1em;
+}
