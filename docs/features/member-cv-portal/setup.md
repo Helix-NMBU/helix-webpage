@@ -39,6 +39,16 @@ The pooled `DATABASE_URL` is only for the API. Access control is in the API: the
 
 ## Google sign-in
 
+### Internal member platform routes
+
+On `internal.helixnmbu.no`, `/login` is the Google sign-in page, `/` is the protected member landing page, and `/profile` opens the profile and CV editor. The app verifies the member session before rendering either protected page. The APIs continue to require a verified member bearer token. Marketing routes, the public navbar, the marketing page loader, and the public footer are not rendered on this host.
+
+Old `/member/login`, `/member/profile` and `/cv-bank` links redirect within the internal app and preserve the query and fragment, including Neon's one-time session verifier. The public website keeps its own homepage and routes.
+
+The Vercel project-level rule `36e32a59-b240-4213-ac8f-ab295422d0c8`, which previously redirected the internal root to `/member/login`, must be disabled after deploying this version. It runs before the app's routes and would otherwise intercept direct visits to the protected root.
+
+For local internal-app development, start Vite with `VITE_MEMBER_PLATFORM=true npm run dev`. This override only works in development on localhost or 127.0.0.1. Production selects the member app by its exact hostname.
+
 Login is Google only. The Google redirect URI registered on the OAuth client is:
 
 `{NEON_AUTH_BASE_URL}/callback/google`
@@ -47,7 +57,7 @@ For this project that is:
 
 `https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth/callback/google`
 
-That URI is Neon's callback, not the website. After Google returns, Neon sends the browser to the absolute `callbackURL` on this site (`/member/profile` by default). A relative or missing callback falls back to `/`. That origin must be a trusted domain in the Neon Auth console, with the scheme and no trailing slash. Localhost is often already trusted. Add the production Vercel domain and any preview origins that should be able to sign in.
+That URI is Neon's callback, not the website. After Google returns, Neon sends the browser to the absolute `callbackURL` on the current origin. The internal app defaults to `/`, can return to `/profile`, and sends sign-in errors to `/login`. Legacy website member routes default to `/member/profile`. Return destinations are validated before being passed to Neon. The origin must be a trusted domain in the Neon Auth console, with the scheme and no trailing slash. Localhost is often already trusted. Add the production Vercel domain and any preview origins that should be able to sign in.
 
 In the Neon Auth console, disable email and password sign-up. The API still rejects a session that is not a verified `@helixnmbu.no` Google account, including a missing or wrong hosted domain, an unverified email, a banned user, or a Google ID token whose audience is not `GOOGLE_CLIENT_ID`. The first successful link stores the Google subject on `identity.members`. Later requests keep that link while the Neon user is still that Google account with a verified Helix email. Changing the email or Google subject requires a fresh valid ID token. A client-supplied `hd` value is ignored.
 

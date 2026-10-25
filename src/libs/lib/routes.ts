@@ -52,12 +52,12 @@ const hiddenChromePaths = new Set([
   "/cv-bank/login",
   "/cv-bank/profile",
   "/member/login",
+  "/member/profile",
 ]);
 
 const hiddenNavbarOnlyPaths = new Set<string>([]);
 
-/** The CV editor uses the site header and still hides the marketing footer. */
-const hiddenFooterOnlyPaths = new Set(["/member/profile"]);
+const hiddenFooterOnlyPaths = new Set<string>([]);
 
 export function hideFooter(pathname: string): boolean {
   return hiddenChromePaths.has(pathname) || hiddenFooterOnlyPaths.has(pathname);

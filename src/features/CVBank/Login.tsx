@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
 import { memberLoginDestination } from "../MemberCV/repository";
+import { memberPaths } from "../MemberPlatform/routes";
 import { memberText, type StaticMemberCopyKey } from "../MemberCV/locale";
 import { localizeCvError } from "../MemberCV/errors";
 import { authClient, ensureMemberLanding, loginAction, memberAuthConfigured, startGoogleSignIn, type MemberFrame } from "../MemberCV/session";
@@ -63,10 +64,10 @@ export default function CVBankLogin() {
     <main className="member-login portal-root" lang={locale}>
       <div className="member-login-panel">
         <header className="member-login-header">
-          <a className="member-login-brand" href="https://helixnmbu.no">
+          <Link className="member-login-brand" to={memberPaths().home}>
             <span className="member-login-brand-icon"><img src="/Vector.png" alt="" /></span>
             <span>Helix NMBU</span>
-          </a>
+          </Link>
         </header>
         <div className="member-login-center">
           <section className="member-login-form" aria-labelledby="member-login-title">
@@ -93,9 +94,6 @@ export default function CVBankLogin() {
             )}
           </section>
         </div>
-        <footer className="member-login-footer">
-          <a href="https://helixnmbu.no">{t("Back to home")}</a>
-        </footer>
       </div>
       <div className="member-login-brand-panel" aria-hidden="true">
         <img src="/Vector.png" alt="" />

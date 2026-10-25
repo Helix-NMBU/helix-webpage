@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -67,7 +66,7 @@ import {
   type MemberLocale,
 } from "./locale";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { useMemberNav } from "@libs/components/navbar/member-nav";
+import { memberPaths } from "../MemberPlatform/routes";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
 import "./member-cv.css";
@@ -299,10 +298,7 @@ function Section({
 
 export default function MemberCV() {
   const { locale, setLocale, t } = useMemberLocale();
-  const { setActions } = useMemberNav();
-  const logoutRef = useRef<(opener?: HTMLElement) => Promise<void>>(async () => {});
-  const setLocaleRef = useRef(setLocale);
-  setLocaleRef.current = setLocale;
+  const paths = memberPaths();
   const location = useLocation();
   const navigate = useNavigate();
   const demo =
@@ -462,7 +458,7 @@ export default function MemberCV() {
         if ("redirectTo" in outcome) {
           navigate(outcome.redirectTo, {
             replace: true,
-            state: { from: "/member/profile" },
+            state: { from: paths.profile },
           });
           return;
         }
@@ -491,7 +487,7 @@ export default function MemberCV() {
       if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
       previewUrl.current = null;
     };
-  }, [demo, navigate, repository, unsavedConfirmation]);
+  }, [demo, navigate, paths.profile, repository, unsavedConfirmation]);
   useEffect(() => {
     const controller = autosave.current;
     if (!controller) return;
@@ -515,25 +511,6 @@ export default function MemberCV() {
       restoreOpener(pendingFocus.current);
     }
   }, [busy, confirmation, preview, restoreOpener]);
-
-  useLayoutEffect(() => {
-    setActions({
-      signOutLabel: memberText(locale, "Sign out"),
-      signOutDisabled: Boolean(busy),
-      onSignOut: (opener) => {
-        void logoutRef.current(opener);
-      },
-      renderLanguage: (appearance) => (
-        <LanguageSwitcher
-          locale={locale}
-          onChange={(next) => setLocaleRef.current(next)}
-          appearance={appearance}
-        />
-      ),
-    });
-  }, [busy, locale, setActions]);
-
-  useEffect(() => () => setActions(null), [setActions]);
 
   function confirmUnsaved(action: UnsavedAction, opener?: HTMLElement) {
     confirmationOpener.current =
@@ -714,26 +691,26 @@ export default function MemberCV() {
     }
   }
 
-  async function logout(opener?: HTMLElement) {
+  async function leaveProfile(action: "home" | "logout", opener?: HTMLElement) {
     if (busy || manualOperation.current) return;
     const current = generation.current;
     const controller = autosave.current;
     manualOperation.current = true;
     controller?.setBlocked(true);
-    setBusy("logout");
+    setBusy(action);
     try {
       const saved = controller ? await controller.lock() : envelope;
       if (generation.current !== current) return;
-      if (hasUnsavedInput(saved) && !(await confirmUnsaved("logout", opener))) return;
+      if (hasUnsavedInput(saved) && !(await confirmUnsaved(action, opener))) return;
       if (generation.current !== current) return;
-      if (!demo) await signOutMember();
+      if (!demo && action === "logout") await signOutMember();
       generation.current++;
       controller?.dispose();
       clearPreview();
       setDraft(null);
       setEnvelope(null);
       setEnded(true);
-      navigate("/member/login", { replace: true });
+      navigate(action === "home" ? paths.home : paths.login, { replace: true });
     } catch (failure) {
       if (generation.current !== current) return;
       setError(failure instanceof Error ? failure.message : "Could not sign out. Please try again.");
@@ -741,7 +718,6 @@ export default function MemberCV() {
       finishManual(current);
     }
   }
-  logoutRef.current = logout;
   const edit = (key: keyof CvData, value: CvData[keyof CvData]) =>
     setDraft((previous) =>
       previous ? { ...previous, [key]: value } : previous,
@@ -797,6 +773,15 @@ export default function MemberCV() {
   return (
     <main className="mcv-page mcv-profile portal-root" lang={locale}>
       <div className="mcv-container">
+        <div className="mcv-account-actions">
+          {paths.home !== paths.profile
+            ? <Button type="button" variant="ghost" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("home", event.currentTarget)}>{t("Member home")}</Button>
+            : <span />}
+          <div>
+            <LanguageSwitcher locale={locale} onChange={setLocale} />
+            <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("logout", event.currentTarget)}>{t("Sign out")}</Button>
+          </div>
+        </div>
         {demo && (
           <Alert className="mcv-demo-banner" role="status">
             <AlertTitle>{t("Fictional local demo")}</AlertTitle>
@@ -824,7 +809,7 @@ export default function MemberCV() {
           <Alert className="mcv-error" variant="destructive">
             <AlertDescription>
               {t("Your session has ended. Editing is locked.")}{" "}
-              <Link to="/member/login" state={{ from: "/member/profile" }}>
+              <Link to={paths.login} state={{ from: paths.profile }}>
                 {t("Sign in again")}
               </Link>
               .
@@ -1380,7 +1365,9 @@ export default function MemberCV() {
                 ? t(
                     "Reloading replaces your unsaved input with the saved draft. Continue?",
                   )
-                : t("Your latest changes are not saved. Sign out anyway?")}
+                : confirmation === "home"
+                  ? t("Your latest changes are not saved. Leave this page anyway?")
+                  : t("Your latest changes are not saved. Sign out anyway?")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mcv-confirm-actions">
@@ -1395,7 +1382,7 @@ export default function MemberCV() {
             >
               {confirmation === "reload"
                 ? t("Reload saved draft")
-                : t("Sign out")}
+                : confirmation === "home" ? t("Member home") : t("Sign out")}
             </Button>
           </DialogFooter>
         </DialogContent>

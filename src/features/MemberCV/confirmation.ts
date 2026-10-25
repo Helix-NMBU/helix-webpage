@@ -1,4 +1,4 @@
-export type UnsavedAction = "reload" | "logout";
+export type UnsavedAction = "reload" | "logout" | "home";
 
 /** Resolves every in-app confirmation, including cancellation during session cleanup. */
 export function createUnsavedConfirmation(

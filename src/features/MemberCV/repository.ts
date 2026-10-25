@@ -1,5 +1,6 @@
 import { validateCvData, validateSharing } from "./model";
 import type { CvEnvelope, CvMutation } from "./types";
+import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
 
 export class CvRequestError extends Error {
   constructor(
@@ -65,8 +66,9 @@ export function createCvRepository(
 
 // Treat location state as untrusted. Only established member/admin routes are valid.
 export function memberLoginDestination(state: unknown): string {
+  const paths = memberPaths();
   if (!state || typeof state !== "object" || !("from" in state))
-    return "/member/profile";
+    return paths.home;
   const from = state.from;
   const pathname =
     typeof from === "string"
@@ -74,7 +76,10 @@ export function memberLoginDestination(state: unknown): string {
       : from && typeof from === "object" && "pathname" in from
         ? from.pathname
         : null;
-  return pathname === "/member/profile" ? pathname : "/member/profile";
+  if (isMemberPlatform()) {
+    return pathname === paths.profile || pathname === "/member/profile" ? paths.profile : paths.home;
+  }
+  return pathname === paths.profile ? pathname : paths.home;
 }
 
 export function validateMutation(mutation: CvMutation): CvMutation {

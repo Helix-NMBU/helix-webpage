@@ -237,6 +237,8 @@ export const englishCopy = {
   "Sign in to build your CV": "Sign in to build your CV",
   "Sign in with Google": "Sign in with Google",
   "Log in to your account": "Log in to your account",
+  "Member home": "Member home",
+  "Your latest changes are not saved. Leave this page anyway?": "Your latest changes are not saved. Leave this page anyway?",
   "Sign in with your Helix account.": "Sign in with your Helix account.",
   "Use your @helixnmbu.no Google Workspace account. Your profile starts as a private draft. You choose when to publish it to Talent Directory.":
     "Use your @helixnmbu.no Google Workspace account. Your profile starts as a private draft. You choose when to publish it to Talent Directory.",
@@ -482,6 +484,8 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Sign in to build your CV": "Logg inn for å lage CV-en din",
   "Sign in with Google": "Logg inn med Google",
   "Log in to your account": "Logg inn på kontoen din",
+  "Member home": "Medlemssiden",
+  "Your latest changes are not saved. Leave this page anyway?": "De siste endringene er ikke lagret. Vil du likevel forlate siden?",
   "Sign in with your Helix account.": "Logg inn med Helix-kontoen din.",
   "Use your @helixnmbu.no Google Workspace account. Your profile starts as a private draft. You choose when to publish it to Talent Directory.":
     "Bruk Google Workspace-kontoen din på @helixnmbu.no. Profilen starter som et privat utkast. Du velger når du vil publisere den i talentoversikten.",

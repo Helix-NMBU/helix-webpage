@@ -1297,13 +1297,13 @@
   margin-top: 8px;
 }
 
-/* Clears the fixed site header. */
+/* Account controls live in the member page, without the public site header. */
 .mcv-profile .mcv-container {
-  padding-top: 112px;
+  padding-top: 32px;
 }
 @media (max-width: 600px) {
   .mcv-profile .mcv-container {
-    padding-top: 104px;
+    padding-top: 24px;
   }
 }
 body:has(.mcv-profile) button[aria-label="Scroll to top"] {

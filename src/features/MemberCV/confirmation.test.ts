@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { createUnsavedConfirmation } from "./confirmation";
 
 describe("async unsaved-change confirmation", () => {
-  it("waits for an explicit decision before allowing a destructive navigation action", async () => {
+  it.each(["logout", "home"] as const)("waits for an explicit decision before allowing %s with unsaved changes", async (destination) => {
     const onRequest = vi.fn();
     const confirmation = createUnsavedConfirmation(onRequest);
     const action = vi.fn();
-    const pending = confirmation.request("logout").then((accepted) => {
+    const pending = confirmation.request(destination).then((accepted) => {
       if (accepted) action();
     });
-    expect(onRequest).toHaveBeenLastCalledWith("logout");
+    expect(onRequest).toHaveBeenLastCalledWith(destination);
     await Promise.resolve();
     expect(action).not.toHaveBeenCalled();
     confirmation.resolve(true);

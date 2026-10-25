@@ -1,0 +1,40 @@
+.member-platform.portal-root {
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.member-platform-status {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+.member-platform-home {
+  display: grid;
+  justify-items: start;
+  gap: 24px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+.member-platform-home > [data-slot="card"] { width: 100%; }
+.member-platform-home-intro h1 { margin: 16px 0 8px; font-size: 28px; font-weight: 600; letter-spacing: -.025em; }
+.member-platform-home-intro p { color: var(--muted-foreground); }
+.member-platform-logo {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+}
+.member-platform-logo img { width: 15px; height: 25px; object-fit: contain; }
+.member-platform .mcv-profile .mcv-container { padding-top: 32px; }
+.mcv-account-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 32px; }
+.mcv-account-actions > div { display: flex; align-items: center; gap: 12px; }
+.mcv-account-actions .mcv-language-trigger { background: var(--background); color: var(--foreground); border-color: var(--border); }
+@media (max-width: 600px) {
+  .mcv-account-actions { flex-wrap: wrap; }
+  .member-platform-home { padding-top: 32px; }
+}

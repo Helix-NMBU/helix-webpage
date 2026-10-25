@@ -93,9 +93,6 @@
 
 .member-login .member-login-google:hover { background: #f8faff; }
 .member-login-google img { flex-shrink: 0; }
-.member-login-footer { font-size: 13px; }
-.member-login-footer a { color: var(--muted-foreground); text-underline-offset: 4px; }
-.member-login-footer a:hover { color: var(--primary); }
 .member-login a:focus-visible { outline: 2px solid var(--ring); outline-offset: 4px; }
 .member-login-brand-panel { display: none; }
 

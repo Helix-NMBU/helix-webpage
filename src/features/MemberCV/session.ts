@@ -1,6 +1,7 @@
 import { createAuthClient } from "@neondatabase/neon-js/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/adapters";
 import { CvRequestError } from "./repository";
+import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
 
 // neon-js rejects a protocol-less base URL. `/api/auth` is expanded to the
 // current origin so one value works for every preview and production host.
@@ -61,10 +62,10 @@ export function memberAuthFailure(error: unknown): CvRequestError {
   return new CvRequestError(MEMBER_AUTH_UNAVAILABLE, status ?? 0);
 }
 
-export function memberLoadFailure(failure: unknown): { redirectTo: "/member/login" } | { message: string } {
+export function memberLoadFailure(failure: unknown): { redirectTo: string } | { message: string } {
   if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
     rejectMemberSession();
-    return { redirectTo: "/member/login" };
+    return { redirectTo: memberPaths().login };
   }
   if (failure instanceof CvRequestError) return { message: failure.message };
   console.error("Member CV load failed.", failure instanceof Error ? failure.message : failure);
@@ -463,8 +464,6 @@ export async function confirmMemberSession(
   throw new Error(landing.error ?? "Sign-in failed. Use your Helix Google Workspace account.");
 }
 
-const MEMBER_PROFILE_PATH = "/member/profile";
-
 function returnCandidate(source: unknown): string | null {
   if (typeof source === "string") return source;
   if (!source || typeof source !== "object") return null;
@@ -481,7 +480,8 @@ function returnCandidate(source: unknown): string | null {
 
 // A return path must be a single-slash path. `new URL` then has to stay on this origin.
 export function memberSignInCallbackUrl(source: unknown, origin: string): string {
-  const fallback = new URL(MEMBER_PROFILE_PATH, origin).href;
+  const paths = memberPaths(origin);
+  const fallback = new URL(paths.home, origin).href;
   const path = returnCandidate(source)?.trim() ?? "";
   if (!path.startsWith("/") || path.startsWith("//") || path.includes("\\")) return fallback;
   let target: URL;
@@ -493,7 +493,10 @@ export function memberSignInCallbackUrl(source: unknown, origin: string): string
     return fallback;
   }
   if (target.origin !== allowedOrigin) return fallback;
-  if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
+  if (isMemberPlatform(origin)) {
+    if (target.pathname === "/member/profile") target.pathname = paths.profile;
+    if (![paths.home, paths.profile].includes(target.pathname)) return fallback;
+  } else if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
   return new URL(`${target.pathname}${target.search}${target.hash}`, origin).href;
 }
 
@@ -503,7 +506,8 @@ export function googleSignInRequest(source: unknown, origin: string): {
   errorCallbackURL: string;
 } {
   const callbackURL = memberSignInCallbackUrl(source, origin);
-  return { provider: "google", callbackURL, errorCallbackURL: callbackURL };
+  const errorCallbackURL = isMemberPlatform(origin) ? new URL(memberPaths(origin).login, origin).href : callbackURL;
+  return { provider: "google", callbackURL, errorCallbackURL };
 }
 
 export async function startGoogleSignIn(returnTo?: unknown): Promise<void> {
