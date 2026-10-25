@@ -221,7 +221,7 @@ describe("internal member platform", () => {
     expect(isMemberPlatform("https://www.helixnmbu.no")).toBe(false);
     expect(isMemberPlatform("https://internal.helixnmbu.no.evil.invalid")).toBe(false);
     expect(memberPaths(origin)).toEqual({ home: "/", login: "/login", profile: "/profile" });
-    expect(googleSignInRequest(undefined, origin)).toEqual({ provider: "google", callbackURL: `${origin}/`, errorCallbackURL: `${origin}/login` });
+    expect(googleSignInRequest(undefined, origin)).toEqual({ provider: "google", callbackURL: `${origin}/`, errorCallbackURL: `${origin}/login`, additionalParams: { prompt: "select_account" } });
     expect(googleSignInRequest("/member/profile?tab=cv", origin).callbackURL).toBe(`${origin}/profile?tab=cv`);
     for (const value of ["//evil.invalid", "https://evil.invalid", "/login", "/garage", "/\\evil.invalid"]) {
       expect(googleSignInRequest(value, origin).callbackURL).toBe(`${origin}/`);
