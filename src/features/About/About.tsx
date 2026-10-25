@@ -9,14 +9,14 @@ import { ArrowLeft } from 'lucide-react'
 gsap.registerPlugin(useGSAP, ScrollTrigger, Flip)
 
 const PHOTOS = [
-  { src: '/tilt.png',        alt: 'Tilt test' },
-  { src: '/lagbilde.jpg',    alt: 'Team photo' },
+  { src: '/tilt.webp',        alt: 'Tilt test' },
+  { src: '/lagbilde.webp',    alt: 'Team photo' },
   { src: '/Silverstone.webp', alt: 'Silverstone 2025' },
-  { src: '/P1010055 1.png',  alt: 'Race day' },
-  { src: '/P1010366 1.png',  alt: 'On track' },
+  { src: '/P1010055 1.webp',  alt: 'Race day' },
+  { src: '/P1010366 1.webp',  alt: 'On track' },
   { src: '/birk i bil.webp', alt: 'Cockpit' },
-  { src: '/peder.png',       alt: 'In the garage' },
-  { src: '/cost.png',        alt: 'Cost event judging' },
+  { src: '/peder.webp',       alt: 'In the garage' },
+  { src: '/cost.webp',        alt: 'Cost event judging' },
 ]
 
 const EPIGRAPH_LINES = [
