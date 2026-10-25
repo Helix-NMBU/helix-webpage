@@ -44,6 +44,16 @@ import {
   SidebarProvider,
 } from "@libs/components/ui/sidebar";
 import { memberSessionToken } from "../MemberCV/session";
+import { useMemberAccount } from "./MemberAccountContext";
+import {
+  getCachedGmailConnection,
+  getCachedGmailList,
+  getCachedGmailMessage,
+  loadCachedGmailMessage,
+  removeCachedGmailMessage,
+  setCachedGmailConnection,
+  setCachedGmailList,
+} from "./gmail-session-cache";
 
 type MailFolder = {
   id: string;
@@ -70,6 +80,10 @@ type GmailMessage = GmailMessageSummary & {
 
 type MessageAction = "archive" | "trash" | "junk";
 type ComposeMode = "new" | "reply" | "forward";
+
+function mailListCacheKey(folder: string, search: string, unreadOnly: boolean): string {
+  return `${folder}:${search.trim()}:${unreadOnly}`;
+}
 
 const mailFolders: MailFolder[] = [
   { id: "inbox", label: "Inbox", icon: Inbox },
@@ -263,6 +277,7 @@ function ConnectedMailSidebar({
   error,
   selectedMessageId,
   onMessageSelect,
+  onMessagePrefetch,
   nextPageToken,
   onLoadMore,
 }: {
@@ -279,6 +294,7 @@ function ConnectedMailSidebar({
   error: string | null;
   selectedMessageId: string | null;
   onMessageSelect: (messageId: string) => void;
+  onMessagePrefetch: (messageId: string) => void;
   nextPageToken: string | null;
   onLoadMore: () => void;
 }) {
@@ -419,6 +435,8 @@ function ConnectedMailSidebar({
                       aria-current={selectedMessageId === message.id ? "true" : undefined}
                       disabled={loading}
                       className={`block w-full px-4 py-3 text-left transition-colors hover:bg-sidebar-accent ${selectedMessageId === message.id ? "bg-sidebar-accent" : ""}`}
+                      onMouseEnter={() => onMessagePrefetch(message.id)}
+                      onFocus={() => onMessagePrefetch(message.id)}
                       onClick={() => onMessageSelect(message.id)}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -536,14 +554,15 @@ function MessageComposer({
 }
 
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
+  const accountEmail = useMemberAccount()?.email ?? "";
   const [activeFolder, setActiveFolder] = useState("inbox");
   const [search, setSearch] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [messages, setMessages] = useState<GmailMessageSummary[]>([]);
+  const [messages, setMessages] = useState<GmailMessageSummary[]>(() => getCachedGmailList(accountEmail, mailListCacheKey("inbox", "", false))?.messages ?? []);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(() => getCachedGmailList(accountEmail, mailListCacheKey("inbox", "", false))?.nextPageToken ?? null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(() => getCachedGmailList(accountEmail, mailListCacheKey("inbox", "", false))?.messages[0]?.id ?? null);
   const [selectedMessage, setSelectedMessage] = useState<GmailMessage | null>(null);
   const [messageLoading, setMessageLoading] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
@@ -551,7 +570,8 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     if (connectedOverride !== undefined) return connectedOverride ? "connected" : "disconnected";
     const justConnected = typeof window !== "undefined"
       && new URLSearchParams(window.location.search).get("gmail") === "connected";
-    return justConnected ? "connected" : "checking";
+    const cachedConnection = getCachedGmailConnection(accountEmail);
+    return justConnected ? "connected" : cachedConnection === null ? "checking" : cachedConnection ? "connected" : "disconnected";
   });
   const [connecting, setConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -580,14 +600,19 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         });
         const body = await response.json().catch(() => null) as { connected?: unknown } | null;
         if (active) {
-          setConnectionState(!response.ok ? "unavailable" : body?.connected === true ? "connected" : "disconnected");
+          if (response.ok && typeof body?.connected === "boolean") {
+            setCachedGmailConnection(accountEmail, body.connected);
+            setConnectionState(body.connected ? "connected" : "disconnected");
+          } else if (getCachedGmailConnection(accountEmail) === null) {
+            setConnectionState("unavailable");
+          }
         }
       } catch {
-        if (active) setConnectionState("unavailable");
+        if (active && getCachedGmailConnection(accountEmail) === null) setConnectionState("unavailable");
       }
     })();
     return () => { active = false; };
-  }, [connectedOverride]);
+  }, [accountEmail, connectedOverride]);
 
   async function connectGmail() {
     setConnecting(true);
@@ -616,6 +641,13 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   useEffect(() => {
     if (!connected || connectedOverride !== undefined) return;
     const requestId = ++listRequestId.current;
+    const queryKey = mailListCacheKey(activeFolder, search, unreadOnly);
+    const cachedList = getCachedGmailList(accountEmail, queryKey);
+    setMessages(cachedList?.messages ?? []);
+    setNextPageToken(cachedList?.nextPageToken ?? null);
+    setSelectedMessageId((current) => cachedList?.messages.some((message) => message.id === current)
+      ? current
+      : cachedList?.messages[0]?.id ?? null);
     setListError(null);
     setListLoading(true);
     const timer = window.setTimeout(() => {
@@ -633,16 +665,21 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           if (requestId !== listRequestId.current) return;
           if (!response.ok) throw new Error(body?.error || "Could not load Gmail messages.");
           const loadedMessages = Array.isArray(body?.messages) ? body.messages : [];
+          setCachedGmailList(accountEmail, queryKey, { messages: loadedMessages, nextPageToken: body?.nextPageToken ?? null });
           setMessages(loadedMessages);
           setNextPageToken(body?.nextPageToken ?? null);
-          setSelectedMessageId(loadedMessages[0]?.id ?? null);
+          setSelectedMessageId((current) => loadedMessages.some((message) => message.id === current)
+            ? current
+            : loadedMessages[0]?.id ?? null);
         } catch (error) {
           if (requestId === listRequestId.current) {
             setListError(error instanceof Error ? error.message : "Could not load Gmail messages.");
-            setMessages([]);
-            setNextPageToken(null);
-            setSelectedMessageId(null);
-            setSelectedMessage(null);
+            if (!cachedList) {
+              setMessages([]);
+              setNextPageToken(null);
+              setSelectedMessageId(null);
+              setSelectedMessage(null);
+            }
           }
         } finally {
           if (requestId === listRequestId.current) setListLoading(false);
@@ -653,25 +690,30 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       window.clearTimeout(timer);
       if (requestId === listRequestId.current) listRequestId.current += 1;
     };
-  }, [activeFolder, connected, connectedOverride, search, unreadOnly]);
+  }, [accountEmail, activeFolder, connected, connectedOverride, search, unreadOnly]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined || !selectedMessageId) return;
     const requestId = ++detailRequestId.current;
+    const cachedMessage = getCachedGmailMessage(accountEmail, selectedMessageId);
+    setSelectedMessage(cachedMessage);
     setMessageError(null);
-    setMessageLoading(true);
+    setMessageLoading(!cachedMessage);
     void (async () => {
       try {
-        const token = await memberSessionToken(boundUserId);
-        const params = new URLSearchParams({ action: "message", id: selectedMessageId });
-        const response = await fetch(`/api/gmail?${params}`, {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
+        const body = await loadCachedGmailMessage(accountEmail, selectedMessageId, async () => {
+          const token = await memberSessionToken(boundUserId);
+          const params = new URLSearchParams({ action: "message", id: selectedMessageId });
+          const response = await fetch(`/api/gmail?${params}`, {
+            credentials: "include",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const result = await response.json().catch(() => null) as (GmailMessage & { error?: string }) | null;
+          if (!response.ok) throw new Error(result?.error || "Could not open this message.");
+          return result as GmailMessage;
         });
-        const body = await response.json().catch(() => null) as (GmailMessage & { error?: string }) | null;
         if (requestId !== detailRequestId.current) return;
-        if (!response.ok) throw new Error(body?.error || "Could not open this message.");
-        setSelectedMessage(body as GmailMessage);
+        setSelectedMessage(body);
       } catch (error) {
         if (requestId === detailRequestId.current) setMessageError(error instanceof Error ? error.message : "Could not open this message.");
       } finally {
@@ -679,7 +721,34 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       }
     })();
     return () => { detailRequestId.current += 1; };
-  }, [connected, connectedOverride, selectedMessageId]);
+  }, [accountEmail, connected, connectedOverride, selectedMessageId]);
+
+  async function prefetchMessage(messageId: string) {
+    if (getCachedGmailMessage(accountEmail, messageId)) return;
+    try {
+      await loadCachedGmailMessage(accountEmail, messageId, async () => {
+        const token = await memberSessionToken(boundUserId);
+        const params = new URLSearchParams({ action: "message", id: messageId });
+        const response = await fetch(`/api/gmail?${params}`, {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const body = await response.json().catch(() => null) as (GmailMessage & { error?: string }) | null;
+        if (!response.ok) throw new Error(body?.error || "Could not open this message.");
+        return body as GmailMessage;
+      });
+    } catch {
+      // Prefetch is opportunistic; selecting the message will show any real error.
+    }
+  }
+
+  function selectMessage(messageId: string) {
+    setSelectedMessageId(messageId);
+    const cachedMessage = getCachedGmailMessage(accountEmail, messageId);
+    setSelectedMessage(cachedMessage);
+    setMessageError(null);
+    setMessageLoading(!cachedMessage);
+  }
 
   async function loadMoreMessages() {
     if (!nextPageToken || listLoading) return;
@@ -698,7 +767,11 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
       if (requestId !== listRequestId.current) return;
       if (!response.ok) throw new Error(body?.error || "Could not load more messages.");
-      setMessages((current) => [...current, ...(Array.isArray(body?.messages) ? body.messages : [])]);
+      const loadedMessages = Array.isArray(body?.messages) ? body.messages : [];
+      const allMessages = [...messages, ...loadedMessages];
+      const queryKey = mailListCacheKey(activeFolder, search, unreadOnly);
+      setCachedGmailList(accountEmail, queryKey, { messages: allMessages, nextPageToken: body?.nextPageToken ?? null });
+      setMessages(allMessages);
       setNextPageToken(body?.nextPageToken ?? null);
     } catch (error) {
       if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : "Could not load more messages.");
@@ -762,7 +835,13 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || "Could not update this message.");
-      setMessages((current) => current.filter((message) => message.id !== selectedMessageId));
+      removeCachedGmailMessage(accountEmail, selectedMessageId);
+      const remainingMessages = messages.filter((message) => message.id !== selectedMessageId);
+      setCachedGmailList(accountEmail, mailListCacheKey(activeFolder, search, unreadOnly), {
+        messages: remainingMessages,
+        nextPageToken,
+      });
+      setMessages(remainingMessages);
       setSelectedMessageId(null);
       setSelectedMessage(null);
       setConfirmAction(null);
@@ -801,7 +880,8 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             loading={listLoading}
             error={listError}
             selectedMessageId={selectedMessageId}
-            onMessageSelect={setSelectedMessageId}
+            onMessageSelect={selectMessage}
+            onMessagePrefetch={(messageId) => void prefetchMessage(messageId)}
             nextPageToken={nextPageToken}
             onLoadMore={loadMoreMessages}
           />

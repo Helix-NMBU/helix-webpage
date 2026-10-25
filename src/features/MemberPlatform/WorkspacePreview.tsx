@@ -45,6 +45,11 @@ import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
 import { GmailLogo } from "./MailWorkspace";
 import { memberSessionToken } from "../MemberCV/session";
+import {
+  clearGmailSessionCache,
+  getCachedGmailConnection,
+  setCachedGmailConnection,
+} from "./gmail-session-cache";
 
 const suggestions = [
   "Summarize Helix team updates",
@@ -285,9 +290,13 @@ export function MemberSettingsPreview() {
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
-  const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">("checking");
-  const boundUserId = useRef<string | null>(null);
   const account = useMemberAccount();
+  const accountEmail = account?.email ?? "";
+  const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">(() => {
+    const cached = getCachedGmailConnection(accountEmail);
+    return cached === null ? "checking" : cached ? "connected" : "disconnected";
+  });
+  const boundUserId = useRef<string | null>(null);
   const role = account?.role ?? "Member";
 
   useEffect(() => {
@@ -300,13 +309,16 @@ export function MemberSettingsPreview() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const body = await response.json().catch(() => null) as { connected?: unknown } | null;
-        if (active) setGmailStatus(response.ok && body?.connected === true ? "connected" : "disconnected");
+        if (active && response.ok && typeof body?.connected === "boolean") {
+          setCachedGmailConnection(accountEmail, body.connected);
+          setGmailStatus(body.connected ? "connected" : "disconnected");
+        }
       } catch {
-        if (active) setGmailStatus("disconnected");
+        if (active && getCachedGmailConnection(accountEmail) === null) setGmailStatus("disconnected");
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [accountEmail]);
 
   async function disconnectGmail() {
     setDisconnecting(true);
@@ -320,6 +332,8 @@ export function MemberSettingsPreview() {
       });
       const body = await response.json().catch(() => null) as { error?: unknown } | null;
       if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : "Could not disconnect Gmail.");
+      clearGmailSessionCache(accountEmail);
+      setCachedGmailConnection(accountEmail, false);
       setGmailStatus("disconnected");
       setDisconnectOpen(false);
     } catch (error) {
