@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { MemberCvError, neonCvServices, type CvServices } from "./_lib/member-cv-service.js";
+import { memberAccount } from "./_lib/member-account.js";
 
 export type MemberSessionReason = "no_session_cookie" | "session_lookup_failed" | "domain_rejected" | "db_error" | "missing_env";
 
@@ -53,7 +54,7 @@ export function createMemberLoginHandler(
     try {
       const token = await lookup(req.headers);
       const identity = await getServices().authenticate(token);
-      return res.status(200).json({ ok: true, email: identity.email });
+      return res.status(200).json({ ok: true, email: identity.email, account: memberAccount(identity) });
     } catch (error) {
       const failure = failureOf(error);
       console.error("Member session bootstrap failed.", {

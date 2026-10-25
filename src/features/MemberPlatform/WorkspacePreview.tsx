@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
-import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
 import {
   Card,
@@ -44,13 +43,13 @@ import { Separator } from "@libs/components/ui/separator";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@libs/components/ui/table";
 import { previewPage, previewTeams } from "./workspace-preview-data";
+import { useMemberAccount } from "./MemberAccountContext";
 
 const suggestions = [
   "Summarize Helix team updates",
@@ -88,9 +87,6 @@ export function WorkspaceHomePreview() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Sparkles className="size-4" />
           Helix assistant
-          <Badge variant="secondary" className="font-normal">
-            Preview
-          </Badge>
         </div>
         <h1
           id="workspace-home-title"
@@ -112,12 +108,8 @@ export function WorkspaceHomePreview() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Sparkles className="size-4" />
-                Example response
+                Helix assistant
               </CardTitle>
-              <CardDescription>
-                This illustrates a future reply using fictional workspace
-                content.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm leading-6">
               <div className="typeset typeset-chat">
@@ -125,10 +117,10 @@ export function WorkspaceHomePreview() {
                   {turn.scope === "business-marketing"
                     ? "The partner spotlight is planned for the newsletter. The workshop stories campaign is ready for review."
                     : turn.scope === "finance"
-                      ? "Two example expense claims are ready for review. The event budget also needs a decision."
+                      ? "Two expense claims are ready for review. The event budget also needs a decision."
                       : turn.scope === "mechanical-production"
                         ? "The frame assembly is in workshop preparation. The mounting bracket is ready for design review."
-                        : "The workshop stories campaign is ready for review. Finance has two example expense claims awaiting review, and the production team is preparing the frame assembly."}
+                        : "The workshop stories campaign is ready for review. Finance has two expense claims awaiting review, and the production team is preparing the frame assembly."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -212,17 +204,13 @@ export function WorkspaceHomePreview() {
                 variant="default"
                 className="ml-auto rounded-full"
                 disabled={!text.trim()}
-                aria-label="Preview response"
+                aria-label="Send message"
               >
                 <ArrowUp />
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
         </form>
-        <p className="text-xs leading-5 text-muted-foreground">
-          Example mode. Prompts stay on this page and are not sent to an AI
-          service.
-        </p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5 text-sm">
@@ -255,9 +243,6 @@ export function TeamWorkspacePreview() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <team.icon className="size-4" />
           {team.title}
-          <Badge variant="secondary" className="font-normal">
-            Preview
-          </Badge>
         </div>
         <h1
           id="team-page-title"
@@ -270,15 +255,9 @@ export function TeamWorkspacePreview() {
       <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">{section.title}</CardTitle>
-          <CardDescription>
-            Sample content to explore how this team area could work.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
-            <TableCaption>
-              Fictional data. Changes and approvals are not enabled.
-            </TableCaption>
             <TableHeader>
               <TableRow>
                 {section.columns.map((column) => (
@@ -309,19 +288,14 @@ export function TeamWorkspacePreview() {
           </Table>
         </CardContent>
       </Card>
-      <Alert>
-        <ShieldCheck className="size-4" />
-        <AlertDescription className="text-muted-foreground">
-          You can explore every team in this preview. Team-based access will be
-          added later.
-        </AlertDescription>
-      </Alert>
     </section>
   );
 }
 
 export function MemberSettingsPreview() {
-  const [connectionPreview, setConnectionPreview] = useState(false);
+  const [connectionOpen, setConnectionOpen] = useState(false);
+  const account = useMemberAccount();
+  const role = account?.role ?? "Member";
   return (
     <section
       className="mx-auto w-full max-w-3xl space-y-8 px-2 py-8 sm:px-6"
@@ -343,9 +317,6 @@ export function MemberSettingsPreview() {
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="size-4" />
             AI connection
-            <Badge variant="secondary" className="font-normal">
-              Preview
-            </Badge>
           </CardTitle>
           <CardDescription>
             Connect your own ChatGPT account to power the Helix assistant.
@@ -357,10 +328,7 @@ export function MemberSettingsPreview() {
               <p className="font-medium">ChatGPT</p>
               <p className="text-sm text-muted-foreground">Not connected</p>
             </div>
-            <Dialog
-              open={connectionPreview}
-              onOpenChange={setConnectionPreview}
-            >
+            <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Link2 />
@@ -371,24 +339,18 @@ export function MemberSettingsPreview() {
                 <DialogHeader>
                   <DialogTitle>Connect your ChatGPT account</DialogTitle>
                   <DialogDescription>
-                    This is a preview of the connection setup. No account will
-                    be connected.
+                    Manage the ChatGPT account used with the Helix assistant.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 py-2 text-sm">
-                  <p>
-                    When enabled, you will sign in with ChatGPT and review the
-                    permissions before connecting.
-                  </p>
                   <p className="text-muted-foreground">
-                    Using your ChatGPT plan depends on account eligibility and
-                    integration approval. The Helix connection has not been set
-                    up yet.
+                    ChatGPT connections are currently unavailable. Please try
+                    again later.
                   </p>
                 </div>
                 <DialogFooter>
-                  <Button onClick={() => setConnectionPreview(false)}>
-                    Close preview
+                  <Button onClick={() => setConnectionOpen(false)}>
+                    Close
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -396,9 +358,7 @@ export function MemberSettingsPreview() {
           </div>
           <Separator />
           <p className="text-sm leading-6 text-muted-foreground">
-            The assistant is intended to work with the Helix information you
-            have access to. Account linking and live AI responses are not
-            enabled in this preview.
+            Manage your connection to the Helix assistant.
           </p>
         </CardContent>
       </Card>
@@ -406,29 +366,32 @@ export function MemberSettingsPreview() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="size-4" />
-            Workspace access
+            Workspace role
             <Badge variant="secondary" className="font-normal">
-              All access · Preview
+              {role}
             </Badge>
           </CardTitle>
           <CardDescription>
-            All team areas are visible for this mockup.
+            {account?.email || "Your Helix account"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {previewTeams.map((team) => (
-            <div key={team.id} className="flex items-center gap-3 text-sm">
-              <team.icon className="size-4 text-muted-foreground" />
-              <span className="flex-1">{team.title}</span>
-              <Check
-                className="size-4 text-muted-foreground"
-                aria-label="Visible in preview"
-              />
-            </div>
-          ))}
+          {role === "Admin" &&
+            previewTeams.map((team) => (
+              <div key={team.id} className="flex items-center gap-3 text-sm">
+                <team.icon className="size-4 text-muted-foreground" />
+                <span className="flex-1">{team.title}</span>
+                <Check
+                  className="size-4 text-muted-foreground"
+                  aria-label="Access granted"
+                />
+              </div>
+            ))}
           <Separator />
           <p className="text-sm text-muted-foreground">
-            Team memberships and permission management will be added later.
+            {role === "Admin"
+              ? "Access to all Helix team areas."
+              : "Helix member access."}
           </p>
         </CardContent>
       </Card>

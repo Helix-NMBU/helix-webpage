@@ -2,6 +2,7 @@ import { createAuthClient } from "@neondatabase/neon-js/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/adapters";
 import { CvRequestError } from "./repository";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
+import { readMemberAccount, type MemberAccount } from "../MemberPlatform/account";
 
 // neon-js rejects a protocol-less base URL. `/api/auth` is expanded to the
 // current origin so one value works for every preview and production host.
@@ -84,6 +85,7 @@ function verifierFrom(search: string): string | null {
 export type MemberFrame = "loading" | "signed-in" | "signed-out";
 
 export type MemberLanding = {
+  account?: MemberAccount | null;
   phase: "signed-in" | "signed-out" | "unavailable";
   token: string | null;
   userId: string | null;
@@ -287,7 +289,10 @@ async function runMemberLanding(
     const jwt = await readMemberJwt(client, fetchImpl);
     const response = await postMemberSession(fetchImpl, jwt.token ?? undefined);
     if (!response) return { phase: "unavailable", token: jwt.token, userId: null, status: jwt.status, error: "Could not start your member session. Please try again." };
-    if (response.ok && jwt.token) return { phase: "signed-in", token: jwt.token, userId: null, status: response.status, error: null };
+    if (response.ok && jwt.token) {
+      const body = await response.json().catch(() => ({}));
+      return { phase: "signed-in", token: jwt.token, userId: null, status: response.status, error: null, account: readMemberAccount(body?.account) };
+    }
     const body = await response.json().catch(() => ({}));
     const message = typeof body.error === "string" ? body.error : "Could not start your member session. Please try again.";
     const status = jwt.status === 401 || jwt.status === 403 ? jwt.status : response.status;
@@ -338,7 +343,10 @@ async function runMemberLanding(
   const jwt = await readMemberJwt(client, fetchImpl);
   const response = await postMemberSession(fetchImpl, jwt.token ?? undefined);
   if (!response) return { phase: "unavailable", token: jwt.token, userId, status: jwt.status, error: "Could not start your member session. Please try again." };
-  if (response.ok && jwt.token) return { phase: "signed-in", token: jwt.token, userId, status: response.status, error: null };
+  if (response.ok && jwt.token) {
+    const body = await response.json().catch(() => ({}));
+    return { phase: "signed-in", token: jwt.token, userId, status: response.status, error: null, account: readMemberAccount(body?.account) };
+  }
   const body = await response.json().catch(() => ({}));
   const message = typeof body.error === "string" ? body.error : "Could not start your member session. Please try again.";
   const status = jwt.status === 401 || jwt.status === 403 ? jwt.status : response.status;

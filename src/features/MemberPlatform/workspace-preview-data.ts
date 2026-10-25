@@ -14,9 +14,9 @@ export const previewTeams = [
         description: "Keep sponsor conversations and next steps together.",
         columns: ["Partner", "Next step", "Status"],
         rows: [
-          ["Example partner A", "Review partnership proposal", "In progress"],
-          ["Example partner B", "Prepare introduction", "Planned"],
-          ["Example partner C", "Schedule a follow-up", "To review"],
+          ["Partner A", "Review partnership proposal", "In progress"],
+          ["Partner B", "Prepare introduction", "Planned"],
+          ["Partner C", "Schedule a follow-up", "To review"],
         ],
       },
       {

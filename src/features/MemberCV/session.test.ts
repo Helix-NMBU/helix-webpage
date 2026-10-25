@@ -146,6 +146,18 @@ describe("member session claim", () => {
     await expect(second).resolves.toBe(true);
   });
 
+  it.each([true, false])("carries the verified account into the landing with session reader %s", async (withSessionReader) => {
+    const account = { name: "Åse Hansen", email: "ase@helixnmbu.no", role: "Member" };
+    const token = vi.fn(async () => ({ data: { token: "member-jwt" } }));
+    const client = withSessionReader
+      ? { token, getSession: async () => ({ data: { user: { id: "member", name: "Untrusted client name" } } }) }
+      : { token };
+    const fetchImpl = vi.fn(async () => Response.json({ ok: true, email: account.email, account }));
+    const landing = await ensureMemberLanding(client, fetchImpl);
+    expect(landing.phase).toBe("signed-in");
+    expect(landing.account).toEqual(account);
+  });
+
   it("logs a failed verifier exchange without the verifier", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const secret = "verifier-secret";

@@ -28,7 +28,7 @@ vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
 } }));
 
 const signedOut = { phase: "signed-out", token: null, userId: null, status: 401, error: null };
-const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null };
+const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null, account: { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" } };
 
 describe("internal member platform", () => {
   let container: HTMLDivElement;
@@ -59,6 +59,28 @@ describe("internal member platform", () => {
   async function profileMenu() {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Profile menu"]')?.click());
   }
+
+  it.each([
+    { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" },
+    { name: "Åse Hansen", email: "ase@helixnmbu.no", role: "Member" },
+  ])("shows the signed-in account $name and its role", async (account) => {
+    session.landing.mockResolvedValue({ ...signedIn, account });
+    await open("/");
+    const trigger = container.querySelector('[aria-label="Profile menu"]');
+    expect(trigger?.textContent).toContain(account.name);
+    expect(trigger?.textContent).toContain(account.role);
+    expect(trigger?.textContent).not.toContain("Member account");
+    await profileMenu();
+    const menu = document.querySelector('[aria-label="Account menu"]');
+    expect(menu?.textContent).toContain(account.name);
+    expect(menu?.textContent).toContain(account.role);
+  });
+
+  it.each(["/", "/settings", "/teams/business-marketing/campaigns"])("removes preview notices from %s", async (path) => {
+    session.landing.mockResolvedValue(signedIn);
+    await open(path);
+    expect(container.textContent).not.toMatch(/\bpreview\b|\bmockup\b|\bfictional\b|\bexample mode\b|added later/i);
+  });
 
   it.each(["/", "/profile", "/settings", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
@@ -151,7 +173,7 @@ describe("internal member platform", () => {
     await act(async () => suggestion?.click());
     const reply = container.querySelector('[aria-live="polite"]');
     expect(reply?.firstElementChild?.textContent).toBe(prompt);
-    expect(reply?.textContent).toContain("Example response");
+    expect(reply?.textContent).toContain("Helix assistant");
     expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Ask Helix"]')?.value).toBe("");
   });
 

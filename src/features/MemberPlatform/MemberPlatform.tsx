@@ -19,6 +19,7 @@ import {
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
+import { MemberAccountProvider } from "./MemberAccountContext";
 import {
   MemberSettingsPreview,
   TeamWorkspacePreview,
@@ -98,7 +99,11 @@ export function MemberAccess({ children }: { children: ReactNode }) {
         </Button>
       </main>
     );
-  return children;
+  return (
+    <MemberAccountProvider account={landing.account ?? null}>
+      {children}
+    </MemberAccountProvider>
+  );
 }
 
 function LegacyMemberRedirect({ to }: { to: string }) {

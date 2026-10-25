@@ -26,6 +26,8 @@ import {
   useMemberTheme,
   type MemberTheme,
 } from "@/features/MemberPlatform/MemberTheme";
+import { useMemberAccount } from "@/features/MemberPlatform/MemberAccountContext";
+import { accountInitials } from "@/features/MemberPlatform/account";
 
 export function NavUser({
   onNavigate,
@@ -38,6 +40,10 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useMemberTheme();
+  const account = useMemberAccount();
+  const name = account?.name || account?.email || "Helix member";
+  const role = account?.role ?? "Member";
+  const initials = accountInitials(name);
   const [open, setOpen] = useState(false);
   return (
     <SidebarMenu>
@@ -51,12 +57,14 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarFallback className="rounded-lg">
-                  <UserRound className="size-4" />
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">Helix member</span>
-                <span className="truncate text-xs">Member account</span>
+                <span className="truncate font-medium" title={account?.email}>
+                  {name}
+                </span>
+                <span className="truncate text-xs">{role}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -71,13 +79,13 @@ export function NavUser({
             <div className="flex items-center gap-2 px-2 py-2 text-sm">
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarFallback className="rounded-lg">
-                  <UserRound className="size-4" />
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 leading-tight">
-                <span className="truncate font-medium">Helix member</span>
+                <span className="truncate font-medium">{name}</span>
                 <span className="truncate text-xs text-muted-foreground">
-                  Member account
+                  {role}
                 </span>
               </div>
             </div>

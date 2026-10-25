@@ -11,7 +11,7 @@ function fixture(authenticate: CvServices["authenticate"]) {
     let status: number | undefined;
     let result: unknown;
     const res = { setHeader: vi.fn(), status: (code: number) => { status = code; return res; }, json: (value: unknown) => { result = value; return res; } };
-    await handler({ method, headers, body: { hd: "helixnmbu.no" } } as VercelRequest, res as unknown as VercelResponse);
+    await handler({ method, headers, body: { hd: "helixnmbu.no", role: "Admin", name: "Henrik Engdal" } } as VercelRequest, res as unknown as VercelResponse);
     return { status, result };
   }
   return { authenticate, request };
@@ -23,13 +23,25 @@ function loggedFailures() {
 }
 
 describe("Neon member sign-in", () => {
+  it.each([
+    ["henrik.engdal@helixnmbu.no", "Admin"],
+    ["HENRIK.ENGDAL@HELIXNMBU.NO", "Admin"],
+    ["another.member@helixnmbu.no", "Member"],
+  ])("assigns the workspace role from verified email %s", async (email, role) => {
+    const f = fixture(vi.fn(async () => ({ userId: "member", googleSub: "google-member", email, name: "Henrik Engdal" })));
+    expect(await f.request({ authorization: "Bearer neon-session" })).toMatchObject({
+      status: 200,
+      result: { account: { name: "Henrik Engdal", email: email.toLowerCase(), role } },
+    });
+  });
+
   it("confirms a server-verified session and ignores a client hd hint", async () => {
     const logged = loggedFailures();
     const f = fixture(vi.fn(async (token) => {
       expect(token).toBe("neon-session");
       return { userId: "member", googleSub: "google-ase", email: "ase@helixnmbu.no", name: "Åse" };
     }));
-    expect(await f.request({ authorization: "Bearer neon-session" })).toEqual({ status: 200, result: { ok: true, email: "ase@helixnmbu.no" } });
+    expect(await f.request({ authorization: "Bearer neon-session" })).toEqual({ status: 200, result: { ok: true, email: "ase@helixnmbu.no", account: { name: "Åse", email: "ase@helixnmbu.no", role: "Member" } } });
     expect(logged).not.toHaveBeenCalled();
     logged.mockRestore();
   });
