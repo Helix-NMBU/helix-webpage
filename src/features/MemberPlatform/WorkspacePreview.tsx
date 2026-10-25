@@ -1,12 +1,5 @@
 import { useRef, useState, type FormEvent } from "react";
-import {
-  ArrowUp,
-  ArrowUpRight,
-  Check,
-  Link2,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowUp, Check } from "lucide-react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
 import { Button } from "@libs/components/ui/button";
@@ -84,8 +77,7 @@ export function WorkspaceHomePreview() {
       aria-labelledby="workspace-home-title"
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Sparkles className="size-4" />
+        <div className="text-sm text-muted-foreground">
           Helix assistant
         </div>
         <h1
@@ -106,8 +98,7 @@ export function WorkspaceHomePreview() {
           </p>
           <Card className="gap-4 shadow-none">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Sparkles className="size-4" />
+              <CardTitle className="text-sm">
                 Helix assistant
               </CardTitle>
             </CardHeader>
@@ -131,9 +122,7 @@ export function WorkspaceHomePreview() {
                   .map((team) => (
                     <Button key={team.id} asChild variant="outline" size="sm">
                       <Link to={`/teams/${team.id}/${team.sections[0].id}`}>
-                        <team.icon />
                         {team.title}
-                        <ArrowUpRight />
                       </Link>
                     </Button>
                   ))}
@@ -214,14 +203,12 @@ export function WorkspaceHomePreview() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5 text-sm">
-        <span className="flex items-center gap-2 text-muted-foreground">
-          <Link2 className="size-4" />
+        <span className="text-muted-foreground">
           ChatGPT is not connected
         </span>
         <Button asChild variant="ghost" size="sm">
           <Link to="/settings#chatgpt">
             AI settings
-            <ArrowUpRight />
           </Link>
         </Button>
       </div>
@@ -240,8 +227,7 @@ export function TeamWorkspacePreview() {
       aria-labelledby="team-page-title"
     >
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <team.icon className="size-4" />
+        <div className="text-sm text-muted-foreground">
           {team.title}
         </div>
         <h1
@@ -314,8 +300,7 @@ export function MemberSettingsPreview() {
       </div>
       <Card id="chatgpt" className="scroll-mt-8 shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="size-4" />
+          <CardTitle className="text-base">
             AI connection
           </CardTitle>
           <CardDescription>
@@ -331,7 +316,6 @@ export function MemberSettingsPreview() {
             <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
-                  <Link2 />
                   Connect ChatGPT
                 </Button>
               </DialogTrigger>
@@ -365,7 +349,6 @@ export function MemberSettingsPreview() {
       <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="size-4" />
             Workspace role
             <Badge variant="secondary" className="font-normal">
               {role}
@@ -379,7 +362,6 @@ export function MemberSettingsPreview() {
           {role === "Admin" &&
             previewTeams.map((team) => (
               <div key={team.id} className="flex items-center gap-3 text-sm">
-                <team.icon className="size-4 text-muted-foreground" />
                 <span className="flex-1">{team.title}</span>
                 <Check
                   className="size-4 text-muted-foreground"
