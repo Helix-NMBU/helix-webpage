@@ -16,15 +16,15 @@
     },
     {
       "source": "/api/gmail-connect",
-      "destination": "/api/gmail/connect"
+      "destination": "/api/gmail?action=connect"
     },
     {
       "source": "/api/gmail-callback",
-      "destination": "/api/gmail/callback"
+      "destination": "/api/gmail?action=callback"
     },
     {
       "source": "/api/gmail-status",
-      "destination": "/api/gmail/status"
+      "destination": "/api/gmail?action=status"
     },
     {
       "source": "/(.*)",
