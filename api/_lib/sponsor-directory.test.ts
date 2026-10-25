@@ -108,6 +108,13 @@ describe("published sponsor directory and current CV authorization", () => {
     expect((await call("directory", { year: "2027" })).body).toMatchObject({ members: [] });
   });
 
+  it("accepts filter values up to the publication model's permitted field lengths", async () => {
+    const programme = "Programme ".repeat(40).trim();
+    const department = "Department ".repeat(35).trim();
+    await change("publish", { ...CV, fieldOfStudy: programme, experience: [{ ...CV.experience[0], department }] });
+    expect((await call("directory", { programme, department })).body).toMatchObject({ members: [{ id: member }] });
+  });
+
   it("keeps profiles visible without shared CVs and honors current published contact consent", async () => {
     await change("publish", CV, { cv: false, email: true, phone: true });
     const profile = await call("profile", { id: member });

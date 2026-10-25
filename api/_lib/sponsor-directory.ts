@@ -70,11 +70,11 @@ export function createSponsorDirectoryHandler(deps: {
       if (req.query.path !== undefined || req.query.cvPath !== undefined) throw new SponsorError(400, "Request a member's current publication, not a file path.");
       if (action === "directory") {
         const search = normalizeDirectoryValue(queryText(req.query.q, "name search", 200));
-        const programme = normalizeDirectoryValue(queryText(req.query.programme, "study programme"));
+        const programme = normalizeDirectoryValue(queryText(req.query.programme, "study programme", 500));
         const year = queryText(req.query.year, "graduation year", 4);
         if (year && !/^[0-9]{4}$/.test(year)) throw new SponsorError(400, "Invalid graduation year.");
-        const department = normalizeDirectoryValue(queryText(req.query.department, "Helix department"));
-        const skill = normalizeDirectoryValue(queryText(req.query.skill, "skill"));
+        const department = normalizeDirectoryValue(queryText(req.query.department, "Helix department", 500));
+        const skill = normalizeDirectoryValue(queryText(req.query.skill, "skill", 100));
         const rows = await deps.db.query<PublishedRow>(`${publishedQuery} order by lower(p.snapshot->>'fullName'), d.member_id`);
         const all = rows.rows.map((row) => publication(row).member);
         const members = all.filter((member) =>
