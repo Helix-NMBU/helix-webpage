@@ -7,13 +7,14 @@
     "preinstall": "npx only-allow npm",
     "dev": "vite",
     "dev:member": "vite --mode member-local --host 127.0.0.1 --port 5190 --strictPort",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-deployment-size.mjs",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --exclude scripts/deployment-guards.test.mjs && node --test scripts/deployment-guards.test.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:api": "tsc --project tsconfig.api.json",
     "typecheck:api:runtime": "tsc --project tsconfig.api.runtime.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:deployment-size": "node scripts/check-deployment-size.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1153.0",
