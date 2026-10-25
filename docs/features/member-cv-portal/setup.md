@@ -49,6 +49,8 @@ The Vercel project-level rule `36e32a59-b240-4213-ac8f-ab295422d0c8`, which prev
 
 For local internal-app development, start Vite with `VITE_MEMBER_PLATFORM=true npm run dev`. This override only works in development on localhost or 127.0.0.1. Production selects the member app by its exact hostname.
 
+For local design testing with the isolated Alex Example account, use `npm run dev:member` and open http://127.0.0.1:5190/profile. This dedicated mode persists fictional CV data in that browser's local storage and never contacts live member APIs. It is unavailable in production builds, on LAN hosts or in ordinary development mode. A `demo` query parameter does not enable it. Keep verification details in documentation, without adding labels or banners to the product.
+
 Authenticated pages use the official shadcn `sidebar-07` block, installed with `npx shadcn@latest add sidebar-07`. Its collapsible sidebar, workspace header, account footer, breadcrumb header and mobile sheet use the block's standard components and layout. Helix labels and routes replace the sample data. Appearance in the account menu offers Light, Dark and System, saved locally under `helix-member-theme`. The default follows the system preference. Theme tokens apply only inside the member app, including portaled menus and dialogs; CV preview documents keep their paper styling. Editor navigation and sign-out use the existing autosave and unsaved-change confirmation.
 
 Login is Google only. The Google redirect URI registered on the OAuth client is:
@@ -103,10 +105,8 @@ The CV entry uses a green active visibility switch. Its actions are icon-only Pr
 
 The bucket `member-cvs` is private. The server uploads only generated PDFs (`application/pdf`, `%PDF-` header, at most 5 MB) under `{memberId}/{uuid}.pdf`. `GET /api/member-cv-file` checks the session and returns a presigned GET that lasts 120 seconds, and only for the caller's current published path. Preview (`POST /api/member-cv` with `action=preview`) returns PDF bytes and does not write storage.
 
-## What is left before members can use it
+## Deployment and acceptance status
 
-- Set the environment variables on Vercel.
-- Apply the migration.
-- Confirm trusted domains and that email/password sign-up is disabled.
-- Confirm Neon stores the Google `idToken` on `neon_auth.account` after sign-in. If it does not, the first login fails closed.
-- The sponsor Talent Directory, agreement entitlements, and profile images are not in this slice.
+As of 25 October 2026, internal.helixnmbu.no serves the Member CV branch. Runtime environment, trusted origin and migrations 001/002 are active. Fresh Helix Google sign-in and stored CV access have been observed. First onboarding still requires the stored Google ID token and fails closed if it is missing. This observation does not establish every authentication-provider console setting or every negative-path browser scenario.
+
+See [verification.md](verification.md) for the tested revisions, browser/database evidence and remaining two-account and authentication acceptance checks. Do not rerun live migrations as a routine deployment step. The sponsor Talent Directory, agreement entitlements and profile images are not in this slice.
