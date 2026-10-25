@@ -93,7 +93,7 @@ The CV entry's directory switch publishes the current CV with CV sharing enabled
 
 ## Member notifications
 
-The sidebar links to the protected `/notifications` page below Home. Manual CV saves, reloads, publication and withdrawal send a shadcn Sonner popup at the top right. The page retains up to 50 messages in memory during the current authenticated session and marks them read when opened. The unread count appears beside Notifications in the sidebar. Messages clear on refresh or sign-out and are isolated by the verified member ID. This is client-side feedback; there is no server notification inbox yet.
+The sidebar links to the protected `/notifications` page below Home. Manual CV saves, reloads, publication and withdrawal send a shadcn Sonner popup at the top right. The page retains up to 50 messages in memory during the current authenticated session until the member selects messages and uses Mark as read to remove them. Select all selects the current list. Opening the page does not change the unread count. The unread count appears beside Notifications in the sidebar. Messages clear on refresh or sign-out and are isolated by the verified member ID. This is client-side feedback; there is no server notification inbox yet.
 
 The CV entry uses a green active visibility switch. Its actions are Edit, icon-only Preview, and the split download control. Members without a registered CV see the shadcn Empty component with a single Setup CV action.
 
