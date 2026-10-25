@@ -36,7 +36,7 @@ describe("GET /api/gmail-callback", () => {
   it("exchanges the code, verifies the mailbox identity, and saves the connection", async () => {
     const saved = store();
     const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(Response.json({ access_token: "access", refresh_token: "refresh", scope: "gmail.readonly" }))
+      .mockResolvedValueOnce(Response.json({ access_token: "access", refresh_token: "refresh", scope: "gmail.modify" }))
       .mockResolvedValueOnce(Response.json({ emailAddress: "member@helixnmbu.no" }));
     const handler = createGmailCallbackHandler(env, fetchImpl, () => saved, () => 1_700_000_000_000);
     const cookie = stateCookie("member-1", "state-1", env.GMAIL_OAUTH_STATE_SECRET, 1_700_000_000_000);
@@ -45,7 +45,7 @@ describe("GET /api/gmail-callback", () => {
     await handler({ method: "GET", query: { code: "auth-code", state: "state-1" }, headers: { cookie } } as unknown as VercelRequest, res);
 
     expect(result().headers.Location).toBe("/mail?gmail=connected");
-    expect(saved.save).toHaveBeenCalledWith("member-1", "member@helixnmbu.no", "refresh", "gmail.readonly");
+    expect(saved.save).toHaveBeenCalledWith("member-1", "member@helixnmbu.no", "refresh", "gmail.modify");
   });
 
   it("rejects a callback with a missing or invalid state", async () => {

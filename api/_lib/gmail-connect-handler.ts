@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { bearer, MemberCvError, neonCvServices, type WorkspaceIdentity } from "./member-cv-service.js";
 
-export const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+export const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 export const GMAIL_OAUTH_STATE_TTL_SECONDS = 10 * 60;
 export const GMAIL_OAUTH_STATE_COOKIE = "helix_gmail_oauth_state";
 
@@ -83,7 +83,7 @@ export function createGmailConnectHandler(
         client_id: config.clientId,
         redirect_uri: config.redirectUri,
         response_type: "code",
-        scope: GMAIL_READONLY_SCOPE,
+        scope: GMAIL_MODIFY_SCOPE,
         access_type: "offline",
         include_granted_scopes: "true",
         prompt: "consent",

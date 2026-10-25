@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailConnectHandler, GMAIL_OAUTH_STATE_COOKIE, GMAIL_READONLY_SCOPE } from "./_lib/gmail-connect-handler.js";
+import { createGmailConnectHandler, GMAIL_MODIFY_SCOPE, GMAIL_OAUTH_STATE_COOKIE } from "./_lib/gmail-connect-handler.js";
 
 function response() {
   let status = 200;
@@ -42,7 +42,7 @@ describe("POST /api/gmail-connect", () => {
     expect(url.origin).toBe("https://accounts.google.com");
     expect(url.searchParams.get("client_id")).toBe(env.GMAIL_GOOGLE_CLIENT_ID);
     expect(url.searchParams.get("redirect_uri")).toBe(env.GMAIL_OAUTH_REDIRECT_URI);
-    expect(url.searchParams.get("scope")).toBe(GMAIL_READONLY_SCOPE);
+    expect(url.searchParams.get("scope")).toBe(GMAIL_MODIFY_SCOPE);
     expect(url.searchParams.get("state")).toBe("fixed-state");
     expect(url.searchParams.get("access_type")).toBe("offline");
   });

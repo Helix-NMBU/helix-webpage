@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { GMAIL_OAUTH_STATE_COOKIE, verifyStateCookie } from "./gmail-connect-handler.js";
+import { GMAIL_MODIFY_SCOPE, GMAIL_OAUTH_STATE_COOKIE, verifyStateCookie } from "./gmail-connect-handler.js";
 import { createGmailConnectionStore, type GmailConnectionStore } from "./gmail-connection.js";
 import { MemberCvError } from "./member-cv-error.js";
 
@@ -31,7 +31,7 @@ async function exchangeCode(code: string, configuration: NonNullable<ReturnType<
   });
   const body = await response.json().catch(() => null) as OAuthTokenResponse | null;
   if (!response.ok || typeof body?.access_token !== "string" || typeof body.refresh_token !== "string") throw new MemberCvError(502, "Google did not return a reusable Gmail connection.");
-  return { accessToken: body.access_token, refreshToken: body.refresh_token, scope: typeof body.scope === "string" ? body.scope : "https://www.googleapis.com/auth/gmail.readonly" };
+  return { accessToken: body.access_token, refreshToken: body.refresh_token, scope: typeof body.scope === "string" ? body.scope : GMAIL_MODIFY_SCOPE };
 }
 
 async function gmailProfile(accessToken: string, fetchImpl: typeof fetch): Promise<string> {
