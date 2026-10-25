@@ -93,9 +93,11 @@ function GmailLogo({ className }: { className?: string }) {
 function ConnectedMailSidebar({
   activeFolder,
   onFolderChange,
+  onReconnect,
 }: {
   activeFolder: string;
   onFolderChange: (folder: string) => void;
+  onReconnect: () => void;
 }) {
   const [search, setSearch] = useState("");
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
@@ -146,7 +148,7 @@ function ConnectedMailSidebar({
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem disabled>Mail settings</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onReconnect}>Reconnect Gmail</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -240,7 +242,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {connected ? (
         <>
-          <ConnectedMailSidebar activeFolder={activeFolder} onFolderChange={setActiveFolder} />
+          <ConnectedMailSidebar activeFolder={activeFolder} onFolderChange={setActiveFolder} onReconnect={connectGmail} />
           <main className="flex min-w-0 flex-1 items-center justify-center p-6" aria-live="polite">
             <div className="max-w-sm text-center">
               <folder.icon className="mx-auto size-8 text-muted-foreground/60" aria-hidden="true" />
