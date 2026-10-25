@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailMessageHandler, createGmailMessagesHandler } from "./_lib/gmail-messages-handler.js";
-import type { GmailConnectionStore } from "./_lib/gmail-connection.js";
+import { createGmailMessageHandler, createGmailMessagesHandler } from "../api/_lib/gmail-messages-handler.js";
+import type { GmailConnectionStore } from "../api/_lib/gmail-connection.js";
 
 function response() {
   let status = 200;
