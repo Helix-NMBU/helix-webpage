@@ -1,0 +1,60 @@
+/* Internal-only tokens also reach Radix dialogs, sheets and dropdown portals. */
+html[data-member-theme="light"] { color-scheme: light; background: #f4f4f7; }
+html[data-member-theme="dark"] { color-scheme: dark; background: #1c1c1c; }
+html[data-member-theme] .portal-root,
+html[data-member-theme] body:has(.member-platform) {
+  --sidebar: #fff;
+  --sidebar-foreground: #27272a;
+  --sidebar-primary: #002ec4;
+  --sidebar-primary-foreground: #fff;
+  --sidebar-accent: #f0eff5;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #002ec4;
+  --platform-canvas: #f4f4f7;
+  --color-destructive: var(--destructive);
+  color-scheme: light;
+}
+html[data-member-theme="dark"] .portal-root,
+html[data-member-theme="dark"] body:has(.member-platform) {
+  --background: #101010;
+  --foreground: #ededed;
+  --card: #151515;
+  --card-foreground: #ededed;
+  --popover: #191919;
+  --popover-foreground: #ededed;
+  --primary: #8aa4ff;
+  --primary-foreground: #101a40;
+  --secondary: #202020;
+  --secondary-foreground: #ededed;
+  --muted: #202020;
+  --muted-foreground: #aaa;
+  --accent: #282828;
+  --accent-foreground: #f5f5f5;
+  --border: #2c2c2c;
+  --input: #424242;
+  --ring: #8aa4ff;
+  --destructive: #ff8f8f;
+  --sidebar: #101010;
+  --sidebar-foreground: #ddd;
+  --sidebar-primary: #8aa4ff;
+  --sidebar-primary-foreground: #101a40;
+  --sidebar-accent: #282828;
+  --sidebar-accent-foreground: #fff;
+  --sidebar-border: #2c2c2c;
+  --sidebar-ring: #8aa4ff;
+  --platform-canvas: #1c1c1c;
+  color-scheme: dark;
+}
+html[data-member-theme] .mcv-page.portal-root { --muted-foreground: #65656e; --color-muted-foreground: var(--muted-foreground); }
+html[data-member-theme="dark"] .mcv-page.portal-root { --muted-foreground: #aaa; }
+html[data-member-theme] .mcv-intro .mcv-eyebrow,
+html[data-member-theme] .mcv-field,
+html[data-member-theme] .mcv-field [data-slot="label"],
+html[data-member-theme] .mcv-page .mcv-nav-link,
+html[data-member-theme] .mcv-nav-label { color: var(--foreground); }
+html[data-member-theme] .mcv-dialog.portal-root,
+html[data-member-theme] .mcv-language-menu.portal-root { font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif; }
+html[data-member-theme] .member-login-brand-icon,
+html[data-member-theme] .member-login-brand-panel,
+html[data-member-theme] .member-platform-logo { background: #002ec4; }

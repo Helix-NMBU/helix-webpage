@@ -5,9 +5,13 @@ import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import CVBankLogin from "../CVBank/Login";
 import MemberCV from "../MemberCV/MemberCV";
-import { clearMemberLanding, ensureMemberLanding, signOutMember, watchMemberSession, type MemberLanding } from "../MemberCV/session";
+import { clearMemberLanding, ensureMemberLanding, watchMemberSession, type MemberLanding } from "../MemberCV/session";
+import { MemberThemeProvider } from "./MemberTheme";
+import { MemberNavigationProvider } from "./MemberNavigation";
+import { MemberShell } from "./MemberShell";
 import "@fontsource-variable/geist";
 import "./member-platform.css";
+import "./member-theme.css";
 
 export function MemberAccess({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -37,22 +41,7 @@ export function MemberAccess({ children }: { children: ReactNode }) {
 
 function MemberHome() {
   const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   useEffect(() => watchMemberSession(() => navigate("/login", { replace: true })), [navigate]);
-
-  async function logout() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await signOutMember();
-      navigate("/login", { replace: true });
-    } catch {
-      setError("Could not sign out. Please try again.");
-      setBusy(false);
-    }
-  }
 
   return (
     <main className="member-platform-home">
@@ -65,8 +54,6 @@ function MemberHome() {
         <CardHeader><CardTitle>Profile and CV</CardTitle><CardDescription>Manage your member profile and CV.</CardDescription></CardHeader>
         <CardContent><Button asChild><Link to="/profile">Open profile and CV</Link></Button></CardContent>
       </Card>
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-      <Button type="button" variant="ghost" disabled={busy} onClick={() => void logout()}>Sign out</Button>
     </main>
   );
 }
@@ -78,11 +65,11 @@ function LegacyMemberRedirect({ to }: { to: string }) {
 
 export default function MemberPlatform() {
   return (
-    <div className="member-platform portal-root">
+    <MemberThemeProvider><MemberNavigationProvider><div className="member-platform portal-root">
       <Routes>
         <Route path="/login" element={<CVBankLogin />} />
-        <Route path="/" element={<MemberAccess><MemberHome /></MemberAccess>} />
-        <Route path="/profile" element={<MemberAccess><MemberCV /></MemberAccess>} />
+        <Route path="/" element={<MemberAccess><MemberShell><MemberHome /></MemberShell></MemberAccess>} />
+        <Route path="/profile" element={<MemberAccess><MemberShell><MemberCV /></MemberShell></MemberAccess>} />
         <Route path="/member/login" element={<LegacyMemberRedirect to="/login" />} />
         <Route path="/member/profile" element={<LegacyMemberRedirect to="/profile" />} />
         <Route path="/cv-bank" element={<LegacyMemberRedirect to="/login" />} />
@@ -90,6 +77,6 @@ export default function MemberPlatform() {
         <Route path="/cv-bank/profile" element={<LegacyMemberRedirect to="/profile" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </div>
+    </div></MemberNavigationProvider></MemberThemeProvider>
   );
 }

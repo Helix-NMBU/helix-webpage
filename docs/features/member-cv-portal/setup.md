@@ -49,6 +49,8 @@ The Vercel project-level rule `36e32a59-b240-4213-ac8f-ab295422d0c8`, which prev
 
 For local internal-app development, start Vite with `VITE_MEMBER_PLATFORM=true npm run dev`. This override only works in development on localhost or 127.0.0.1. Production selects the member app by its exact hostname.
 
+Authenticated pages share a shadcn sidebar with an icon rail and expandable profile/CV navigation. The profile icon at the bottom opens the account menu. Appearance offers Light, Dark and System, saved locally under `helix-member-theme`. The default follows the system preference. Theme tokens apply only inside the member app, including portaled menus and dialogs; CV preview documents keep their paper styling. On mobile, the detailed navigation opens as a sheet. Editor navigation and sign-out use the existing autosave and unsaved-change confirmation.
+
 Login is Google only. The Google redirect URI registered on the OAuth client is:
 
 `{NEON_AUTH_BASE_URL}/callback/google`

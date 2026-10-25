@@ -2,13 +2,14 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { memberLoadFailure, memberSessionToken, signOutMember, watchMemberSession } from "./session";
+import { memberLoadFailure, memberSessionToken, signOutMember, watchMemberSession, NEON_AUTH_SESSION_VERIFIER_PARAM } from "./session";
 import { createDemoRepository, fictionalCv } from "./demo";
 import {
   createCvRepository,
@@ -67,6 +68,7 @@ import {
 } from "./locale";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { memberPaths } from "../MemberPlatform/routes";
+import { useMemberNavigation, type MemberEditorActions } from "../MemberPlatform/MemberNavigation";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
 import "./member-cv.css";
@@ -299,6 +301,9 @@ function Section({
 export default function MemberCV() {
   const { locale, setLocale, t } = useMemberLocale();
   const paths = memberPaths();
+  const platformNavigation = useMemberNavigation();
+  const setEditor = platformNavigation?.setEditor;
+  const editorActions = useRef<MemberEditorActions | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const demo =
@@ -380,6 +385,26 @@ export default function MemberCV() {
   const latestInput = useRef({ draft, sharing, envelope });
   latestInput.current = { draft, sharing, envelope };
   const [savingState, setSavingState] = useState<CvAutosaveState>({ saving: false, pending: false, paused: null });
+  const editorLoaded = Boolean(draft);
+  useEffect(() => {
+    const section = location.hash.replace(/^#mcv-/, "");
+    if (!editorLoaded || !["contact", "education", "experience", "projects", "languages", "links", "sharing", "publication"].includes(section)) return;
+    setOpenSections((previous) => ({ ...previous, [section]: true }));
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`mcv-${section}-title`)?.focus({ preventScroll: true });
+      document.getElementById(`mcv-${section}`)?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editorLoaded, location.hash, location.key]);
+
+  useLayoutEffect(() => {
+    setEditor?.({
+      busy: Boolean(busy),
+      navigate: (to, opener) => editorActions.current?.navigate(to, opener),
+      signOut: (opener) => editorActions.current?.signOut(opener),
+    });
+  }, [busy, setEditor]);
+  useEffect(() => () => setEditor?.(null), [setEditor]);
   const inputKey = draft ? cvSnapshotKey({ draft, sharing }) : null;
   const dirty = Boolean(
     draft &&
@@ -691,7 +716,13 @@ export default function MemberCV() {
     }
   }
 
-  async function leaveProfile(action: "home" | "logout", opener?: HTMLElement) {
+  async function leaveProfile(action: "home" | "logout", opener?: HTMLElement, destination = paths.home) {
+    if (action === "home" && new URL(destination, window.location.origin).pathname === paths.profile) {
+      const search = new URLSearchParams(location.search);
+      search.delete(NEON_AUTH_SESSION_VERIFIER_PARAM);
+      navigate({ pathname: paths.profile, search: search.toString(), hash: new URL(destination, window.location.origin).hash });
+      return;
+    }
     if (busy || manualOperation.current) return;
     const current = generation.current;
     const controller = autosave.current;
@@ -710,7 +741,7 @@ export default function MemberCV() {
       setDraft(null);
       setEnvelope(null);
       setEnded(true);
-      navigate(action === "home" ? paths.home : paths.login, { replace: true });
+      navigate(action === "home" ? destination : paths.login, { replace: true });
     } catch (failure) {
       if (generation.current !== current) return;
       setError(failure instanceof Error ? failure.message : "Could not sign out. Please try again.");
@@ -718,6 +749,11 @@ export default function MemberCV() {
       finishManual(current);
     }
   }
+  editorActions.current = {
+    busy: Boolean(busy),
+    navigate: (to, opener) => { void leaveProfile("home", opener, to); },
+    signOut: (opener) => { void leaveProfile("logout", opener); },
+  };
   const edit = (key: keyof CvData, value: CvData[keyof CvData]) =>
     setDraft((previous) =>
       previous ? { ...previous, [key]: value } : previous,
@@ -774,12 +810,12 @@ export default function MemberCV() {
     <main className="mcv-page mcv-profile portal-root" lang={locale}>
       <div className="mcv-container">
         <div className="mcv-account-actions">
-          {paths.home !== paths.profile
+          {!platformNavigation && paths.home !== paths.profile
             ? <Button type="button" variant="ghost" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("home", event.currentTarget)}>{t("Member home")}</Button>
             : <span />}
           <div>
             <LanguageSwitcher locale={locale} onChange={setLocale} />
-            <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("logout", event.currentTarget)}>{t("Sign out")}</Button>
+            {!platformNavigation && <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={(event) => void leaveProfile("logout", event.currentTarget)}>{t("Sign out")}</Button>}
           </div>
         </div>
         {demo && (
@@ -910,7 +946,7 @@ export default function MemberCV() {
               }}
             >
               <div className="mcv-layout">
-                <SectionNavigation
+                {!platformNavigation && <SectionNavigation
                   locale={locale}
                   onNavigate={(key) =>
                     setOpenSections((previous) => ({
@@ -923,7 +959,7 @@ export default function MemberCV() {
                     sharing,
                     envelope.document,
                   )}
-                />
+                />}
                 <fieldset
                   disabled={Boolean(busy) || ended}
                   className="mcv-form-fieldset"

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useLayoutEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,8 +7,9 @@ import MemberPlatform from "./MemberPlatform";
 import { isMemberPlatform, memberPaths } from "./routes";
 import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
+import { useMemberNavigation } from "./MemberNavigation";
 
-const session = vi.hoisted(() => ({ landing: vi.fn(), signOut: vi.fn() }));
+const session = vi.hoisted(() => ({ landing: vi.fn(), signOut: vi.fn(), editorNavigate: vi.fn(), editorSignOut: vi.fn() }));
 vi.mock("../MemberCV/session", async (original) => ({
   ...await original<typeof import("../MemberCV/session")>(),
   authClient: {},
@@ -17,7 +18,14 @@ vi.mock("../MemberCV/session", async (original) => ({
   watchMemberSession: () => () => undefined,
   signOutMember: session.signOut,
 }));
-vi.mock("../MemberCV/MemberCV", () => ({ default: () => <p>Private CV editor</p> }));
+vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
+  const setEditor = useMemberNavigation()?.setEditor;
+  useLayoutEffect(() => {
+    setEditor?.({ busy: false, navigate: session.editorNavigate, signOut: session.editorSignOut });
+    return () => setEditor?.(null);
+  }, [setEditor]);
+  return <p>Private CV editor</p>;
+} }));
 
 const signedOut = { phase: "signed-out", token: null, userId: null, status: 401, error: null };
 const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null };
@@ -27,21 +35,29 @@ describe("internal member platform", () => {
   let root: Root;
   let router: ReturnType<typeof createMemoryRouter>;
   beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    window.localStorage.removeItem("helix-member-theme");
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
     session.landing.mockReset().mockResolvedValue(signedOut);
     session.signOut.mockReset().mockResolvedValue(undefined);
+    session.editorNavigate.mockReset();
+    session.editorSignOut.mockReset();
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
   });
-  afterEach(() => {
-    act(() => root.unmount());
+  afterEach(async () => {
+    await act(async () => root.unmount());
     container.remove();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
   async function open(path: string) {
     router = createMemoryRouter([{ path: "*", element: <MemberPlatform /> }], { initialEntries: [path] });
     await act(async () => root.render(<RouterProvider router={router} />));
+  }
+  async function profileMenu() {
+    await act(async () => container.querySelector('[aria-label="Profile menu"]')?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" })));
   }
 
   it.each(["/", "/profile", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
@@ -68,9 +84,39 @@ describe("internal member platform", () => {
     await open("/login");
     expect(router.state.location.pathname).toBe("/");
     session.landing.mockResolvedValue(signedOut);
-    await act(async () => container.querySelector("button")?.click());
+    await profileMenu();
+    const signOut = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes("Sign out"));
+    await act(async () => signOut?.click());
     expect(session.signOut).toHaveBeenCalledOnce();
     expect(router.state.location.pathname).toBe("/login");
+  });
+
+  it("changes and remembers appearance from the profile menu", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/");
+    await profileMenu();
+    const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
+    expect(dark).toBeDefined();
+    await act(async () => dark?.click());
+    expect(document.documentElement.dataset.memberTheme).toBe("dark");
+    expect(window.localStorage.getItem("helix-member-theme")).toBe("dark");
+    await act(async () => router.navigate("/profile"));
+    expect(document.documentElement.dataset.memberTheme).toBe("dark");
+    expect(container.querySelector('[aria-label="Profile menu"]')).not.toBeNull();
+  });
+
+  it("lets the editor save or confirm unsaved changes before sidebar navigation or sign-out", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/profile");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Overview"]')?.click());
+    expect(session.editorNavigate).toHaveBeenCalledWith("/", expect.any(HTMLButtonElement));
+    expect(router.state.location.pathname).toBe("/profile");
+    await profileMenu();
+    const signOut = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.includes("Sign out"));
+    await act(async () => signOut?.click());
+    expect(session.editorSignOut).toHaveBeenCalledOnce();
+    expect(session.signOut).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe("/profile");
   });
 
   it("preserves the one-time verifier when redirecting old profile links", async () => {
