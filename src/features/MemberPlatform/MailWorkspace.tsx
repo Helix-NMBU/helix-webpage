@@ -19,14 +19,6 @@ import {
   DropdownMenuTrigger,
 } from "@libs/components/ui/dropdown-menu";
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@libs/components/ui/breadcrumb";
-import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
@@ -185,24 +177,6 @@ function ConnectedMailSidebar({
   );
 }
 
-function MailBreadcrumbRail() {
-  return (
-    <nav aria-label="Mail breadcrumbs" className="hidden w-44 shrink-0 border-r bg-background px-4 pt-5 md:block">
-      <Breadcrumb>
-        <BreadcrumbList className="flex-wrap gap-1">
-          <BreadcrumbItem>
-            <BreadcrumbLink href="/">Helix NMBU</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>Mail</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-    </nav>
-  );
-}
-
 const emptyFolderMessage: Record<string, string> = {
   inbox: "No messages in your inbox.",
   starred: "No starred messages.",
@@ -266,7 +240,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {connected ? (
         <>
-          <MailBreadcrumbRail />
           <ConnectedMailSidebar activeFolder={activeFolder} onFolderChange={setActiveFolder} />
           <main className="flex min-w-0 flex-1 items-center justify-center p-6" aria-live="polite">
             <div className="max-w-sm text-center">
