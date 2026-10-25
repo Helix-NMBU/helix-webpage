@@ -13,13 +13,13 @@
   "ignoreCommand": "sh scripts/ignore-docs-build.sh",
   "redirects": [
     {
-      "source": "/P1010055 1.png",
-      "destination": "/P1010055 1.webp",
+      "source": "/P1010055%201.png",
+      "destination": "/P1010055%201.webp",
       "permanent": true
     },
     {
-      "source": "/P1010366 1.png",
-      "destination": "/P1010366 1.webp",
+      "source": "/P1010366%201.png",
+      "destination": "/P1010366%201.webp",
       "permanent": true
     },
     {
@@ -33,8 +33,8 @@
       "permanent": true
     },
     {
-      "source": "/birk i bil.jpg",
-      "destination": "/birk i bil.webp",
+      "source": "/birk%20i%20bil.jpg",
+      "destination": "/birk%20i%20bil.webp",
       "permanent": true
     },
     {
@@ -43,8 +43,8 @@
       "permanent": true
     },
     {
-      "source": "/cars/Børsen.png",
-      "destination": "/cars/Børsen.webp",
+      "source": "/cars/B%C3%B8rsen.png",
+      "destination": "/cars/B%C3%B8rsen.webp",
       "permanent": true
     },
     {
