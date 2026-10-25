@@ -151,18 +151,52 @@ function emailDocument(html: string, plainText: string): string {
   const htmlStyle = `${sanitizeCss(parsed.documentElement.getAttribute("style") ?? "")};height:100%!important;overflow:hidden!important`;
   const bodyStyle = `${sanitizeCss(parsed.body.getAttribute("style") ?? "")};box-sizing:border-box;height:100%!important;max-height:100%;overflow-x:auto!important;overflow-y:auto!important;overscroll-behavior-y:contain!important`;
   const shellStyles = "html{height:100%;overflow:hidden}body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
-  return `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`;
+  const scrollbarStyles = "body{scrollbar-width:thin;scrollbar-color:transparent transparent;transition:scrollbar-color .45s ease-out}body[data-scrolling='true']{scrollbar-color:color-mix(in srgb,#5f6368 65%,transparent) transparent}body::-webkit-scrollbar{width:8px;height:8px}body::-webkit-scrollbar-track{background:transparent}body::-webkit-scrollbar-thumb{background:transparent;border-radius:8px;transition:background-color .45s ease-out}body[data-scrolling='true']::-webkit-scrollbar-thumb{background:color-mix(in srgb,#5f6368 65%,transparent);transition-duration:120ms}";
+  return `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}<style>${scrollbarStyles}</style></head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`;
 }
 
 function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }) {
   const srcDoc = useMemo(() => emailDocument(html, plainText), [html, plainText]);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const scrollIdleTimeout = useRef<number | null>(null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    let scrollBody: HTMLElement | null = null;
+    const attachScrollListener = () => {
+      scrollBody?.removeEventListener("scroll", handleScroll);
+      scrollBody = frame.contentDocument?.body ?? null;
+      scrollBody?.addEventListener("scroll", handleScroll, { passive: true });
+    };
+    const handleScroll = () => {
+      if (!scrollBody) return;
+      scrollBody.dataset.scrolling = "true";
+      if (scrollIdleTimeout.current !== null) window.clearTimeout(scrollIdleTimeout.current);
+      scrollIdleTimeout.current = window.setTimeout(() => {
+        if (scrollBody) scrollBody.dataset.scrolling = "false";
+        scrollIdleTimeout.current = null;
+      }, 650);
+    };
+    frame.addEventListener("load", attachScrollListener);
+    attachScrollListener();
+    return () => {
+      frame.removeEventListener("load", attachScrollListener);
+      scrollBody?.removeEventListener("scroll", handleScroll);
+      if (scrollIdleTimeout.current !== null) {
+        window.clearTimeout(scrollIdleTimeout.current);
+        scrollIdleTimeout.current = null;
+      }
+    };
+  }, [srcDoc]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <iframe
         title="Email content"
-        sandbox=""
+        sandbox="allow-same-origin"
         referrerPolicy="no-referrer"
+        ref={frameRef}
         srcDoc={srcDoc}
         className="h-full min-h-0 w-full flex-1 border-0 bg-white"
       />

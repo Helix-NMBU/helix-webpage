@@ -228,7 +228,8 @@ export function createGmailMessagesHandler(
       const result = await withGmail(req, getStore, authenticate, env, fetchImpl, async (token) => {
         const params = new URLSearchParams({ maxResults: "25" });
         for (const id of filter.labelIds ?? []) params.append("labelIds", id);
-        const query = [filter.q, unreadOnly ? "is:unread" : "", search].filter(Boolean).join(" ");
+        if (unreadOnly) params.append("labelIds", "UNREAD");
+        const query = [filter.q, search].filter(Boolean).join(" ");
         if (query) params.set("q", query);
         if (pageToken) params.set("pageToken", pageToken);
         if (filter.includeSpamTrash) params.set("includeSpamTrash", "true");
