@@ -17,7 +17,10 @@ vi.mock("./browser-pdf", () => ({ generateBrowserCvPdf: vi.fn(async () => new Bl
 
 function SignOutControl() {
   const navigation = useMemberNavigation();
-  return <button onClick={() => navigation?.editor?.signOut()}>Sign out through account menu</button>;
+  return <>
+    <button onClick={() => navigation?.editor?.signOut()}>Sign out through account menu</button>
+    <button onClick={() => navigation?.editor?.navigate("/notifications")}>Go to notifications</button>
+  </>;
 }
 
 describe("member profile", () => {
@@ -72,7 +75,6 @@ describe("member profile", () => {
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(element => element.textContent === name)!;
     await act(async () => option.click());
   }
-
   it("keeps the platform in English and places the CV entry below the profile", async () => {
     await open();
     expect(container.querySelector("h1")?.textContent).toBe("Profile");
@@ -90,13 +92,21 @@ describe("member profile", () => {
     const actions = [...container.querySelectorAll('[aria-labelledby="member-cv-title"] button')].map(item => item.getAttribute("aria-label"));
     expect(actions.filter(Boolean)).toEqual(["Preview CV", "CV actions"]);
     await cvMenu("Edit");
-    expect([...document.querySelectorAll('[aria-label="CV setup steps"] button')].map(item => item.textContent)).toEqual(["1. Introduction", "2. Education", "3. Experience", "4. Projects", "5. Languages", "6. Links", "7. Review & sharing"]);
-    await click("2. Education");
-    await click("Remove education 1");
-    await click("4. Projects");
-    await click("2. Education");
-    expect(document.querySelector('[aria-label="Remove education 1"]')).toBeNull();
-    await click("Save and close");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 1 of 4");
+    expect(document.querySelectorAll(".mcv-wizard-progress-bar span")).toHaveLength(4);
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("The basics");
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Fill out each section");
+    expect(document.querySelector('[aria-label="Original CV language"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Jump to step"]')).toBeNull();
+    await click("Next step");
+    await click("Remove MSc Mechanical engineering");
+    await click("Next step");
+    await click("Next step");
+    await click("Previous step");
+    await click("Previous step");
+    expect(document.querySelector('[aria-label="Remove MSc Mechanical engineering"]')).toBeNull();
+    await click("Close");
+    await click("Save as draft");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual([]);
   });
@@ -112,22 +122,29 @@ describe("member profile", () => {
     expect(emptyState.textContent).not.toContain("Learn More");
     await click("Setup CV");
     await click("Close");
+    await click("Discard changes");
     expect(container.textContent).toContain("No CV yet");
     await click("Setup CV");
-    await click("Save and close");
+    await click("Close");
+    await click("Save as draft");
     expect(container.textContent).toContain("No CV yet");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.cvRegistered).toBe(false);
     await click("Setup CV");
-    await click("7. Review & sharing");
+    for (let index = 0; index < 3; index += 1) await click("Next step");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Projects");
+    expect(button("Next step").disabled).toBe(true);
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Review & sharing");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("References (optional)");
     await click("Finish");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(container.textContent).toContain("CV Alex Example");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.cvRegistered).toBe(true);
   });
 
-  it("opens sharing deep links in the setup modal and renders PDF previews with language controls", async () => {
+  it("keeps sharing on the profile and renders PDF previews with language controls", async () => {
     await open("#mcv-sharing");
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Share generated CV");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[role="switch"]')).not.toBeNull();
     await click("Preview CV");
     const dialog = document.querySelector('[role="dialog"].mcv-preview-panel');
     expect(dialog?.getAttribute("lang")).toBe("en");
@@ -229,7 +246,9 @@ describe("member profile", () => {
     await fill("Field of study", "Robotics");
     await fill("Graduation year", "20");
     await act(async () => dialogButton("Save changes").click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Enter a four-digit graduation year.");
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Enter a four-digit graduation year.");
+    expect(document.querySelector('[data-sonner-toast][data-type="error"]')?.textContent).toContain("Enter a four-digit graduation year.");
+    expect(document.activeElement?.getAttribute("aria-invalid")).toBe("true");
     await fill("Graduation year", "2029");
     await act(async () => dialogButton("Save changes").click());
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -239,5 +258,182 @@ describe("member profile", () => {
     expect(saved.document.draft.headline).toBe("Mechanical engineering student");
     expect(saved.document.draft.education).toEqual(fictionalCv().education);
     expect(saved.document.draft.helixRole).toBeUndefined();
+  });
+
+  it("reports discarded setup changes as a notification and restores the saved draft", async () => {
+    await open();
+    const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education;
+    await cvMenu("Edit");
+    expect(document.querySelector('[role="dialog"] [role="status"]')).toBeNull();
+    await click("Next");
+    await click("Remove MSc Mechanical engineering");
+    await click("Close");
+    await click("Discard changes");
+    expect(container.querySelector('[role="alert"], .mcv-notice')).toBeNull();
+    expect(document.querySelector('[data-sonner-toast][data-type="info"]')?.textContent).toContain("Changes discarded");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual(before);
+    await cvMenu("Edit");
+    await click("Next");
+    expect(button("Remove MSc Mechanical engineering")).toBeDefined();
+  });
+  it("does not report an expired session when navigating away from the profile", async () => {
+    await open("", <SignOutControl />);
+    await click("Go to notifications");
+    expect(router.state.location.pathname).toBe("/notifications");
+    expect(document.querySelector('[data-sonner-toast]')?.textContent ?? "").not.toContain("Session ended");
+  });
+  it("shows only the education essentials and updates its title while typing", async () => {
+    const stored = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!);
+    stored.document.draft.education[0].fieldOfStudy = "Mechanical engineering";
+    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
+    await open();
+    await cvMenu("Edit");
+    await click("Next");
+    await click("Mechanical engineering");
+    const section = document.querySelector("#mcv-education")!;
+    expect([...section.querySelectorAll("label")].map((label) => label.textContent)).toEqual([
+      "Institution", "Degree or programme", "Field of study", "Start date", "Expected end date",
+    ]);
+    expect(section.querySelector("textarea")).toBeNull();
+    expect(section.textContent).not.toContain("Education 1");
+    const label = [...section.querySelectorAll("label")].find((item) => item.textContent === "Field of study")!;
+    const input = document.getElementById(label.htmlFor) as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Robotics");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(button("Robotics").getAttribute("aria-expanded")).toBe("true");
+    expect(button("Remove Robotics")).toBeDefined();
+    await click("Close");
+    await click("Save as draft");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education[0]).toMatchObject({ fieldOfStudy: "Robotics", description: stored.document.draft.education[0].description });
+  });
+  it("keeps a new education entry as a plain form until Add places it in the section", async () => {
+    const stored = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!);
+    stored.document.draft.education = [];
+    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
+    await open();
+    await cvMenu("Edit");
+    await click("Next");
+    await click("+ Add education");
+    const section = document.querySelector("#mcv-education")!;
+    expect(section.querySelector('.mcv-entry-form[data-section="education"]')).not.toBeNull();
+    expect(section.querySelector(".mcv-entry, .mcv-remove")).toBeNull();
+    expect(section.textContent).not.toContain("New education");
+    expect(button("Add").disabled).toBe(true);
+    for (const [label, value] of [["Institution", "NMBU"], ["Degree or programme", "MSc"], ["Field of study", "Robotics"]]) {
+      const controlLabel = [...section.querySelectorAll("label")].find((item) => item.textContent === label)!;
+      const input = document.getElementById(controlLabel.htmlFor) as HTMLInputElement;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    expect(section.querySelector(".mcv-entry")).toBeNull();
+    await click("Add");
+    expect(section.querySelector('.mcv-entry-form[data-section="education"]')).toBeNull();
+    expect(button("Robotics").getAttribute("aria-expanded")).toBe("false");
+    expect(button("+ Add education")).toBeDefined();
+    await click("Close");
+    await click("Save as draft");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual([
+      expect.objectContaining({ institution: "NMBU", degree: "MSc", fieldOfStudy: "Robotics", startDate: "", endDate: "", description: "" }),
+    ]);
+  });
+  it("does not save an empty education form as an entry when leaving setup", async () => {
+    const stored = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!);
+    stored.document.draft.education = [];
+    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
+    await open();
+    await cvMenu("Edit");
+    await click("Next");
+    await click("+ Add education");
+    await click("Close");
+    await click("Save as draft");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual([]);
+  });
+  it("edits languages and social links in The basics without adding wizard steps", async () => {
+    await open();
+    await cvMenu("Edit");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("The basics");
+    await click("Languages");
+    expect(document.querySelector("#mcv-introduction")?.getAttribute("data-state")).toBe("closed");
+    expect(document.querySelector("#mcv-languages")?.getAttribute("data-state")).toBe("open");
+    await click("+ Add language");
+    async function fill(section: string, label: string, value: string) {
+      const entry = document.querySelector(`#mcv-${section} .mcv-entry-form`)!;
+      const controlLabel = [...entry.querySelectorAll("label")].find((item) => item.textContent === label)!;
+      const input = document.getElementById(controlLabel.htmlFor) as HTMLInputElement;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    const languageForm = document.querySelector('#mcv-languages .mcv-entry-form')!;
+    expect(languageForm.querySelector(".mcv-entry-trigger, .mcv-remove")).toBeNull();
+    expect(button("Add", languageForm).disabled).toBe(true);
+    await fill("languages", "Language", "Spanish");
+    await act(async () => button("Add", languageForm).click());
+    expect(document.querySelector('#mcv-languages .mcv-entry-form')).toBeNull();
+    expect(button("Spanish").getAttribute("aria-expanded")).toBe("false");
+    await click("Social links");
+    expect(document.querySelector("#mcv-languages")?.getAttribute("data-state")).toBe("closed");
+    await click("+ Add link");
+    const linkForm = document.querySelector('#mcv-links .mcv-entry-form')!;
+    expect(linkForm.querySelector(".mcv-entry-trigger, .mcv-remove")).toBeNull();
+    expect(button("Add", linkForm).disabled).toBe(true);
+    await fill("links", "Label", "LinkedIn");
+    await fill("links", "URL", "https://example.invalid/alex");
+    await act(async () => button("Add", linkForm).click());
+    expect(document.querySelector('#mcv-links .mcv-entry-form')).toBeNull();
+    expect(button("LinkedIn").getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 1 of 4");
+    await click("Close");
+    await click("Save as draft");
+    const saved = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft;
+    expect(saved.languages).toEqual(expect.arrayContaining([expect.objectContaining({ name: "Spanish" })]));
+    expect(saved.links).toEqual([expect.objectContaining({ label: "LinkedIn", url: "https://example.invalid/alex" })]);
+  });
+  it.each(["languages", "links"])("opens %s deep links inside The basics", async (section) => {
+    await open(`#mcv-${section}`);
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("The basics");
+    expect(document.querySelector(`#mcv-${section}`)?.getAttribute("data-state")).toBe("open");
+  });
+  it.each([
+    { section: "languages", title: "Languages", add: "+ Add language" },
+    { section: "links", title: "Social links", add: "+ Add link" },
+  ] as const)("does not save an empty $section creation form", async ({ section, title, add }) => {
+    const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft[section];
+    await open();
+    await cvMenu("Edit");
+    await click(title);
+    await click(add);
+    const form = document.querySelector(`#mcv-${section} .mcv-entry-form`)!;
+    expect(form.querySelector(".mcv-entry-trigger, .mcv-remove")).toBeNull();
+    expect(button("Add", form).disabled).toBe(true);
+    await click("Close");
+    await click("Save as draft");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft[section]).toEqual(before);
+  });
+  it("keeps an invalid social link in its form and reports the problem as a notification", async () => {
+    await open();
+    await cvMenu("Edit");
+    await click("Social links");
+    await click("+ Add link");
+    const form = document.querySelector("#mcv-links .mcv-entry-form")!;
+    const label = [...form.querySelectorAll("label")].find((item) => item.textContent === "URL")!;
+    const input = document.getElementById(label.htmlFor) as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "not-a-url");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      button("Add", form).click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.querySelector("#mcv-links .mcv-entry-form")).not.toBeNull();
+    expect(document.querySelector("#mcv-links .mcv-entry")).toBeNull();
+    expect(input.value).toBe("not-a-url");
+    expect(document.querySelector('[data-sonner-toast][data-type="error"]')?.textContent).toContain("Check social link");
   });
 });

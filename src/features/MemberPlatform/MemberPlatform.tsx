@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
 import {
   Navigate,
   Route,
@@ -6,7 +7,6 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
 import CVBankLogin from "../CVBank/Login";
 import MemberCV from "../MemberCV/MemberCV";
@@ -19,7 +19,7 @@ import {
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
-import { MemberNotificationsProvider, MemberNotificationsPage } from "./MemberNotifications";
+import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
 import {
   MemberSettingsPreview,
@@ -35,6 +35,17 @@ export function MemberAccess({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [landing, setLanding] = useState<MemberLanding | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const notify = useNotify();
+  const retryAccess = useCallback(() => {
+    clearMemberLanding();
+    setLanding(null);
+    setAttempt((value) => value + 1);
+  }, []);
+  useEffect(() => {
+    if (landing?.phase === "unavailable") notify("Sign-in unavailable", "Member sign-in is temporarily unavailable. Please try again.", {
+      id: "member-access", variant: "error", href: null, action: { label: "Try again", onClick: retryAccess },
+    });
+  }, [landing?.phase, notify, retryAccess]);
 
   useEffect(() => {
     let active = true;
@@ -64,8 +75,8 @@ export function MemberAccess({ children }: { children: ReactNode }) {
 
   if (!landing)
     return (
-      <main className="member-platform-status" role="status">
-        Verifying your Helix account…
+      <main className="member-platform-status">
+        <LoaderCircle className="size-5 animate-spin" aria-label="Verifying your Helix account" />
       </main>
     );
   if (landing.phase === "signed-out") {
@@ -82,19 +93,10 @@ export function MemberAccess({ children }: { children: ReactNode }) {
   if (landing.phase === "unavailable")
     return (
       <main className="member-platform-status">
-        <Alert variant="destructive">
-          <AlertDescription>
-            Member sign-in is temporarily unavailable. Please try again.
-          </AlertDescription>
-        </Alert>
         <Button
           type="button"
           variant="outline"
-          onClick={() => {
-            clearMemberLanding();
-            setLanding(null);
-            setAttempt((value) => value + 1);
-          }}
+          onClick={retryAccess}
         >
           Try again
         </Button>
@@ -102,7 +104,7 @@ export function MemberAccess({ children }: { children: ReactNode }) {
     );
   return (
     <MemberAccountProvider account={landing.account ?? null}>
-      <MemberNotificationsProvider key={landing.userId}>{children}</MemberNotificationsProvider>
+      <MemberNotificationsProvider key={landing.userId} renderToaster={false}>{children}</MemberNotificationsProvider>
     </MemberAccountProvider>
   );
 }
@@ -187,6 +189,7 @@ export default function MemberPlatform() {
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <MemberNotificationToaster />
         </div>
       </MemberNavigationProvider>
     </MemberThemeProvider>

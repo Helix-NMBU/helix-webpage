@@ -228,4 +228,18 @@ describe("internal member platform", () => {
     }
     expect(memberLoginDestination({ from: "/profile" })).toBe("/profile");
   });
+  it("uses notifications for unavailable connections across the app", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/settings");
+    expect(container.querySelector('[data-sonner-toaster]')!.closest(".member-platform")).not.toBeNull();
+    const connect = [...container.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === "Connect ChatGPT")!;
+    await act(async () => {
+      connect.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[data-sonner-toast][data-type="info"]')?.textContent).toContain("Connection unavailable");
+    await act(async () => router.navigate("/notifications"));
+    expect(container.querySelector("article")?.textContent).toContain("ChatGPT connections are currently unavailable.");
+  });
 });

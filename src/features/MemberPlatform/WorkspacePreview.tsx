@@ -11,15 +11,6 @@ import {
   CardTitle,
 } from "@libs/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@libs/components/ui/dialog";
-import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
@@ -43,6 +34,7 @@ import {
 } from "@libs/components/ui/table";
 import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
+import { useNotify } from "./MemberNotifications";
 
 const suggestions = [
   "Summarize Helix team updates",
@@ -203,9 +195,6 @@ export function WorkspaceHomePreview() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5 text-sm">
-        <span className="text-muted-foreground">
-          ChatGPT is not connected
-        </span>
         <Button asChild variant="ghost" size="sm">
           <Link to="/settings#chatgpt">
             AI settings
@@ -279,7 +268,7 @@ export function TeamWorkspacePreview() {
 }
 
 export function MemberSettingsPreview() {
-  const [connectionOpen, setConnectionOpen] = useState(false);
+  const notify = useNotify();
   const account = useMemberAccount();
   const role = account?.role ?? "Member";
   return (
@@ -313,32 +302,9 @@ export function MemberSettingsPreview() {
               <p className="font-medium">ChatGPT</p>
               <p className="text-sm text-muted-foreground">Not connected</p>
             </div>
-            <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  Connect ChatGPT
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Connect your ChatGPT account</DialogTitle>
-                  <DialogDescription>
-                    Manage the ChatGPT account used with the Helix assistant.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3 py-2 text-sm">
-                  <p className="text-muted-foreground">
-                    ChatGPT connections are currently unavailable. Please try
-                    again later.
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button onClick={() => setConnectionOpen(false)}>
-                    Close
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => notify("Connection unavailable", "ChatGPT connections are currently unavailable. Please try again later.", { id: "chatgpt-connection", variant: "info", href: "/settings#chatgpt" })}>
+              Connect ChatGPT
+            </Button>
           </div>
           <Separator />
           <p className="text-sm leading-6 text-muted-foreground">

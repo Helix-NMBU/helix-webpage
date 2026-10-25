@@ -67,7 +67,12 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
   const id = useId();
   // Retain groups while focus is inside the editor, including adjacent controls and Tab targets.
   const [editingOrganizations, setEditingOrganizations] = useState<Map<string, string> | null>(null);
+  const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
   const editor = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!expandedRoleId || rows.some((role) => role.id === expandedRoleId)) return;
+    setExpandedRoleId(null);
+  }, [expandedRoleId, rows]);
   useEffect(() => {
     if (!editingOrganizations) return;
     // Regroup after an outside button/link activates, so changing layout cannot swallow its click.
@@ -132,17 +137,24 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
             }
             onChange(role.id, key, value);
           };
-          return <li key={role.id} className="mcv-role-entry">
-            <div className="mcv-entry-title">
-              <h4>{role.title || `${memberText(locale, "Role")} ${index + 1}`}</h4>
-              <Button variant="ghost" type="button" className="mcv-remove" disabled={disabled}
-                aria-label={memberText(locale, "Remove {entry} {number}", { entry: memberText(locale, "experience"), number: index + 1 })}
-                onClick={() => {
-                  previousEndDates.current.delete(role.id);
-                  onRemove(role.id);
-                }}>{memberText(locale, "Remove")}</Button>
-            </div>
-            <div className="mcv-grid">
+          return <Collapsible key={role.id} open={expandedRoleId === role.id} onOpenChange={(open) => setExpandedRoleId(open ? role.id : null)} asChild>
+            <li className="mcv-role-entry">
+              <div className="mcv-entry-title">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" type="button" className="mcv-role-trigger" aria-expanded={expandedRoleId === role.id}>
+                    <h4>{role.title || `${memberText(locale, "Role")} ${index + 1}`}</h4>
+                    <ChevronDown aria-hidden="true" className={expandedRoleId === role.id ? "mcv-nav-chevron-open" : ""} />
+                  </Button>
+                </CollapsibleTrigger>
+                <Button variant="ghost" type="button" className="mcv-remove" disabled={disabled}
+                  aria-label={memberText(locale, "Remove {entry} {number}", { entry: memberText(locale, "experience"), number: index + 1 })}
+                  onClick={() => {
+                    previousEndDates.current.delete(role.id);
+                    onRemove(role.id);
+                  }}>{memberText(locale, "Remove")}</Button>
+              </div>
+              <CollapsibleContent forceMount className="mcv-role-content" aria-hidden={expandedRoleId !== role.id}>
+              <div className="mcv-grid">
               <TextField label={memberText(locale, "Job title")} translationKey={`experience:${role.id}:title`} disabled={disabled} value={role.title} onChange={(value) => change("title", value)} />
               <TextField label={memberText(locale, "Company or organisation")} translationKey={`experience:${role.id}:organization`} disabled={disabled} value={role.organization}
                 onChange={(value) => change("organization", value)} />
@@ -159,9 +171,11 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
                 <Textarea id={`${id}-${role.id}-description`} rows={4} value={role.description} maxLength={8000} disabled={disabled}
                   onChange={(event) => change("description", event.target.value)} />
               </div>
-            </div>
-            <RoleDetails role={role} locale={locale} disabled={disabled} onChange={change} />
-          </li>;
+              </div>
+              <RoleDetails role={role} locale={locale} disabled={disabled} onChange={change} />
+              </CollapsibleContent>
+            </li>
+          </Collapsible>;
         })}
       </ol>
     </section>)}

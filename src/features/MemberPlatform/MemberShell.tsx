@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@libs/components/ui/sidebar";
-import { Alert, AlertDescription } from "@libs/components/ui/alert";
+import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
@@ -27,7 +27,7 @@ function Workspace({ children }: { children: ReactNode }) {
   const { setOpenMobile, isMobile } = useSidebar();
   const navigation = useMemberNavigation();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const notify = useNotify();
   const profile = location.pathname === "/profile";
   const page = previewPage(location.pathname);
   const pageTitle = profile
@@ -53,12 +53,11 @@ function Workspace({ children }: { children: ReactNode }) {
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       await signOutMember();
       navigate("/login", { replace: true });
     } catch {
-      setError("Could not sign out. Please try again.");
+      notify("Could not sign out", "Please try again.", { variant: "error", href: null });
       setBusy(false);
     }
   }
@@ -105,11 +104,6 @@ function Workspace({ children }: { children: ReactNode }) {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
           {children}
         </div>
       </SidebarInset>
