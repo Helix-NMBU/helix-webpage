@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailDisconnectHandler } from "./_lib/gmail-disconnect-handler.js";
-import type { GmailConnectionStore } from "./_lib/gmail-connection.js";
+import { createGmailDisconnectHandler } from "./gmail-disconnect-handler.js";
+import type { GmailConnectionStore } from "./gmail-connection.js";
 
 function response() {
   let status = 200;
