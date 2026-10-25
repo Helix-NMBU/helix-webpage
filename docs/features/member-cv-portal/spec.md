@@ -1,5 +1,7 @@
 # Member CV portal specification
 
+Current acceptance is in [acceptance.md](acceptance.md). It records the user's 25 October follow-ups and explicitly supersedes historical interface requirements below. Delivery evidence is in [delivery.md](delivery.md).
+
 Feature: member-cv-portal. Revision: 11, 2026-10-19.
 Status: product behavior from revision 10 is unchanged. The runtime now uses Neon instead of Supabase and no longer depends on sponsor-portal-v2. Live Neon configuration remains a rollout prerequisite. See [setup.md](setup.md).
 Authorization: the user selected self-service Helix Google Workspace onboarding and draft/self-publication, then invoked `$deliver` on the scoped feature. The proposed field set and separate published versions are implementation defaults from the preceding scope, not separately answered product questions. CV styling was initially deferred and is now covered by F-16; profile images remain deferred.
