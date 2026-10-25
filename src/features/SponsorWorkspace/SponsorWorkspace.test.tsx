@@ -4,11 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SponsorWorkspace from "./SponsorWorkspace";
-import { loadSponsorSession, sponsorRequest, SponsorRequestError } from "./session";
+import { loadSponsorSession, sponsorRequest, sponsorSignOut, SponsorRequestError } from "./session";
 import type { SponsorContext } from "./types";
 import type { SponsorTransport } from "./admin-types";
 
-vi.mock("./session", async (original) => ({ ...await original<typeof import("./session")>(), loadSponsorSession: vi.fn(), sponsorRequest: vi.fn() }));
+vi.mock("./session", async (original) => ({ ...await original<typeof import("./session")>(), loadSponsorSession: vi.fn(), sponsorRequest: vi.fn(), sponsorSignOut: vi.fn() }));
 vi.mock("./local", () => ({ isLocalSponsorMode: () => false }));
 vi.mock("./RequestsPanel", () => ({ default: function Reply({ request }: { request: SponsorTransport }) {
   const [text, setText] = useState(""); const [error, setError] = useState("");
@@ -21,6 +21,7 @@ beforeEach(() => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   localStorage.setItem("helix-member-theme", "light");
   vi.mocked(loadSponsorSession).mockResolvedValue(context);
+  vi.mocked(sponsorSignOut).mockResolvedValue(undefined);
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
@@ -31,6 +32,33 @@ async function reply() {
   await act(async () => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 }
 describe("composed sponsor workspace", () => {
+  it.each([
+    { role: "sponsor", portal: true, directory: true, links: ["Talent Directory", "Collaboration requests"] },
+    { role: "sponsor", portal: true, directory: false, links: ["Collaboration requests"] },
+    { role: "admin", portal: false, directory: false, links: ["Collaboration requests", "Administration"] },
+    { role: "developer", portal: false, directory: false, links: [] },
+  ] as const)("shows permitted sidebar destinations for $role with directory=$directory", async ({ role, portal, directory, links }) => {
+    vi.mocked(loadSponsorSession).mockResolvedValue({ ...context, role, portal, directory });
+    await render(directory ? "/sponsor/requests" : "/sponsor");
+    const navigation = host.querySelector('nav[aria-label="Sponsor navigation"]')!;
+    expect(Array.from(navigation.querySelectorAll("a"), (link) => link.textContent)).toEqual(links);
+    if (portal || role === "admin") expect(navigation.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe(!directory && !portal && role === "admin" ? "/sponsor/admin" : "/sponsor/requests");
+    else expect(host.textContent).toContain("Your developer sign-in is active.");
+  });
+  it("keeps the workspace open and sign-out retryable after a provider failure", async () => {
+    vi.mocked(sponsorSignOut).mockRejectedValueOnce(new Error("Sign-out service is unavailable."));
+    await render();
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Sponsor account menu"]')!.click());
+    const signOut = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Sign out")!;
+    await act(async () => signOut.click());
+    expect(host.textContent).toContain("Sign-out service is unavailable.");
+    expect(host.querySelector("textarea")).not.toBeNull();
+    expect(signOut.disabled).toBe(false);
+    await act(async () => signOut.click());
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).toContain("Email me a sign-in link");
+    expect(sponsorSignOut).toHaveBeenCalledTimes(2);
+  });
   it("preserves an unsent reply after reassignment rejects the operation but session remains valid", async () => {
     vi.mocked(sponsorRequest).mockImplementation(async (action) => {
       if (action === "session") return context;
