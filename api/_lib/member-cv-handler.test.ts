@@ -25,7 +25,7 @@ function fixture() {
   const candidates = new Map<string, "pending" | "current" | "retired" | "deleted">();
   let pathIndex = 0;
   const services: CvServices = {
-    authenticate: vi.fn(async (token) => { if (token !== "member-token") throw new MemberCvError(401, "Invalid session."); return { userId, googleSub: "google-sub", email: "ase@helixnmbu.no", name: "Åse" }; }),
+    authenticate: vi.fn(async (token) => { if (token !== "member-token") throw new MemberCvError(401, "Invalid session."); return { userId, googleSub: "google-sub", email: "ase@helixnmbu.no", name: "Åse Ødegård" }; }),
     read: vi.fn(async (id) => { expect(id).toBe(userId); return structuredClone(state); }),
     commit: vi.fn(async (id, change) => {
       expect(id).toBe(userId);
@@ -74,6 +74,26 @@ function fixture() {
 }
 
 describe("member CV handler", () => {
+  it.each(["save", "publish", "preview"])("uses the administrator-owned name for %s instead of submitted names or translations", async (action) => {
+    const f = fixture();
+    const draft = { ...publishedData(), fullName: "Forged name", cvLanguage: "nb", translations: { en: { fullName: "Translated forged name", summary: "Keep this translation" } } };
+    const result = await f.request({ action, draft, sharing: { ...privateChoices, cv: true }, expectedRevision: 0, language: "en" });
+    expect(result.status).toBe(200);
+    if (action === "preview") {
+      expect(f.render).toHaveBeenCalledWith(expect.objectContaining({ fullName: "Åse Ødegård", translations: { en: { summary: "Keep this translation" } } }), expect.anything(), "en");
+    } else {
+      expect(f.state().draft.fullName).toBe("Åse Ødegård");
+      expect(f.state().draft.translations).toEqual({ en: { summary: "Keep this translation" } });
+      expect(result.body).toMatchObject({ identity: { name: "Åse Ødegård" }, document: { draft: { fullName: "Åse Ødegård" } } });
+    }
+  });
+  it("returns the current member name when a legacy saved draft has an older name", async () => {
+    const f = fixture();
+    f.state().draft.fullName = "Old member-editable name";
+    const result = await f.request();
+    expect(result.body).toMatchObject({ identity: { name: "Åse Ødegård" }, document: { draft: { fullName: "Åse Ødegård" } } });
+    expect(f.services.commit).not.toHaveBeenCalled();
+  });
   it("requires a live member session and does not expose a storage path", async () => {
     const f = fixture();
     expect((await f.request(undefined, "")).status).toBe(401);
@@ -95,7 +115,7 @@ describe("member CV handler", () => {
     const result = await f.request({ action: "save", userId: "another-user", draft, sharing: privateChoices, expectedRevision: 0 });
     expect(result.status).toBe(200);
     expect(f.services.commit).toHaveBeenCalledWith(userId, expect.objectContaining({ expectedRevision: 0 }));
-    expect(f.state().draft).toEqual(draft);
+    expect(f.state().draft).toEqual({ ...draft, fullName: "Åse Ødegård" });
     expect(f.snapshot()).toBeNull();
   });
   it("rejects malformed, oversized, unsafe-link and incomplete-publication input before writing", async () => {
@@ -130,15 +150,17 @@ describe("member CV handler", () => {
     const firstPath = f.state().publishedPath!;
     expect(f.stored.has(firstPath)).toBe(true);
     expect(f.render).toHaveBeenLastCalledWith(expect.objectContaining({ contactEmail: "", phone: "" }), sharing, "en");
-    expect((await f.request({ action: "save", draft: { ...publishedData(), fullName: "New draft" }, sharing, expectedRevision: 1 })).status).toBe(200);
+    expect((await f.request({ action: "save", draft: { ...publishedData(), summary: "New draft" }, sharing, expectedRevision: 1 })).status).toBe(200);
     expect(f.snapshot()?.fullName).toBe("Åse Ødegård");
+    expect(f.snapshot()?.summary).toBe("");
+    expect(f.state().draft.summary).toBe("New draft");
     expect(f.state().publishedRevision).toBe(1);
-    expect((await f.request({ action: "publish", draft: { ...publishedData(), fullName: "Published update" }, sharing, expectedRevision: 2 })).status).toBe(200);
+    expect((await f.request({ action: "publish", draft: { ...publishedData(), summary: "Published update" }, sharing, expectedRevision: 2 })).status).toBe(200);
     expect(f.stored.has(firstPath)).toBe(false);
     expect(f.stored.size).toBe(1);
     expect((await f.request({ action: "withdraw", expectedRevision: 3 })).status).toBe(200);
     expect(f.state().publishedRevision).toBeNull();
-    expect(f.state().draft.fullName).toBe("Published update");
+    expect(f.state().draft.summary).toBe("Published update");
     expect(f.stored.size).toBe(0);
   });
   it("reports CV visibility from the published file even when private sharing choices change", async () => {
@@ -243,7 +265,7 @@ describe("member CV handler", () => {
     const get = await f.request();
     expect(get.status).toBe(200);
     expect(get.body).toHaveProperty("cleanupPending", true);
-    const save = await f.request({ action: "save", draft: { ...publishedData(), fullName: "New private draft" }, sharing: privateChoices, expectedRevision: 1 });
+    const save = await f.request({ action: "save", draft: { ...publishedData(), summary: "New private draft" }, sharing: privateChoices, expectedRevision: 1 });
     expect(save.status).toBe(200);
     expect(save.body).toHaveProperty("document.revision", 2);
     const withdraw = await f.request({ action: "withdraw", expectedRevision: 2 });
@@ -251,7 +273,7 @@ describe("member CV handler", () => {
     expect(withdraw.body).toHaveProperty("cleanupPending", true);
     expect(f.state().publishedPath).toBeNull();
     expect(f.state().publishedRevision).toBeNull();
-    expect(f.state().draft.fullName).toBe("New private draft");
+    expect(f.state().draft.summary).toBe("New private draft");
     expect(f.stored.has(publishedPath)).toBe(true);
   });
   it("persists the upload candidate before any bytes are sent and tracks failed settlement", async () => {
