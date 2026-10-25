@@ -84,6 +84,15 @@ export function createGmailConnectionStore(
       const row = result.rows[0];
       return row ? { email: row.gmail_email, connectedAt: row.connected_at } : null;
     },
+    async disconnect(memberId: string): Promise<string | null> {
+      const result = await db.query<{ refresh_token_ciphertext: string }>(
+        "select refresh_token_ciphertext from identity.gmail_connections where member_id = $1",
+        [memberId],
+      );
+      const refreshToken = result.rows[0] ? decryptRefreshToken(result.rows[0].refresh_token_ciphertext, env) : null;
+      await db.query("delete from identity.gmail_connections where member_id = $1", [memberId]);
+      return refreshToken;
+    },
   };
 }
 

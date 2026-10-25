@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createGmailCallbackHandler } from "./_lib/gmail-callback-handler.js";
 import { createGmailConnectHandler } from "./_lib/gmail-connect-handler.js";
+import { createGmailDisconnectHandler } from "./_lib/gmail-disconnect-handler.js";
 import { createGmailStatusHandler } from "./_lib/gmail-status-handler.js";
 
 const handlers = {
   callback: createGmailCallbackHandler(),
   connect: createGmailConnectHandler(),
+  disconnect: createGmailDisconnectHandler(),
   status: createGmailStatusHandler(),
 };
 

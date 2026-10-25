@@ -27,6 +27,10 @@
       "destination": "/api/gmail?action=status"
     },
     {
+      "source": "/api/gmail-disconnect",
+      "destination": "/api/gmail?action=disconnect"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

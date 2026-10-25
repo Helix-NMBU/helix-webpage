@@ -282,6 +282,9 @@ export function TeamWorkspacePreview() {
 
 export function MemberSettingsPreview() {
   const [connectionOpen, setConnectionOpen] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">("checking");
   const boundUserId = useRef<string | null>(null);
   const account = useMemberAccount();
@@ -304,6 +307,27 @@ export function MemberSettingsPreview() {
     })();
     return () => { active = false; };
   }, []);
+
+  async function disconnectGmail() {
+    setDisconnecting(true);
+    setDisconnectError(null);
+    try {
+      const token = await memberSessionToken(boundUserId);
+      const response = await fetch("/api/gmail-disconnect", {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await response.json().catch(() => null) as { error?: unknown } | null;
+      if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : "Could not disconnect Gmail.");
+      setGmailStatus("disconnected");
+      setDisconnectOpen(false);
+    } catch (error) {
+      setDisconnectError(error instanceof Error ? error.message : "Could not disconnect Gmail.");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
 
   return (
     <section
@@ -328,10 +352,10 @@ export function MemberSettingsPreview() {
             Manage the apps connected to your Helix member account.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div id="chatgpt" className="flex flex-wrap items-center gap-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-border">
-              <img src="/openai-logo.png" alt="ChatGPT" className="size-7 rounded-md object-contain" />
+        <CardContent className="space-y-3">
+          <div id="chatgpt" className="flex flex-wrap items-center gap-3">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-border">
+              <img src="/openai-logo.png" alt="ChatGPT" className="size-6 rounded-md object-contain" />
             </div>
             <div className="min-w-0 flex-1 space-y-1">
               <p className="font-medium">ChatGPT</p>
@@ -339,7 +363,7 @@ export function MemberSettingsPreview() {
             </div>
             <Dialog open={connectionOpen} onOpenChange={setConnectionOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">Connect ChatGPT</Button>
+                <Button size="sm" variant="outline">Connect</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -361,9 +385,9 @@ export function MemberSettingsPreview() {
             </Dialog>
           </div>
           <Separator />
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-border" aria-hidden="true">
-              <GmailLogo className="size-7" />
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white ring-1 ring-border" aria-hidden="true">
+              <GmailLogo className="size-6" />
             </div>
             <div className="min-w-0 flex-1 space-y-1">
               <p className="font-medium">Gmail</p>
@@ -371,9 +395,30 @@ export function MemberSettingsPreview() {
                 {gmailStatus === "checking" ? "Checking connection…" : gmailStatus === "connected" ? "Connected" : "Not connected"}
               </p>
             </div>
-            <Button asChild variant="outline">
-              <Link to="/mail">{gmailStatus === "connected" ? "Open Gmail" : "Connect Gmail"}</Link>
-            </Button>
+            {gmailStatus === "connected" ? (
+              <Dialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
+                <Button size="sm" variant="outline" onClick={() => setDisconnectOpen(true)}>Disconnect</Button>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Disconnect Gmail?</DialogTitle>
+                    <DialogDescription>
+                      Helix will stop accessing this Gmail account and remove its saved connection. Your messages will remain in Gmail.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {disconnectError && <p className="text-sm text-destructive">{disconnectError}</p>}
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setDisconnectOpen(false)} disabled={disconnecting}>Cancel</Button>
+                    <Button type="button" variant="destructive" onClick={() => void disconnectGmail()} disabled={disconnecting}>
+                      {disconnecting ? "Disconnecting…" : "Disconnect"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Button asChild size="sm" variant="outline">
+                <Link to="/mail">Connect</Link>
+              </Button>
+            )}
           </div>
           <Separator />
           <p className="text-sm leading-6 text-muted-foreground">

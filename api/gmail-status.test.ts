@@ -19,6 +19,7 @@ function store(connection: Awaited<ReturnType<GmailConnectionStore["read"]>>): G
     memberEmail: vi.fn(async () => "member@helixnmbu.no"),
     save: vi.fn(async () => undefined),
     read: vi.fn(async () => connection),
+    disconnect: vi.fn(async () => null),
   };
 }
 
