@@ -66,10 +66,17 @@ export default function AdminPanel({ request }: { request: SponsorTransport }) {
               <p className="text-xs text-muted-foreground">Deactivation removes access on the next request. Adding a contact does not send an invitation.</p>
               <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy}>{contact.id ? "Save contact" : "Add contact"}</Button>{contact.id && <Button type="button" variant="ghost" onClick={() => setContact(blankContact)}>New contact</Button>}</div>
             </form>
-            <form className="space-y-3 border-t pt-5" onSubmit={(event) => void save(event, { operation: "agreement", organizationId, ...agreement })}>
+            <form className="space-y-3 border-t pt-5" onSubmit={(event) => {
+              const submitted = new FormData(event.currentTarget);
+              const startsAt = String(submitted.get("startsAt") ?? "");
+              const endsAt = String(submitted.get("endsAt") ?? "");
+              setAgreement((current) => ({ ...current, startsAt, endsAt }));
+              void save(event, { operation: "agreement", organizationId, ...agreement,
+                startsAt, endsAt });
+            }}>
               <Label htmlFor="agreement-tier">Agreement tier</Label><Select value={agreement.tier} onValueChange={(tier) => setAgreement({ ...agreement, tier })}><SelectTrigger id="agreement-tier"><SelectValue /></SelectTrigger><SelectContent>{["partner", "service", "bronze", "silver", "gold", "platinum", "main"].map((tier) => <SelectItem key={tier} value={tier}>{tier[0].toUpperCase() + tier.slice(1)}</SelectItem>)}</SelectContent></Select>
-              <Label htmlFor="agreement-start">Starts on</Label><Input id="agreement-start" type="date" required value={agreement.startsAt} onChange={(event) => setAgreement({ ...agreement, startsAt: event.target.value })} />
-              <Label htmlFor="agreement-end">Ends before</Label><Input id="agreement-end" type="date" required value={agreement.endsAt} onChange={(event) => setAgreement({ ...agreement, endsAt: event.target.value })} />
+              <Label htmlFor="agreement-start">Starts on</Label><Input id="agreement-start" name="startsAt" type="date" required value={agreement.startsAt} onChange={(event) => setAgreement({ ...agreement, startsAt: event.target.value })} />
+              <Label htmlFor="agreement-end">Ends before</Label><Input id="agreement-end" name="endsAt" type="date" required value={agreement.endsAt} onChange={(event) => setAgreement({ ...agreement, endsAt: event.target.value })} />
               <p className="text-xs text-muted-foreground">Dates use midnight UTC. Access ends at the start of the end date.</p>
               <div className="flex items-center gap-2"><Switch id="agreement-revoked" checked={agreement.revoked} onCheckedChange={(revoked) => setAgreement({ ...agreement, revoked })} /><Label htmlFor="agreement-revoked">Agreement revoked</Label></div>
               <Button type="submit" disabled={busy}>Save agreement</Button>

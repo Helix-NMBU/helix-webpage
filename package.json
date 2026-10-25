@@ -10,7 +10,7 @@
     "dev:sponsor": "vite --mode sponsor-local --host 127.0.0.1 --port 5192 --strictPort",
     "build": "vite build && node scripts/check-deployment-size.mjs",
     "lint": "eslint .",
-    "test": "vitest run --exclude scripts/deployment-guards.test.mjs && node --test scripts/deployment-guards.test.mjs",
+    "test": "vitest run --maxWorkers=4 --exclude scripts/deployment-guards.test.mjs && node --test scripts/deployment-guards.test.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:api": "tsc --project tsconfig.api.json",
     "typecheck:api:runtime": "tsc --project tsconfig.api.runtime.json",
