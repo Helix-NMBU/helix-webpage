@@ -455,6 +455,7 @@ export default function MemberCV() {
   );
   const [envelope, setEnvelope] = useState<CvEnvelope | null>(null);
   const helixRole = envelope?.identity.helixRole === undefined ? account?.helixRole : envelope.identity.helixRole;
+  const memberName = envelope?.identity.name || account?.name || "Helix member";
   const [draft, setDraft] = useState<CvData | null>(null);
   const [sharing, setSharing] = useState<CvSharing>({
     cv: false,
@@ -1021,11 +1022,11 @@ export default function MemberCV() {
               <div className="flex min-w-0 items-center gap-4">
                 <Avatar className="size-16 rounded-xl">
                   <AvatarFallback className="rounded-xl text-xl">
-                    {accountInitials(draft?.fullName || account?.name || envelope?.identity.name || "Helix member")}
+                    {accountInitials(memberName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 space-y-1">
-                  <p id="mcv-contact-title" tabIndex={-1} className="break-words text-lg font-medium">{draft?.fullName || account?.name || envelope?.identity.name || "Helix member"}</p>
+                  <p id="mcv-contact-title" tabIndex={-1} className="break-words text-lg font-medium">{memberName}</p>
                   {helixRole && <p className="break-words text-sm text-muted-foreground">{helixRole}</p>}
                   <p className="break-all text-sm text-muted-foreground">{account?.email || envelope?.identity.email}</p>
                   {draft?.phone && <p className="break-words text-sm text-muted-foreground">{draft.phone}</p>}
@@ -1044,7 +1045,7 @@ export default function MemberCV() {
           <h2 id="member-cv-title" className="text-xl font-medium">CV</h2>
           {hasRegisteredCv(draft) ? <Card className="gap-0 py-0 shadow-none"><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
             <div className="space-y-3">
-              <p className="font-medium">CV {draft.fullName || account?.name || "Helix member"}</p>
+              <p className="font-medium">CV {memberName}</p>
               <div className="flex items-center gap-2">
                 <Switch id={`${sharingId}-directory`} className="cv-control data-[state=checked]:bg-green-600 dark:data-[state=checked]:bg-green-500" checked={envelope.document.cvVisible ?? envelope.document.publishedRevision !== null}
                   disabled={Boolean(busy)} onCheckedChange={(visible) => void run(visible ? "publish" : "withdraw", false, undefined, { cvRegistered: true }, "nb", visible ? { cv: true } : undefined)} />
