@@ -21,6 +21,7 @@ import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
 import { MemberNotificationsProvider, MemberNotificationsPage } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
+import { MailWorkspace } from "./MailWorkspace";
 import {
   MemberSettingsPreview,
   TeamWorkspacePreview,
@@ -145,6 +146,16 @@ export default function MemberPlatform() {
               }
             />
             <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
+            <Route
+              path="/mail"
+              element={
+                <MemberAccess>
+                  <MemberShell>
+                    <MailWorkspace />
+                  </MemberShell>
+                </MemberAccess>
+              }
+            />
             <Route
               path="/settings"
               element={
