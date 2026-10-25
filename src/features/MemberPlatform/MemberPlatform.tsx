@@ -44,7 +44,7 @@ function MemberHome() {
   useEffect(() => watchMemberSession(() => navigate("/login", { replace: true })), [navigate]);
 
   return (
-    <main className="member-platform-home">
+    <section className="member-platform-home">
       <div className="member-platform-home-intro">
         <span className="member-platform-logo"><img src="/Vector.png" alt="" /></span>
         <h1>Helix member platform</h1>
@@ -54,7 +54,7 @@ function MemberHome() {
         <CardHeader><CardTitle>Profile and CV</CardTitle><CardDescription>Manage your member profile and CV.</CardDescription></CardHeader>
         <CardContent><Button asChild><Link to="/profile">Open profile and CV</Link></Button></CardContent>
       </Card>
-    </main>
+    </section>
   );
 }
 

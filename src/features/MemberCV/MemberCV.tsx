@@ -302,6 +302,7 @@ export default function MemberCV() {
   const { locale, setLocale, t } = useMemberLocale();
   const paths = memberPaths();
   const platformNavigation = useMemberNavigation();
+  const PageContainer = platformNavigation ? "div" : "main";
   const setEditor = platformNavigation?.setEditor;
   const editorActions = useRef<MemberEditorActions | null>(null);
   const location = useLocation();
@@ -807,7 +808,7 @@ export default function MemberCV() {
   }
 
   return (
-    <main className="mcv-page mcv-profile portal-root" lang={locale}>
+    <PageContainer className="mcv-page mcv-profile portal-root" lang={locale}>
       <div className="mcv-container">
         <div className="mcv-account-actions">
           {!platformNavigation && paths.home !== paths.profile
@@ -1423,6 +1424,6 @@ export default function MemberCV() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </main>
+    </PageContainer>
   );
 }

@@ -1,13 +1,14 @@
 /* Internal-only tokens also reach Radix dialogs, sheets and dropdown portals. */
 html[data-member-theme="light"] { color-scheme: light; background: #f4f4f7; }
 html[data-member-theme="dark"] { color-scheme: dark; background: #1c1c1c; }
+html[data-member-theme] body { font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif; }
 html[data-member-theme] .portal-root,
 html[data-member-theme] body:has(.member-platform) {
-  --sidebar: #fff;
+  --sidebar: #fafafa;
   --sidebar-foreground: #27272a;
   --sidebar-primary: #002ec4;
   --sidebar-primary-foreground: #fff;
-  --sidebar-accent: #f0eff5;
+  --sidebar-accent: #f4f4f5;
   --sidebar-accent-foreground: #18181b;
   --sidebar-border: #e4e4e7;
   --sidebar-ring: #002ec4;
@@ -35,7 +36,7 @@ html[data-member-theme="dark"] body:has(.member-platform) {
   --input: #424242;
   --ring: #8aa4ff;
   --destructive: #ff8f8f;
-  --sidebar: #101010;
+  --sidebar: #171717;
   --sidebar-foreground: #ddd;
   --sidebar-primary: #8aa4ff;
   --sidebar-primary-foreground: #101a40;
