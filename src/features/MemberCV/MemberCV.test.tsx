@@ -29,6 +29,7 @@ describe("member profile", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:cv-test"), revokeObjectURL: vi.fn() }));
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
+    vi.stubEnv("MODE", "member-local");
     window.localStorage.setItem("helix-member-ui-language-v1", "nb");
     window.localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify({
       identity: { name: "Alex Example", email: "alex@example.invalid" },
@@ -53,7 +54,7 @@ describe("member profile", () => {
       <MemberThemeProvider><MemberNotificationsProvider><MemberNavigationProvider>{controls}<MemberAccountProvider account={{ name: "Alex Example", email: "alex@example.invalid", role: "Admin", helixRole: "Mechanical team member" }}>
         <MemberCV />
       </MemberAccountProvider></MemberNavigationProvider></MemberNotificationsProvider></MemberThemeProvider>,
-    }], { initialEntries: [`/profile?demo=1${hash}`] });
+    }], { initialEntries: [`/profile${hash}`] });
     await act(async () => root.render(<RouterProvider router={router} />));
   }
   function button(name: string, scope: ParentNode = document) {
@@ -112,6 +113,10 @@ describe("member profile", () => {
     await click("Setup CV");
     await click("Close");
     expect(container.textContent).toContain("No CV yet");
+    await click("Setup CV");
+    await click("Save and close");
+    expect(container.textContent).toContain("No CV yet");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.cvRegistered).toBe(false);
     await click("Setup CV");
     await click("7. Review & sharing");
     await click("Finish");

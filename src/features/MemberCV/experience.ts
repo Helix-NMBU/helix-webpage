@@ -57,8 +57,20 @@ export function moveProjectRoleToExperience(draft: CvData, projectId: string, ne
     ...projectRoleToExperience(project, newExperienceId),
     __projectRoleSourceId: project.id,
   };
+  const translations = structuredClone(draft.translations);
+  for (const entries of Object.values(translations ?? {})) {
+    if (!entries) continue;
+    for (const [from, to] of Object.entries({ name: "department", role: "title", season: "season", description: "description" })) {
+      const sourceKey = `projects:${project.id}:${from}`;
+      if (Object.prototype.hasOwnProperty.call(entries, sourceKey)) {
+        entries[`experience:${newExperienceId}:${to}`] = entries[sourceKey];
+        delete entries[sourceKey];
+      }
+    }
+  }
   return {
     ...draft,
+    ...(translations ? { translations } : {}),
     projects: draft.projects.filter((_, index) => index !== sourceIndex),
     experience: [...draft.experience, experience],
   };

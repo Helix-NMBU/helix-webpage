@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createCvRepository,
   CvRequestError,
@@ -156,6 +156,24 @@ describe("pending retired file cleanup", () => {
 });
 
 describe("fictional demo lifecycle", () => {
+  beforeEach(() => {
+    vi.stubEnv("MODE", "member-local");
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:5190" } });
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+  it.each([
+    { mode: "development", dev: true, origin: "http://127.0.0.1:5190" },
+    { mode: "member-local", dev: true, origin: "http://192.168.1.20:5190" },
+    { mode: "member-local", dev: false, origin: "http://127.0.0.1:5190" },
+  ])("rejects fixture access outside dedicated loopback development: %j", ({ mode, dev, origin }) => {
+    vi.stubEnv("MODE", mode);
+    vi.stubEnv("DEV", dev);
+    vi.stubGlobal("window", { location: { origin } });
+    expect(() => createDemoRepository(storage(), true)).toThrow("only available in development");
+  });
   it("keeps saved drafts across reloads and separate from the published version", async () => {
     const local = storage();
     const repository = createDemoRepository(local, true);

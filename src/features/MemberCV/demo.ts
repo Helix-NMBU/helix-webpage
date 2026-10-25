@@ -5,6 +5,7 @@ import {
   type CvRepository,
 } from "./repository";
 import type { CvData, CvEnvelope } from "./types";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 
 export const DEMO_STORAGE_KEY = "helix-member-cv-fictional-demo-v1";
 
@@ -49,7 +50,7 @@ export function createDemoRepository(
   enabled: boolean,
   initialDraft?: CvData,
 ): CvRepository {
-  if (!import.meta.env.DEV || !enabled)
+  if (!isLocalMemberMode() || !enabled)
     throw new Error("The fictional demo is only available in development.");
   const initial = (): CvEnvelope => ({
     identity: { name: "Alex Example", email: "alex@example.invalid" },

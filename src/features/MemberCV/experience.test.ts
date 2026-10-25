@@ -3,6 +3,7 @@ import { localizeCvError } from "./errors";
 import { groupExperience, moveProjectRoleToExperience, projectRoleToExperience } from "./experience";
 import { emptyCv, validateCvData } from "./model";
 import type { CvExperience } from "./types";
+import { localizedCv } from "./translations";
 
 function role(id: string, organization: string): CvExperience {
   return { id, organization, title: id, startDate: "", endDate: "", description: "" };
@@ -53,6 +54,18 @@ describe("experience organization grouping", () => {
 });
 
 describe("explicit project role transfer", () => {
+  it("preserves both language versions across transfer, validation and save roundtrip", () => {
+    const draft = { ...projectDraft(), cvLanguage: "nb" as const, translations: {
+      en: { "projects:first:name": "Aerodynamics project", "projects:first:role": "Team lead", "projects:first:season": "2027", "projects:first:description": "English description", "projects:second:role": "Other role", summary: "Keep this text" },
+      nb: { "projects:first:description": "Norsk beskrivelse" },
+    } };
+    const original = structuredClone(draft);
+    const saved = validateCvData(JSON.parse(JSON.stringify(moveProjectRoleToExperience(draft, "first", "new-role"))));
+    expect(saved.translations?.en).toEqual({ "experience:new-role:department": "Aerodynamics project", "experience:new-role:title": "Team lead", "experience:new-role:season": "2027", "experience:new-role:description": "English description", "projects:second:role": "Other role", summary: "Keep this text" });
+    expect(saved.translations?.nb).toEqual({ "experience:new-role:description": "Norsk beskrivelse" });
+    expect(localizedCv(saved, "en").experience[1]).toMatchObject({ department: "Aerodynamics project", title: "Team lead", season: "2027", description: "English description" });
+    expect(draft).toEqual(original);
+  });
   it("retains exact content, metadata and legacy dates, removes only the selected project and appends its role", () => {
     const draft = projectDraft();
     const original = structuredClone(draft);

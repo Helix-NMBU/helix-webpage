@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDemoRepository, DEMO_STORAGE_KEY } from "./demo";
 import { localizeCvError } from "./errors";
 import { emptyCv, privateSharing, sharedCvData, validateCvData } from "./model";
@@ -35,6 +35,10 @@ const fields = [
 ] as const;
 
 describe("additive profile fields", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
   it("leaves legacy omitted fields absent and free-text dates unchanged", () => {
     const old = legacy();
     expect(validateCvData(old)).toEqual(old);
@@ -80,6 +84,8 @@ describe("additive profile fields", () => {
   });
 
   it("persists new fields through demo save/reload/publication and keeps the snapshot independent", async () => {
+    vi.stubEnv("MODE", "member-local");
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:5190" } });
     const values = new Map<string, string>();
     const storage = {
       getItem: (key: string) => values.get(key) ?? null,

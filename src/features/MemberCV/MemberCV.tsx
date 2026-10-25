@@ -343,9 +343,7 @@ export default function MemberCV() {
   const actionsTrigger = useRef<HTMLButtonElement | null>(null);
   const deleteCancel = useRef<HTMLButtonElement | null>(null);
   const [outputLanguage, setOutputLanguage] = useState<CvOutputLanguage>("en");
-  const demo =
-    import.meta.env.DEV &&
-    (isLocalMemberMode() || new URLSearchParams(location.search).get("demo") === "1");
+  const demo = isLocalMemberMode();
   const sharingId = useId();
   function sectionProps(id: string) {
     return {
@@ -843,8 +841,8 @@ export default function MemberCV() {
     const index = cvSteps.findIndex((step) => step.id === wizardStep);
     setWizardStep(cvSteps[Math.max(0, Math.min(cvSteps.length - 1, index + offset))].id);
   }
-  async function finishCvSetup() {
-    if (await run("save", false, undefined, { cvRegistered: true })) setSetupOpen(false);
+  async function saveCvSetup(register: boolean) {
+    if (await run("save", false, undefined, register ? { cvRegistered: true } : undefined)) setSetupOpen(false);
   }
 
   return (
@@ -1019,7 +1017,7 @@ export default function MemberCV() {
               noValidate
               onSubmit={(event) => {
                 event.preventDefault();
-                if (wizardStep === "review") void finishCvSetup();
+                if (wizardStep === "review") void saveCvSetup(true);
                 else nextCvStep(1);
               }}
             >
@@ -1289,7 +1287,7 @@ export default function MemberCV() {
             <DialogFooter className="flex-row flex-wrap items-center justify-end border-t p-4">
               <Button type="button" variant="outline" disabled={Boolean(busy) || wizardStep === cvSteps[0].id} onClick={() => nextCvStep(-1)}>Back</Button>
               {wizardStep !== "review" && <Button type="button" variant="outline" disabled={Boolean(busy)} onClick={() => nextCvStep(1)}>Next</Button>}
-              <Button type="button" disabled={Boolean(busy) || ended} onClick={() => void finishCvSetup()}>{busy === "save" ? "Saving…" : wizardStep === "review" ? "Finish" : "Save and close"}</Button>
+              <Button type="button" disabled={Boolean(busy) || ended} onClick={() => void saveCvSetup(wizardStep === "review")}>{busy === "save" ? "Saving…" : wizardStep === "review" ? "Finish" : "Save and close"}</Button>
             </DialogFooter>
           </CvTranslationsProvider>
         </DialogContent>}
