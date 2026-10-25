@@ -449,7 +449,9 @@ export async function memberSessionToken(boundUserId: { current: string | null }
 export function watchMemberSession(onEnd: () => void, client: MemberClient | null = authClient, boundUserId?: { current: string | null }): () => void {
   if (isLocalMemberMode()) return () => undefined;
   if (!client?.getSession) return () => undefined;
-  const readSession = client.getSession.bind(client);
+  // Better Auth exposes endpoint functions through a Proxy. Accessing `.bind`
+  // creates a `/get-session/bind` request instead of binding a JS function.
+  const readSession: SessionReader["getSession"] = (options) => client.getSession!(options);
   let active = true;
   const end = () => {
     if (!active) return;
@@ -472,7 +474,9 @@ export function watchMemberSession(onEnd: () => void, client: MemberClient | nul
       const userId = session.data?.user?.id;
       if (!userId || (boundUserId?.current && userId !== boundUserId.current)) end();
     }).catch((error: unknown) => {
-      if (active) memberAuthFailure(error);
+      if (!active) return;
+      const failure = memberAuthFailure(error);
+      if (failure.status === 401 || failure.status === 403) end();
     });
   };
   window.addEventListener("focus", onFocus);
