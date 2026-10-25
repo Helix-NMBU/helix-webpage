@@ -392,7 +392,12 @@ export function MemberSettingsPreview() {
             <div className="min-w-0 flex-1 space-y-1">
               <p className="font-medium">Gmail</p>
               <p className="text-sm text-muted-foreground">
-                {gmailStatus === "checking" ? "Checking connection…" : gmailStatus === "connected" ? "Connected" : "Not connected"}
+                {gmailStatus === "checking" ? "Checking connection…" : gmailStatus === "connected" ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                    Connected
+                  </span>
+                ) : "Not connected"}
               </p>
             </div>
             {gmailStatus === "connected" ? (

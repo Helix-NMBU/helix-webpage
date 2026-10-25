@@ -190,7 +190,12 @@ const emptyFolderMessage: Record<string, string> = {
 
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
   const [activeFolder, setActiveFolder] = useState("inbox");
-  const [connectionState, setConnectionState] = useState(connectedOverride ? "connected" : "disconnected");
+  const [connectionState, setConnectionState] = useState<"checking" | "connected" | "disconnected" | "unavailable">(() => {
+    if (connectedOverride !== undefined) return connectedOverride ? "connected" : "disconnected";
+    const justConnected = typeof window !== "undefined"
+      && new URLSearchParams(window.location.search).get("gmail") === "connected";
+    return justConnected ? "connected" : "checking";
+  });
   const [connecting, setConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const boundUserId = useRef<string | null>(null);
@@ -206,9 +211,11 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           headers: { Authorization: `Bearer ${token}` },
         });
         const body = await response.json().catch(() => null) as { connected?: unknown } | null;
-        if (active && response.ok && body?.connected === true) setConnectionState("connected");
+        if (active) {
+          setConnectionState(!response.ok ? "unavailable" : body?.connected === true ? "connected" : "disconnected");
+        }
       } catch {
-        // The disconnected state remains the safe default when status is unavailable.
+        if (active) setConnectionState("unavailable");
       }
     })();
     return () => { active = false; };
@@ -240,7 +247,18 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      {connected ? (
+      {connectionState === "checking" && connectedOverride === undefined ? (
+        <main className="flex min-w-0 flex-1 items-center justify-center" aria-live="polite">
+          <p className="text-sm text-muted-foreground">Checking your Gmail connection…</p>
+        </main>
+      ) : connectionState === "unavailable" ? (
+        <main className="flex min-w-0 flex-1 flex-col items-center justify-center gap-4" aria-live="polite">
+          <p className="text-sm text-muted-foreground">Couldn’t check your Gmail connection.</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </main>
+      ) : connected ? (
         <>
           <ConnectedMailSidebar activeFolder={activeFolder} onFolderChange={setActiveFolder} onReconnect={connectGmail} />
           <main className="flex min-w-0 flex-1 items-center justify-center p-6" aria-live="polite">
