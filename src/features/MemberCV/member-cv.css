@@ -102,10 +102,10 @@
   font-size: 17px;
   line-height: 1.6;
 }
-.mcv-page button:not([data-slot="checkbox"]),
+.mcv-page button:not([data-slot="checkbox"]):not(.mcv-profile-edit),
 .mcv-page .mcv-header-button,
 .mcv-page .mcv-demo-button,
-.mcv-dialog button:not([data-slot="checkbox"]) {
+.mcv-dialog button:not([data-slot="checkbox"]):not(.mcv-profile-edit) {
   min-height: 44px;
   height: auto;
   border-radius: 12px;

@@ -50,7 +50,7 @@ export function EditProfileDialog({ draft, disabled, saveError, onSave }: {
     }
   }
   return <Dialog open={open} onOpenChange={changeOpen}>
-    <DialogTrigger asChild><Button variant="outline" size="sm" disabled={disabled}>Edit</Button></DialogTrigger>
+    <DialogTrigger asChild><Button variant="outline" size="sm" className="mcv-profile-edit" disabled={disabled}>Edit</Button></DialogTrigger>
     <DialogContent className="sm:max-w-lg" showCloseButton={!pending}>
       <DialogHeader>
         <DialogTitle>Edit profile</DialogTitle>
