@@ -222,12 +222,13 @@ export function createGmailMessagesHandler(
       const folder = queryString(req.query.folder) || "inbox";
       const filter = folderQuery(folder);
       const search = queryString(req.query.q).slice(0, 500);
+      const unreadOnly = folder === "inbox" && queryString(req.query.unreadOnly) === "true";
       const pageToken = queryString(req.query.pageToken);
       if (pageToken.length > 4096) throw new MemberCvError(400, "The Gmail page token is invalid.");
       const result = await withGmail(req, getStore, authenticate, env, fetchImpl, async (token) => {
         const params = new URLSearchParams({ maxResults: "25" });
         for (const id of filter.labelIds ?? []) params.append("labelIds", id);
-        const query = [filter.q, search].filter(Boolean).join(" ");
+        const query = [filter.q, unreadOnly ? "is:unread" : "", search].filter(Boolean).join(" ");
         if (query) params.set("q", query);
         if (pageToken) params.set("pageToken", pageToken);
         if (filter.includeSpamTrash) params.set("includeSpamTrash", "true");

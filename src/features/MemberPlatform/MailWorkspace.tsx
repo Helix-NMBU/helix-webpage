@@ -4,6 +4,7 @@ import {
   ArchiveX,
   Forward,
   File,
+  Filter,
   Inbox,
   LoaderCircle,
   MoreHorizontal,
@@ -218,6 +219,8 @@ function ConnectedMailSidebar({
   activeFolder,
   onFolderChange,
   onNewMessage,
+  unreadOnly,
+  onUnreadOnlyChange,
   onReconnect,
   search,
   onSearchChange,
@@ -232,6 +235,8 @@ function ConnectedMailSidebar({
   activeFolder: string;
   onFolderChange: (folder: string) => void;
   onNewMessage: () => void;
+  unreadOnly: boolean;
+  onUnreadOnlyChange: (enabled: boolean) => void;
   onReconnect: () => void;
   search: string;
   onSearchChange: (search: string) => void;
@@ -294,6 +299,21 @@ function ConnectedMailSidebar({
                   <span className="sr-only">{item.label}</span>
                 </SidebarMenuButton>
               ))}
+              {activeFolder === "inbox" && (
+                <SidebarMenuButton
+                  type="button"
+                  size="sm"
+                  tooltip={{ children: unreadOnly ? "Show all inbox messages" : "Show unread only", hidden: false }}
+                  aria-label={unreadOnly ? "Show all inbox messages" : "Show unread only"}
+                  aria-pressed={unreadOnly}
+                  isActive={unreadOnly}
+                  className="size-8 justify-center p-0"
+                  onClick={() => onUnreadOnlyChange(!unreadOnly)}
+                >
+                  <Filter />
+                  <span className="sr-only">{unreadOnly ? "Show all inbox messages" : "Show unread only"}</span>
+                </SidebarMenuButton>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
@@ -338,16 +358,23 @@ function ConnectedMailSidebar({
         <SidebarContent
           className="mail-inbox-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain"
           data-scrolling={listScrolling}
+          aria-busy={loading}
           onScroll={handleListScroll}
         >
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
-              {error ? (
+              {loading && messages.length > 0 && (
+                <p className="px-4 py-2 text-xs text-muted-foreground" role="status">Updating messages…</p>
+              )}
+              {error && messages.length > 0 && (
+                <p className="px-4 py-2 text-xs text-destructive" role="alert">{error}</p>
+              )}
+              {error && messages.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-destructive" role="alert">{error}</p>
               ) : loading && messages.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">Loading messages…</p>
               ) : messages.length === 0 ? (
-                <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">No messages in this folder.</p>
+                <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">{activeFolder === "inbox" && unreadOnly ? "No unread messages in your inbox." : "No messages in this folder."}</p>
               ) : (
                 <div className="divide-y divide-border">
                   {messages.map((message) => (
@@ -356,6 +383,7 @@ function ConnectedMailSidebar({
                       type="button"
                       aria-label={`${message.from}, ${message.subject}`}
                       aria-current={selectedMessageId === message.id ? "true" : undefined}
+                      disabled={loading}
                       className={`block w-full px-4 py-3 text-left transition-colors hover:bg-sidebar-accent ${selectedMessageId === message.id ? "bg-sidebar-accent" : ""}`}
                       onClick={() => onMessageSelect(message.id)}
                     >
@@ -374,7 +402,6 @@ function ConnectedMailSidebar({
                       </Button>
                     </div>
                   )}
-                  {error && <p className="px-4 py-3 text-sm text-destructive" role="alert">{error}</p>}
                 </div>
               )}
             </SidebarGroupContent>
@@ -476,6 +503,7 @@ function MessageComposer({
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
   const [activeFolder, setActiveFolder] = useState("inbox");
   const [search, setSearch] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [messages, setMessages] = useState<GmailMessageSummary[]>([]);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -553,10 +581,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   useEffect(() => {
     if (!connected || connectedOverride !== undefined) return;
     const requestId = ++listRequestId.current;
-    setMessages([]);
-    setSelectedMessageId(null);
-    setSelectedMessage(null);
-    setNextPageToken(null);
     setListError(null);
     setListLoading(true);
     const timer = window.setTimeout(() => {
@@ -565,6 +589,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           const token = await memberSessionToken(boundUserId);
           const params = new URLSearchParams({ action: "messages", folder: activeFolder });
           if (search.trim()) params.set("q", search.trim());
+          if (activeFolder === "inbox" && unreadOnly) params.set("unreadOnly", "true");
           const response = await fetch(`/api/gmail?${params}`, {
             credentials: "include",
             headers: { Authorization: `Bearer ${token}` },
@@ -572,25 +597,32 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
           if (requestId !== listRequestId.current) return;
           if (!response.ok) throw new Error(body?.error || "Could not load Gmail messages.");
-          setMessages(Array.isArray(body?.messages) ? body.messages : []);
+          const loadedMessages = Array.isArray(body?.messages) ? body.messages : [];
+          setMessages(loadedMessages);
           setNextPageToken(body?.nextPageToken ?? null);
+          setSelectedMessageId(loadedMessages[0]?.id ?? null);
         } catch (error) {
-          if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : "Could not load Gmail messages.");
+          if (requestId === listRequestId.current) {
+            setListError(error instanceof Error ? error.message : "Could not load Gmail messages.");
+            setMessages([]);
+            setNextPageToken(null);
+            setSelectedMessageId(null);
+            setSelectedMessage(null);
+          }
         } finally {
           if (requestId === listRequestId.current) setListLoading(false);
         }
       })();
-    }, search ? 300 : 0);
+    }, search ? 180 : 0);
     return () => {
       window.clearTimeout(timer);
       if (requestId === listRequestId.current) listRequestId.current += 1;
     };
-  }, [activeFolder, connected, connectedOverride, search]);
+  }, [activeFolder, connected, connectedOverride, search, unreadOnly]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined || !selectedMessageId) return;
     const requestId = ++detailRequestId.current;
-    setSelectedMessage(null);
     setMessageError(null);
     setMessageLoading(true);
     void (async () => {
@@ -623,6 +655,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       const token = await memberSessionToken(boundUserId);
       const params = new URLSearchParams({ action: "messages", folder: activeFolder, pageToken: nextPageToken });
       if (search.trim()) params.set("q", search.trim());
+      if (activeFolder === "inbox" && unreadOnly) params.set("unreadOnly", "true");
       const response = await fetch(`/api/gmail?${params}`, {
         credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
@@ -728,6 +761,8 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             activeFolder={activeFolder}
             onFolderChange={setActiveFolder}
             onNewMessage={() => startCompose("new")}
+            unreadOnly={unreadOnly}
+            onUnreadOnlyChange={setUnreadOnly}
             onReconnect={connectGmail}
             search={search}
             onSearchChange={setSearch}
@@ -755,21 +790,24 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                 onSend={() => void sendMessage()}
               />
             ) : selectedMessageId ? (
-              messageLoading ? (
+              messageLoading && !selectedMessage ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading message…</div>
               ) : messageError ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-destructive" role="alert">{messageError}</div>
               ) : selectedMessage ? (
                 <>
+                  {(messageLoading || listLoading) && (
+                    <div className="shrink-0 border-b px-5 py-2 text-xs text-muted-foreground" role="status">{messageLoading ? "Opening message…" : "Updating messages…"}</div>
+                  )}
                   <div className="shrink-0 border-b px-5 py-4 md:px-8">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h1 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="ghost" size="icon" aria-label="Reply" title="Reply" onClick={() => startCompose("reply")}><Reply aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Forward" title="Forward" onClick={() => startCompose("forward")}><Forward aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending}><Archive aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending}><ShieldAlert aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending}><Trash2 aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Reply" title="Reply" onClick={() => startCompose("reply")} disabled={messageLoading || listLoading}><Reply aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Forward" title="Forward" onClick={() => startCompose("forward")} disabled={messageLoading || listLoading}><Forward aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending || messageLoading || listLoading}><Archive aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending || messageLoading || listLoading}><ShieldAlert aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending || messageLoading || listLoading}><Trash2 aria-hidden="true" /></Button>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
@@ -804,7 +842,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             ) : messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center">
                 <folder.icon className="size-8 text-muted-foreground/60" aria-hidden="true" />
-                <h1 className="mt-4 text-lg font-medium tracking-tight">{emptyFolderMessage[folder.id]}</h1>
+                <h1 className="mt-4 text-lg font-medium tracking-tight">{activeFolder === "inbox" && unreadOnly ? "No unread messages in your inbox." : emptyFolderMessage[folder.id]}</h1>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">Try another folder or change your search.</p>
               </div>
             ) : (
