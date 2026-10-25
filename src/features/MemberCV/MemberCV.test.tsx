@@ -58,14 +58,18 @@ describe("member profile", () => {
     expect(container.querySelector("h1")?.textContent).toBe("Profile");
     expect(container.querySelector('[lang="en"]')).not.toBeNull();
     expect(container.textContent).toContain("Alex Example");
-    expect(container.textContent).toContain("About");
+    expect([...container.querySelectorAll('[role="tab"]')].map(item => item.textContent)).toEqual(["Profile", "CV"]);
+    expect(container.querySelector("#mcv-contact-title")?.textContent).toBe("Alex Example");
+    expect(container.querySelector('[role="tablist"]')!.compareDocumentPosition(container.querySelector(".mcv-profile-identity")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(container.querySelector(".mcv-profile-identity")?.textContent).toContain("Mechanical team member");
     expect(container.querySelector(".mcv-profile-identity")?.textContent).not.toContain("Mechanical engineering student");
     expect(container.querySelector(".mcv-profile-identity")?.textContent).not.toContain("Admin");
     expect(container.textContent).not.toMatch(/fictional|local preview|demo preview|local demo/i);
     expect(container.querySelector('[aria-label="Language"]')).toBeNull();
     expect(container.querySelector('[aria-label="Språk"]')).toBeNull();
-    expect(container.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain("Contact email");
+    expect(container.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain("Field of study");
+    expect(container.querySelector('input[type="email"]')).toBeNull();
+    expect(container.querySelector("textarea")).toBeNull();
     await tab("CV");
     const expand = container.querySelector<HTMLButtonElement>('[aria-label="Expand Education"]')!;
     await act(async () => expand.click());
@@ -80,7 +84,7 @@ describe("member profile", () => {
 
   it("opens sponsor sharing from an existing deep link and keeps preview dialogs in English", async () => {
     await open("#mcv-sharing");
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Sharing");
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("CV");
     expect(container.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain("Share generated CV");
     const preview = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Preview CV")!;
     await act(async () => preview.click());

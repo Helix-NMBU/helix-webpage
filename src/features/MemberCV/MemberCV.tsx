@@ -400,7 +400,7 @@ export default function MemberCV() {
   useEffect(() => {
     const section = location.hash.replace(/^#mcv-/, "");
     if (!editorLoaded || !["contact", "education", "experience", "projects", "languages", "links", "sharing", "publication"].includes(section)) return;
-    setProfileTab(section === "contact" ? "profile" : ["sharing", "publication"].includes(section) ? "sharing" : "cv");
+    setProfileTab(section === "contact" ? "profile" : "cv");
     setOpenSections((previous) => ({ ...previous, [section]: true }));
     const frame = requestAnimationFrame(() => {
       document.getElementById(`mcv-${section}-title`)?.focus({ preventScroll: true });
@@ -836,7 +836,13 @@ export default function MemberCV() {
           <h1>Profile</h1>
           <p>Manage your profile, CV and sponsor visibility.</p>
         </div>
-        {(account || envelope) && <Card className="mcv-profile-identity shadow-none">
+        <Tabs value={profileTab} onValueChange={setProfileTab} className="mcv-profile-tabs">
+          <TabsList aria-label="Profile sections">
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="cv">CV</TabsTrigger>
+          </TabsList>
+          <TabsContent value="profile" className="mcv-profile-panel">
+        {(account || envelope) && <Card className="mcv-profile-identity shadow-none" id="mcv-contact" aria-labelledby="mcv-contact-title">
           <CardContent className="space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
@@ -846,22 +852,23 @@ export default function MemberCV() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 space-y-1">
-                  <p className="break-words text-lg font-medium">{draft?.fullName || account?.name || envelope?.identity.name || "Helix member"}</p>
+                  <p id="mcv-contact-title" tabIndex={-1} className="break-words text-lg font-medium">{draft?.fullName || account?.name || envelope?.identity.name || "Helix member"}</p>
                   {helixRole && <p className="break-words text-sm text-muted-foreground">{helixRole}</p>}
                   <p className="break-all text-sm text-muted-foreground">{account?.email || envelope?.identity.email}</p>
+                  {draft?.phone && <p className="break-words text-sm text-muted-foreground">{draft.phone}</p>}
                 </div>
               </div>
               {draft && <EditProfileDialog draft={draft} disabled={Boolean(busy) || ended}
                 saveError={error ? localizeCvError(error, locale) : null}
                 onSave={async (details) => Boolean(await run("save", false, undefined, details))} />}
             </div>
-            <dl className="grid gap-5 border-t pt-5 text-sm sm:grid-cols-3">
-              <div className="min-w-0 space-y-1"><dt className="text-muted-foreground">Phone number</dt><dd className="break-words">{draft?.phone || "Not provided"}</dd></div>
+            <dl className="grid gap-5 border-t pt-5 text-sm sm:grid-cols-2">
               <div className="min-w-0 space-y-1"><dt className="text-muted-foreground">Field of study</dt><dd className="break-words">{draft?.fieldOfStudy || "Not set"}</dd></div>
               <div className="min-w-0 space-y-1"><dt className="text-muted-foreground">Graduation year</dt><dd>{draft?.graduationYear || "Not set"}</dd></div>
             </dl>
           </CardContent>
         </Card>}
+          </TabsContent>
         {ended && (
           <Alert className="mcv-error" variant="destructive">
             <AlertDescription>
@@ -924,12 +931,7 @@ export default function MemberCV() {
             </AlertDescription>
           </Alert>
         ) : (
-          <Tabs value={profileTab} onValueChange={setProfileTab} className="mcv-profile-tabs">
-            <TabsList aria-label="Profile sections">
-              <TabsTrigger value="profile">Profile</TabsTrigger>
-              <TabsTrigger value="cv">CV</TabsTrigger>
-              <TabsTrigger value="sharing">Sharing</TabsTrigger>
-            </TabsList>
+          <TabsContent value="cv" className="mcv-profile-panel">
             <div className="mcv-status" aria-live="polite">
               <div>
                 <Badge variant="outline" className="mcv-status-badge">
@@ -970,7 +972,7 @@ export default function MemberCV() {
                 {!platformNavigation && <SectionNavigation
                   locale={locale}
                   onNavigate={(key) => {
-                    setProfileTab(key === "contact" ? "profile" : ["sharing", "publication"].includes(key) ? "sharing" : "cv");
+                    setProfileTab(key === "contact" ? "profile" : "cv");
                     setOpenSections((previous) => ({
                       ...previous,
                       [key]: true,
@@ -987,44 +989,16 @@ export default function MemberCV() {
                   className="mcv-form-fieldset"
                 >
                   <div className="mcv-editor">
-                    <TabsContent value="profile" className="mcv-profile-panel">
-                    <Section
-                      {...sectionProps("contact")}
-                      expandable={false}
-                      title="About"
-                      hint={t(
-                        "Your Workspace login address stays linked to your account. Contact details below are shared only when you choose.",
-                      )}
-                    >
-                      <div className="mcv-grid">
-                        <Field
-                          label={t("Contact email")}
-                          type="email"
-                          value={draft.contactEmail}
-                          onChange={(value) => edit("contactEmail", value)}
-                        />
-                        <Field
-                          label={t("City")}
-                          value={draft.city}
-                          onChange={(value) => edit("city", value)}
-                        />
-                        <Field
-                          label={t("Introduction")}
-                          value={draft.summary}
-                          multiline
-                          onChange={(value) => edit("summary", value)}
-                        />
-                      </div>
-                    </Section>
-                    </TabsContent>
-                    <TabsContent value="cv" className="mcv-profile-panel">
                     <div className="space-y-1">
                       <h2>Your CV</h2>
                       <p className="text-sm text-muted-foreground">Add your education and experience. Your profile information is included in your CV.</p>
                     </div>
                     <Card className="mcv-card">
-                      <CardContent className="mcv-card-content">
+                      <CardContent className="mcv-card-content mcv-grid">
                         <Field label="CV headline" value={draft.headline} onChange={(value) => edit("headline", value)} />
+                        <Field label={t("Contact email")} type="email" value={draft.contactEmail} onChange={(value) => edit("contactEmail", value)} />
+                        <Field label={t("City")} value={draft.city} onChange={(value) => edit("city", value)} />
+                        <Field label={t("Introduction")} value={draft.summary} multiline onChange={(value) => edit("summary", value)} />
                       </CardContent>
                     </Card>
                     {definitions.map(({ key, title, singular, fields }) => (
@@ -1169,8 +1143,6 @@ export default function MemberCV() {
                         <OptionalReferencesInput value={draft.references ?? ""} onChange={(value) => edit("references", value)} locale={locale} disabled={Boolean(busy) || ended} />
                       </CardContent>
                     </Card>
-                    </TabsContent>
-                    <TabsContent value="sharing" className="mcv-profile-panel">
                     <div className="space-y-1">
                       <h2>Sponsor visibility</h2>
                       <p className="text-sm text-muted-foreground">Choose what sponsors can access, preview your CV and publish when you are ready.</p>
@@ -1287,13 +1259,13 @@ export default function MemberCV() {
                         )}
                       </p>
                     </Section>
-                    </TabsContent>
                   </div>
                 </fieldset>
               </div>
             </form>
-          </Tabs>
+          </TabsContent>
         )}
+        </Tabs>
       </div>
       <Dialog
         open={Boolean(preview)}
