@@ -501,7 +501,7 @@ export default function MemberCV() {
           if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
           previewUrl.current = null;
           setPreview(null);
-        })
+        }, undefined, boundUserId)
       : undefined;
     return () => {
       active = false;

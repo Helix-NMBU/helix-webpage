@@ -75,7 +75,9 @@ export function memberLoadFailure(failure: unknown): { redirectTo: string } | { 
 
 export const NEON_AUTH_SESSION_VERIFIER_PARAM = "neon_auth_session_verifier";
 
-type SessionReader = { getSession: () => Promise<AuthCall> };
+type SessionReader = {
+  getSession: (options?: { fetchOptions?: { headers?: Record<string, string> } }) => Promise<AuthCall>;
+};
 
 function verifierFrom(search: string): string | null {
   const value = new URLSearchParams(search).get(NEON_AUTH_SESSION_VERIFIER_PARAM)?.trim();
@@ -133,16 +135,22 @@ function rejectMemberSession(): void {
   sessionRejected = true;
 }
 
-function jwtExpiryMs(token: string): number | null {
+// Read claims only to detect account changes and schedule refresh. The API
+// remains responsible for cryptographically verifying every token.
+function jwtClaims(token: string): { exp?: unknown; sub?: unknown } | null {
   const segment = token.split(".")[1];
   if (!segment) return null;
   try {
     const padded = segment.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (segment.length % 4)) % 4);
-    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
-    return typeof payload.exp === "number" && Number.isFinite(payload.exp) ? payload.exp * 1000 : null;
+    return JSON.parse(atob(padded)) as { exp?: unknown; sub?: unknown };
   } catch {
     return null;
   }
+}
+
+function jwtExpiryMs(token: string): number | null {
+  const exp = jwtClaims(token)?.exp;
+  return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
 }
 
 function rememberJwt(token: string): void {
@@ -399,14 +407,19 @@ export async function sessionTokenFromAuth(
 ): Promise<string> {
   if (sessionRejected) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
   const landing = await ensureMemberLanding(client, fetchImpl);
+  if (sessionRejected) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
   if (landing.phase === "signed-in") {
     const jwt = await readMemberJwt(client, fetchImpl);
+    if (sessionRejected) throw new CvRequestError("Your session has ended. Sign in again to continue.", 401);
     if (jwt.token) {
-      if (boundUserId.current && landing.userId && boundUserId.current !== landing.userId) {
+      const sub = jwtClaims(jwt.token)?.sub;
+      const tokenUserId = typeof sub === "string" ? sub : null;
+      const owner = boundUserId.current ?? landing.userId;
+      if ((owner && landing.userId && owner !== landing.userId) || (owner && tokenUserId && owner !== tokenUserId)) {
         rejectMemberSession();
         throw new CvRequestError("The signed-in account changed. Sign in again to open your CV.", 401);
       }
-      if (landing.userId) boundUserId.current = landing.userId;
+      boundUserId.current = owner ?? tokenUserId;
       return jwt.token;
     }
     if (jwt.status === 401 || jwt.status === 403) {
@@ -427,29 +440,36 @@ export async function memberSessionToken(boundUserId: { current: string | null }
   return sessionTokenFromAuth(authClient, boundUserId);
 }
 
-export function watchMemberSession(onEnd: () => void, client: MemberClient | null = authClient): () => void {
+export function watchMemberSession(onEnd: () => void, client: MemberClient | null = authClient, boundUserId?: { current: string | null }): () => void {
   if (!client?.getSession) return () => undefined;
   const readSession = client.getSession.bind(client);
+  let active = true;
+  const end = () => {
+    if (!active) return;
+    active = false;
+    rejectMemberSession();
+    onEnd();
+  };
   const onFocus = () => {
-    void readSession().then((session) => {
+    if (!active) return;
+    // Neon otherwise serves the previous account from its in-memory cache.
+    void readSession({ fetchOptions: { headers: { "X-Force-Fetch": "true" } } }).then((session) => {
+      if (!active) return;
       if (session.error) {
         const failure = memberAuthFailure(session.error);
         if (failure.status === 401 || failure.status === 403) {
-          rejectMemberSession();
-          onEnd();
+          end();
         }
         return;
       }
-      if (!session.data?.user?.id) {
-        rejectMemberSession();
-        onEnd();
-      }
+      const userId = session.data?.user?.id;
+      if (!userId || (boundUserId?.current && userId !== boundUserId.current)) end();
     }).catch((error: unknown) => {
-      memberAuthFailure(error);
+      if (active) memberAuthFailure(error);
     });
   };
   window.addEventListener("focus", onFocus);
-  return () => window.removeEventListener("focus", onFocus);
+  return () => { active = false; window.removeEventListener("focus", onFocus); };
 }
 
 export async function signOutMember(): Promise<void> {

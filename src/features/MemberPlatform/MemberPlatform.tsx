@@ -58,8 +58,8 @@ export function MemberAccess({ children }: { children: ReactNode }) {
   useEffect(() => {
     // The CV editor manages its own session expiry and unsaved input.
     if (location.pathname === "/profile") return;
-    return watchMemberSession(() => navigate("/login", { replace: true }));
-  }, [navigate, location.pathname]);
+    return watchMemberSession(() => navigate("/login", { replace: true }), undefined, { current: landing?.userId ?? null });
+  }, [navigate, location.pathname, landing?.userId]);
 
   if (!landing)
     return (

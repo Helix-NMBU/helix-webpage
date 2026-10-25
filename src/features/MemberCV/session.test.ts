@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CvRequestError } from "./repository";
+import { createCvRepository, CvRequestError } from "./repository";
 import {
   MEMBER_AUTH_UNAVAILABLE,
   claimNeonAuthSession,
@@ -19,9 +19,9 @@ import {
   watchMemberSession,
 } from "./session";
 
-function memberJwt(expSeconds: number): string {
+function memberJwt(expSeconds: number, subject = "member"): string {
   const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds, sub: "member" })}.sig`;
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode({ exp: expSeconds, sub: subject })}.sig`;
 }
 
 describe("member auth URL", () => {
@@ -412,7 +412,123 @@ describe("member session claim", () => {
     stop();
     expect(listeners.has("focus")).toBe(false);
   });
+
+  it("locks the loaded account when a fresh focus check finds another member", async () => {
+    const onEnd = vi.fn();
+    let user = { id: "member-a" };
+    const getSession = vi.fn(async () => ({ data: { user } }));
+    const listeners = stubFocusWindow();
+    const stop = watchMemberSession(onEnd, { getSession }, { current: "member-a" });
+    listeners.get("focus")?.(new Event("focus"));
+    await Promise.resolve();
+    expect(onEnd).not.toHaveBeenCalled();
+    expect(getSession).toHaveBeenCalledWith({ fetchOptions: { headers: { "X-Force-Fetch": "true" } } });
+
+    user = { id: "member-b" };
+    listeners.get("focus")?.(new Event("focus"));
+    await Promise.resolve();
+    expect(onEnd).toHaveBeenCalledOnce();
+    listeners.get("focus")?.(new Event("focus"));
+    expect(getSession).toHaveBeenCalledTimes(2);
+    expect((await ensureMemberLanding({ getSession }, vi.fn())).phase).toBe("signed-out");
+    stop();
+    expect(listeners.has("focus")).toBe(false);
+  });
+
+  it.each(["save", "preview", "publish"] as const)("does not send %s with a different member's refreshed JWT", async (action) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const expires = Math.floor(Date.now() / 1000);
+      const firstToken = memberJwt(expires + 120, "member-a");
+      const token = vi.fn()
+        .mockResolvedValueOnce({ data: { token: firstToken } })
+        .mockResolvedValue({ data: { token: memberJwt(expires + 3600, "member-b") } });
+      const client = { getSession: async () => ({ data: { user: { id: "member-a" } } }), token };
+      const bootstrap = vi.fn(async () => Response.json({ ok: true }));
+      const bound = { current: null as string | null };
+      await expect(sessionTokenFromAuth(client, bound, bootstrap)).resolves.toBe(firstToken);
+      expect(bound.current).toBe("member-a");
+      vi.setSystemTime(Date.now() + 90_000);
+
+      const request = vi.fn();
+      const repository = createCvRepository(() => sessionTokenFromAuth(client, bound, bootstrap), request);
+      const pending = action === "preview"
+        ? repository.preview({ action, expectedRevision: 0 })
+        : repository.mutate({ action, expectedRevision: 0 });
+      await expect(pending).rejects.toMatchObject({ status: 401 });
+      await expect(repository.mutate({ action: "save", expectedRevision: 0 })).rejects.toMatchObject({ status: 401 });
+      expect(request).not.toHaveBeenCalled();
+      expect(token).toHaveBeenCalledTimes(2);
+      expect((await ensureMemberLanding(client, bootstrap)).phase).toBe("signed-out");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects an in-flight save when focus detects a switch before JWT refresh completes", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    let stop: () => void = () => undefined;
+    try {
+      const listeners = stubFocusWindow();
+      let user = { id: "member-a" };
+      const getSession = vi.fn(async () => ({ data: { user } }));
+      const expires = Math.floor(Date.now() / 1000);
+      let release!: (value: { data: { token: string } }) => void;
+      const refreshing = new Promise<{ data: { token: string } }>((resolve) => { release = resolve; });
+      const token = vi.fn()
+        .mockResolvedValueOnce({ data: { token: memberJwt(expires + 120, "member-a") } })
+        .mockReturnValueOnce(refreshing);
+      const client = { getSession, token };
+      const bootstrap = vi.fn(async () => Response.json({ ok: true }));
+      const bound = { current: null as string | null };
+      await sessionTokenFromAuth(client, bound, bootstrap);
+      stop = watchMemberSession(vi.fn(), client, bound);
+      vi.setSystemTime(Date.now() + 90_000);
+      const request = vi.fn();
+      const repository = createCvRepository(() => sessionTokenFromAuth(client, bound, bootstrap), request);
+      const pending = repository.mutate({ action: "save", expectedRevision: 0 });
+      const rejected = expect(pending).rejects.toMatchObject({ status: 401 });
+      await Promise.resolve();
+      expect(token).toHaveBeenCalledTimes(2);
+      user = { id: "member-b" };
+      listeners.get("focus")?.(new Event("focus"));
+      await Promise.resolve();
+      // Even a delayed token for A cannot revive the rejected form session.
+      release({ data: { token: memberJwt(expires + 3600, "member-a") } });
+      await rejected;
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores a focus response after its watcher has been disposed", async () => {
+    const listeners = stubFocusWindow();
+    const onEnd = vi.fn();
+    let release!: (value: { data: { user: { id: string } } }) => void;
+    const getSession = vi.fn(() => new Promise<{ data: { user: { id: string } } }>((resolve) => { release = resolve; }));
+    const stop = watchMemberSession(onEnd, { getSession }, { current: "member-a" });
+    listeners.get("focus")?.(new Event("focus"));
+    stop();
+    release({ data: { user: { id: "member-b" } } });
+    await Promise.resolve();
+    expect(onEnd).not.toHaveBeenCalled();
+    expect(listeners.has("focus")).toBe(false);
+  });
 });
+
+function stubFocusWindow(): Map<string, EventListener> {
+  const listeners = new Map<string, EventListener>();
+  vi.stubGlobal("window", {
+    location: { search: "" },
+    addEventListener: (type: string, listener: EventListener) => { listeners.set(type, listener); },
+    removeEventListener: (type: string, listener: EventListener) => {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+  });
+  return listeners;
+}
 
 function memberLoginCount(fetchImpl: { mock: { calls: unknown[][] } }): number {
   return fetchImpl.mock.calls.filter((call) => {
