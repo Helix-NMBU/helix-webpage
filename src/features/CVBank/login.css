@@ -6,10 +6,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-body:has(.member-login) .mcv-language-menu.portal-root {
-  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-}
-
 .member-login-panel {
   display: flex;
   flex-direction: column;
@@ -21,17 +17,30 @@ body:has(.member-login) .mcv-language-menu.portal-root {
 .member-login-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 16px;
 }
 
-.member-login .mcv-language-trigger {
-  min-width: 100px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--background);
+.member-login-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
 }
+
+.member-login-brand-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--primary);
+}
+
+.member-login-brand-icon img { width: 11px; height: 18px; object-fit: contain; }
 
 .member-login-center {
   display: flex;
@@ -68,7 +77,9 @@ body:has(.member-login) .mcv-language-menu.portal-root {
 }
 
 .member-login .member-login-google {
-  width: 100%;
+  width: 260px;
+  max-width: 100%;
+  align-self: center;
   min-height: 44px;
   gap: 10px;
   border: 1px solid #747775;
@@ -100,7 +111,7 @@ body:has(.member-login) .mcv-language-menu.portal-root {
     background: var(--primary);
   }
   .member-login-brand-panel img {
-    width: 64px;
+    width: 88px;
     height: auto;
   }
 }

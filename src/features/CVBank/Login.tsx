@@ -3,8 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
 import { memberLoginDestination } from "../MemberCV/repository";
-import { useMemberLocale } from "../MemberCV/locale";
-import { LanguageSwitcher } from "../MemberCV/LanguageSwitcher";
+import { memberText, type StaticMemberCopyKey } from "../MemberCV/locale";
 import { localizeCvError } from "../MemberCV/errors";
 import { authClient, ensureMemberLanding, loginAction, memberAuthConfigured, startGoogleSignIn, type MemberFrame } from "../MemberCV/session";
 import "@fontsource-variable/geist";
@@ -13,7 +12,8 @@ import "../MemberCV/member-cv.css";
 import "./login.css";
 
 export default function CVBankLogin() {
-  const { locale, setLocale, t } = useMemberLocale();
+  const locale = "en";
+  const t = (key: StaticMemberCopyKey) => memberText(locale, key);
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -63,12 +63,15 @@ export default function CVBankLogin() {
     <main className="member-login portal-root" lang={locale}>
       <div className="member-login-panel">
         <header className="member-login-header">
-          <LanguageSwitcher locale={locale} onChange={setLocale} />
+          <a className="member-login-brand" href="https://helixnmbu.no">
+            <span className="member-login-brand-icon"><img src="/Vector.png" alt="" /></span>
+            <span>Helix NMBU</span>
+          </a>
         </header>
         <div className="member-login-center">
           <section className="member-login-form" aria-labelledby="member-login-title">
             <div className="member-login-intro">
-              <h1 id="member-login-title">{t("Helix member platform")}</h1>
+              <h1 id="member-login-title">{t("Log in to your account")}</h1>
               <p>{t("Sign in with your Helix account.")}</p>
             </div>
             {memberAuthConfigured && (frame === "loading" || busy) ? (
