@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailCallbackHandler } from "./gmail-callback.js";
-import { stateCookie } from "./gmail-connect.js";
+import { createGmailCallbackHandler } from "./_lib/gmail-callback-handler.js";
+import { stateCookie } from "./_lib/gmail-connect-handler.js";
 import type { GmailConnectionStore } from "./_lib/gmail-connection.js";
 
 function response() {

@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { bearer, MemberCvError, neonCvServices, type WorkspaceIdentity } from "./_lib/member-cv-service.js";
+import { bearer, MemberCvError, neonCvServices, type WorkspaceIdentity } from "./member-cv-service.js";
 
 export const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 export const GMAIL_OAUTH_STATE_TTL_SECONDS = 10 * 60;
@@ -13,12 +13,7 @@ function encode(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
-export function stateCookie(
-  memberId: string,
-  state: string,
-  secret: string,
-  now: number,
-): string {
+export function stateCookie(memberId: string, state: string, secret: string, now: number): string {
   const payload = encode(JSON.stringify({
     memberId,
     state,
@@ -33,12 +28,7 @@ function cookieValue(header: string | undefined, name: string): string | null {
   return value ? value.slice(name.length + 1) : null;
 }
 
-export function verifyStateCookie(
-  header: string | undefined,
-  state: string,
-  secret: string,
-  now: number,
-): { memberId: string } | null {
+export function verifyStateCookie(header: string | undefined, state: string, secret: string, now: number): { memberId: string } | null {
   const value = cookieValue(header, GMAIL_OAUTH_STATE_COOKIE);
   const [payload, signature] = value?.split(".") ?? [];
   if (!payload || !signature) return null;
@@ -47,11 +37,7 @@ export function verifyStateCookie(
   const expectedBytes = Buffer.from(expected);
   if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) return null;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
-      memberId?: unknown;
-      state?: unknown;
-      expiresAt?: unknown;
-    };
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { memberId?: unknown; state?: unknown; expiresAt?: unknown };
     if (parsed.state !== state || typeof parsed.memberId !== "string" || typeof parsed.expiresAt !== "number" || parsed.expiresAt < now) return null;
     return { memberId: parsed.memberId };
   } catch {
@@ -87,10 +73,8 @@ export function createGmailConnectHandler(
   return async (req: VercelRequest, res: VercelResponse) => {
     res.setHeader("Cache-Control", "no-store");
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
-
     const config = configuration(env);
     if (!config) return res.status(503).json({ error: "Gmail connection is not configured yet." });
-
     try {
       const identity = await authenticate(bearer(req.headers.authorization));
       const state = randomState();
@@ -114,5 +98,3 @@ export function createGmailConnectHandler(
     }
   };
 }
-
-export default createGmailConnectHandler();

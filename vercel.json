@@ -15,6 +15,18 @@
       "destination": "/api/auth?__path=:path*"
     },
     {
+      "source": "/api/gmail-connect",
+      "destination": "/api/gmail/connect"
+    },
+    {
+      "source": "/api/gmail-callback",
+      "destination": "/api/gmail/callback"
+    },
+    {
+      "source": "/api/gmail-status",
+      "destination": "/api/gmail/status"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailStatusHandler } from "./gmail-status.js";
+import { createGmailStatusHandler } from "./_lib/gmail-status-handler.js";
 import type { GmailConnectionStore } from "./_lib/gmail-connection.js";
 
 function response() {

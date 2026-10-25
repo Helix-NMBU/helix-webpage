@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { bearer, neonCvServices, type WorkspaceIdentity } from "./_lib/member-cv-service.js";
-import { createGmailConnectionStore, type GmailConnectionStore } from "./_lib/gmail-connection.js";
+import { bearer, neonCvServices, type WorkspaceIdentity } from "./member-cv-service.js";
+import { createGmailConnectionStore, type GmailConnectionStore } from "./gmail-connection.js";
 
 export function createGmailStatusHandler(
   getStore: () => GmailConnectionStore = () => createGmailConnectionStore(),
@@ -21,5 +21,3 @@ export function createGmailStatusHandler(
     }
   };
 }
-
-export default createGmailStatusHandler();
