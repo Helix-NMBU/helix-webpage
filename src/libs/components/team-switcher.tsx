@@ -12,7 +12,7 @@ export function TeamSwitcher({ onNavigate, disabled }: { onNavigate: (to: string
             <img src="/Vector.png" alt="" className="h-5 w-3 object-contain" />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">Helix NMBU</span>
+            <span className="truncate font-medium">Helix NMBU</span>
             <span className="truncate text-xs">Member platform</span>
           </div>
           <ChevronsUpDown className="ml-auto" />
