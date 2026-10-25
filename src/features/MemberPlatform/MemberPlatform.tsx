@@ -21,6 +21,8 @@ import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
 import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
+import { clearGmailSessionCache } from "./gmail-session-cache";
+import { MailWorkspace } from "./MailWorkspace";
 import {
   MemberSettingsPreview,
   TeamWorkspacePreview,
@@ -70,7 +72,10 @@ export function MemberAccess({ children }: { children: ReactNode }) {
   useEffect(() => {
     // The CV editor manages its own session expiry and unsaved input.
     if (location.pathname === "/profile") return;
-    return watchMemberSession(() => navigate("/login", { replace: true }), undefined, { current: landing?.userId ?? null });
+    return watchMemberSession(() => {
+      clearGmailSessionCache();
+      navigate("/login", { replace: true });
+    }, undefined, { current: landing?.userId ?? null });
   }, [navigate, location.pathname, landing?.userId]);
 
   if (!landing)
@@ -147,6 +152,16 @@ export default function MemberPlatform() {
               }
             />
             <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
+            <Route
+              path="/mail"
+              element={
+                <MemberAccess>
+                  <MemberShell>
+                    <MailWorkspace />
+                  </MemberShell>
+                </MemberAccess>
+              }
+            />
             <Route
               path="/settings"
               element={

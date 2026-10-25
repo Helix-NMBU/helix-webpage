@@ -85,7 +85,7 @@ describe("internal member platform", () => {
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/notifications", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
@@ -216,6 +216,7 @@ describe("internal member platform", () => {
   it("changes only the internal host and rejects unsafe internal return URLs", () => {
     const origin = "https://internal.helixnmbu.no";
     expect(isMemberPlatform(origin)).toBe(true);
+    expect(isMemberPlatform("https://helix-webpage-git-internal-member-platform-mvp-helix-nmbu.vercel.app")).toBe(true);
     expect(isMemberPlatform("https://helixnmbu.no")).toBe(false);
     expect(isMemberPlatform("https://www.helixnmbu.no")).toBe(false);
     expect(isMemberPlatform("https://internal.helixnmbu.no.evil.invalid")).toBe(false);

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, Home } from "lucide-react";
+import { Bell, Home, Mail } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -56,6 +56,7 @@ export function AppSidebar({
               isActive: location.pathname === "/",
             },
             { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
+            { title: "Mail", url: "/mail", icon: Mail, isActive: location.pathname.startsWith("/mail") },
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}

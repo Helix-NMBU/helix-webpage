@@ -29,12 +29,17 @@ function Workspace({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const notify = useNotify();
   const profile = location.pathname === "/profile";
+  const mail = location.pathname.startsWith("/mail");
   const page = previewPage(location.pathname);
   const pageTitle = profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
-      : location.pathname === "/notifications" ? "Notifications" : (page?.section.title ?? "Home");
+      : location.pathname === "/notifications"
+        ? "Notifications"
+        : location.pathname.startsWith("/mail")
+          ? "Mail"
+          : (page?.section.title ?? "Home");
   const disabled = busy || Boolean(navigation?.editor?.busy);
 
   function go(to: string, opener?: HTMLElement) {
@@ -69,43 +74,51 @@ function Workspace({ children }: { children: ReactNode }) {
         onSignOut={() => void logout()}
         disabled={disabled}
       />
-      <SidebarInset className="member-workspace-content min-w-0">
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink asChild>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={(event) => go("/", event.currentTarget)}
-                    >
-                      Helix NMBU
-                    </button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                {page && (
-                  <>
-                    <BreadcrumbItem className="hidden lg:block">
-                      {page.team.title}
-                    </BreadcrumbItem>
-                    <BreadcrumbSeparator className="hidden lg:block" />
-                  </>
-                )}
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : ""}`}>
+        {mail ? (
+          <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+            {children}
           </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          {children}
-        </div>
+        ) : (
+          <>
+            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+              <div className="flex items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <BreadcrumbItem className="hidden md:block">
+                      <BreadcrumbLink asChild>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={(event) => go("/", event.currentTarget)}
+                        >
+                          Helix NMBU
+                        </button>
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator className="hidden md:block" />
+                    {page && (
+                      <>
+                        <BreadcrumbItem className="hidden lg:block">
+                          {page.team.title}
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator className="hidden lg:block" />
+                      </>
+                    )}
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
+            </header>
+            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+              {children}
+            </div>
+          </>
+        )}
       </SidebarInset>
     </>
   );
