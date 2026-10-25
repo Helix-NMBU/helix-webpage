@@ -42,7 +42,7 @@ describe("GET /api/gmail-callback", () => {
     const cookie = stateCookie("member-1", "state-1", env.GMAIL_OAUTH_STATE_SECRET, 1_700_000_000_000);
     const { res, result } = response();
 
-    await handler({ method: "GET", query: { code: "auth-code", state: "state-1" }, headers: { cookie } } as VercelRequest, res);
+    await handler({ method: "GET", query: { code: "auth-code", state: "state-1" }, headers: { cookie } } as unknown as VercelRequest, res);
 
     expect(result().headers.Location).toBe("/mail?gmail=connected");
     expect(saved.save).toHaveBeenCalledWith("member-1", "member@helixnmbu.no", "refresh", "gmail.readonly");
@@ -52,7 +52,7 @@ describe("GET /api/gmail-callback", () => {
     const { res, result } = response();
     const handler = createGmailCallbackHandler(env, vi.fn(), () => store());
 
-    await handler({ method: "GET", query: { code: "auth-code", state: "wrong" }, headers: {} } as VercelRequest, res);
+    await handler({ method: "GET", query: { code: "auth-code", state: "wrong" }, headers: {} } as unknown as VercelRequest, res);
 
     expect(result()).toMatchObject({ status: 400, body: { error: "The Gmail connection request expired. Start again." } });
   });
@@ -66,7 +66,7 @@ describe("GET /api/gmail-callback", () => {
     const cookie = stateCookie("member-1", "state-1", env.GMAIL_OAUTH_STATE_SECRET, 1_700_000_000_000);
     const { res, result } = response();
 
-    await handler({ method: "GET", query: { code: "auth-code", state: "state-1" }, headers: { cookie } } as VercelRequest, res);
+    await handler({ method: "GET", query: { code: "auth-code", state: "state-1" }, headers: { cookie } } as unknown as VercelRequest, res);
 
     expect(result()).toMatchObject({ status: 403, body: { error: "Connect the Gmail account belonging to your Helix member account." } });
     expect(saved.save).not.toHaveBeenCalled();
