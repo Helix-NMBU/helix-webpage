@@ -59,6 +59,8 @@ describe("member CV schema", () => {
     expect((await db.query("select to_jsonb(m)->>'helix_role' as helix_role from identity.members m where id = $1", [member])).rows[0]).toEqual({ helix_role: null });
     await db.exec(readFileSync(new URL("../db/migrations/002_member_helix_role.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/002_member_helix_role.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/003_admin_managed_member_names.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/003_admin_managed_member_names.sql", import.meta.url), "utf8"));
   });
   afterAll(async () => { await db?.close(); });
 
@@ -81,6 +83,16 @@ describe("member CV schema", () => {
     await expect(db.query("update identity.members set helix_role = '' where id = $1", [member])).rejects.toThrow("members_helix_role_check");
     await expect(db.query("update identity.members set helix_role = $1 where id = $2", ["x".repeat(151), member])).rejects.toThrow("members_helix_role_check");
     await db.query("update identity.members set helix_role = null where id = $1", [member]);
+  });
+
+  it("preserves an administrator's member name when Google onboarding runs again", async () => {
+    await db.query("update identity.members set full_name = $1 where id = $2", ["Admin-assigned name", member]);
+    try {
+      await onboard(authUser, "google-member", "ase@helixnmbu.no", "Changed Google name");
+      expect((await db.query("select full_name from identity.members where id = $1", [member])).rows[0]).toEqual({ full_name: "Admin-assigned name" });
+    } finally {
+      await db.query("update identity.members set full_name = 'Åse' where id = $1", [member]);
+    }
   });
 
   it("publishes a redacted snapshot and keeps a later draft private", async () => {

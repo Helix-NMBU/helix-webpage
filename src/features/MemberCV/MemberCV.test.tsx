@@ -211,6 +211,13 @@ describe("member profile", () => {
     const edit = () => container.querySelector<HTMLButtonElement>(".mcv-profile-identity button")!;
     const dialogButton = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === text)!;
     async function fill(label: string, value: string) {
+      if (label === "Field of study") {
+        const trigger = document.querySelector<HTMLButtonElement>('[role="dialog"] [aria-label="Field of study"]')!;
+        await act(async () => trigger.click());
+        const option = [...document.querySelectorAll<HTMLElement>('[cmdk-item]')].find(item => item.textContent === value)!;
+        await act(async () => option.click());
+        return;
+      }
       const element = [...document.querySelectorAll<HTMLLabelElement>('[role="dialog"] label')].find(item => item.textContent === label)!;
       const input = document.getElementById(element.htmlFor) as HTMLInputElement;
       await act(async () => {
@@ -219,14 +226,14 @@ describe("member profile", () => {
       });
     }
     await act(async () => edit().click());
-    expect([...document.querySelectorAll('[role="dialog"] label')].map(item => item.textContent)).toEqual(["Name", "Phone number", "Field of study", "Graduation year"]);
-    await fill("Name", "Cancelled name");
+    expect([...document.querySelectorAll('[role="dialog"] label')].map(item => item.textContent)).toEqual(["Phone number", "Field of study", "Graduation year"]);
+    expect(document.querySelector('[role="dialog"] [autocomplete="name"]')).toBeNull();
+    await fill("Phone number", "+47 12345678");
     await act(async () => dialogButton("Cancel").click());
     expect(container.querySelector(".mcv-profile-identity")?.textContent).toContain("Alex Example");
     await act(async () => edit().click());
-    await fill("Name", "Alex Updated");
     await fill("Phone number", "+47 12345678");
-    await fill("Field of study", "Robotics");
+    await fill("Field of study", "Applied Robotics");
     await fill("Graduation year", "20");
     await act(async () => dialogButton("Save changes").click());
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Enter a four-digit graduation year.");
@@ -234,10 +241,14 @@ describe("member profile", () => {
     await act(async () => dialogButton("Save changes").click());
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     const card = container.querySelector(".mcv-profile-identity");
-    for (const value of ["Alex Updated", "+47 12345678", "Robotics", "2029", "Mechanical team member"]) expect(card?.textContent).toContain(value);
+    for (const value of ["Alex Example", "+47 12345678", "Applied Robotics", "2029", "Mechanical team member"]) expect(card?.textContent).toContain(value);
     const saved = JSON.parse(window.localStorage.getItem(DEMO_STORAGE_KEY)!);
     expect(saved.document.draft.headline).toBe("Mechanical engineering student");
     expect(saved.document.draft.education).toEqual(fictionalCv().education);
     expect(saved.document.draft.helixRole).toBeUndefined();
+    expect(saved.document.draft.fullName).toBe("Alex Example");
+    await cvMenu("Edit");
+    expect([...document.querySelectorAll('[role="dialog"] label')].map(item => item.textContent)).not.toContain("Name");
+    expect(document.querySelector('[aria-label="Translations for Name"]')).toBeNull();
   });
 });
