@@ -223,10 +223,16 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
               <h1 id="connect-gmail-title" className="text-2xl font-medium tracking-tight">
                 Connect your Gmail account
               </h1>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              <p id="connect-gmail-description" className="mt-3 text-sm leading-6 text-muted-foreground">
                 Connect your Helix mailbox to mirror your inbox and search messages without leaving the member platform.
               </p>
-              <Button type="button" className="mt-6" onClick={connectGmail} disabled={connecting}>
+              <Button
+                type="button"
+                className="mt-6"
+                onClick={connectGmail}
+                disabled={connecting}
+                aria-describedby="connect-gmail-description"
+              >
                 {connecting ? "Connecting…" : "Connect Gmail account"}
               </Button>
               {connectionError && (
