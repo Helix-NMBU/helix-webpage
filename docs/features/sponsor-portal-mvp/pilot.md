@@ -2,6 +2,22 @@
 
 Prepared 25 October 2026 for HELIX-20, HELIX-21 and HELIX-22. This document records the local setup and acceptance procedure. It does not establish that the sponsor portal is deployed or ready for participants.
 
+## Isolated local verification
+
+Run `npm run dev:sponsor`. The dedicated server at `http://127.0.0.1:5192` applies the actual migrations to an in-memory PGlite database and routes browser requests through the real sponsor API. It uses fictional records and generated PDFs. It does not use live credentials or send email. Restarting the server clears its data.
+
+| Entry URL | Expected access |
+| --- | --- |
+| `/sponsor?account=sponsor` | Silver directory, shared profiles/CVs and own-organization requests |
+| `/sponsor/requests?account=admin` | Cross-organization administrator queue and follow-up |
+| `/sponsor/admin?account=admin` | Organization, contact and agreement controls |
+| `/sponsor?account=bronze` | Requests without Talent Directory |
+| `/sponsor?account=expired` | Denied |
+| `/sponsor?account=unentitled` | Legacy Service agreement denied |
+| `/sponsor?account=developer` | Developer sign-in without sponsor-data or administrator grants |
+
+An explicit account query switches the local browser account. Old tabs must reject mutations after that switch. No account query defaults to the current local account, or the fictional Silver account on the first visit. Sign-out remains effective on reload without a new explicit account selection. The server refuses non-loopback binding and requests; ordinary development and production cannot use these accounts.
+
 ## Current decision
 
 The sponsor pilot is **no-go** until the release commit, environment, acceptance evidence, approved agreement matrix, pilot participants, support owner and sign-off owner are recorded below. These are required inputs, not assignments to people who have not agreed to own them.
