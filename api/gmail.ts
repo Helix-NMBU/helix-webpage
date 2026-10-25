@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createGmailCallbackHandler } from "./_lib/gmail-callback-handler.js";
 import { createGmailConnectHandler } from "./_lib/gmail-connect-handler.js";
 import { createGmailDisconnectHandler } from "./_lib/gmail-disconnect-handler.js";
+import { createGmailMessageHandler, createGmailMessagesHandler } from "./_lib/gmail-messages-handler.js";
 import { createGmailStatusHandler } from "./_lib/gmail-status-handler.js";
 
 const handlers = {
@@ -9,6 +10,8 @@ const handlers = {
   connect: createGmailConnectHandler(),
   disconnect: createGmailDisconnectHandler(),
   status: createGmailStatusHandler(),
+  messages: createGmailMessagesHandler(),
+  message: createGmailMessageHandler(),
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

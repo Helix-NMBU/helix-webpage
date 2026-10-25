@@ -21,7 +21,7 @@ describe("mail workspace", () => {
   });
 
   it("shows only the disconnected Gmail state", async () => {
-    await act(async () => root.render(<MailWorkspace />));
+    await act(async () => root.render(<MailWorkspace connected={false} />));
 
     expect(container.querySelector("#connect-gmail-title")?.textContent).toBe(
       "Connect your Gmail account",
@@ -45,7 +45,7 @@ describe("mail workspace", () => {
   });
 
   it("keeps the connect action on the disconnected page", async () => {
-    await act(async () => root.render(<MailWorkspace />));
+    await act(async () => root.render(<MailWorkspace connected={false} />));
 
     expect(container.querySelector('[data-state="open"]')).toBeNull();
     expect([...container.querySelectorAll<HTMLButtonElement>("button")].some(

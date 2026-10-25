@@ -36,6 +36,19 @@ type MailFolder = {
   icon: typeof Inbox;
 };
 
+type GmailMessageSummary = {
+  id: string;
+  threadId: string;
+  from: string;
+  subject: string;
+  date: string;
+  snippet: string;
+  unread: boolean;
+  starred: boolean;
+};
+
+type GmailMessage = GmailMessageSummary & { body: string };
+
 const mailFolders: MailFolder[] = [
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "starred", label: "Starred", icon: Star },
@@ -94,12 +107,29 @@ function ConnectedMailSidebar({
   activeFolder,
   onFolderChange,
   onReconnect,
+  search,
+  onSearchChange,
+  messages,
+  loading,
+  error,
+  selectedMessageId,
+  onMessageSelect,
+  nextPageToken,
+  onLoadMore,
 }: {
   activeFolder: string;
   onFolderChange: (folder: string) => void;
   onReconnect: () => void;
+  search: string;
+  onSearchChange: (search: string) => void;
+  messages: GmailMessageSummary[];
+  loading: boolean;
+  error: string | null;
+  selectedMessageId: string | null;
+  onMessageSelect: (messageId: string) => void;
+  nextPageToken: string | null;
+  onLoadMore: () => void;
 }) {
-  const [search, setSearch] = useState("");
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
 
   const overflowFolders = mailFolders.filter((item) => !["inbox", "sent", "archive"].includes(item.id));
@@ -162,7 +192,7 @@ function ConnectedMailSidebar({
               aria-label="Search mail"
               placeholder="Search mail"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => onSearchChange(event.target.value)}
               className="pl-8"
             />
           </div>
@@ -170,13 +200,55 @@ function ConnectedMailSidebar({
         <SidebarContent>
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
-              <div className="p-4 text-sm leading-6 text-muted-foreground">Choose a folder to view its messages.</div>
+              {error ? (
+                <p className="px-4 py-3 text-sm text-destructive" role="alert">{error}</p>
+              ) : loading && messages.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">Loading messages…</p>
+              ) : messages.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">No messages in this folder.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {messages.map((message) => (
+                    <button
+                      key={message.id}
+                      type="button"
+                      aria-label={`${message.from}, ${message.subject}`}
+                      aria-current={selectedMessageId === message.id ? "true" : undefined}
+                      className={`block w-full px-4 py-3 text-left transition-colors hover:bg-sidebar-accent ${selectedMessageId === message.id ? "bg-sidebar-accent" : ""}`}
+                      onClick={() => onMessageSelect(message.id)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`truncate text-sm ${message.unread ? "font-semibold text-foreground" : "text-foreground/80"}`}>{message.from}</span>
+                        <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={message.date}>{formatMessageDate(message.date)}</time>
+                      </div>
+                      <p className={`mt-1 truncate text-sm ${message.unread ? "font-semibold" : "font-medium"}`}>{message.subject}</p>
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.snippet}</p>
+                    </button>
+                  ))}
+                  {nextPageToken && (
+                    <div className="p-3">
+                      <Button variant="outline" size="sm" className="w-full" disabled={loading} onClick={onLoadMore}>
+                        {loading ? "Loading…" : "Load more"}
+                      </Button>
+                    </div>
+                  )}
+                  {error && <p className="px-4 py-3 text-sm text-destructive" role="alert">{error}</p>}
+                </div>
+              )}
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
       </Sidebar>
     </SidebarProvider>
   );
+}
+
+function formatMessageDate(value: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return new Intl.DateTimeFormat(undefined, sameDay ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric" }).format(date);
 }
 
 const emptyFolderMessage: Record<string, string> = {
@@ -190,6 +262,15 @@ const emptyFolderMessage: Record<string, string> = {
 
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
   const [activeFolder, setActiveFolder] = useState("inbox");
+  const [search, setSearch] = useState("");
+  const [messages, setMessages] = useState<GmailMessageSummary[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<GmailMessage | null>(null);
+  const [messageLoading, setMessageLoading] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<"checking" | "connected" | "disconnected" | "unavailable">(() => {
     if (connectedOverride !== undefined) return connectedOverride ? "connected" : "disconnected";
     const justConnected = typeof window !== "undefined"
@@ -199,6 +280,8 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [connecting, setConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const boundUserId = useRef<string | null>(null);
+  const listRequestId = useRef(0);
+  const detailRequestId = useRef(0);
 
   useEffect(() => {
     if (connectedOverride !== undefined) return;
@@ -245,6 +328,95 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const connected = connectedOverride ?? connectionState === "connected";
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
 
+  useEffect(() => {
+    if (!connected || connectedOverride !== undefined) return;
+    const requestId = ++listRequestId.current;
+    setMessages([]);
+    setSelectedMessageId(null);
+    setSelectedMessage(null);
+    setNextPageToken(null);
+    setListError(null);
+    setListLoading(true);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const token = await memberSessionToken(boundUserId);
+          const params = new URLSearchParams({ action: "messages", folder: activeFolder });
+          if (search.trim()) params.set("q", search.trim());
+          const response = await fetch(`/api/gmail?${params}`, {
+            credentials: "include",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
+          if (requestId !== listRequestId.current) return;
+          if (!response.ok) throw new Error(body?.error || "Could not load Gmail messages.");
+          setMessages(Array.isArray(body?.messages) ? body.messages : []);
+          setNextPageToken(body?.nextPageToken ?? null);
+        } catch (error) {
+          if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : "Could not load Gmail messages.");
+        } finally {
+          if (requestId === listRequestId.current) setListLoading(false);
+        }
+      })();
+    }, search ? 300 : 0);
+    return () => {
+      window.clearTimeout(timer);
+      if (requestId === listRequestId.current) listRequestId.current += 1;
+    };
+  }, [activeFolder, connected, connectedOverride, search]);
+
+  useEffect(() => {
+    if (!connected || connectedOverride !== undefined || !selectedMessageId) return;
+    const requestId = ++detailRequestId.current;
+    setSelectedMessage(null);
+    setMessageError(null);
+    setMessageLoading(true);
+    void (async () => {
+      try {
+        const token = await memberSessionToken(boundUserId);
+        const params = new URLSearchParams({ action: "message", id: selectedMessageId });
+        const response = await fetch(`/api/gmail?${params}`, {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const body = await response.json().catch(() => null) as (GmailMessage & { error?: string }) | null;
+        if (requestId !== detailRequestId.current) return;
+        if (!response.ok) throw new Error(body?.error || "Could not open this message.");
+        setSelectedMessage(body as GmailMessage);
+      } catch (error) {
+        if (requestId === detailRequestId.current) setMessageError(error instanceof Error ? error.message : "Could not open this message.");
+      } finally {
+        if (requestId === detailRequestId.current) setMessageLoading(false);
+      }
+    })();
+    return () => { detailRequestId.current += 1; };
+  }, [connected, connectedOverride, selectedMessageId]);
+
+  async function loadMoreMessages() {
+    if (!nextPageToken || listLoading) return;
+    setListLoading(true);
+    setListError(null);
+    const requestId = ++listRequestId.current;
+    try {
+      const token = await memberSessionToken(boundUserId);
+      const params = new URLSearchParams({ action: "messages", folder: activeFolder, pageToken: nextPageToken });
+      if (search.trim()) params.set("q", search.trim());
+      const response = await fetch(`/api/gmail?${params}`, {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
+      if (requestId !== listRequestId.current) return;
+      if (!response.ok) throw new Error(body?.error || "Could not load more messages.");
+      setMessages((current) => [...current, ...(Array.isArray(body?.messages) ? body.messages : [])]);
+      setNextPageToken(body?.nextPageToken ?? null);
+    } catch (error) {
+      if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : "Could not load more messages.");
+    } finally {
+      if (requestId === listRequestId.current) setListLoading(false);
+    }
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {connectionState === "checking" && connectedOverride === undefined ? (
@@ -260,15 +432,49 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         </main>
       ) : connected ? (
         <>
-          <ConnectedMailSidebar activeFolder={activeFolder} onFolderChange={setActiveFolder} onReconnect={connectGmail} />
-          <main className="flex min-w-0 flex-1 items-center justify-center p-6" aria-live="polite">
-            <div className="max-w-sm text-center">
-              <folder.icon className="mx-auto size-8 text-muted-foreground/60" aria-hidden="true" />
-              <h1 className="mt-4 text-lg font-medium tracking-tight">{emptyFolderMessage[folder.id]}</h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Messages from this folder will appear here after Gmail mirroring is enabled.
-              </p>
-            </div>
+          <ConnectedMailSidebar
+            activeFolder={activeFolder}
+            onFolderChange={setActiveFolder}
+            onReconnect={connectGmail}
+            search={search}
+            onSearchChange={setSearch}
+            messages={messages}
+            loading={listLoading}
+            error={listError}
+            selectedMessageId={selectedMessageId}
+            onMessageSelect={setSelectedMessageId}
+            nextPageToken={nextPageToken}
+            onLoadMore={loadMoreMessages}
+          />
+          <main className="min-w-0 flex-1 overflow-auto" aria-live="polite">
+            {selectedMessageId ? (
+              messageLoading ? (
+                <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading message…</div>
+              ) : messageError ? (
+                <div className="flex h-full items-center justify-center p-6 text-sm text-destructive" role="alert">{messageError}</div>
+              ) : selectedMessage ? (
+                <article className="mx-auto w-full max-w-4xl p-6 md:p-10">
+                  <h1 className="text-2xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
+                  <div className="mt-5 border-b pb-5 text-sm">
+                    <p className="font-medium">{selectedMessage.from}</p>
+                    <time className="mt-1 block text-muted-foreground" dateTime={selectedMessage.date}>{selectedMessage.date}</time>
+                  </div>
+                  <div className="whitespace-pre-wrap break-words py-6 text-sm leading-6 text-foreground">{selectedMessage.body || selectedMessage.snippet}</div>
+                </article>
+              ) : null
+            ) : listLoading && messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading messages…</div>
+            ) : listError && messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-destructive" role="alert">{listError}</div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+                <folder.icon className="size-8 text-muted-foreground/60" aria-hidden="true" />
+                <h1 className="mt-4 text-lg font-medium tracking-tight">{emptyFolderMessage[folder.id]}</h1>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">Try another folder or change your search.</p>
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Select a message to read it.</div>
+            )}
           </main>
         </>
       ) : (
@@ -285,7 +491,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                 Connect your Gmail account
               </h1>
               <p id="connect-gmail-description" className="mt-3 text-sm leading-6 text-muted-foreground">
-                Connect your Helix mailbox to mirror your inbox and search messages without leaving the member platform.
+                Connect your Helix mailbox to read and search messages without leaving the member platform.
               </p>
               <Button
                 type="button"

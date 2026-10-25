@@ -84,6 +84,18 @@ export function createGmailConnectionStore(
       const row = result.rows[0];
       return row ? { email: row.gmail_email, connectedAt: row.connected_at } : null;
     },
+    async readCredentials(memberId: string): Promise<{ email: string; refreshToken: string; scope: string } | null> {
+      const result = await db.query<{ gmail_email: string; refresh_token_ciphertext: string; granted_scope: string }>(
+        "select gmail_email, refresh_token_ciphertext, granted_scope from identity.gmail_connections where member_id = $1",
+        [memberId],
+      );
+      const row = result.rows[0];
+      return row ? {
+        email: row.gmail_email,
+        refreshToken: decryptRefreshToken(row.refresh_token_ciphertext, env),
+        scope: row.granted_scope,
+      } : null;
+    },
     async disconnect(memberId: string): Promise<string | null> {
       const result = await db.query<{ refresh_token_ciphertext: string }>(
         "select refresh_token_ciphertext from identity.gmail_connections where member_id = $1",
