@@ -508,29 +508,30 @@ function MessageComposer({
 }) {
   const label = mode === "new" ? "New message" : mode === "reply" ? "Reply" : "Forward";
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-5 md:p-8" aria-label={`${label} message`}>
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-        <h1 className="text-xl font-semibold tracking-tight">{label}</h1>
-        <label className="grid gap-1.5 text-sm font-medium">To
-          <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus />
+    <div className="flex flex-col gap-4">
+      <DialogHeader>
+        <DialogTitle>{label}</DialogTitle>
+        <DialogDescription>{mode === "reply" ? "Write your reply." : mode === "forward" ? "Forward this message to someone." : "Compose and send an email from your Gmail account."}</DialogDescription>
+      </DialogHeader>
+      <label className="grid gap-1.5 text-sm font-medium">To
+        <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus />
+      </label>
+      {mode === "new" && (
+        <label className="grid gap-1.5 text-sm font-medium">Subject
+          <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={subject} onChange={(event) => onSubjectChange(event.target.value)} />
         </label>
-        {mode === "new" && (
-          <label className="grid gap-1.5 text-sm font-medium">Subject
-            <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={subject} onChange={(event) => onSubjectChange(event.target.value)} />
-          </label>
-        )}
-        <label className="grid gap-1.5 text-sm font-medium">Message
-          <textarea className="min-h-56 resize-y rounded-md border bg-background p-3 font-normal leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" value={body} onChange={(event) => onBodyChange(event.target.value)} />
-        </label>
-        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onCancel} disabled={sending}>Cancel</Button>
-          <Button onClick={onSend} disabled={sending || !to.trim() || (mode === "new" && !subject.trim())}>
-            {sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}
-          </Button>
-        </div>
-      </div>
-    </section>
+      )}
+      <label className="grid gap-1.5 text-sm font-medium">Message
+        <textarea className="min-h-56 resize-y rounded-md border bg-background p-3 font-normal leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" value={body} onChange={(event) => onBodyChange(event.target.value)} />
+      </label>
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel} disabled={sending}>Cancel</Button>
+        <Button onClick={onSend} disabled={sending || !to.trim() || (mode === "new" && !subject.trim())}>
+          {sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}
+        </Button>
+      </DialogFooter>
+    </div>
   );
 }
 
@@ -709,11 +710,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   function startCompose(mode: ComposeMode) {
     setComposeMode(mode);
     setComposeError(null);
-    if (mode === "new") {
-      setSelectedMessageId(null);
-      setSelectedMessage(null);
-    }
-    setComposeSubject(selectedMessage?.subject ?? "");
+    setComposeSubject(mode === "new" ? "" : selectedMessage?.subject ?? "");
     setComposeBody(!selectedMessage ? "" : mode === "forward"
       ? `\n\n---------- Forwarded message ----------\nFrom: ${selectedMessage.from}\nDate: ${formatMessageDetailDate(selectedMessage.date)}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
       : mode === "reply" ? `\n\nOn ${formatMessageDetailDate(selectedMessage.date)}, ${selectedMessage.from} wrote:\n${selectedMessage.body.split("\n").map((line) => `> ${line}`).join("\n")}` : "");
@@ -809,21 +806,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             onLoadMore={loadMoreMessages}
           />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-live="polite">
-            {composeMode === "new" ? (
-              <MessageComposer
-                mode={composeMode}
-                to={composeTo}
-                onToChange={setComposeTo}
-                subject={composeSubject}
-                onSubjectChange={setComposeSubject}
-                body={composeBody}
-                onBodyChange={setComposeBody}
-                error={composeError}
-                sending={sending}
-                onCancel={() => setComposeMode(null)}
-                onSend={() => void sendMessage()}
-              />
-            ) : selectedMessageId ? (
+            {selectedMessageId ? (
               messageLoading && !selectedMessage ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading message…</div>
               ) : messageError ? (
@@ -850,23 +833,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                     </div>
                     {actionError && <p className="mt-2 text-sm text-destructive" role="alert">{actionError}</p>}
                   </div>
-                  {composeMode ? (
-                    <MessageComposer
-                      mode={composeMode}
-                      to={composeTo}
-                      onToChange={setComposeTo}
-                      subject={composeSubject}
-                      onSubjectChange={setComposeSubject}
-                      body={composeBody}
-                      onBodyChange={setComposeBody}
-                      error={composeError}
-                      sending={sending}
-                      onCancel={() => setComposeMode(null)}
-                      onSend={() => void sendMessage()}
-                    />
-                  ) : (
-                    <EmailHtmlFrame html={selectedMessage.htmlBody} plainText={selectedMessage.body || selectedMessage.snippet} />
-                  )}
+                  <EmailHtmlFrame html={selectedMessage.htmlBody} plainText={selectedMessage.body || selectedMessage.snippet} />
                 </>
               ) : null
             ) : listLoading && messages.length === 0 ? (
@@ -883,6 +850,25 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
               <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Select a message to read it.</div>
             )}
           </main>
+          <Dialog open={composeMode !== null} onOpenChange={(open) => { if (!open && !sending) setComposeMode(null); }}>
+            {composeMode && (
+              <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto sm:max-w-2xl">
+                <MessageComposer
+                  mode={composeMode}
+                  to={composeTo}
+                  onToChange={setComposeTo}
+                  subject={composeSubject}
+                  onSubjectChange={setComposeSubject}
+                  body={composeBody}
+                  onBodyChange={setComposeBody}
+                  error={composeError}
+                  sending={sending}
+                  onCancel={() => setComposeMode(null)}
+                  onSend={() => void sendMessage()}
+                />
+              </DialogContent>
+            )}
+          </Dialog>
           <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open && !actionPending) setConfirmAction(null); }}>
             <DialogContent>
               <DialogHeader>
