@@ -80,6 +80,9 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open(path);
     expect(container.textContent).not.toMatch(/\bpreview\b|\bmockup\b|\bfictional\b|\bexample mode\b|added later/i);
+    if (path === "/settings") {
+      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toContain("Admin");
+    }
   });
 
   it.each(["/", "/profile", "/settings", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {

@@ -54,6 +54,10 @@ describe("member CV schema", () => {
     await db.exec(readFileSync(new URL("../db/migrations/001_member_cv.sql", import.meta.url), "utf8"));
     member = await onboard(authUser, "google-member", "ase@helixnmbu.no", "Åse");
     other = await onboard(otherAuth, "google-other", "other@helixnmbu.no", "Other", emptyCv("Other"));
+    // Sign-in stays compatible until the additive role migration is applied.
+    expect((await db.query("select to_jsonb(m)->>'helix_role' as helix_role from identity.members m where id = $1", [member])).rows[0]).toEqual({ helix_role: null });
+    await db.exec(readFileSync(new URL("../db/migrations/002_member_helix_role.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/002_member_helix_role.sql", import.meta.url), "utf8"));
   });
   afterAll(async () => { await db?.close(); });
 
@@ -67,6 +71,15 @@ describe("member CV schema", () => {
   it("refuses an account that is not the linked Google identity", async () => {
     await expect(onboard(authUser, "made-up", "ase@helixnmbu.no", "Åse")).rejects.toThrow("Identity mismatch");
     await expect(onboard(otherAuth, "google-other", "person@gmail.com", "Other")).rejects.toThrow("Identity mismatch");
+  });
+
+  it("keeps an administrator's Helix role assignment through member onboarding", async () => {
+    await db.query("update identity.members set helix_role = $1 where id = $2", ["Mechanical lead", member]);
+    await onboard(authUser, "google-member", "ase@helixnmbu.no", "Åse");
+    expect((await db.query("select to_jsonb(m)->>'helix_role' as helix_role from identity.members m where id = $1", [member])).rows[0]).toEqual({ helix_role: "Mechanical lead" });
+    await expect(db.query("update identity.members set helix_role = '' where id = $1", [member])).rejects.toThrow("members_helix_role_check");
+    await expect(db.query("update identity.members set helix_role = $1 where id = $2", ["x".repeat(151), member])).rejects.toThrow("members_helix_role_check");
+    await db.query("update identity.members set helix_role = null where id = $1", [member]);
   });
 
   it("publishes a redacted snapshot and keeps a later draft private", async () => {

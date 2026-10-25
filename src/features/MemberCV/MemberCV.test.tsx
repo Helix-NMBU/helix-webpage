@@ -42,7 +42,7 @@ describe("member profile", () => {
   });
   async function open(hash = "", controls?: ReactNode) {
     router = createMemoryRouter([{ path: "/login", element: <p>Log in to your account</p> }, { path: "*", element:
-      <MemberNavigationProvider>{controls}<MemberAccountProvider account={{ name: "Alex Example", email: "alex@example.invalid", role: "Admin" }}>
+      <MemberNavigationProvider>{controls}<MemberAccountProvider account={{ name: "Alex Example", email: "alex@example.invalid", role: "Admin", helixRole: "Mechanical team member" }}>
         <MemberCV />
       </MemberAccountProvider></MemberNavigationProvider>,
     }], { initialEntries: [`/profile?demo=1${hash}`] });
@@ -58,11 +58,14 @@ describe("member profile", () => {
     expect(container.querySelector("h1")?.textContent).toBe("Profile");
     expect(container.querySelector('[lang="en"]')).not.toBeNull();
     expect(container.textContent).toContain("Alex Example");
-    expect(container.textContent).toContain("Personal information");
+    expect(container.textContent).toContain("About");
+    expect(container.querySelector(".mcv-profile-identity")?.textContent).toContain("Mechanical team member");
+    expect(container.querySelector(".mcv-profile-identity")?.textContent).not.toContain("Mechanical engineering student");
+    expect(container.querySelector(".mcv-profile-identity")?.textContent).not.toContain("Admin");
     expect(container.textContent).not.toMatch(/fictional|local preview|demo preview|local demo/i);
     expect(container.querySelector('[aria-label="Language"]')).toBeNull();
     expect(container.querySelector('[aria-label="Språk"]')).toBeNull();
-    expect(container.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain("Full name");
+    expect(container.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain("Contact email");
     await tab("CV");
     const expand = container.querySelector<HTMLButtonElement>('[aria-label="Expand Education"]')!;
     await act(async () => expand.click());
@@ -97,5 +100,40 @@ describe("member profile", () => {
     await act(async () => signOut.click());
     expect(localMemberSignedIn()).toBe(false);
     expect(router.state.location.pathname).toBe("/login");
+  });
+
+  it("stages profile details in the modal and saves them without changing the Helix role or CV", async () => {
+    await open();
+    const edit = () => container.querySelector<HTMLButtonElement>(".mcv-profile-identity button")!;
+    const dialogButton = (text: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(item => item.textContent === text)!;
+    async function fill(label: string, value: string) {
+      const element = [...document.querySelectorAll<HTMLLabelElement>('[role="dialog"] label')].find(item => item.textContent === label)!;
+      const input = document.getElementById(element.htmlFor) as HTMLInputElement;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    await act(async () => edit().click());
+    expect([...document.querySelectorAll('[role="dialog"] label')].map(item => item.textContent)).toEqual(["Name", "Phone number", "Field of study", "Graduation year"]);
+    await fill("Name", "Cancelled name");
+    await act(async () => dialogButton("Cancel").click());
+    expect(container.querySelector(".mcv-profile-identity")?.textContent).toContain("Alex Example");
+    await act(async () => edit().click());
+    await fill("Name", "Alex Updated");
+    await fill("Phone number", "+47 12345678");
+    await fill("Field of study", "Robotics");
+    await fill("Graduation year", "20");
+    await act(async () => dialogButton("Save changes").click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Enter a four-digit graduation year.");
+    await fill("Graduation year", "2029");
+    await act(async () => dialogButton("Save changes").click());
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const card = container.querySelector(".mcv-profile-identity");
+    for (const value of ["Alex Updated", "+47 12345678", "Robotics", "2029", "Mechanical team member"]) expect(card?.textContent).toContain(value);
+    const saved = JSON.parse(window.localStorage.getItem(DEMO_STORAGE_KEY)!);
+    expect(saved.document.draft.headline).toBe("Mechanical engineering student");
+    expect(saved.document.draft.education).toEqual(fictionalCv().education);
+    expect(saved.document.draft.helixRole).toBeUndefined();
   });
 });

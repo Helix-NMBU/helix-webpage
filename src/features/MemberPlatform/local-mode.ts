@@ -15,6 +15,7 @@ export const localMemberAccount: MemberAccount = {
   name: "Alex Example",
   email: "alex@example.invalid",
   role: "Admin",
+  helixRole: "Mechanical team member",
 };
 
 const SESSION_KEY = "helix-member-local-session-v1";

@@ -11,7 +11,7 @@ function fixture(authenticate: CvServices["authenticate"]) {
     let status: number | undefined;
     let result: unknown;
     const res = { setHeader: vi.fn(), status: (code: number) => { status = code; return res; }, json: (value: unknown) => { result = value; return res; } };
-    await handler({ method, headers, body: { hd: "helixnmbu.no", role: "Admin", name: "Henrik Engdal" } } as VercelRequest, res as unknown as VercelResponse);
+    await handler({ method, headers, body: { hd: "helixnmbu.no", role: "Admin", helixRole: "Self-appointed lead", name: "Henrik Engdal" } } as VercelRequest, res as unknown as VercelResponse);
     return { status, result };
   }
   return { authenticate, request };
@@ -41,9 +41,16 @@ describe("Neon member sign-in", () => {
       expect(token).toBe("neon-session");
       return { userId: "member", googleSub: "google-ase", email: "ase@helixnmbu.no", name: "Åse" };
     }));
-    expect(await f.request({ authorization: "Bearer neon-session" })).toEqual({ status: 200, result: { ok: true, email: "ase@helixnmbu.no", account: { name: "Åse", email: "ase@helixnmbu.no", role: "Member" } } });
+    expect(await f.request({ authorization: "Bearer neon-session" })).toEqual({ status: 200, result: { ok: true, email: "ase@helixnmbu.no", account: { name: "Åse", email: "ase@helixnmbu.no", role: "Member", helixRole: null } } });
     expect(logged).not.toHaveBeenCalled();
     logged.mockRestore();
+  });
+
+  it("returns the database-assigned Helix role and ignores a submitted role title", async () => {
+    const f = fixture(vi.fn(async () => ({ userId: "member", googleSub: "google-ase", email: "ase@helixnmbu.no", name: "Åse", helixRole: "Mechanical lead" })));
+    expect(await f.request({ authorization: "Bearer neon-session" })).toMatchObject({
+      status: 200, result: { account: { role: "Member", helixRole: "Mechanical lead" } },
+    });
   });
 
   it("returns 401 and logs no_session_cookie when the request has no bearer token", async () => {

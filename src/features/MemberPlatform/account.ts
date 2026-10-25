@@ -2,6 +2,7 @@ export type MemberAccount = {
   name: string;
   email: string;
   role: "Admin" | "Member";
+  helixRole?: string | null;
 };
 
 export function readMemberAccount(value: unknown): MemberAccount | null {
@@ -14,6 +15,8 @@ export function readMemberAccount(value: unknown): MemberAccount | null {
     name: account.name.trim() || account.email,
     email: account.email,
     role: account.role,
+    ...(account.helixRole === null || typeof account.helixRole === "string"
+      ? { helixRole: account.helixRole?.trim() || null } : {}),
   };
 }
 

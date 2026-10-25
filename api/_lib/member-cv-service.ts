@@ -9,7 +9,7 @@ import { createCvStorage, isOwnedPdfPath, type CvObjectStorage } from "./member-
 import { withVerifyFullSsl } from "./pg-ssl.js";
 
 export { MemberCvError } from "./member-cv-error.js";
-export type WorkspaceIdentity = { userId: string; googleSub: string; email: string; name: string };
+export type WorkspaceIdentity = { userId: string; googleSub: string; email: string; name: string; helixRole?: string | null };
 export type StoredCv = CvRecord & { publishedPath: string | null };
 export type CvCommit = { action: "save" | "publish" | "withdraw"; expectedRevision: number; draft?: CvData; sharing?: CvSharing; path?: string | null };
 export interface CvServices {
@@ -27,7 +27,7 @@ export interface CvDatabase {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
 }
 type AuthRow = { email: string; name: string; email_verified: boolean; banned: boolean; account_id: string; id_token: string | null };
-type MemberRow = { id: string; google_sub: string; email: string; full_name: string };
+type MemberRow = { id: string; google_sub: string; email: string; full_name: string; helix_role?: string | null };
 
 let pool: pg.Pool | undefined;
 function database(): CvDatabase {
@@ -44,7 +44,9 @@ function database(): CvDatabase {
 
 export function envelope(document: StoredCv, identity: WorkspaceIdentity): CvEnvelope {
   const { publishedPath: _path, ...record } = document;
-  return { document: record, identity: { email: identity.email, name: identity.name } };
+  return { document: record, identity: { email: identity.email, name: identity.name,
+    ...(identity.helixRole !== undefined ? { helixRole: identity.helixRole } : {}),
+  } };
 }
 export function bearer(authorization: string | undefined): string {
   const match = authorization?.match(/^Bearer ([^\s]+)$/i);
@@ -98,7 +100,8 @@ export function createCvServices(deps: {
           [session.userId],
         )).rows[0];
         member = (await db.query<MemberRow>(
-          "select id, google_sub, email, full_name from identity.members where auth_user_id = $1",
+          // JSON extraction stays compatible while migration 002 rolls out.
+          "select id, google_sub, email, full_name, to_jsonb(m)->>'helix_role' as helix_role from identity.members m where auth_user_id = $1",
           [session.userId],
         )).rows[0];
       } catch {
@@ -136,7 +139,7 @@ export function createCvServices(deps: {
         );
         const memberId = saved.rows[0]?.onboard_member ?? member?.id;
         if (!memberId) throw new Error("missing member");
-        return { userId: memberId, googleSub: auth.account_id, email: auth.email, name: auth.name || "" };
+        return { userId: memberId, googleSub: auth.account_id, email: auth.email, name: auth.name || "", helixRole: member?.helix_role?.trim() || null };
       } catch (error) {
         if (error instanceof MemberCvError) throw error;
         mapSqlError(error, "Could not prepare your private member profile. Try signing in again.");

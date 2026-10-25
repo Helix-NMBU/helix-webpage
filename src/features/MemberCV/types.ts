@@ -12,6 +12,6 @@ export type CvData = {
 };
 export type CvSharing = { cv: boolean; email: boolean; phone: boolean };
 export type CvRecord = { draft: CvData; sharing: CvSharing; revision: number; publishedRevision: number | null; publishedAt: string | null };
-export type CvEnvelope = { document: CvRecord; identity: { email: string; name: string }; cleanupPending?: boolean };
+export type CvEnvelope = { document: CvRecord; identity: { email: string; name: string; helixRole?: string | null }; cleanupPending?: boolean };
 export type CvMutation = { action: "save" | "publish" | "withdraw" | "preview"; draft?: CvData; sharing?: CvSharing; expectedRevision?: number };
 export type PdfRenderer = (data: CvData, sharing: CvSharing) => Promise<Uint8Array>;

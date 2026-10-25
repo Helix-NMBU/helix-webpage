@@ -10,5 +10,6 @@ export function memberAccount(identity: WorkspaceIdentity): MemberAccount {
     name: identity.name.trim() || email,
     email,
     role: ADMIN_EMAILS.has(email) ? "Admin" : "Member",
+    helixRole: identity.helixRole?.trim() || null,
   };
 }

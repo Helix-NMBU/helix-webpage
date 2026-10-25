@@ -72,7 +72,7 @@ describe("member session bootstrap", () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(status).toBe(200);
-    expect(result).toEqual({ ok: true, email: "ase@helixnmbu.no", account: { name: "Åse", email: "ase@helixnmbu.no", role: "Member" } });
+    expect(result).toEqual({ ok: true, email: "ase@helixnmbu.no", account: { name: "Åse", email: "ase@helixnmbu.no", role: "Member", helixRole: null } });
     expect(authenticate).toHaveBeenCalledOnce();
     expect(logged).not.toHaveBeenCalled();
     expect(JSON.stringify(fetchImpl.mock.calls)).not.toContain("preview-secret");

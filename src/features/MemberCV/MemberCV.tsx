@@ -72,6 +72,7 @@ import { memberPaths } from "../MemberPlatform/routes";
 import { useMemberAccount } from "../MemberPlatform/MemberAccountContext";
 import { accountInitials } from "../MemberPlatform/account";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
+import { EditProfileDialog, type ProfileDetails } from "./EditProfileDialog";
 import { useMemberNavigation, type MemberEditorActions } from "../MemberPlatform/MemberNavigation";
 import { localizeCvError } from "./errors";
 import "../Portal/portal.css";
@@ -371,6 +372,7 @@ export default function MemberCV() {
     [demo],
   );
   const [envelope, setEnvelope] = useState<CvEnvelope | null>(null);
+  const helixRole = envelope?.identity.helixRole === undefined ? account?.helixRole : envelope.identity.helixRole;
   const [draft, setDraft] = useState<CvData | null>(null);
   const [sharing, setSharing] = useState<CvSharing>({
     cv: false,
@@ -577,6 +579,7 @@ export default function MemberCV() {
     action: CvMutation["action"],
     download = false,
     opener?: HTMLElement,
+    profileChanges?: ProfileDetails,
   ) {
     if (!draft || !envelope || busy || ended || manualOperation.current) return;
     const current = generation.current;
@@ -600,7 +603,7 @@ export default function MemberCV() {
       }
       const live = latestInput.current;
       if (!live.draft) return;
-      const submitted = { draft: structuredClone(live.draft), sharing: { ...live.sharing } };
+      const submitted = { draft: structuredClone({ ...live.draft, ...profileChanges }), sharing: { ...live.sharing } };
       const mutation = validateProfileMutation({
         action,
         ...(action === "withdraw" ? {} : submitted),
@@ -643,6 +646,7 @@ export default function MemberCV() {
             ? "Published. Sponsors with Talent Directory access can see this version with your sharing choices."
             : "Profile withdrawn from Talent Directory. Your private draft is kept.");
       }
+      return true;
     } catch (failure) {
       if (generation.current !== current) return;
       if (failure instanceof CvRequestError) {
@@ -658,6 +662,7 @@ export default function MemberCV() {
       setError(failure instanceof CvRequestError && failure.status === 409
         ? "Another session saved a newer version. Your input has been kept. Copy any changes you need, then reload the saved draft before saving again."
         : failure instanceof Error ? failure.message : "The request failed. Your input has been kept.");
+      return false;
     } finally {
       finishManual(current);
     }
@@ -832,20 +837,29 @@ export default function MemberCV() {
           <p>Manage your profile, CV and sponsor visibility.</p>
         </div>
         {(account || envelope) && <Card className="mcv-profile-identity shadow-none">
-          <CardContent className="flex items-center gap-4 p-6">
-            <Avatar className="size-16 rounded-xl">
-              <AvatarFallback className="rounded-xl text-xl">
-                {accountInitials(draft?.fullName || account?.name || envelope?.identity.name || "Helix member")}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="break-words text-lg font-medium">{draft?.fullName || account?.name || envelope?.identity.name || "Helix member"}</p>
-                <Badge variant="secondary" className="font-normal">{account?.role ?? "Member"}</Badge>
+          <CardContent className="space-y-6 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-4">
+                <Avatar className="size-16 rounded-xl">
+                  <AvatarFallback className="rounded-xl text-xl">
+                    {accountInitials(draft?.fullName || account?.name || envelope?.identity.name || "Helix member")}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 space-y-1">
+                  <p className="break-words text-lg font-medium">{draft?.fullName || account?.name || envelope?.identity.name || "Helix member"}</p>
+                  {helixRole && <p className="break-words text-sm text-muted-foreground">{helixRole}</p>}
+                  <p className="break-all text-sm text-muted-foreground">{account?.email || envelope?.identity.email}</p>
+                </div>
               </div>
-              {draft?.headline && <p className="break-words text-sm text-muted-foreground">{draft.headline}</p>}
-              <p className="break-all text-sm text-muted-foreground">{account?.email || envelope?.identity.email}</p>
+              {draft && <EditProfileDialog draft={draft} disabled={Boolean(busy) || ended}
+                saveError={error ? localizeCvError(error, locale) : null}
+                onSave={async (details) => Boolean(await run("save", false, undefined, details))} />}
             </div>
+            <dl className="grid gap-5 border-t pt-5 text-sm sm:grid-cols-3">
+              <div className="min-w-0 space-y-1"><dt className="text-muted-foreground">Phone number</dt><dd className="break-words">{draft?.phone || "Not provided"}</dd></div>
+              <div className="min-w-0 space-y-1"><dt className="text-muted-foreground">Field of study</dt><dd className="break-words">{draft?.fieldOfStudy || "Not set"}</dd></div>
+              <div className="min-w-0 space-y-1"><dt className="text-muted-foreground">Graduation year</dt><dd>{draft?.graduationYear || "Not set"}</dd></div>
+            </dl>
           </CardContent>
         </Card>}
         {ended && (
@@ -977,23 +991,12 @@ export default function MemberCV() {
                     <Section
                       {...sectionProps("contact")}
                       expandable={false}
-                      title="Personal information"
+                      title="About"
                       hint={t(
                         "Your Workspace login address stays linked to your account. Contact details below are shared only when you choose.",
                       )}
                     >
                       <div className="mcv-grid">
-                        <Field
-                          label={t("Full name")}
-                          value={draft.fullName}
-                          onChange={(value) => edit("fullName", value)}
-                        />
-                        <Field
-                          label={t("Headline")}
-                          value={draft.headline}
-                          placeholder={t("Your field or role")}
-                          onChange={(value) => edit("headline", value)}
-                        />
                         <Field
                           label={t("Contact email")}
                           type="email"
@@ -1001,28 +1004,9 @@ export default function MemberCV() {
                           onChange={(value) => edit("contactEmail", value)}
                         />
                         <Field
-                          label={t("Phone")}
-                          type="tel"
-                          value={draft.phone}
-                          maxLength={100}
-                          onChange={(value) => edit("phone", value)}
-                        />
-                        <Field
                           label={t("City")}
                           value={draft.city}
                           onChange={(value) => edit("city", value)}
-                        />
-                        <Field
-                          label={t("Field of study")}
-                          value={draft.fieldOfStudy}
-                          onChange={(value) => edit("fieldOfStudy", value)}
-                        />
-                        <Field
-                          label={t("Graduation year")}
-                          value={draft.graduationYear}
-                          maxLength={4}
-                          placeholder={t("2028")}
-                          onChange={(value) => edit("graduationYear", value)}
                         />
                         <Field
                           label={t("Introduction")}
@@ -1038,6 +1022,11 @@ export default function MemberCV() {
                       <h2>Your CV</h2>
                       <p className="text-sm text-muted-foreground">Add your education and experience. Your profile information is included in your CV.</p>
                     </div>
+                    <Card className="mcv-card">
+                      <CardContent className="mcv-card-content">
+                        <Field label="CV headline" value={draft.headline} onChange={(value) => edit("headline", value)} />
+                      </CardContent>
+                    </Card>
                     {definitions.map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}

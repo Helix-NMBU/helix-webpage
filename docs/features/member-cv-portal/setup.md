@@ -65,6 +65,22 @@ In the Neon Auth console, disable email and password sign-up. The API still reje
 
 `/api/auth/:path*` is rewritten to the Vercel function `api/auth.ts` before the SPA fallback. The function reads the remaining path from the `__path` query parameter, because a Vite project does not route `[[...path]]` and the rewrite destination replaces `req.url`. That rewrite stays on this site. It does not forward the browser to Neon, so Vercel does not send this site's host as `X-Forwarded-Host`. The function builds the upstream URL only from `NEON_AUTH_BASE_URL`, drops forwarded host headers, and forwards only the Neon Auth cookies plus the browser's `Origin`. POST, PUT, PATCH, and DELETE must come from the request `Host`, from `helixnmbu.no` or `www.helixnmbu.no`, or from an optional comma-separated `AUTH_PROXY_ALLOWED_HOSTS` list. When `Origin` is absent, `Sec-Fetch-Site: same-origin` is accepted. The function reads the raw body with `bodyParser` disabled. The browser still talks to its own origin (`/api/auth`), which keeps the session cookie first-party. Responses use `Cache-Control: no-store`. Session JWTs are still issued by the Neon origin: `iss` and `aud` are that origin, and the API keeps verifying them with `NEON_AUTH_BASE_URL`. Do not set `NEON_AUTH_BASE_URL` to the website. The Google redirect URI stays `{NEON_AUTH_BASE_URL}/callback/google`. The proxy does not need a cookie secret.
 
+## Member role titles
+
+Apply `db/migrations/002_member_helix_role.sql` after migration 001 to add `identity.members.helix_role`. This nullable title is the person's role at Helix and is separate from the application's Admin/Member access role and the member-editable CV headline.
+
+A database administrator assigns it directly, for example:
+
+```sql
+update identity.members
+set helix_role = 'Mechanical lead'
+where email = 'member@helixnmbu.no';
+```
+
+The sign-in and CV responses read this value from the server-verified member row. Neither the personal-profile modal nor CV mutations write it. Onboarding preserves existing assignments. The query accepts the pre-migration schema so an incremental deployment cannot break sign-in; unassigned titles are omitted from the profile card. A new page load refreshes account metadata. Local development uses the sample role in `local-mode.ts`.
+
+The profile card's Edit modal changes the CV draft's name, phone number, field of study and graduation year. It uses the existing revision-checked private save, preserving other draft data and the current published version.
+
 ## Files
 
 The bucket `member-cvs` is private. The server uploads only generated PDFs (`application/pdf`, `%PDF-` header, at most 5 MB) under `{memberId}/{uuid}.pdf`. `GET /api/member-cv-file` checks the session and returns a presigned GET that lasts 120 seconds, and only for the caller's current published path. Preview (`POST /api/member-cv` with `action=preview`) returns PDF bytes and does not write storage.

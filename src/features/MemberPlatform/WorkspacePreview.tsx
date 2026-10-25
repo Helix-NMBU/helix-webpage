@@ -348,11 +348,8 @@ export function MemberSettingsPreview() {
       </Card>
       <Card className="shadow-none">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            Workspace role
-            <Badge variant="secondary" className="font-normal">
-              {role}
-            </Badge>
+          <CardTitle className="text-base">
+            Workspace access
           </CardTitle>
           <CardDescription>
             {account?.email || "Your Helix account"}

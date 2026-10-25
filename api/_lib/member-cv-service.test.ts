@@ -36,12 +36,12 @@ describe("Neon member access", () => {
     const verifyGoogle = vi.fn();
     const db: CvDatabase = { query: async <T,>(sql: string) => {
       if (sql.includes("neon_auth")) return { rows: [{ email: "ase@helixnmbu.no", name: "Åse", email_verified: true, banned: false, account_id: "google-ase", id_token: null }] as T[] };
-      if (sql.includes("from identity.members")) return { rows: [{ id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: "Åse" }] as T[] };
+      if (sql.includes("from identity.members")) return { rows: [{ id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: "Åse", helix_role: "Mechanical lead" }] as T[] };
       if (sql.includes("onboard_member")) return { rows: [{ onboard_member: memberId }] as T[] };
       throw new Error(sql);
     } };
     const identity = await servicesFor(db, { putPdf: vi.fn(), remove: vi.fn(), presign: vi.fn() }, verifyGoogle).authenticate("session");
-    expect(identity).toMatchObject({ userId: memberId, email: "ase@helixnmbu.no", googleSub: "google-ase" });
+    expect(identity).toMatchObject({ userId: memberId, email: "ase@helixnmbu.no", googleSub: "google-ase", helixRole: "Mechanical lead" });
     expect(verifyGoogle).not.toHaveBeenCalled();
   });
 });
