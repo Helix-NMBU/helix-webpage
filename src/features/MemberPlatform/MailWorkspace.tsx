@@ -263,8 +263,22 @@ function ConnectedMailSidebar({
   onLoadMore: () => void;
 }) {
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
-
+  const [listScrolling, setListScrolling] = useState(false);
+  const scrollIdleTimeout = useRef<number | null>(null);
   const overflowFolders = mailFolders.filter((item) => !["inbox", "sent", "archive"].includes(item.id));
+
+  useEffect(() => () => {
+    if (scrollIdleTimeout.current !== null) window.clearTimeout(scrollIdleTimeout.current);
+  }, []);
+
+  function handleListScroll() {
+    setListScrolling(true);
+    if (scrollIdleTimeout.current !== null) window.clearTimeout(scrollIdleTimeout.current);
+    scrollIdleTimeout.current = window.setTimeout(() => {
+      setListScrolling(false);
+      scrollIdleTimeout.current = null;
+    }, 650);
+  }
 
   return (
     <SidebarProvider className="h-full !min-h-0 min-h-0 w-80 shrink-0">
@@ -329,7 +343,11 @@ function ConnectedMailSidebar({
             />
           </div>
         </SidebarHeader>
-        <SidebarContent className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain">
+        <SidebarContent
+          className="mail-inbox-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain"
+          data-scrolling={listScrolling}
+          onScroll={handleListScroll}
+        >
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
               {error ? (
