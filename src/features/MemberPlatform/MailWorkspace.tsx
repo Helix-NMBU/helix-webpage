@@ -1,15 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Archive,
   ArchiveX,
+  Forward,
   File,
   Inbox,
+  LoaderCircle,
   MoreHorizontal,
+  Reply,
   Search,
   Send,
+  ShieldAlert,
   Star,
   Trash2,
 } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@libs/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,7 +60,14 @@ type GmailMessageSummary = {
   starred: boolean;
 };
 
-type GmailMessage = GmailMessageSummary & { body: string };
+type GmailMessage = GmailMessageSummary & {
+  body: string;
+  htmlBody: string;
+  replyTo: string;
+};
+
+type MessageAction = "archive" | "trash" | "junk";
+type ComposeMode = "reply" | "forward";
 
 const mailFolders: MailFolder[] = [
   { id: "inbox", label: "Inbox", icon: Inbox },
@@ -55,8 +75,101 @@ const mailFolders: MailFolder[] = [
   { id: "sent", label: "Sent", icon: Send },
   { id: "drafts", label: "Drafts", icon: File },
   { id: "archive", label: "Archive", icon: ArchiveX },
+  { id: "spam", label: "Spam", icon: ShieldAlert },
   { id: "trash", label: "Trash", icon: Trash2 },
 ];
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
+}
+
+function emailDocument(html: string, plainText: string, allowRemoteImages: boolean): { srcDoc: string; remoteImageCount: number } {
+  const source = html.trim() || `<pre>${escapeHtml(plainText)}</pre>`;
+  const parsed = new DOMParser().parseFromString(source, "text/html");
+  parsed.querySelectorAll("script, iframe, frame, frameset, object, embed, form, input, button, textarea, select, option, link, meta, base, svg, math, video, audio, source, track, canvas, portal").forEach((element) => element.remove());
+  let remoteImageCount = 0;
+
+  parsed.querySelectorAll("*").forEach((element) => {
+    for (const attribute of [...element.attributes]) {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+      if (name.startsWith("on") || ["srcdoc", "formaction", "xlink:href"].includes(name)) {
+        element.removeAttribute(attribute.name);
+      } else if (name === "style" && /url\s*\(|expression\s*\(|javascript:|@import|behavior\s*:/i.test(value)) {
+        element.removeAttribute(attribute.name);
+      } else if (name === "href") {
+        try {
+          const url = new URL(value, window.location.origin);
+          if (!["https:", "http:", "mailto:"].includes(url.protocol)) element.removeAttribute(attribute.name);
+          else if (url.protocol === "http:" || url.protocol === "https:") {
+            element.setAttribute("target", "_blank");
+            element.setAttribute("rel", "noopener noreferrer");
+          }
+        } catch {
+          element.removeAttribute(attribute.name);
+        }
+      } else if (name === "src" && element.tagName.toLowerCase() === "img") {
+        try {
+          const url = new URL(value, window.location.origin);
+          if (url.protocol === "http:" || url.protocol === "https:") {
+            remoteImageCount += 1;
+            if (allowRemoteImages) {
+              element.setAttribute("src", url.href);
+              element.setAttribute("referrerpolicy", "no-referrer");
+            } else {
+              element.removeAttribute("src");
+              element.setAttribute("data-remote-image-hidden", "true");
+            }
+          } else if (url.protocol !== "data:" || !/^data:image\//i.test(value)) {
+            element.removeAttribute("src");
+          }
+        } catch {
+          element.removeAttribute("src");
+        }
+      } else if (["srcset", "background", "poster"].includes(name)) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  });
+
+  const styles = [...parsed.querySelectorAll("style")].map((style) => {
+    const css = style.textContent ?? "";
+    if (/url\s*\(|expression\s*\(|javascript:|@import|behavior\s*:/i.test(css)) return "";
+    return `<style>${css.replace(/<\/style/gi, "<\\/style")}</style>`;
+  }).join("");
+  const shellStyles = "body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
+  const imageSources = allowRemoteImages ? "data: https: http:" : "data:";
+  return {
+    srcDoc: `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${imageSources}; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}</head><body>${parsed.body.innerHTML}</body></html>`,
+    remoteImageCount,
+  };
+}
+
+function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }) {
+  const [allowRemoteImages, setAllowRemoteImages] = useState(false);
+  const { srcDoc, remoteImageCount } = useMemo(
+    () => emailDocument(html, plainText, allowRemoteImages),
+    [allowRemoteImages, html, plainText],
+  );
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {remoteImageCount > 0 && !allowRemoteImages && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-2 text-xs text-muted-foreground">
+          <span>External images are hidden for privacy.</span>
+          <Button variant="outline" size="sm" className="h-7" onClick={() => setAllowRemoteImages(true)}>Load images</Button>
+        </div>
+      )}
+      <iframe
+        title="Email content"
+        sandbox=""
+        referrerPolicy="no-referrer"
+        srcDoc={srcDoc}
+        className="min-h-0 w-full flex-1 border-0 bg-white"
+      />
+    </div>
+  );
+}
 
 export function GmailLogo({ className }: { className?: string }) {
   return (
@@ -197,7 +310,7 @@ function ConnectedMailSidebar({
             />
           </div>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
               {error ? (
@@ -257,6 +370,7 @@ const emptyFolderMessage: Record<string, string> = {
   sent: "No sent messages.",
   drafts: "No drafts.",
   archive: "No archived messages.",
+  spam: "No messages in Spam.",
   trash: "Your trash is empty.",
 };
 
@@ -279,6 +393,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   });
   const [connecting, setConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
+  const [composeTo, setComposeTo] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [composeError, setComposeError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<MessageAction | null>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const boundUserId = useRef<string | null>(null);
   const listRequestId = useRef(0);
   const detailRequestId = useRef(0);
@@ -417,6 +539,69 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     }
   }
 
+  function startCompose(mode: ComposeMode) {
+    setComposeMode(mode);
+    setComposeError(null);
+    setComposeBody(!selectedMessage ? "" : mode === "forward"
+      ? `\n\n---------- Forwarded message ----------\nFrom: ${selectedMessage.from}\nDate: ${selectedMessage.date}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
+      : `\n\nOn ${selectedMessage.date}, ${selectedMessage.from} wrote:\n${selectedMessage.body.split("\n").map((line) => `> ${line}`).join("\n")}`);
+    const emailAddress = selectedMessage?.replyTo.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? "";
+    setComposeTo(mode === "reply" ? emailAddress : "");
+  }
+
+  async function sendMessage() {
+    if (!selectedMessage || !composeMode) return;
+    setSending(true);
+    setComposeError(null);
+    try {
+      const token = await memberSessionToken(boundUserId);
+      const response = await fetch("/api/gmail?action=messageAction", {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send", mode: composeMode, to: composeTo, subject: selectedMessage.subject,
+          body: composeBody,
+          ...(composeMode === "reply" ? { replyToMessageId: selectedMessage.id } : {}),
+        }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "Could not send this message.");
+      setComposeMode(null);
+      setComposeTo("");
+      setComposeBody("");
+    } catch (error) {
+      setComposeError(error instanceof Error ? error.message : "Could not send this message.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function performMessageAction(action: MessageAction) {
+    if (!selectedMessageId) return;
+    setActionPending(true);
+    setActionError(null);
+    try {
+      const token = await memberSessionToken(boundUserId);
+      const response = await fetch("/api/gmail?action=messageAction", {
+        method: "POST",
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action, id: selectedMessageId }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "Could not update this message.");
+      setMessages((current) => current.filter((message) => message.id !== selectedMessageId));
+      setSelectedMessageId(null);
+      setSelectedMessage(null);
+      setConfirmAction(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not update this message.");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {connectionState === "checking" && connectedOverride === undefined ? (
@@ -446,21 +631,51 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             nextPageToken={nextPageToken}
             onLoadMore={loadMoreMessages}
           />
-          <main className="min-w-0 flex-1 overflow-auto" aria-live="polite">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-live="polite">
             {selectedMessageId ? (
               messageLoading ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading message…</div>
               ) : messageError ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-destructive" role="alert">{messageError}</div>
               ) : selectedMessage ? (
-                <article className="mx-auto w-full max-w-4xl p-6 md:p-10">
-                  <h1 className="text-2xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
-                  <div className="mt-5 border-b pb-5 text-sm">
-                    <p className="font-medium">{selectedMessage.from}</p>
-                    <time className="mt-1 block text-muted-foreground" dateTime={selectedMessage.date}>{selectedMessage.date}</time>
+                <>
+                  <div className="shrink-0 border-b px-5 py-4 md:px-8">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h1 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => startCompose("reply")}><Reply className="mr-2 size-4" />Reply</Button>
+                        <Button variant="outline" size="sm" onClick={() => startCompose("forward")}><Forward className="mr-2 size-4" />Forward</Button>
+                        <Button variant="outline" size="sm" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending}><Archive className="size-4" /></Button>
+                        <Button variant="outline" size="sm" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending}><ShieldAlert className="size-4" /></Button>
+                        <Button variant="outline" size="sm" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending}><Trash2 className="size-4" /></Button>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+                      <p className="min-w-0 break-words font-medium">{selectedMessage.from}</p>
+                      <time className="text-xs text-muted-foreground" dateTime={selectedMessage.date}>{selectedMessage.date}</time>
+                    </div>
+                    {actionError && <p className="mt-2 text-sm text-destructive" role="alert">{actionError}</p>}
                   </div>
-                  <div className="whitespace-pre-wrap break-words py-6 text-sm leading-6 text-foreground">{selectedMessage.body || selectedMessage.snippet}</div>
-                </article>
+                  {composeMode ? (
+                    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-5 md:p-8" aria-label={`${composeMode === "reply" ? "Reply" : "Forward"} message`}>
+                      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+                        <label className="grid gap-1.5 text-sm font-medium">To
+                          <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={composeTo} onChange={(event) => setComposeTo(event.target.value)} placeholder="name@example.com" autoFocus />
+                        </label>
+                        <label className="grid gap-1.5 text-sm font-medium">Message
+                          <textarea className="min-h-56 resize-y rounded-md border bg-background p-3 font-normal leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" value={composeBody} onChange={(event) => setComposeBody(event.target.value)} />
+                        </label>
+                        {composeError && <p className="text-sm text-destructive" role="alert">{composeError}</p>}
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" onClick={() => setComposeMode(null)} disabled={sending}>Cancel</Button>
+                          <Button onClick={() => void sendMessage()} disabled={sending || !composeTo.trim()}>{sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}</Button>
+                        </div>
+                      </div>
+                    </section>
+                  ) : (
+                    <EmailHtmlFrame html={selectedMessage.htmlBody} plainText={selectedMessage.body || selectedMessage.snippet} />
+                  )}
+                </>
               ) : null
             ) : listLoading && messages.length === 0 ? (
               <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading messages…</div>
@@ -476,6 +691,21 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
               <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Select a message to read it.</div>
             )}
           </main>
+          <Dialog open={confirmAction !== null} onOpenChange={(open) => { if (!open && !actionPending) setConfirmAction(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{confirmAction === "junk" ? "Move this message to Spam?" : "Move this message to Trash?"}</DialogTitle>
+                <DialogDescription>{confirmAction === "junk" ? "Gmail will mark this message as spam. You can find it in the Spam folder." : "The message will move to Gmail Trash, where it can be restored until Gmail permanently deletes it."}</DialogDescription>
+              </DialogHeader>
+              {actionError && <p className="text-sm text-destructive" role="alert">{actionError}</p>}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmAction(null)} disabled={actionPending}>Cancel</Button>
+                <Button variant="destructive" onClick={() => confirmAction && void performMessageAction(confirmAction)} disabled={actionPending}>
+                  {actionPending ? "Working…" : confirmAction === "junk" ? "Move to Spam" : "Move to Trash"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       ) : (
         <main className="flex min-w-0 flex-1 flex-col">

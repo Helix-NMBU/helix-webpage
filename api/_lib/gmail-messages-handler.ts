@@ -28,6 +28,16 @@ type GmailMessageSummary = {
   starred: boolean;
 };
 
+type GmailMessageAction = {
+  action?: unknown;
+  id?: unknown;
+  mode?: unknown;
+  to?: unknown;
+  subject?: unknown;
+  body?: unknown;
+  replyToMessageId?: unknown;
+};
+
 type GmailEnv = NodeJS.ProcessEnv;
 type Fetch = typeof fetch;
 
@@ -41,6 +51,7 @@ function folderQuery(folder: string): { labelIds?: string[]; q?: string; include
     case "sent": return { labelIds: ["SENT"] };
     case "starred": return { labelIds: ["STARRED"] };
     case "drafts": return { labelIds: ["DRAFT"] };
+    case "spam": return { labelIds: ["SPAM"], includeSpamTrash: true };
     case "trash": return { labelIds: ["TRASH"], includeSpamTrash: true };
     case "archive": return { q: "-in:inbox -in:sent -in:trash -in:drafts -in:spam" };
     default: throw new MemberCvError(400, "Choose a valid Gmail folder.");
@@ -66,9 +77,10 @@ async function accessToken(refreshToken: string, env: GmailEnv, fetchImpl: Fetch
   return body.access_token;
 }
 
-async function gmailRequest<T>(path: string, token: string, fetchImpl: Fetch): Promise<T> {
+async function gmailRequest<T>(path: string, token: string, fetchImpl: Fetch, init: RequestInit = {}): Promise<T> {
   const response = await fetchImpl(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...(init.headers as Record<string, string> | undefined) },
   });
   const body = await response.json().catch(() => null) as (T & { error?: { message?: string } }) | null;
   if (response.status === 401 || response.status === 403) {
@@ -131,6 +143,50 @@ function messageBody(message: GmailApiMessage): string {
   if (plainText) return plainText.slice(0, 100_000);
   const html = collectBodies(message.payload, "text/html").join("\n\n");
   return html ? htmlToText(html).slice(0, 100_000) : message.snippet ?? "";
+}
+
+function messageHtml(message: GmailApiMessage): string {
+  return collectBodies(message.payload, "text/html").join("\n").slice(0, 200_000);
+}
+
+function requestBody(value: unknown): GmailMessageAction {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as GmailMessageAction;
+}
+
+function validMessageId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 512 && !/[\s/]/.test(value);
+}
+
+function recipientAddresses(value: unknown): string[] {
+  if (typeof value !== "string" || value.length > 1200) throw new MemberCvError(400, "Enter a valid recipient email address.");
+  const addresses = value.split(/[;,]/).map((part) => {
+    const bracketed = part.match(/<([^<>]+)>/)?.[1];
+    return (bracketed ?? part).trim();
+  }).filter(Boolean);
+  if (!addresses.length || addresses.length > 20 || addresses.some((address) => !/^[^\s@,<>]+@[^\s@,<>]+\.[^\s@,<>]+$/.test(address))) {
+    throw new MemberCvError(400, "Enter valid recipient email addresses.");
+  }
+  return addresses;
+}
+
+function safeReferences(value: string): string[] {
+  return value.match(/<[^<>\s\r\n]+>/g) ?? [];
+}
+
+function mimeSubject(subject: string): string {
+  const normalized = subject.replace(/[\r\n]+/g, " ").trim();
+  if (normalized.length > 998) throw new MemberCvError(400, "Enter a subject under 999 characters.");
+  return /[^\x20-\x7e]/.test(normalized)
+    ? `=?UTF-8?B?${Buffer.from(normalized, "utf8").toString("base64")}?=`
+    : normalized;
+}
+
+function base64Lines(value: string): string {
+  return Buffer.from(value.replace(/\r?\n/g, "\r\n"), "utf8")
+    .toString("base64")
+    .replace(/.{1,76}/g, "$&\r\n")
+    .trimEnd();
 }
 
 function failure(error: unknown): { status: number; message: string } {
@@ -206,7 +262,88 @@ export function createGmailMessageHandler(
       const message = await withGmail(req, getStore, authenticate, env, fetchImpl, async (token) =>
         gmailRequest<GmailApiMessage>(`messages/${encodeURIComponent(id)}?format=full`, token, fetchImpl));
       const details = summary(message);
-      return res.status(200).json({ ...details, body: messageBody(message) });
+      return res.status(200).json({
+        ...details,
+        body: messageBody(message),
+        htmlBody: messageHtml(message),
+        replyTo: header(message, "Reply-To") || header(message, "From"),
+        rfcMessageId: header(message, "Message-ID"),
+      });
+    } catch (error) {
+      const result = failure(error);
+      return res.status(result.status).json({ error: result.message });
+    }
+  };
+}
+
+export function createGmailMessageActionHandler(
+  getStore: () => GmailConnectionStore = () => createGmailConnectionStore(),
+  authenticate: (token: string) => Promise<WorkspaceIdentity> = (token) => neonCvServices().authenticate(token),
+  env: GmailEnv = process.env,
+  fetchImpl: Fetch = fetch,
+) {
+  return async (req: VercelRequest, res: VercelResponse) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed." });
+    try {
+      const input = requestBody(req.body);
+      const action = typeof input.action === "string" ? input.action : "";
+      const result = await withGmail(req, getStore, authenticate, env, fetchImpl, async (token) => {
+        if (action === "archive" || action === "junk") {
+          if (!validMessageId(input.id)) throw new MemberCvError(400, "A valid Gmail message ID is required.");
+          const labels = action === "archive"
+            ? { removeLabelIds: ["INBOX"] }
+            : { addLabelIds: ["SPAM"], removeLabelIds: ["INBOX"] };
+          await gmailRequest(`messages/${encodeURIComponent(input.id)}/modify`, token, fetchImpl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(labels),
+          });
+          return { action, id: input.id };
+        }
+        if (action === "trash") {
+          if (!validMessageId(input.id)) throw new MemberCvError(400, "A valid Gmail message ID is required.");
+          await gmailRequest(`messages/${encodeURIComponent(input.id)}/trash`, token, fetchImpl, { method: "POST" });
+          return { action, id: input.id };
+        }
+        if (action !== "send") throw new MemberCvError(400, "Choose a valid Gmail action.");
+        if (input.mode !== "reply" && input.mode !== "forward") throw new MemberCvError(400, "Choose Reply or Forward.");
+        if (typeof input.body !== "string" || input.body.length > 100_000) throw new MemberCvError(400, "The message body is too long.");
+        const to = recipientAddresses(input.to);
+        let subject = typeof input.subject === "string" ? input.subject : "";
+        let threadId: string | undefined;
+        let replyHeaders: string[] = [];
+        if (input.mode === "reply") {
+          if (!validMessageId(input.replyToMessageId)) throw new MemberCvError(400, "Select a message to reply to.");
+          const original = await gmailRequest<GmailApiMessage>(`messages/${encodeURIComponent(input.replyToMessageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References`, token, fetchImpl);
+          threadId = original.threadId;
+          subject = header(original, "Subject");
+          const messageId = header(original, "Message-ID");
+          const references = [...safeReferences(header(original, "References")), ...safeReferences(messageId)];
+          if (messageId) replyHeaders.push(`In-Reply-To: ${messageId}`);
+          if (references.length) replyHeaders.push(`References: ${[...new Set(references)].join(" ")}`);
+          if (!threadId || !messageId) throw new MemberCvError(502, "Google could not identify the conversation to reply to.");
+        } else if (subject && !/^fwd?:/i.test(subject)) {
+          subject = `Fwd: ${subject}`;
+        }
+        const encodedSubject = mimeSubject(subject);
+        const headers = [
+          `To: ${to.join(", ")}`,
+          `Subject: ${encodedSubject}`,
+          "MIME-Version: 1.0",
+          "Content-Type: text/plain; charset=UTF-8",
+          "Content-Transfer-Encoding: base64",
+          ...replyHeaders,
+        ];
+        const raw = Buffer.from(`${headers.join("\r\n")}\r\n\r\n${base64Lines(input.body)}`, "utf8").toString("base64url");
+        const sent = await gmailRequest<{ id?: string; threadId?: string }>("messages/send", token, fetchImpl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ raw, ...(threadId ? { threadId } : {}) }),
+        });
+        return { action, id: sent.id ?? null, threadId: sent.threadId ?? threadId ?? null };
+      });
+      return res.status(200).json(result);
     } catch (error) {
       const result = failure(error);
       return res.status(result.status).json({ error: result.message });
