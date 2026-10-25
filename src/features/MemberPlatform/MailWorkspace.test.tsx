@@ -36,8 +36,12 @@ describe("mail workspace", () => {
 
     expect(container.querySelector('[aria-label="Search mail"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Inbox"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Mail settings"]')).not.toBeNull();
-    expect(container.textContent).toContain("Your mirrored messages will appear here.");
+    expect(container.querySelector('[aria-label="Sent"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Archive"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="More mail folders"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Mail settings"]')).toBeNull();
+    expect(container.textContent).toContain("No messages in your inbox.");
+    expect(container.textContent).toContain("Helix NMBU");
   });
 
   it("keeps the connect action on the disconnected page", async () => {

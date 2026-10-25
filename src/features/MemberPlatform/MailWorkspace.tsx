@@ -3,13 +3,29 @@ import {
   ArchiveX,
   File,
   Inbox,
+  MoreHorizontal,
   Search,
   Send,
-  Settings2,
   Star,
   Trash2,
 } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@libs/components/ui/dropdown-menu";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@libs/components/ui/breadcrumb";
 import {
   Sidebar,
   SidebarContent,
@@ -92,14 +108,16 @@ function ConnectedMailSidebar({
   const [search, setSearch] = useState("");
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
 
+  const overflowFolders = mailFolders.filter((item) => !["inbox", "sent", "archive"].includes(item.id));
+
   return (
-    <SidebarProvider className="!min-h-0 min-h-0 flex-1">
-      <Sidebar collapsible="none" className="hidden !w-80 shrink-0 border-r md:flex">
+    <SidebarProvider className="h-full !min-h-0 min-h-0 w-80 shrink-0">
+      <Sidebar collapsible="none" className="hidden h-full !w-80 shrink-0 border-r md:flex">
         <SidebarHeader className="gap-3.5 border-b p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="text-base font-medium text-foreground">{folder.label}</div>
             <div className="flex items-center gap-1">
-              {mailFolders.map((item) => (
+              {mailFolders.filter((item) => ["inbox", "sent", "archive"].includes(item.id)).map((item) => (
                 <SidebarMenuButton
                   key={item.id}
                   type="button"
@@ -114,16 +132,31 @@ function ConnectedMailSidebar({
                   <span className="sr-only">{item.label}</span>
                 </SidebarMenuButton>
               ))}
-              <SidebarMenuButton
-                type="button"
-                size="sm"
-                tooltip={{ children: "Mail settings", hidden: false }}
-                aria-label="Mail settings"
-                className="size-8 justify-center p-0"
-              >
-                <Settings2 />
-                <span className="sr-only">Mail settings</span>
-              </SidebarMenuButton>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <SidebarMenuButton
+                    type="button"
+                    size="sm"
+                    tooltip={{ children: "More mail folders", hidden: false }}
+                    aria-label="More mail folders"
+                    className="size-8 justify-center p-0"
+                  >
+                    <MoreHorizontal />
+                    <span className="sr-only">More mail folders</span>
+                  </SidebarMenuButton>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" className="min-w-48">
+                  <DropdownMenuLabel>More folders</DropdownMenuLabel>
+                  {overflowFolders.map((item) => (
+                    <DropdownMenuItem key={item.id} onSelect={() => onFolderChange(item.id)}>
+                      <item.icon />
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem disabled>Mail settings</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           <div className="relative">
@@ -143,9 +176,7 @@ function ConnectedMailSidebar({
         <SidebarContent>
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
-              <div className="p-4 text-sm leading-6 text-muted-foreground">
-                Your mirrored messages will appear here.
-              </div>
+              <div className="p-4 text-sm leading-6 text-muted-foreground">Choose a folder to view its messages.</div>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
@@ -153,6 +184,33 @@ function ConnectedMailSidebar({
     </SidebarProvider>
   );
 }
+
+function MailBreadcrumbRail() {
+  return (
+    <nav aria-label="Mail breadcrumbs" className="hidden w-44 shrink-0 border-r bg-background px-4 pt-5 md:block">
+      <Breadcrumb>
+        <BreadcrumbList className="flex-wrap gap-1">
+          <BreadcrumbItem>
+            <BreadcrumbLink href="/">Helix NMBU</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>Mail</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+    </nav>
+  );
+}
+
+const emptyFolderMessage: Record<string, string> = {
+  inbox: "No messages in your inbox.",
+  starred: "No starred messages.",
+  sent: "No sent messages.",
+  drafts: "No drafts.",
+  archive: "No archived messages.",
+  trash: "Your trash is empty.",
+};
 
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
   const [activeFolder, setActiveFolder] = useState("inbox");
@@ -202,14 +260,24 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   }
 
   const connected = connectedOverride ?? connectionState === "connected";
+  const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
 
   return (
-    <div className="-m-4 flex min-h-[calc(100vh-4rem)] flex-1 overflow-hidden bg-background">
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       {connected ? (
-        <ConnectedMailSidebar
-          activeFolder={activeFolder}
-          onFolderChange={setActiveFolder}
-        />
+        <>
+          <MailBreadcrumbRail />
+          <ConnectedMailSidebar activeFolder={activeFolder} onFolderChange={setActiveFolder} />
+          <main className="flex min-w-0 flex-1 items-center justify-center p-6" aria-live="polite">
+            <div className="max-w-sm text-center">
+              <folder.icon className="mx-auto size-8 text-muted-foreground/60" aria-hidden="true" />
+              <h1 className="mt-4 text-lg font-medium tracking-tight">{emptyFolderMessage[folder.id]}</h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Messages from this folder will appear here after Gmail mirroring is enabled.
+              </p>
+            </div>
+          </main>
+        </>
       ) : (
         <main className="flex min-w-0 flex-1 flex-col">
           <section
