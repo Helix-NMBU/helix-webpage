@@ -63,7 +63,7 @@ function Workspace() {
   if (!context) return <main className="mx-auto max-w-lg px-6 py-20">{error ? <Alert variant="destructive"><AlertDescription>{error}<Button className="mt-3" variant="outline" onClick={() => { setError(""); setAttempt((value) => value + 1); }}>Try again</Button></AlertDescription></Alert> : <p role="status">Verifying your sponsor access…</p>}</main>;
   const selected = location.pathname.endsWith("/admin") ? "admin" : location.pathname.endsWith("/requests") ? "requests" : "directory";
   const page = selected === "directory" && !context.directory ? context.portal ? "requests" : context.role === "admin" ? "admin" : "access" : selected;
-  return <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: "Geist Variable, sans-serif" }}>
+  return <div className="min-h-screen bg-background text-foreground">
     <header className="border-b"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-5"><Link to="/sponsor" className="text-lg font-semibold tracking-tight">Helix · Sponsor portal</Link><div className="flex flex-wrap items-center gap-3 text-sm"><span className="break-all text-muted-foreground">{context.organizationName || context.email}</span><Button size="sm" variant="outline" disabled={signingOut} onClick={() => {
       setSigningOut(true);
       void (local ? localSponsorSignOut() : sponsorSignOut()).then(() => { setContext(null); setEnded(true); navigate("/sponsor/login", { replace: true }); }).catch((failure: unknown) => setError(failure instanceof Error ? failure.message : "Could not sign out. Try again.")).finally(() => setSigningOut(false));

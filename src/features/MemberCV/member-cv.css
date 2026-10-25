@@ -1,4 +1,4 @@
-/* The member portal shares the site's light portal tokens and global body font. */
+/* The member editor inherits the shared workspace theme. */
 .mcv-page.portal-root {
   min-height: 100svh;
   background: var(--background);
@@ -6,9 +6,6 @@
   font-family: inherit;
   font-size: 14px;
   line-height: 1.6;
-  /* Zinc-700. Labels and help text sit on white and on the gray section cards. */
-  --muted-foreground: #3f3f46;
-  --color-muted-foreground: #3f3f46;
 }
 .mcv-page * {
   box-sizing: border-box;
@@ -108,17 +105,17 @@
 .mcv-dialog button:not([data-slot="checkbox"]):not(.mcv-profile-edit):not(.cv-control) {
   min-height: 44px;
   height: auto;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   white-space: normal;
   line-height: 1.4;
   box-shadow: none;
 }
-/* Site Button radius is Tailwind rounded-md (0.375rem). Join Us stays rounded-sm. */
+/* Custom editor controls use the shared preset radius. */
 .mcv-page button.mcv-primary,
 .mcv-page button.bg-primary,
 .mcv-dialog button.bg-primary,
 .mcv-dialog button.mcv-primary {
-  border-radius: 0.375rem;
+  border-radius: var(--radius-md);
 }
 .mcv-page .mcv-header-button,
 .mcv-page .mcv-demo-button {
@@ -170,7 +167,7 @@
   background: var(--card);
   color: var(--card-foreground);
   border-color: var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   padding: 32px;
   gap: 0;
   box-shadow: none;
@@ -214,7 +211,7 @@
   background: var(--card);
   color: var(--card-foreground);
   border-color: var(--input);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   min-height: 44px;
   box-shadow: none;
   font-size: 14px;
@@ -335,7 +332,7 @@
   margin-top: 2px;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .mcv-checkbox [data-slot="label"] {
   font-size: 14px;
@@ -355,7 +352,7 @@
   gap: 32px;
   border: 1px solid var(--border);
   background: var(--card);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   padding: 24px 32px;
   font-size: 14px;
   color: var(--muted-foreground);
@@ -376,7 +373,7 @@
   background: var(--muted);
   color: var(--muted-foreground);
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   margin: 0 0 24px;
   overflow-wrap: anywhere;
@@ -386,7 +383,7 @@
 .mcv-demo-banner,
 .mcv-cleanup-warning {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   padding: 20px 24px;
   margin-bottom: 24px;
   overflow-wrap: anywhere;
@@ -436,7 +433,7 @@
   width: min(960px, calc(100vw - 64px));
   max-width: 960px;
   max-height: calc(100svh - 64px);
-  border-radius: 24px;
+  border-radius: var(--radius-xl);
   overflow: auto;
   padding: 32px;
   box-shadow: 0 16px 48px color-mix(in srgb, var(--foreground) 20%, transparent);
@@ -448,14 +445,14 @@
 }
 .mcv-preview-download {
   align-self: flex-start;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   min-height: 44px;
 }
 .mcv-preview-panel iframe {
   width: 100%;
   min-height: 65svh;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   margin-top: 20px;
 }
 /* Shared export fonts apply only inside the reference document preview. */
@@ -683,7 +680,7 @@
   }
 }
 .mcv-demo-label {
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
   color: var(--primary, #002ec4);
@@ -704,7 +701,7 @@
   padding: 32px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
 }
 .mcv-login-card h1 {
   font-size: 30px;
@@ -785,7 +782,7 @@
     width: calc(100vw - 24px);
     padding: 20px;
     max-height: calc(100svh - 24px);
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
   }
   .mcv-preview-panel > header {
     align-items: flex-start;
@@ -829,7 +826,7 @@
   padding: 8px 10px;
   border: 1px solid
     color-mix(in srgb, var(--primary-foreground) 45%, transparent);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--primary);
   color: var(--primary-foreground);
   cursor: pointer;
@@ -847,7 +844,7 @@
   min-height: 0;
   height: auto;
   padding: 8px 20px;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-md);
   font-size: 1rem;
   font-weight: 500;
   line-height: 1.5;
@@ -878,7 +875,7 @@
 .mcv-dialog button.mcv-language-on-dark,
 .mcv-dialog button.mcv-language-on-light {
   min-height: 0;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-md);
 }
 @media (max-width: 600px) {
   .mcv-header {
@@ -927,7 +924,7 @@
   padding: 0;
 }
 .mcv-status-badge {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-weight: 500;
   margin-bottom: 8px;
   background: var(--card);
@@ -948,11 +945,11 @@
 .mcv-dialog.portal-root,
 .mcv-language-menu.portal-root {
   min-height: 0;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 .mcv-language-menu {
   z-index: 60;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   color: var(--foreground);
   background: var(--popover);
 }
@@ -982,7 +979,7 @@
   width: min(560px, calc(100vw - 48px));
   max-width: 560px;
   max-height: calc(100svh - 48px);
-  border-radius: 24px;
+  border-radius: var(--radius-xl);
   padding: 32px;
   overflow-y: auto;
   gap: 24px;
@@ -1023,7 +1020,7 @@
     width: calc(100vw - 24px);
     max-height: calc(100svh - 24px);
     padding: 20px;
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
   }
   .mcv-preview-controls {
     gap: 8px;
@@ -1051,7 +1048,7 @@
   gap: 0;
   padding: 20px 12px 12px;
   border-color: var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 5%, transparent);
   max-height: calc(100svh - 48px);
   overflow-y: auto;
@@ -1099,7 +1096,7 @@
   min-height: 44px;
   height: auto;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   white-space: normal;
   text-decoration: none;
   color: #111827;
@@ -1135,7 +1132,7 @@
 .mcv-section h2:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .mcv-nav-chevron-open {
   transform: rotate(180deg);
@@ -1184,12 +1181,12 @@
 
 .mcv-profile-menu.portal-root {
   min-height: 0;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   max-width: calc(100vw - 32px);
 }
 .mcv-profile-menu {
   z-index: 60;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 .mcv-page .mcv-profile-select {
   min-height: 44px;
@@ -1245,7 +1242,7 @@
   letter-spacing: inherit;
   text-align: left;
   color: var(--foreground);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 .mcv-section-trigger > span {
   flex: 1;
@@ -1307,8 +1304,8 @@
   }
 }
 body:has(.mcv-profile) button[aria-label="Scroll to top"] {
-  background: #002ec4;
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 /* The CV editor uses the same shadcn controls as the member platform. */

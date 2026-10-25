@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import { Alert, AlertDescription } from "@libs/components/ui/alert";
 import { Button } from "@libs/components/ui/button";
+import { TooltipProvider } from "@libs/components/ui/tooltip";
 import CVBankLogin from "../CVBank/Login";
 import MemberCV from "../MemberCV/MemberCV";
 import {
@@ -120,75 +121,77 @@ function LegacyMemberRedirect({ to }: { to: string }) {
 export default function MemberPlatform() {
   return (
     <MemberThemeProvider>
-      <MemberNavigationProvider>
-        <div className="member-platform portal-root">
-          <Routes>
-            <Route path="/login" element={<CVBankLogin />} />
-            <Route
-              path="/"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <WorkspaceHomePreview />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <MemberCV />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
-            <Route
-              path="/settings"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <MemberSettingsPreview />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/teams/:teamId/:sectionId"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <TeamWorkspacePreview />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/member/login"
-              element={<LegacyMemberRedirect to="/login" />}
-            />
-            <Route
-              path="/member/profile"
-              element={<LegacyMemberRedirect to="/profile" />}
-            />
-            <Route
-              path="/cv-bank"
-              element={<LegacyMemberRedirect to="/login" />}
-            />
-            <Route
-              path="/cv-bank/login"
-              element={<LegacyMemberRedirect to="/login" />}
-            />
-            <Route
-              path="/cv-bank/profile"
-              element={<LegacyMemberRedirect to="/profile" />}
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </MemberNavigationProvider>
+      <TooltipProvider>
+        <MemberNavigationProvider>
+          <div className="member-platform portal-root">
+            <Routes>
+              <Route path="/login" element={<CVBankLogin />} />
+              <Route
+                path="/"
+                element={
+                  <MemberAccess>
+                    <MemberShell>
+                      <WorkspaceHomePreview />
+                    </MemberShell>
+                  </MemberAccess>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <MemberAccess>
+                    <MemberShell>
+                      <MemberCV />
+                    </MemberShell>
+                  </MemberAccess>
+                }
+              />
+              <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
+              <Route
+                path="/settings"
+                element={
+                  <MemberAccess>
+                    <MemberShell>
+                      <MemberSettingsPreview />
+                    </MemberShell>
+                  </MemberAccess>
+                }
+              />
+              <Route
+                path="/teams/:teamId/:sectionId"
+                element={
+                  <MemberAccess>
+                    <MemberShell>
+                      <TeamWorkspacePreview />
+                    </MemberShell>
+                  </MemberAccess>
+                }
+              />
+              <Route
+                path="/member/login"
+                element={<LegacyMemberRedirect to="/login" />}
+              />
+              <Route
+                path="/member/profile"
+                element={<LegacyMemberRedirect to="/profile" />}
+              />
+              <Route
+                path="/cv-bank"
+                element={<LegacyMemberRedirect to="/login" />}
+              />
+              <Route
+                path="/cv-bank/login"
+                element={<LegacyMemberRedirect to="/login" />}
+              />
+              <Route
+                path="/cv-bank/profile"
+                element={<LegacyMemberRedirect to="/profile" />}
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        </MemberNavigationProvider>
+      </TooltipProvider>
     </MemberThemeProvider>
   );
 }
