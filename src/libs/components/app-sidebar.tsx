@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Home } from "lucide-react";
+import { Bell, Home } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -11,6 +11,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@libs/components/ui/sidebar";
+import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
 import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
 
 export type MemberSidebarActions = {
@@ -26,6 +27,7 @@ export function AppSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar> & MemberSidebarActions) {
   const location = useLocation();
+  const notifications = useMemberNotifications();
   const activeTeam = previewTeams.find((team) =>
     location.pathname.startsWith(`/teams/${team.id}/`),
   );
@@ -53,6 +55,7 @@ export function AppSidebar({
               icon: Home,
               isActive: location.pathname === "/",
             },
+            { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}

@@ -91,6 +91,12 @@ The preview document uses the selected language and current sharing choices. The
 
 The CV entry's directory switch publishes the current CV with CV sharing enabled, or withdraws the published profile. Name and education requirements still apply to publication. The API returns `cvVisible` from the actual published revision and file path; draft edits do not change it. Email and phone sharing retain their separate choices. Later edits stay private until the member publishes the new version in Review & sharing.
 
+## Member notifications
+
+The sidebar links to the protected `/notifications` page below Home. Manual CV saves, reloads, publication and withdrawal send a shadcn Sonner popup at the top right. The page retains up to 50 messages in memory during the current authenticated session and marks them read when opened. The unread count appears beside Notifications in the sidebar. Messages clear on refresh or sign-out and are isolated by the verified member ID. This is client-side feedback; there is no server notification inbox yet.
+
+The CV entry uses a green active visibility switch. Its actions are Edit, icon-only Preview, and the split download control. Members without a registered CV see the shadcn Empty component with a single Setup CV action.
+
 ## Files
 
 The bucket `member-cvs` is private. The server uploads only generated PDFs (`application/pdf`, `%PDF-` header, at most 5 MB) under `{memberId}/{uuid}.pdf`. `GET /api/member-cv-file` checks the session and returns a presigned GET that lasts 120 seconds, and only for the caller's current published path. Preview (`POST /api/member-cv` with `action=preview`) returns PDF bytes and does not write storage.

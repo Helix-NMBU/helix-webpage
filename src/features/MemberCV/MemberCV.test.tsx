@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MemberCV from "./MemberCV";
+import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
+import { MemberNotificationsProvider } from "../MemberPlatform/MemberNotifications";
 import { generateBrowserCvPdf } from "./browser-pdf";
 import { DEMO_STORAGE_KEY, fictionalCv } from "./demo";
 import { emptyCv, privateSharing } from "./model";
@@ -48,9 +50,9 @@ describe("member profile", () => {
   });
   async function open(hash = "", controls?: ReactNode) {
     router = createMemoryRouter([{ path: "/login", element: <p>Log in to your account</p> }, { path: "*", element:
-      <MemberNavigationProvider>{controls}<MemberAccountProvider account={{ name: "Alex Example", email: "alex@example.invalid", role: "Admin", helixRole: "Mechanical team member" }}>
+      <MemberThemeProvider><MemberNotificationsProvider><MemberNavigationProvider>{controls}<MemberAccountProvider account={{ name: "Alex Example", email: "alex@example.invalid", role: "Admin", helixRole: "Mechanical team member" }}>
         <MemberCV />
-      </MemberAccountProvider></MemberNavigationProvider>,
+      </MemberAccountProvider></MemberNavigationProvider></MemberNotificationsProvider></MemberThemeProvider>,
     }], { initialEntries: [`/profile?demo=1${hash}`] });
     await act(async () => root.render(<RouterProvider router={router} />));
   }
@@ -73,6 +75,8 @@ describe("member profile", () => {
     expect(container.textContent).not.toMatch(/fictional|local preview|demo preview|local demo/i);
     expect(container.querySelector('[aria-label="Language"]')).toBeNull();
     expect(container.querySelector("textarea")).toBeNull();
+    const actions = [...container.querySelectorAll('[aria-labelledby="member-cv-title"] button')].map(item => item.getAttribute("aria-label"));
+    expect(actions.indexOf("Edit CV")).toBeLessThan(actions.indexOf("Preview CV"));
     await click("Edit CV");
     expect([...document.querySelectorAll('[aria-label="CV setup steps"] button')].map(item => item.textContent)).toEqual(["1. Introduction", "2. Education", "3. Experience", "4. Projects", "5. Languages", "6. Links", "7. Review & sharing"]);
     await click("2. Education");
@@ -90,11 +94,14 @@ describe("member profile", () => {
     stored.document.draft = { ...emptyCv("Alex Example", "alex@example.invalid"), phone: "+47 12345678", fieldOfStudy: "Engineering", graduationYear: "2028" };
     localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
     await open();
-    expect(container.textContent).toContain("No CV registered. Set up your CV now.");
-    await click("Set up CV");
+    expect(container.textContent).toContain("No CV yet");
+    const emptyState = container.querySelector('[data-slot="empty"]')!;
+    expect([...emptyState.querySelectorAll("button")].map(item => item.textContent)).toEqual(["Setup CV"]);
+    expect(emptyState.textContent).not.toContain("Learn More");
+    await click("Setup CV");
     await click("Close");
-    expect(container.textContent).toContain("No CV registered.");
-    await click("Set up CV");
+    expect(container.textContent).toContain("No CV yet");
+    await click("Setup CV");
     await click("7. Review & sharing");
     await click("Finish");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -123,6 +130,9 @@ describe("member profile", () => {
     expect(toggle().getAttribute("aria-checked")).toBe("false");
     await act(async () => toggle().click());
     expect(toggle().getAttribute("aria-checked")).toBe("true");
+    expect(container.querySelector(".mcv-notice")).toBeNull();
+    expect(document.querySelector('[data-sonner-toaster][data-x-position="right"][data-y-position="top"]')).not.toBeNull();
+    expect(document.querySelector('[data-sonner-toast]')?.textContent).toContain("CV visible in Talent Directory");
     const published = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!);
     expect(published.document.sharing.cv).toBe(true);
     expect(published.published.draft).toEqual(published.document.draft);

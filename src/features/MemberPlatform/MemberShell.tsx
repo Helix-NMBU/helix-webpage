@@ -34,7 +34,7 @@ function Workspace({ children }: { children: ReactNode }) {
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
-      : (page?.section.title ?? "Home");
+      : location.pathname === "/notifications" ? "Notifications" : (page?.section.title ?? "Home");
   const disabled = busy || Boolean(navigation?.editor?.busy);
 
   function go(to: string, opener?: HTMLElement) {

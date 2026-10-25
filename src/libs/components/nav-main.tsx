@@ -13,6 +13,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuBadge,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
@@ -35,6 +36,7 @@ export function NavMain({
     url: string;
     icon?: LucideIcon;
     isActive?: boolean;
+    badge?: number;
     items?: {
       title: string;
       url: string;
@@ -59,6 +61,7 @@ export function NavMain({
                 {item.icon && <item.icon />}
                 <span>{item.title}</span>
               </SidebarMenuButton>
+              {Boolean(item.badge) && <SidebarMenuBadge aria-label={`${item.badge} unread notifications`}>{item.badge}</SidebarMenuBadge>}
             </SidebarMenuItem>
           ) : (
             <Collapsible

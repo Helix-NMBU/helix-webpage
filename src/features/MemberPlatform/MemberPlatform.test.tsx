@@ -85,13 +85,25 @@ describe("internal member platform", () => {
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
     expect(container.textContent).not.toContain("Private CV editor");
     expect(container.textContent).not.toContain("What are we working on?");
     expect(container.querySelector('a[href="https://helixnmbu.no"]')).toBeNull();
+  });
+
+  it("opens Notifications from below Home and shows an honest empty state", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/");
+    const home = container.querySelector('[aria-label="Home"]')!;
+    const notifications = container.querySelector<HTMLButtonElement>('[aria-label="Notifications"]')!;
+    expect(home.compareDocumentPosition(notifications) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await act(async () => notifications.click());
+    expect(router.state.location.pathname).toBe("/notifications");
+    expect(container.textContent).toContain("You're all caught up");
+    expect(container.querySelector("h1")?.textContent).toBe("Notifications");
   });
 
   it("keeps the root private until membership verification completes", async () => {

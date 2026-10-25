@@ -20,6 +20,8 @@ import { classifyCvRequestFailure, createPrivateAutosave, cvSnapshotKey, type Cv
 import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
 import { ButtonGroup } from "@libs/components/ui/button-group";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@libs/components/ui/empty";
+import { useMemberNotifications } from "../MemberPlatform/MemberNotifications";
 import { Switch } from "@libs/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { Input } from "@libs/components/ui/input";
@@ -38,7 +40,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@libs/components/ui/collapsible";
-import { ChevronDown, Download, Eye } from "lucide-react";
+import { ChevronDown, Download, Eye, FileText } from "lucide-react";
 import { ChoiceInput, OptionalGradeInput, PeriodInputs } from "./ProfileInputs";
 import {
   employmentTypes,
@@ -326,6 +328,7 @@ function Section({
 export default function MemberCV() {
   const { locale, t } = useMemberLocale();
   const account = useMemberAccount();
+  const notifications = useMemberNotifications();
   const paths = memberPaths();
   const platformNavigation = useMemberNavigation();
   const PageContainer = platformNavigation ? "div" : "main";
@@ -665,11 +668,15 @@ export default function MemberCV() {
           setDraft(result.document.draft);
           setSharing(result.document.sharing);
         }
-        setNotice(action === "save"
+        const message = action === "save"
           ? "Private draft saved. Your published version has not changed."
           : action === "publish"
             ? "Published. Sponsors with Talent Directory access can see this version with your sharing choices."
-            : "Profile withdrawn from Talent Directory. Your private draft is kept.");
+            : "Profile withdrawn from Talent Directory. Your private draft is kept.";
+        const title = action === "save" ? "Changes saved" : action === "publish"
+          ? `${submitted.sharing.cv ? "CV" : "Profile"} visible in Talent Directory` : "CV hidden from Talent Directory";
+        if (notifications) notifications.notify(title, t(message));
+        else setNotice(message);
       }
       return true;
     } catch (failure) {
@@ -713,7 +720,8 @@ export default function MemberCV() {
       setEnvelope(result);
       setDraft(result.document.draft);
       setSharing(result.document.sharing);
-      setNotice("Saved draft reloaded.");
+      if (notifications) notifications.notify("Draft reloaded", t("Saved draft reloaded."));
+      else setNotice("Saved draft reloaded.");
     } catch (failure) {
       if (generation.current !== current) return;
       if (failure instanceof CvRequestError && (failure.status === 401 || failure.status === 403)) {
@@ -878,12 +886,13 @@ export default function MemberCV() {
             <div className="space-y-3">
               <p className="font-medium">CV {draft.fullName || account?.name || "Helix member"}</p>
               <div className="flex items-center gap-2">
-                <Switch id={`${sharingId}-directory`} className="cv-control" checked={envelope.document.cvVisible ?? envelope.document.publishedRevision !== null}
+                <Switch id={`${sharingId}-directory`} className="cv-control data-[state=checked]:bg-green-600 dark:data-[state=checked]:bg-green-500" checked={envelope.document.cvVisible ?? envelope.document.publishedRevision !== null}
                   disabled={Boolean(busy)} onCheckedChange={(visible) => void run(visible ? "publish" : "withdraw", false, undefined, { cvRegistered: true }, "nb", visible ? { cv: true } : undefined)} />
                 <Label htmlFor={`${sharingId}-directory`} className="text-xs font-normal text-muted-foreground">Visible in Talent Directory</Label>
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <Button variant="outline" size="sm" className="cv-control" aria-label="Edit CV" disabled={Boolean(busy)} onClick={openCvSetup}>Edit</Button>
               <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Preview CV" title="Preview CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", false, event.currentTarget)}><Eye aria-hidden="true" /></Button>
               <ButtonGroup aria-label="Download CV">
                 <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Download Norwegian CV" title="Download Norwegian CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", true, event.currentTarget, undefined, "nb")}><Download aria-hidden="true" /></Button>
@@ -895,12 +904,15 @@ export default function MemberCV() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </ButtonGroup>
-              <Button variant="outline" size="sm" className="cv-control" aria-label="Edit CV" disabled={Boolean(busy)} onClick={openCvSetup}>Edit</Button>
             </div>
-          </CardContent></Card> : <Card className="gap-0 py-0 shadow-none"><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
-            <p className="text-sm text-muted-foreground">No CV registered. Set up your CV now.</p>
-            <Button onClick={openCvSetup} disabled={Boolean(busy)}>Set up CV</Button>
-          </CardContent></Card>}
+          </CardContent></Card> : <Empty className="min-h-80 border border-solid bg-card">
+            <EmptyHeader>
+              <EmptyMedia variant="icon"><FileText aria-hidden="true" /></EmptyMedia>
+              <EmptyTitle>No CV yet</EmptyTitle>
+              <EmptyDescription>You haven't set up your CV yet.<br />Get started by creating your CV.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent><Button className="cv-control" onClick={openCvSetup} disabled={Boolean(busy)}>Setup CV</Button></EmptyContent>
+          </Empty>}
         </section>}
         {ended && (
           <Alert className="mcv-error" variant="destructive">

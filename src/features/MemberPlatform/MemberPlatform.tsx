@@ -19,6 +19,7 @@ import {
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
+import { MemberNotificationsProvider, MemberNotificationsPage } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
 import {
   MemberSettingsPreview,
@@ -101,7 +102,7 @@ export function MemberAccess({ children }: { children: ReactNode }) {
     );
   return (
     <MemberAccountProvider account={landing.account ?? null}>
-      {children}
+      <MemberNotificationsProvider key={landing.userId}>{children}</MemberNotificationsProvider>
     </MemberAccountProvider>
   );
 }
@@ -143,6 +144,7 @@ export default function MemberPlatform() {
                 </MemberAccess>
               }
             />
+            <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
             <Route
               path="/settings"
               element={
