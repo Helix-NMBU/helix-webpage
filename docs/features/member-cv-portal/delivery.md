@@ -18,9 +18,9 @@ Updated 25 October 2026. Coordinator worktree: `/private/tmp/helix-login-02`.
 | --- | --- | --- |
 | HELIX-8 | Account ownership on tab focus and before CV requests; blocks HELIX-10 | Fix `f68e8dc` is part of the deployed release. Automated session regressions exist. Two-real-account browser verification remains required; user asked about a second account. |
 | HELIX-9 | Google sign-in, callback, reload/focus, logout, expiry, rejected identity, unavailable-service recovery; blocks HELIX-10 | Previously verified actual Helix sign-in, reload and anonymous API rejection. Complete current-commit browser matrix and separate injected failures from real OAuth evidence. |
-| HELIX-23 | Profile/CV scope, desktop/mobile, shadcn, internal/public routing | Desktop/mobile local browser flows and actual generated PDF checked; live auth/profile read checked. Component choices in verification.md. Close after repaired PR checks pass. |
+| HELIX-23 | Profile/CV scope, desktop/mobile, shadcn, internal/public routing | Done in Linear with desktop/mobile, PDF, real-domain and CI evidence. Component choices in verification.md. |
 | HELIX-10 | Full PR review, CI, prerequisites, older #51/#57 reconciliation; depends on HELIX-8/9 | Main integrated without rewriting history. Independent review findings repaired. Current PR checks and remaining human acceptance pending. Do not close before merge. |
-| HELIX-28 | Newly discovered installed-SDK focus defect, child of HELIX-9 | Fix 1624930 uses direct endpoint invocation and ends access on SDK-thrown 401/403. Four installed-SDK regressions pass. Independent re-review and live verification pending. The connector rejected assigning the existing milestone, so this is linked through parent HELIX-9. |
+| HELIX-28 | Newly discovered installed-SDK focus defect, child of HELIX-9 | Done in Linear. Fix 1624930, four installed-SDK regressions, independent re-review and live repaired asset verified. The connector rejected assigning the existing milestone, so this is linked through parent HELIX-9. |
 
 ## Current execution
 
@@ -32,8 +32,12 @@ Updated 25 October 2026. Coordinator worktree: `/private/tmp/helix-login-02`.
 
 ## Review and final gates
 
-Full-feature review and initial repair re-review passed at 81f20d6. Independent correctness and Spec re-review passed the SDK repair at 1624930. GitHub checks, no-conflict confirmation and repository rules must still be recorded on the final remote revision. Automatic approval review rejected converting the existing PR to draft, so its existing non-draft state was preserved. Do not retry that state change through another tool. A green Vercel status alone does not establish full CI coverage.
+Full-feature review and initial repair re-review passed at 81f20d6. Independent correctness and Spec re-review passed the SDK repair at 1624930. Release e3fd49c passed GitHub's Member CV checks, Vercel and Vercel Preview Comments. GitHub reported MERGEABLE/CLEAN, non-draft, no unresolved review threads, no submitted human approval and no branch rules returned by the repository-rules endpoint. CI run: https://github.com/Helix-NMBU/helix-webpage/actions/runs/40212648213.
+
+Vercel deployment dpl_6YwJNmp6DDqADt8Q52RxFVKGhChS is READY and aliases internal.helixnmbu.no to e3fd49c. Repaired live Profile loaded asset index-DPe4Rp_4.js without new SDK errors. All personal CV content and visibility remained unchanged during checks. This record's finalization is documentation only; recheck the remote head and checks after publishing it.
+
+Automatic approval review rejected converting the existing PR to draft, so its existing non-draft state was preserved. Do not retry that state change through another tool. The GitHub connector lacked metadata-write permission; the authenticated gh CLI updated the same PR successfully. Linear's advertised field-notes tools returned Tool not found, so the verified SDK quirk is retained in the repository evidence instead.
 
 ## Next action
 
-Finish SDK re-review, publish the existing branch, wait for current checks, verify repaired live session flow and update Linear with evidence. Leave two-real-account and incomplete live auth acceptance open. Human review/merge is the final step for HELIX-10.
+Check documentation-followup CI and hand the single PR to the user for teammate review. HELIX-23 and HELIX-28 are Done. HELIX-8 and HELIX-9 remain In Progress for their explicit real-account/session acceptance gaps. HELIX-10 remains In Progress until those checks pass and the accepted PR merges. No merge or auto-merge was performed. Historical GitHub #51 and PR #57 remain open until final acceptance, as HELIX-10 requires.

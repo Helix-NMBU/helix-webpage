@@ -15,6 +15,8 @@ Current code is `1624930d3b1fb1120dde8b61bdf11d97c5e2e256`, integrated with main
 
 The live browser observations below were on release `240609314e37f6562c4bc0d6911a5b14d1dc58f4` at https://internal.helixnmbu.no. The repaired code was exercised at http://127.0.0.1:5190 in the dedicated loopback member-local mode. These are separate evidence sources.
 
+After publication, Vercel confirmed that internal.helixnmbu.no serves e3fd49c through READY deployment dpl_6YwJNmp6DDqADt8Q52RxFVKGhChS. The repaired Profile loaded normally with the new JavaScript asset and no new SDK errors. Logout reached `/login`; a fresh Helix Google selection returned to the protected root. GitHub's full Member CV checks passed in [run 40212648213](https://github.com/Helix-NMBU/helix-webpage/actions/runs/40212648213), and Vercel checks passed. GitHub reported the PR conflict-free and non-draft, with no unresolved review threads. No human approval or merge was performed. A later documentation-only commit finalizes this evidence; code review remains bound to 1624930.
+
 | Scenario | Observed result | Boundary |
 | --- | --- | --- |
 | Live member root and Profile | Real Helix account name and access role; stored profile and CV load | Real Google/Neon session and CV read |
