@@ -53,7 +53,7 @@ For local design testing with the isolated Alex Example account, use `npm run de
 
 Authenticated pages use the official shadcn `sidebar-07` block, installed with `npx shadcn@latest add sidebar-07`. Its collapsible sidebar, workspace header, account footer, breadcrumb header and mobile sheet use the block's standard components and layout. Helix labels and routes replace the sample data. Appearance in the account menu offers Light, Dark and System, saved locally under `helix-member-theme`. The default follows the system preference. Theme tokens apply only inside the member app, including portaled menus and dialogs; CV preview documents keep their paper styling. Editor navigation and sign-out use the existing autosave and unsaved-change confirmation.
 
-Login is Google only. The Google redirect URI registered on the OAuth client is:
+Login is Google only. The sign-in request asks Google to show its account chooser (`prompt=select_account`), so a previously active personal account does not silently take over the Helix sign-in. The Google redirect URI registered on the OAuth client is:
 
 `{NEON_AUTH_BASE_URL}/callback/google`
 

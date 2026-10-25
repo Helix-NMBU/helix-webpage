@@ -42,6 +42,7 @@ describe("Google sign-in callback", () => {
       provider: "google",
       callbackURL: "https://helix.example/member/profile",
       errorCallbackURL: "https://helix.example/member/profile",
+      additionalParams: { prompt: "select_account" },
     });
     expect(request.callbackURL).toBe(new URL("/member/profile", origin).href);
     expect(memberSignInCallbackUrl(null, origin)).toBe("https://helix.example/member/profile");

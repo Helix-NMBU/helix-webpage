@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailMessageHandler, createGmailMessagesHandler } from "../api/_lib/gmail-messages-handler.js";
+import { createGmailMessageActionHandler, createGmailMessageHandler, createGmailMessagesHandler } from "../api/_lib/gmail-messages-handler.js";
 import type { GmailConnectionStore } from "../api/_lib/gmail-connection.js";
 
 function response() {
@@ -93,6 +93,23 @@ describe("Gmail message endpoints", () => {
     expect(listUrl.searchParams.get("q")).toBe("from:sender@example.com");
   });
 
+  it("asks Gmail for unread inbox messages when the unread filter is enabled", async () => {
+    const { res, result } = response();
+    const { fetchImpl, calls } = gmailFetch();
+    const handler = createGmailMessagesHandler(() => connectionStore(), authenticate, env, fetchImpl);
+
+    await handler({
+      method: "GET",
+      headers: { authorization: "Bearer member-token" },
+      query: { folder: "inbox", unreadOnly: "true" },
+    } as unknown as VercelRequest, res);
+
+    expect(result()).toMatchObject({ status: 200 });
+    const listUrl = new URL(calls.find((url) => url.includes("/messages?"))!);
+    expect(listUrl.searchParams.getAll("labelIds")).toEqual(["INBOX", "UNREAD"]);
+    expect(listUrl.searchParams.get("q")).toBe("is:unread");
+  });
+
   it("returns the selected message body as text", async () => {
     const { res, result } = response();
     const { fetchImpl } = gmailFetch();
@@ -105,5 +122,29 @@ describe("Gmail message endpoints", () => {
     } as unknown as VercelRequest, res);
 
     expect(result()).toMatchObject({ status: 200, body: { id: "message-1", body: "The email body" } });
+  });
+
+  it("includes Cc recipients in sent Gmail messages", async () => {
+    const { res, result } = response();
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url === "https://oauth2.googleapis.com/token") return Response.json({ access_token: "access-token" });
+      if (url.endsWith("/messages/send")) return Response.json({ id: "sent-message", threadId: "sent-thread" });
+      return Response.json({ error: "Unexpected URL" }, { status: 404 });
+    };
+    const handler = createGmailMessageActionHandler(() => connectionStore(), authenticate, env, fetchImpl);
+
+    await handler({
+      method: "POST",
+      headers: { authorization: "Bearer member-token" },
+      body: { action: "send", mode: "new", to: "to@example.com", cc: "copy@example.com", subject: "Hello", body: "Message body" },
+    } as unknown as VercelRequest, res);
+
+    expect(result()).toMatchObject({ status: 200, body: { id: "sent-message" } });
+    const sendCall = calls.find((call) => call.url.endsWith("/messages/send"));
+    const raw = JSON.parse(String(sendCall?.init?.body)).raw as string;
+    expect(Buffer.from(raw, "base64url").toString("utf8")).toContain("Cc: copy@example.com");
   });
 });
