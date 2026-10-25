@@ -52,4 +52,19 @@ describe("mail workspace", () => {
       (button) => button.textContent?.includes("Connect Gmail account"),
     )).toBe(true);
   });
+
+  it("opens a full compose form with sender, recipient, cc, subject, and message fields", async () => {
+    await act(async () => root.render(<MailWorkspace connected />));
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="New message"]')?.click();
+    });
+
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('input[aria-label="From"]')).not.toBeNull();
+    expect(document.body.querySelector('input[aria-label="To"]')).not.toBeNull();
+    expect(document.body.querySelector('input[aria-label="Cc"]')).not.toBeNull();
+    expect(document.body.querySelector('input[aria-label="Subject"]')).not.toBeNull();
+    expect(document.body.querySelector('textarea[aria-label="Message"]')).not.toBeNull();
+  });
 });

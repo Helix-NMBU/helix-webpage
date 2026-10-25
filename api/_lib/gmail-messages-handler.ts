@@ -33,6 +33,7 @@ type GmailMessageAction = {
   id?: unknown;
   mode?: unknown;
   to?: unknown;
+  cc?: unknown;
   subject?: unknown;
   body?: unknown;
   replyToMessageId?: unknown;
@@ -170,6 +171,11 @@ function recipientAddresses(value: unknown): string[] {
   return addresses;
 }
 
+function optionalRecipientAddresses(value: unknown): string[] {
+  if (value === undefined || value === null || (typeof value === "string" && !value.trim())) return [];
+  return recipientAddresses(value);
+}
+
 function safeReferences(value: string): string[] {
   return value.match(/<[^<>\s\r\n]+>/g) ?? [];
 }
@@ -229,7 +235,7 @@ export function createGmailMessagesHandler(
         const params = new URLSearchParams({ maxResults: "25" });
         for (const id of filter.labelIds ?? []) params.append("labelIds", id);
         if (unreadOnly) params.append("labelIds", "UNREAD");
-        const query = [filter.q, search].filter(Boolean).join(" ");
+        const query = [filter.q, unreadOnly ? "is:unread" : "", search].filter(Boolean).join(" ");
         if (query) params.set("q", query);
         if (pageToken) params.set("pageToken", pageToken);
         if (filter.includeSpamTrash) params.set("includeSpamTrash", "true");
@@ -312,6 +318,7 @@ export function createGmailMessageActionHandler(
         if (input.mode !== "new" && input.mode !== "reply" && input.mode !== "forward") throw new MemberCvError(400, "Choose New message, Reply, or Forward.");
         if (typeof input.body !== "string" || input.body.length > 100_000) throw new MemberCvError(400, "The message body is too long.");
         const to = recipientAddresses(input.to);
+        const cc = optionalRecipientAddresses(input.cc);
         let subject = typeof input.subject === "string" ? input.subject : "";
         if (subject.length > 998) throw new MemberCvError(400, "The subject is too long.");
         let threadId: string | undefined;
@@ -332,6 +339,7 @@ export function createGmailMessageActionHandler(
         const encodedSubject = mimeSubject(subject);
         const headers = [
           `To: ${to.join(", ")}`,
+          ...(cc.length ? [`Cc: ${cc.join(", ")}`] : []),
           `Subject: ${encodedSubject}`,
           "MIME-Version: 1.0",
           "Content-Type: text/plain; charset=UTF-8",

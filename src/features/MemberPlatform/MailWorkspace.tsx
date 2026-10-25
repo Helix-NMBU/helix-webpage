@@ -4,8 +4,8 @@ import {
   ArchiveX,
   Forward,
   File,
-  Filter,
   Inbox,
+  ListFilter,
   LoaderCircle,
   MoreHorizontal,
   PenSquare,
@@ -17,6 +17,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
+import { Input } from "@libs/components/ui/input";
+import { Label } from "@libs/components/ui/label";
+import { Textarea } from "@libs/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +48,7 @@ import {
 } from "@libs/components/ui/sidebar";
 import { memberSessionToken } from "../MemberCV/session";
 import { useMemberAccount } from "./MemberAccountContext";
+import { useNotify } from "./MemberNotifications";
 import {
   getCachedGmailConnection,
   getCachedGmailList,
@@ -360,7 +364,7 @@ function ConnectedMailSidebar({
                   className="size-8 justify-center p-0"
                   onClick={() => onUnreadOnlyChange(!unreadOnly)}
                 >
-                  <Filter />
+                  <ListFilter />
                   <span className="sr-only">{unreadOnly ? "Show all inbox messages" : "Show unread only"}</span>
                 </SidebarMenuButton>
               )}
@@ -489,6 +493,10 @@ function displaySender(from: string): string {
   return bareAddress ? bareAddress[1].trim() || bareAddress[2] : from;
 }
 
+function inboxMessages(messages: GmailMessageSummary[], activeFolder: string, unreadOnly: boolean): GmailMessageSummary[] {
+  return activeFolder === "inbox" && unreadOnly ? messages.filter((message) => message.unread) : messages;
+}
+
 const emptyFolderMessage: Record<string, string> = {
   inbox: "No messages in your inbox.",
   starred: "No starred messages.",
@@ -501,8 +509,11 @@ const emptyFolderMessage: Record<string, string> = {
 
 function MessageComposer({
   mode,
+  from,
   to,
   onToChange,
+  cc,
+  onCcChange,
   subject,
   onSubjectChange,
   body,
@@ -513,8 +524,11 @@ function MessageComposer({
   onSend,
 }: {
   mode: ComposeMode;
+  from: string;
   to: string;
   onToChange: (value: string) => void;
+  cc: string;
+  onCcChange: (value: string) => void;
   subject: string;
   onSubjectChange: (value: string) => void;
   body: string;
@@ -526,35 +540,48 @@ function MessageComposer({
 }) {
   const label = mode === "new" ? "New message" : mode === "reply" ? "Reply" : "Forward";
   return (
-    <div className="flex flex-col gap-4">
-      <DialogHeader>
+    <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
+      <DialogHeader className="border-b px-6 py-5 pr-14">
         <DialogTitle>{label}</DialogTitle>
         <DialogDescription>{mode === "reply" ? "Write your reply." : mode === "forward" ? "Forward this message to someone." : "Compose and send an email from your Gmail account."}</DialogDescription>
       </DialogHeader>
-      <label className="grid gap-1.5 text-sm font-medium">To
-        <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus />
-      </label>
-      {mode === "new" && (
-        <label className="grid gap-1.5 text-sm font-medium">Subject
-          <input className="h-10 rounded-md border bg-background px-3 font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring" value={subject} onChange={(event) => onSubjectChange(event.target.value)} />
-        </label>
-      )}
-      <label className="grid gap-1.5 text-sm font-medium">Message
-        <textarea className="min-h-56 resize-y rounded-md border bg-background p-3 font-normal leading-6 outline-none focus-visible:ring-2 focus-visible:ring-ring" value={body} onChange={(event) => onBodyChange(event.target.value)} />
-      </label>
-      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel} disabled={sending}>Cancel</Button>
-        <Button onClick={onSend} disabled={sending || !to.trim() || (mode === "new" && !subject.trim())}>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+        <div className="grid gap-2">
+          <Label htmlFor="compose-from">From</Label>
+          <Input id="compose-from" value={from} readOnly disabled aria-label="From" />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="compose-to">To</Label>
+          <Input id="compose-to" type="text" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus aria-label="To" />
+          <p className="text-xs text-muted-foreground">Separate multiple recipients with commas.</p>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="compose-cc">Cc</Label>
+          <Input id="compose-cc" type="text" value={cc} onChange={(event) => onCcChange(event.target.value)} placeholder="Optional recipients" aria-label="Cc" />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="compose-subject">Subject</Label>
+          <Input id="compose-subject" value={subject} onChange={(event) => onSubjectChange(event.target.value)} aria-label="Subject" />
+        </div>
+        <div className="grid min-h-0 gap-2">
+          <Label htmlFor="compose-body">Message</Label>
+          <Textarea id="compose-body" className="min-h-[320px] resize-y leading-6" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
+        </div>
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      </div>
+      <DialogFooter className="border-t px-6 py-4">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>Cancel</Button>
+        <Button type="submit" disabled={sending || !to.trim() || !subject.trim()}>
           {sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}
         </Button>
       </DialogFooter>
-    </div>
+    </form>
   );
 }
 
 export function MailWorkspace({ connected: connectedOverride }: { connected?: boolean }) {
   const accountEmail = useMemberAccount()?.email ?? "";
+  const notify = useNotify();
   const [activeFolder, setActiveFolder] = useState("inbox");
   const [search, setSearch] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -577,6 +604,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
   const [composeTo, setComposeTo] = useState("");
+  const [composeCc, setComposeCc] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeError, setComposeError] = useState<string | null>(null);
@@ -643,11 +671,12 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     const requestId = ++listRequestId.current;
     const queryKey = mailListCacheKey(activeFolder, search, unreadOnly);
     const cachedList = getCachedGmailList(accountEmail, queryKey);
-    setMessages(cachedList?.messages ?? []);
+    const cachedMessages = inboxMessages(cachedList?.messages ?? [], activeFolder, unreadOnly);
+    setMessages(cachedMessages);
     setNextPageToken(cachedList?.nextPageToken ?? null);
-    setSelectedMessageId((current) => cachedList?.messages.some((message) => message.id === current)
+    setSelectedMessageId((current) => cachedMessages.some((message) => message.id === current)
       ? current
-      : cachedList?.messages[0]?.id ?? null);
+      : cachedMessages[0]?.id ?? null);
     setListError(null);
     setListLoading(true);
     const timer = window.setTimeout(() => {
@@ -664,7 +693,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
           if (requestId !== listRequestId.current) return;
           if (!response.ok) throw new Error(body?.error || "Could not load Gmail messages.");
-          const loadedMessages = Array.isArray(body?.messages) ? body.messages : [];
+          const loadedMessages = inboxMessages(Array.isArray(body?.messages) ? body.messages : [], activeFolder, unreadOnly);
           setCachedGmailList(accountEmail, queryKey, { messages: loadedMessages, nextPageToken: body?.nextPageToken ?? null });
           setMessages(loadedMessages);
           setNextPageToken(body?.nextPageToken ?? null);
@@ -767,7 +796,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
       if (requestId !== listRequestId.current) return;
       if (!response.ok) throw new Error(body?.error || "Could not load more messages.");
-      const loadedMessages = Array.isArray(body?.messages) ? body.messages : [];
+      const loadedMessages = inboxMessages(Array.isArray(body?.messages) ? body.messages : [], activeFolder, unreadOnly);
       const allMessages = [...messages, ...loadedMessages];
       const queryKey = mailListCacheKey(activeFolder, search, unreadOnly);
       setCachedGmailList(accountEmail, queryKey, { messages: allMessages, nextPageToken: body?.nextPageToken ?? null });
@@ -784,6 +813,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     setComposeMode(mode);
     setComposeError(null);
     setComposeSubject(mode === "new" ? "" : selectedMessage?.subject ?? "");
+    setComposeCc("");
     setComposeBody(!selectedMessage ? "" : mode === "forward"
       ? `\n\n---------- Forwarded message ----------\nFrom: ${selectedMessage.from}\nDate: ${formatMessageDetailDate(selectedMessage.date)}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
       : mode === "reply" ? `\n\nOn ${formatMessageDetailDate(selectedMessage.date)}, ${selectedMessage.from} wrote:\n${selectedMessage.body.split("\n").map((line) => `> ${line}`).join("\n")}` : "");
@@ -804,6 +834,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "send", mode: composeMode, to: composeTo, subject: composeSubject,
+          cc: composeCc,
           body: composeBody,
           ...(composeMode === "reply" && selectedMessage ? { replyToMessageId: selectedMessage.id } : {}),
         }),
@@ -812,10 +843,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       if (!response.ok) throw new Error(result?.error || "Could not send this message.");
       setComposeMode(null);
       setComposeTo("");
+      setComposeCc("");
       setComposeSubject("");
       setComposeBody("");
+      notify("Message sent", `Your ${composeMode === "reply" ? "reply" : composeMode === "forward" ? "forwarded message" : "message"} was sent.`, { href: null });
     } catch (error) {
-      setComposeError(error instanceof Error ? error.message : "Could not send this message.");
+      const message = error instanceof Error ? error.message : "Could not send this message.";
+      setComposeError(message);
+      notify("Could not send message", message, { variant: "error", href: null });
     } finally {
       setSending(false);
     }
@@ -932,11 +967,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           </main>
           <Dialog open={composeMode !== null} onOpenChange={(open) => { if (!open && !sending) setComposeMode(null); }}>
             {composeMode && (
-              <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto sm:max-w-2xl">
+              <DialogContent className="h-[min(760px,calc(100vh-2rem))] max-h-[calc(100vh-2rem)] max-w-3xl overflow-hidden p-0 sm:max-w-3xl">
                 <MessageComposer
                   mode={composeMode}
+                  from={accountEmail}
                   to={composeTo}
                   onToChange={setComposeTo}
+                  cc={composeCc}
+                  onCcChange={setComposeCc}
                   subject={composeSubject}
                   onSubjectChange={setComposeSubject}
                   body={composeBody}
