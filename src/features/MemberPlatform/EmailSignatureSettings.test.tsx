@@ -29,7 +29,17 @@ describe("email signature settings", () => {
     root = createRoot(container);
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
-  async function open() { await act(async () => root.render(<MemberAccountProvider account={member}><EmailSignatureSettings /></MemberAccountProvider>)); }
+  async function open() {
+    await act(async () => root.render(<MemberAccountProvider account={member}><EmailSignatureSettings /></MemberAccountProvider>));
+    if (mocks.admin) {
+      const textSettings = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.startsWith("Signature text"))!;
+      expect(textSettings.getAttribute("aria-expanded")).toBe("false");
+      await act(async () => textSettings.click());
+    }
+  }
+  async function toggleLine() {
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Signature line 1 settings"]')!.click());
+  }
   async function fill(label: string, value: string) {
     const input = container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
     await act(async () => {
@@ -39,10 +49,15 @@ describe("email signature settings", () => {
   }
   it("lets administrators save a dynamic template and previews current member values", async () => {
     await open();
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Signature line 1"]')).toBeNull();
+    await toggleLine();
     await fill("Signature line 1", "Best regards, {member.name}");
     expect(container.querySelector<HTMLIFrameElement>("iframe")!.srcdoc).toContain("Best regards, Åse Example");
     expect(container.querySelector<HTMLIFrameElement>("iframe")!.srcdoc).toContain("Mechanical lead");
     expect(container.querySelector<HTMLIFrameElement>("iframe")!.srcdoc).toContain("Tlf: +47 900 88 573");
+    await toggleLine();
+    await toggleLine();
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Signature line 1"]')!.value).toBe("Best regards, {member.name}");
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(mocks.request.mock.calls[1][1]).toMatchObject({ revision: 1, settings: { lines: [expect.objectContaining({ text: "Best regards, {member.name}" }), ...defaultSignatureSettings.lines.slice(1)] } });
     expect(mocks.notify).toHaveBeenCalledWith("Email signature saved", expect.any(String), expect.any(Object));
@@ -58,6 +73,7 @@ describe("email signature settings", () => {
 
   it("lets administrators restore the shared Helix design with organization social links", async () => {
     await open();
+    await toggleLine();
     await fill("Signature line 1", "Different text");
     const reset = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Use Helix design")!;
     await act(async () => reset.click());
@@ -71,6 +87,7 @@ describe("email signature settings", () => {
   });
   it("rejects invalid placeholders before saving and keeps the draft available", async () => {
     await open();
+    await toggleLine();
     await fill("Signature line 1", "{member.password}");
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(mocks.request).toHaveBeenCalledTimes(1);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
@@ -74,19 +74,35 @@ function emailDocument(html: string, plainText: string): string {
   return `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}<style>${scrollbarStyles}</style></head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`;
 }
 
-export function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }) {
+export function EmailHtmlFrame({ html, plainText, fitContent = false }: { html: string; plainText: string; fitContent?: boolean }) {
   const srcDoc = useMemo(() => emailDocument(html, plainText), [html, plainText]);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const scrollIdleTimeout = useRef<number | null>(null);
+  const [contentHeight, setContentHeight] = useState(160);
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     let scrollBody: HTMLElement | null = null;
+    let contentObserver: ResizeObserver | null = null;
+    const measureContent = () => {
+      if (!fitContent || !scrollBody) return;
+      const top = scrollBody.getBoundingClientRect().top;
+      const bottom = Math.max(0, ...[...scrollBody.children].map((child) => child.getBoundingClientRect().bottom - top));
+      const padding = Number.parseFloat(frame.contentWindow?.getComputedStyle(scrollBody).paddingBottom ?? "0") || 0;
+      setContentHeight(Math.min(320, Math.max(96, Math.ceil(bottom + padding))));
+    };
     const attachScrollListener = () => {
+      contentObserver?.disconnect();
       scrollBody?.removeEventListener("scroll", handleScroll);
       scrollBody = frame.contentDocument?.body ?? null;
       scrollBody?.addEventListener("scroll", handleScroll, { passive: true });
+      measureContent();
+      if (fitContent && scrollBody && typeof ResizeObserver !== "undefined") {
+        contentObserver = new ResizeObserver(measureContent);
+        contentObserver.observe(scrollBody);
+        for (const child of scrollBody.children) contentObserver.observe(child);
+      }
     };
     const handleScroll = () => {
       if (!scrollBody) return;
@@ -101,16 +117,17 @@ export function EmailHtmlFrame({ html, plainText }: { html: string; plainText: s
     attachScrollListener();
     return () => {
       frame.removeEventListener("load", attachScrollListener);
+      contentObserver?.disconnect();
       scrollBody?.removeEventListener("scroll", handleScroll);
       if (scrollIdleTimeout.current !== null) {
         window.clearTimeout(scrollIdleTimeout.current);
         scrollIdleTimeout.current = null;
       }
     };
-  }, [srcDoc]);
+  }, [srcDoc, fitContent]);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" style={fitContent ? { height: contentHeight, flex: "none" } : undefined}>
       <iframe
         title="Email content"
         sandbox="allow-same-origin"
