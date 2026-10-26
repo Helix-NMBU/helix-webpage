@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { supabase } from "../../libs/lib/utils";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { cvBase64 } from "../Recruitment/website-api";
 import { currentSeason } from "../../libs/lib/season";
 
 gsap.registerPlugin(useGSAP);
@@ -54,8 +55,6 @@ type StepKey = (typeof STEPS)[number]["key"];
 type SubmitStatus =
   | { state: "idle" }
   | { state: "submitting" }
-  | { state: "success" }
-  | { state: "duplicate" }
   | { state: "error"; message: string };
 
 const inputStyle: React.CSSProperties = {
@@ -116,7 +115,10 @@ const stepVariants = {
 };
 
 export default function ApplicationFormPage() {
+  const notify = useNotify();
   const containerRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const submitting = useRef(false);
   const [searchParams] = useSearchParams();
   const [positions, setPositions] = useState<Position[]>([]);
 
@@ -142,8 +144,11 @@ export default function ApplicationFormPage() {
   const [status, setStatus] = useState<SubmitStatus>({ state: "idle" });
 
   useEffect(() => {
-    fetch("/positions.json")
-      .then((r) => r.json())
+    fetch("/api/website?action=positions")
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Could not load available positions. Please try again.");
+        return (await r.json()).positions;
+      })
       .then((data: Position[]) => {
         setPositions(data.map(({ id, title, department }) => ({ id, title, department })));
         // A tampered/stale ?position= that matches nothing sends the user back
@@ -153,7 +158,7 @@ export default function ApplicationFormPage() {
           setValues((prev) => ({ ...prev, positionId: "" }));
           setStep(0);
         }
-      });
+      }).catch((error: unknown) => notify("Could not load positions", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null, action: { label: "Reload", onClick: () => window.location.reload() } }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -248,18 +253,13 @@ export default function ApplicationFormPage() {
 
   const goBack = () => {
     setErrors({});
-    if (status.state === "duplicate" || status.state === "error") setStatus({ state: "idle" });
+    if (status.state === "error") setStatus({ state: "idle" });
     setDirection(-1);
     setStep((s) => Math.max(s - 1, 0));
   };
 
   const submitApplication = async () => {
-    if (values.website) {
-      // Honeypot tripped — pretend everything went fine.
-      setStatus({ state: "success" });
-      return;
-    }
-
+    if (submitting.current) return;
     // Safety net: re-validate everything before sending.
     const allErrors = STEPS.reduce<Record<string, string>>(
       (acc, s) => ({ ...acc, ...validateStep(s.key) }),
@@ -268,61 +268,31 @@ export default function ApplicationFormPage() {
     setErrors(allErrors);
     if (Object.keys(allErrors).length > 0) return;
 
-    if (!supabase) {
-      setStatus({ state: "error", message: "The application service isn't configured. Please try again later." });
-      return;
-    }
-
+    submitting.current = true;
     setStatus({ state: "submitting" });
-
     try {
-      const season = currentSeason();
-      const applicationId = crypto.randomUUID();
-
-      const cvPath = `${season}/${applicationId}/cv.pdf`;
-      const { error: cvError } = await supabase.storage
-        .from("applications")
-        .upload(cvPath, cvFile!, { contentType: "application/pdf", upsert: false });
-      if (cvError) throw cvError;
-
-      const { error: insertError } = await supabase.from("applications").insert({
-        id: applicationId,
-        season,
-        full_name: values.fullName.trim(),
-        email: values.email.trim().toLowerCase(),
-        phone: values.phone.trim(),
-        study_program: values.studyProgram,
-        study_program_other: values.studyProgram === OTHER_PROGRAM ? values.studyProgramOther.trim() : null,
-        year_of_study: Number(values.yearOfStudy),
-        motivation: values.motivation.trim(),
-        position_id: values.positionId,
-        position_title: selectedPosition?.title ?? values.positionId,
-        interested_departments: interested.filter((d) => d !== selectedPosition?.department),
-        cv_path: cvPath,
-        consent: true,
-      });
-
-      if (insertError) {
-        if (insertError.code === "23505") {
-          setStatus({ state: "duplicate" });
-          return;
-        }
-        throw insertError;
-      }
-
-      // Confirmation email is best-effort — the application is already in.
-      void fetch("/api/apply-confirmation", {
+      const response = await fetch("/api/website", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ application_id: applicationId, email: values.email.trim().toLowerCase() }),
-      }).catch((error) => console.warn("Confirmation email request failed", error));
-
-      setStatus({ state: "success" });
-      window.scrollTo({ top: 0, behavior: "smooth" });
+        body: JSON.stringify({
+          action: "submit",
+          full_name: values.fullName.trim(), email: values.email.trim().toLowerCase(),
+          phone: values.phone.trim(), study_program: values.studyProgram,
+          study_program_other: values.studyProgramOther.trim(), year_of_study: Number(values.yearOfStudy),
+          motivation: values.motivation.trim(), position_id: values.positionId,
+          interested_departments: interested.filter(d => d !== selectedPosition?.department),
+          consent, website: values.website, cv_base64: await cvBase64(cvFile!),
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not submit your application. Please try again.");
+      notify("Application received", "Our recruitment team will get in touch.", { variant: "success", href: null });
+      navigate("/apply", { replace: true });
     } catch (error) {
-      console.error("Failed to submit application", error);
-      setStatus({ state: "error", message: "Something went wrong while sending your application. Please try again in a moment." });
-    }
+      const message = error instanceof Error ? error.message : "Could not submit your application. Please try again.";
+      setStatus({ state: "error", message });
+      notify("Could not submit application", message, { variant: "error", href: null, action: { label: "Contact Helix", onClick: () => { window.location.href = "mailto:post@helixnmbu.no"; } } });
+    } finally { submitting.current = false; setStatus({ state: "idle" }); }
   };
 
   const isLastStep = step === STEPS.length - 1;
@@ -349,66 +319,13 @@ export default function ApplicationFormPage() {
             className="font-medium apply-title"
             style={{ fontSize: "clamp(22px, 2.5vw, 34px)", lineHeight: 1.1, letterSpacing: "-0.02em", color: "#03094A" }}
           >
-            {status.state === "success" ? "Application sent" : `Application for ${currentSeason()}, Helix NMBU`}
+            {`Application for ${currentSeason()}, Helix NMBU`}
           </h1>
         </div>
       </div>
 
       <div className="px-6 pb-24 mx-auto" style={{ maxWidth: "680px" }}>
         <AnimatePresence mode="wait" initial={false}>
-          {status.state === "success" ? (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "50%",
-                  border: "1.5px solid #002EC4",
-                  color: "#002EC4",
-                  marginBottom: "24px",
-                }}
-              >
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                  <path d="M4.5 11.5L9 16L17.5 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p style={{ fontSize: "17px", color: "rgba(12,12,12,0.75)", lineHeight: 1.7, marginBottom: "12px" }}>
-                Thank you for applying{selectedPosition ? ` for ${selectedPosition.title}` : ""}. We've received your
-                application and will get back to you once the recruitment round closes.
-              </p>
-              <p style={{ fontSize: "14px", color: "rgba(3,9,74,0.45)", lineHeight: 1.7, marginBottom: "32px" }}>
-                You can submit one application per season. If anything changes, reach out to post@helixnmbu.no.
-              </p>
-              <Link
-                to="/apply"
-                style={{
-                  display: "inline-block",
-                  backgroundColor: "#03094A",
-                  color: "#FDFDFD",
-                  padding: "14px 28px",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  textDecoration: "none",
-                  borderRadius: "6px",
-                  transition: "background-color 0.18s ease",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
-              >
-                Back to open positions
-              </Link>
-            </motion.div>
-          ) : (
             <motion.form
               key="form"
               className="form-shell"
@@ -879,21 +796,7 @@ export default function ApplicationFormPage() {
                 </button>
               </div>
 
-              {status.state === "duplicate" && (
-                <p style={{ ...errorTextStyle, marginTop: "16px" }}>
-                  It looks like you've already submitted an application this season. If you'd like to change
-                  something, please <a href="mailto:post@helixnmbu.no" style={{ color: "#002EC4" }}>get in touch</a>.
-                </p>
-              )}
-              {status.state === "error" && (
-                <p style={{ ...errorTextStyle, marginTop: "16px" }}>
-                  {status.message} Your application has not gone through — if this keeps happening, please email
-                  your CV and a few lines about yourself to{" "}
-                  <a href="mailto:post@helixnmbu.no" style={{ color: "#002EC4" }}>post@helixnmbu.no</a> instead.
-                </p>
-              )}
             </motion.form>
-          )}
         </AnimatePresence>
       </div>
     </div>

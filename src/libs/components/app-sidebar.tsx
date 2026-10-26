@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, Home, Mail } from "lucide-react";
+import { Bell, Home, Mail, UsersRound } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -13,6 +13,7 @@ import {
 } from "@libs/components/ui/sidebar";
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
 import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
+import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -28,19 +29,28 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar> & MemberSidebarActions) {
   const location = useLocation();
   const notifications = useMemberNotifications();
+  const recruitment = useRecruitmentAccess();
   const activeTeam = previewTeams.find((team) =>
     location.pathname.startsWith(`/teams/${team.id}/`),
   );
-  const items = previewTeams.map((team) => ({
-    title: team.title,
-    url: `/teams/${team.id}`,
-    icon: team.icon,
-    isActive: activeTeam?.id === team.id,
-    items: team.sections.map((section) => ({
-      title: section.title,
-      url: `/teams/${team.id}/${section.id}`,
+  const teamItems = [
+    ...previewTeams.map((team) => ({
+      title: team.title,
+      url: `/teams/${team.id}`,
+      icon: team.icon,
+      isActive: activeTeam?.id === team.id,
+      items: team.sections.map((section) => ({
+        title: section.title,
+        url: `/teams/${team.id}/${section.id}`,
+      })),
     })),
-  }));
+    ...(recruitment.access === "allowed" ? [{
+      title: "Recruiting",
+      url: "/recruiting",
+      icon: UsersRound,
+      isActive: location.pathname === "/recruiting",
+    }] : []),
+  ];
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -65,7 +75,7 @@ export function AppSidebar({
         <NavMain
           key={activeTeam?.id ?? "teams"}
           title="Teams"
-          items={items}
+          items={teamItems}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
           disabled={disabled}
