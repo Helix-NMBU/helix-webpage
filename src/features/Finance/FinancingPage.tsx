@@ -16,6 +16,7 @@ import {
   FUNDING_CONFIDENCE,
   FUNDING_STATUSES,
   FUNDING_TYPES,
+  concurrentFundingRequestMessage,
   deleteWithOtherChangesMessage,
   fundingStatusLabel,
   fundingTypeLabel,
@@ -133,6 +134,13 @@ export function FinancingPage() {
     queueMicrotask(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
   }
 
+  async function showSavedFinancing(error: unknown): Promise<boolean> {
+    if (!(error instanceof FinanceRequestError) || error.status !== 409 || error.message !== concurrentFundingRequestMessage) return false;
+    setEditor(null);
+    await session.loadPage("financing");
+    return true;
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editor || saving) return;
@@ -174,6 +182,7 @@ export function FinancingPage() {
       });
       await session.loadPage("financing");
     } catch (error) {
+      if (await showSavedFinancing(error)) return;
       const fieldErrors = error instanceof FinanceRequestError ? error.errors ?? [] : [];
       if (fieldErrors.length) focusErrors(fieldErrors);
       notify("Could not save financing", error instanceof Error ? error.message : "Please try again.", {
@@ -202,6 +211,7 @@ export function FinancingPage() {
       });
       await session.loadPage("financing");
     } catch (error) {
+      if (await showSavedFinancing(error)) return;
       notify(action === "deleteFunding" ? "Could not delete funding" : "Could not restore funding", error instanceof Error ? error.message : "Please try again.", {
         id: `financing-${action}-failed`,
         variant: "error",

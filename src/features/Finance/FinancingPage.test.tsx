@@ -270,6 +270,19 @@ describe("financing page", () => {
     expect(document.querySelector("form")).not.toBeNull();
   });
 
+  it("reloads the current financing when a duplicate request conflicts and shows no error", async () => {
+    await render();
+    await click("Edit funding");
+    await fill("funding-source", "Updated source");
+    api.mutate.mockRejectedValueOnce(new FinanceRequestError("This request was already used with different details.", 409));
+    api.financing.mockResolvedValueOnce(view([{ ...funding, sourceName: "Current source", revision: 4 }], [part], 8));
+    await submit();
+    expect(notify.mock.calls.some((call) => call[2]?.variant === "error")).toBe(false);
+    expect(document.querySelector("form")).toBeNull();
+    expect(api.financing).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Current source");
+  });
+
   it("keeps unsaved edits when a newer financing view arrives", async () => {
     await render();
     await click("Edit funding");
