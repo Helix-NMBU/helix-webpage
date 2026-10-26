@@ -57,7 +57,9 @@ export interface ProjectWorkspace {
   progressEvents: TaskProgressEvent[];
   members: ProjectMember[];
 }
+export type MilestoneChanges = Partial<Pick<TaskInput, "priority" | "assigneeIds" | "deadline">>;
 export type ProjectMutation =
+  | { action: "update_milestone"; id: string; expectedRevision: number; changes: MilestoneChanges }
   | { action: "save_task"; id: string; expectedRevision: number; task: TaskInput }
   | { action: "save_project"; id: string; expectedRevision: number; project: ProjectInput }
   | { action: "set_status"; id: string; expectedRevision: number; status: TaskStatus; blockedReason: string };

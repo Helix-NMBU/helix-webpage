@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type Task, type TaskInput } from "./types";
+import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type Task, type TaskInput } from "./types";
 
 export function osloDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
@@ -51,6 +51,27 @@ function uuidOrNull(value: unknown): string | null {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new Error("Choose a valid member or project.");
   return value;
 }
+export function validateMilestoneChanges(input: MilestoneChanges): MilestoneChanges {
+  if (!input || typeof input !== "object" || Array.isArray(input) || !Object.keys(input).length || Object.keys(input).some(key => !["priority", "assigneeIds", "deadline"].includes(key))) throw new Error("Choose priority, Leads or target date to update.");
+  const changes: MilestoneChanges = {};
+  if ("priority" in input) {
+    if (!TASK_PRIORITIES.includes(input.priority!)) throw new Error("Choose a valid priority.");
+    changes.priority = input.priority;
+  }
+  if ("deadline" in input) {
+    changes.deadline = date(input.deadline);
+    if (!changes.deadline) throw new Error("Set a deadline for this milestone.");
+  }
+  if ("assigneeIds" in input) {
+    if (!Array.isArray(input.assigneeIds) || input.assigneeIds.length > MAX_TASK_ASSIGNEES) throw new Error(`Choose up to ${MAX_TASK_ASSIGNEES} Leads.`);
+    changes.assigneeIds = [...new Set(input.assigneeIds.map(id => {
+      if (typeof id !== "string" || !id) throw new Error("Choose a valid member.");
+      return uuidOrNull(id)!.toLowerCase();
+    }))];
+  }
+  return changes;
+}
+
 export function validateTask(input: TaskInput, { allowUnorganized = false }: { allowUnorganized?: boolean } = {}): TaskInput {
   if (!Array.isArray(input.assigneeIds) || input.assigneeIds.length > MAX_TASK_ASSIGNEES) throw new Error(`Choose up to ${MAX_TASK_ASSIGNEES} assignees.`);
   const assigneeIds = [...new Set(input.assigneeIds.map(id => {

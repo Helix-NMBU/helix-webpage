@@ -26,6 +26,13 @@ describe("project management HTTP boundaries", () => {
     const { assigneeIds: _old, ...withoutIds } = input.task;
     expect(() => parseProjectMutation({ ...input, task: { ...withoutIds, assigneeId: first } })).toThrow();
   });
+  it("accepts only the three bounded milestone fields in partial updates", () => {
+    const id = "10000000-0000-4000-8000-000000000001";
+    const input = { action: "update_milestone", id, expectedRevision: 1, changes: { priority: "high", deadline: "2026-12-01", assigneeIds: [id, id] } };
+    expect(parseProjectMutation(input)).toEqual({ ...input, changes: { ...input.changes, assigneeIds: [id] } });
+    for (const changes of [{}, null, [], { projectId: null }, { category: "marketing" }, { status: "done" }, { priority: "invalid" }, { deadline: null }, { deadline: "2026-02-30" }, { assigneeIds: [null] }, { assigneeIds: Array(21).fill(id) }]) expect(() => parseProjectMutation({ ...input, changes })).toThrow();
+    expect(() => parseProjectMutation({ ...input, expectedRevision: 0 })).toThrow();
+  });
   it("requires project and milestone placement on saves while keeping status-only updates separate", () => {
     const projectId = "10000000-0000-4000-8000-000000000010";
     const milestoneId = "10000000-0000-4000-8000-000000000002";

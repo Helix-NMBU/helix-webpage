@@ -41,3 +41,6 @@ Partnership deliverables record obligations by sponsor/partner name, with delive
 Run `npm test`, `npm run typecheck`, `npm run typecheck:api`, `npm run typecheck:api:runtime`, `npm run lint`, and `npm run build`. Database tests use isolated PGlite instances, not a live Neon project. The full suite starts loopback HTTP servers and needs permission to listen locally. Inspect creation, assignment, status changes, personal task filtering, delivery counts, timeline navigation and reload persistence in the browser. Local fixture checks and database integration tests do not establish that a hosted Neon migration or real Google sign-in has been exercised.
 
 Publishing, migration of a production database, and deployment require user authorization.
+
+
+Migration `014_milestone_field_updates.sql` adds the `update_milestone` operation for priority, multiple Leads and target dates, including unorganized legacy milestones. Apply it before releasing the corresponding API/client. It preserves existing placement, task links, status and history; full saves and new records still require organization. Test locally with the project-management database suite before an authorized production release.

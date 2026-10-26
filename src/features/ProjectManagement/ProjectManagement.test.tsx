@@ -333,7 +333,7 @@ describe("project management interface", () => {
     const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
     await act(async () => inlineButton("priority").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })));
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent === "High")!.click());
-    expect(mutate).toHaveBeenCalledWith({ action: "save_task", id: goal.id, expectedRevision: goal.revision, task: expect.objectContaining({ title: goal.title, priority: "high", assigneeIds: goal.assigneeIds, deadline: goal.deadline, projectId: goal.projectId, milestoneId: null }) });
+    expect(mutate).toHaveBeenCalledWith({ action: "update_milestone", id: goal.id, expectedRevision: goal.revision, changes: { priority: "high" } });
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
   it("saves several Leads inline without an invite option", async () => {
@@ -342,7 +342,7 @@ describe("project management interface", () => {
     await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example as lead"]')!.click());
     expect(document.querySelector('[data-slot="popover-content"]')?.textContent).not.toContain("Invite");
     await click("Save leads");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", expectedRevision: 1, task: expect.objectContaining({ kind: "milestone", assigneeIds: workspace.members.map(member => member.id) }) }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "update_milestone", expectedRevision: 1, changes: { assigneeIds: workspace.members.map(member => member.id) } }));
   });
   it("discards an unsaved Lead selection when its menu is cancelled", async () => {
     load.mockResolvedValue(inlineWorkspace()); await open();
@@ -361,7 +361,7 @@ describe("project management interface", () => {
     mutate.mockResolvedValue({ ...workspace, tasks: workspace.tasks.map(task => task.id === goal.id ? { ...task, deadline, revision: 2 } : task) });
     await act(async () => inlineButton("target date").click());
     await fill(`milestone-date-${goal.id}`, deadline); await click("Save date");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ id: goal.id, expectedRevision: 1, task: expect.objectContaining({ deadline, priority: goal.priority, assigneeIds: goal.assigneeIds }) }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { deadline } }));
     expect(button(goal.title)).toBeUndefined();
   });
   it("supports arrow-key calendar navigation and selecting a day", async () => {
@@ -374,7 +374,7 @@ describe("project management interface", () => {
     expect(document.activeElement?.getAttribute("aria-label")).toBe(formatDate(next));
     await act(async () => (document.activeElement as HTMLButtonElement).click());
     await click("Save date");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ task: expect.objectContaining({ deadline: next }) }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "update_milestone", changes: { deadline: next } }));
   });
   it("keeps the date draft after a conflict and reports recovery through notifications", async () => {
     const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
@@ -395,15 +395,35 @@ describe("project management interface", () => {
     expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Set a deadline");
     expect(document.getElementById(`milestone-date-${goal.id}`)).not.toBeNull();
   });
-  it("requires a scoped Department Lead grant and organized placement for inline editing", async () => {
+  it("requires a scoped Department Lead grant but allows legacy placement for inline editing", async () => {
     const workspace = inlineWorkspace();
     load.mockResolvedValue({ ...workspace, canManage: true, taskLeadCategories: ["marketing"] }); await open();
     expect(inlineButton("priority")).toBeNull();
     expect(inlineButton("leads")).toBeNull();
     expect(inlineButton("target date")).toBeNull();
     load.mockResolvedValue({ ...workspace, tasks: workspace.tasks.map(task => task.kind === "milestone" ? { ...task, projectId: null } : task) });
-    await open(); expect(inlineButton("priority")).toBeNull();
+    await open(); expect(inlineButton("priority")).not.toBeNull();
+    expect(inlineButton("leads")).not.toBeNull();
+    expect(inlineButton("target date")).not.toBeNull();
     expect(mutate).not.toHaveBeenCalled();
+  });
+  it("keeps Projects and Upcoming Milestones headings outside their cards", async () => {
+    await open();
+    for (const id of ["overview-projects-title", "upcoming-milestones-title"]) {
+      const heading = document.getElementById(id)!;
+      expect(heading.tagName).toBe("H2");
+      expect(heading.closest('[data-slot="card"]')).toBeNull();
+      expect(heading.parentElement?.parentElement?.querySelector('[data-slot="card"]')).not.toBeNull();
+    }
+  });
+  it("saves an unorganized milestone field without submitting or changing placement", async () => {
+    const workspace = inlineWorkspace();
+    const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    load.mockResolvedValue({ ...workspace, tasks: workspace.tasks.map(task => task.id === goal.id ? { ...task, projectId: null } : task) });
+    await open();
+    await act(async () => inlineButton("priority").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })));
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent === "Low")!.click());
+    expect(mutate).toHaveBeenCalledWith({ action: "update_milestone", id: goal.id, expectedRevision: goal.revision, changes: { priority: "low" } });
   });
   it("creates a milestone with multiple leads using the member picker", async () => {
     await open("marketing"); await click("New milestone");

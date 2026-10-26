@@ -7,9 +7,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/pop
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { AssigneePicker } from "./TaskAssignees";
 import { addDays, formatDate, osloDate } from "./model";
-import type { ProjectMember, Task, TaskInput, TaskPriority } from "./types";
+import type { MilestoneChanges, ProjectMember, Task, TaskPriority } from "./types";
 
-export type MilestoneChanges = Partial<Pick<TaskInput, "priority" | "assigneeIds" | "deadline">>;
+export type { MilestoneChanges } from "./types";
 export type SaveMilestone = (task: Task, changes: MilestoneChanges) => Promise<boolean>;
 const priorities: { value: TaskPriority; label: string; icon: typeof IconCalendar }[] = [
   { value: "urgent", label: "Urgent", icon: IconExclamationCircle },

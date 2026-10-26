@@ -1,5 +1,5 @@
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
-import { addDays, osloDate, validateProject, validateTask } from "./model";
+import { addDays, osloDate, validateProject, validateTask, validateMilestoneChanges } from "./model";
 import { progressEvent } from "./progress";
 import { ProjectRequestError } from "./repository";
 import { TASK_CATEGORIES, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
@@ -61,6 +61,14 @@ export function createLocalProjectRepository(): ProjectRepository {
         const project = validateProject(mutation.project);
         if (workspace.tasks.some(task => task.projectId === mutation.id && task.category !== project.category)) throw new Error("Move the project's tasks before changing its category.");
         workspace.projects = [...workspace.projects.filter(item => item.id !== mutation.id), { ...project, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
+      } else if (mutation.action === "update_milestone") {
+        const previous = workspace.tasks.find(item => item.id === mutation.id);
+        if (!previous || previous.kind !== "milestone") throw new ProjectRequestError("Milestone not found.", 404);
+        if (!workspace.taskLeadCategories.includes(previous.category)) throw new ProjectRequestError("A Department Lead grant for this area is required to edit milestones.", 403);
+        const changes = validateMilestoneChanges(mutation.changes);
+        if (changes.deadline && previous.startDate && previous.startDate > changes.deadline) throw new Error("The start date must be on or before the deadline.");
+        if (changes.assigneeIds?.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all Leads.");
+        workspace.tasks = workspace.tasks.map(item => item.id === previous.id ? { ...previous, ...changes, revision: previous.revision + 1, updatedAt: now } : item);
       } else {
         const previous = workspace.tasks.find(item => item.id === mutation.id);
         if (mutation.action === "save_task" && (!workspace.taskLeadCategories.includes(mutation.task.category) || (previous && !workspace.taskLeadCategories.includes(previous.category)))) throw new ProjectRequestError("A Department Lead grant for this area is required to create, edit or assign tasks.", 403);

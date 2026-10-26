@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
+import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
 import { MemberCvError } from "./member-cv-error.js";
 
 function invalid(message = "Invalid project management request."): never { throw new MemberCvError(400, message); }
@@ -57,6 +57,19 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
   const id = uuid(body.id);
   const expectedRevision = body.expectedRevision;
   if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
+  if (body.action === "update_milestone") {
+    if (expectedRevision < 1) return invalid("A saved milestone revision is required.");
+    const input = object(body.changes);
+    if (!Object.keys(input).length || Object.keys(input).some(key => !["priority", "assigneeIds", "deadline"].includes(key))) return invalid("Choose priority, Leads or target date to update.");
+    const changes: MilestoneChanges = {};
+    if ("priority" in input) changes.priority = oneOf(input.priority, TASK_PRIORITIES);
+    if ("deadline" in input) { changes.deadline = date(input.deadline); if (!changes.deadline) return invalid("A milestone needs a deadline."); }
+    if ("assigneeIds" in input) {
+      if (!Array.isArray(input.assigneeIds) || input.assigneeIds.length > MAX_TASK_ASSIGNEES) return invalid(`Choose up to ${MAX_TASK_ASSIGNEES} Leads.`);
+      changes.assigneeIds = [...new Set(input.assigneeIds.map(uuid))];
+    }
+    return { action: body.action, id, expectedRevision, changes };
+  }
   if (body.action === "save_task") return { action: body.action, id, expectedRevision, task: task(body.task) };
   if (body.action === "save_project") return { action: body.action, id, expectedRevision, project: project(body.project) };
   if (body.action === "set_status") {

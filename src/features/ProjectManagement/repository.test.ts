@@ -102,4 +102,28 @@ describe("dedicated local project mode", () => {
     expect(organized.progressEvents).toEqual(updated.progressEvents);
   });
 
+  it("updates legacy milestone fields without changing placement, children or history", async () => {
+    const repository = createLocalProjectRepository();
+    const workspace = await repository.load();
+    const goal = workspace.tasks.find(task => task.kind === "milestone")!;
+    const legacy = { ...goal, projectId: null };
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...workspace, tasks: workspace.tasks.map(task => task.id === goal.id ? legacy : task) }));
+    const changes = { priority: "high" as const, deadline: "2027-01-01", assigneeIds: workspace.members.map(member => member.id) };
+    const updated = await repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes });
+    expect(updated.tasks.find(task => task.id === goal.id)).toMatchObject({ ...legacy, ...changes, revision: 2 });
+    expect(updated.tasks.filter(task => task.id !== goal.id)).toEqual(workspace.tasks.filter(task => task.id !== goal.id));
+    expect(updated.progressEvents).toEqual(workspace.progressEvents);
+    await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { priority: "low" } })).rejects.toMatchObject({ status: 409 });
+    await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 2, changes: { assigneeIds: ["00000000-0000-4000-8000-000000009999"] } })).rejects.toThrow("active");
+    expect(await repository.load()).toEqual(updated);
+  });
+  it("denies field updates to management-only members and rejects ordinary task targets", async () => {
+    const repository = createLocalProjectRepository();
+    const workspace = await repository.load();
+    const goal = workspace.tasks.find(task => task.kind === "milestone")!;
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...workspace, canManage: true, taskLeadCategories: [] }));
+    await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { priority: "high" } })).rejects.toMatchObject({ status: 403 });
+    await expect(repository.mutate({ action: "update_milestone", id: workspace.tasks[0].id, expectedRevision: 1, changes: { priority: "high" } })).rejects.toThrow("Milestone");
+  });
+
 });
