@@ -81,6 +81,13 @@ describe("project management interface", () => {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Complete Shared design review"]')!.click());
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", id: shared.id, status: "done" }));
   });
+  it("describes every assignee to screen readers in read-only task details", async () => {
+    await open("overview", true);
+    await click("Deliver partner team photographs");
+    const picker = document.getElementById("task-assignee") as HTMLButtonElement;
+    expect(picker.disabled).toBe(true);
+    expect(document.getElementById(picker.getAttribute("aria-describedby")!)?.textContent).toBe("Assigned to Alex Example, Sam Example.");
+  });
   it("removes one co-assignee without clearing the other member", async () => {
     await open("partnership-deliverables");
     await click("Deliver partner team photographs");

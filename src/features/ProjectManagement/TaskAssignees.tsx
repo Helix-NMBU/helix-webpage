@@ -49,9 +49,10 @@ export function AssigneePicker({ id, value, members, onChange, disabled = false 
     else notify("Assignment limit reached", `A task can have up to ${MAX_TASK_ASSIGNEES} assignees.`, { variant: "warning", href: null });
   }
   return <Popover open={open} onOpenChange={next => { if (!disabled) { setOpen(next); if (!next) setSearch(""); } }}>
-    <PopoverTrigger asChild><Button id={id} type="button" variant="outline" disabled={disabled} aria-label="Choose task assignees" className="h-9 w-full justify-start gap-2 font-normal">
+    <PopoverTrigger asChild><Button id={id} type="button" variant="outline" disabled={disabled} aria-label="Choose task assignees" aria-describedby={`${id}-summary`} className="h-9 w-full justify-start gap-2 font-normal">
       {value.length ? <><AssigneeAvatars assigneeIds={value} members={members} maxVisible={2} /><span className="truncate text-xs">{value.length === 1 ? options.find(member => member.id === value[0])?.name : `${value.length} assignees`}</span></> : "Assign to…"}
     </Button></PopoverTrigger>
+    <span id={`${id}-summary`} className="sr-only">{value.length ? `Assigned to ${value.map(key => options.find(member => member.id === key)?.name).join(", ")}.` : "Unassigned."}</span>
     <PopoverContent align="start" className="w-72 p-2"><div className="p-1"><Input autoFocus aria-label="Search members to assign" placeholder="Search members…" value={search} onChange={event => setSearch(event.target.value)} /></div>
       <div className="mt-1 max-h-64 overflow-y-auto" role="group" aria-label="Task assignees">
         {filtered.map(member => <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent">

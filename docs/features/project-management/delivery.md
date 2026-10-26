@@ -62,3 +62,12 @@ The user requested the shadcn Avatar presentation and multiple people per task. 
 - Local fixture storage upgrades old assignments without resetting data. Browser verification on loopback port 5190 added Alex as a second assignee to a task already assigned to Sam, saved it, confirmed both avatars, and verified its appearance in Alex's My tasks after reload. Profile-photo rendering uses the existing Avatar image/fallback behavior; real Google photos and authentication were not exercised.
 - Focused tests cover multi-person creation and removal, second-assignee visibility, legacy data upgrades, validation, migration backfill/idempotency, co-assignee status updates, conflicting shared edits, assignment rollback and revoked ownership. The 13 database integration tests passed in isolation; 79 focused project, API and member-shell tests also passed. All three TypeScript checks, lint and the production build passed (9.20 MB output and 9 API functions in the current checkout).
 - The pre-existing sidebar CircleCheckBig change and unrelated checkout changes remain unstaged. No push, PR, real Neon migration or deployment was performed.
+
+
+### Standards review
+
+Independent reviewer `assignees_standards_review` inspected `3f040024...57cf955`. One P2 accessibility finding: the fixed assignment-picker label hid selected names from screen readers, particularly when disabled in status-only details. The trigger now references an explicit accessible assignment summary, and a regression checks both selected names in the disabled personal-task editor. No documented-standard breaches or substantial smell-baseline findings were reported.
+
+### Spec and correctness review
+
+Independent reviewer `assignees_spec_review` inspected the same commits and found no actionable Spec, correctness or security issues. Shared visibility/status ownership, scoped Lead assignment, atomic replacement, backfill/idempotency, revocation, revision conflicts and old-payload rejection matched the approved behavior. Neither reviewer reran tests.
