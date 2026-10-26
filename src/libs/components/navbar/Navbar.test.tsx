@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Navbar } from "./Navbar";
+import { MemberNavProvider } from "./member-nav";
 
 function Pathname() {
   const { pathname } = useLocation();
@@ -11,10 +12,12 @@ function Pathname() {
 
 function renderNavbar() {
   return render(
-    <MemoryRouter initialEntries={["/"]}>
-      <Navbar />
-      <Pathname />
-    </MemoryRouter>
+    <MemberNavProvider>
+      <MemoryRouter initialEntries={["/"]}>
+        <Navbar />
+        <Pathname />
+      </MemoryRouter>
+    </MemberNavProvider>
   );
 }
 
