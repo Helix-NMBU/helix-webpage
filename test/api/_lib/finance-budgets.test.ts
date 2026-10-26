@@ -578,6 +578,162 @@ describe("season budgets", () => {
     expect(hidden).not.toContain("Example source");
   });
 
+  it("hides prospect and deleted earmark details from members and shows them to financing", async () => {
+    await season();
+    await grant(headId, "head_of_finance");
+    await grant(financeId, "finance");
+    const seasonId = (await sql<{ id: string }>("select id from finance.seasons"))[0]?.id;
+    await sql(
+      `insert into finance.funding (season_id, public_ref, source_name, owner_name, funding_type, amount_ore, status, created_by_member_id, updated_by_member_id)
+       values
+         ($1::uuid, 'F-S27-010', 'Prospect source', 'Example owner', 'other', 20000, 'prospect', $2::uuid, $2::uuid),
+         ($1::uuid, 'F-S27-011', 'Removed source', 'Example owner', 'other', 30000, 'secured', $2::uuid, $2::uuid)`,
+      [seasonId, operatorId],
+    );
+    await sql(
+      `insert into finance.funding_parts (funding_id, public_ref, purpose, amount_ore, conditions, created_by_member_id, updated_by_member_id)
+       select id, 'FE-010', 'Prospect work', 1234, 'prospect condition', $1::uuid, $1::uuid from finance.funding where public_ref = 'F-S27-010'`,
+      [operatorId],
+    );
+    await sql(
+      `insert into finance.funding_parts (funding_id, public_ref, purpose, amount_ore, conditions, created_by_member_id, updated_by_member_id)
+       select id, 'FE-011', 'Deleted work', 5678, 'deleted condition', $1::uuid, $1::uuid from finance.funding where public_ref = 'F-S27-011'`,
+      [operatorId],
+    );
+    await call("head", { action: "createBudget", requestId: requestId() });
+    const frame = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'"))[0]?.id;
+    const prospect = (await sql<{ id: string }>("select id from finance.funding_parts where public_ref = 'FE-010'"))[0]?.id;
+    const removed = (await sql<{ id: string }>("select id from finance.funding_parts where public_ref = 'FE-011'"))[0]?.id;
+    expect((await call("finance", {
+      action: "addItem", requestId: requestId(), expectedRevision: 0,
+      item: { systemId: frame, description: "Prospect tube", plannedNok: "10.00", priority: "EM", earmarkId: prospect },
+    })).status).toBe(200);
+    expect((await call("finance", {
+      action: "addItem", requestId: requestId(), expectedRevision: 0,
+      item: { systemId: frame, description: "Removed tube", plannedNok: "15.00", priority: "EM", earmarkId: removed },
+    })).status).toBe(200);
+    await sql("update finance.funding set status = 'deleted' where public_ref = 'F-S27-011'");
+    await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+    const member = (await read("member")).body as PublicBudgets;
+    const memberItems = member.departments.flatMap((department) => department.systems).flatMap((system) => system.items);
+    expect(memberItems.find((item) => item.description === "Prospect tube")).toMatchObject({ earmarkPurpose: null, earmarkAmountNok: null });
+    expect(memberItems.find((item) => item.description === "Removed tube")).toMatchObject({ earmarkPurpose: null, earmarkAmountNok: null });
+    const memberBody = JSON.stringify(member);
+    expect(memberBody).not.toContain("Prospect work");
+    expect(memberBody).not.toContain("Deleted work");
+    expect(memberBody).not.toContain("12.34");
+    expect(memberBody).not.toContain("56.78");
+    expect(memberBody).not.toContain("Prospect source");
+    expect(memberBody).not.toContain("Removed source");
+    const finance = (await read("finance")).body as PublicBudgets;
+    const financeItems = finance.departments.flatMap((department) => department.systems).flatMap((system) => system.items);
+    expect(financeItems.find((item) => item.description === "Prospect tube")).toMatchObject({
+      earmarkPurpose: "Prospect work", earmarkAmountNok: "12.34", earmarkSourceName: "Prospect source", earmarkConditions: "prospect condition",
+    });
+    expect(financeItems.find((item) => item.description === "Removed tube")).toMatchObject({
+      earmarkPurpose: "Deleted work", earmarkAmountNok: "56.78", earmarkSourceName: "Removed source", earmarkConditions: "deleted condition",
+    });
+  });
+
+  it("rejects a new or changed link to deleted funding and keeps an existing link", async () => {
+    await season();
+    await grant(headId, "head_of_finance");
+    await grant(financeId, "finance");
+    const seasonId = (await sql<{ id: string }>("select id from finance.seasons"))[0]?.id;
+    await sql(
+      `insert into finance.funding (season_id, public_ref, source_name, owner_name, funding_type, amount_ore, status, created_by_member_id, updated_by_member_id)
+       values
+         ($1::uuid, 'F-S27-020', 'Kept source', 'Example owner', 'other', 20000, 'secured', $2::uuid, $2::uuid),
+         ($1::uuid, 'F-S27-021', 'Other source', 'Example owner', 'other', 20000, 'secured', $2::uuid, $2::uuid)`,
+      [seasonId, operatorId],
+    );
+    await sql(
+      `insert into finance.funding_parts (funding_id, public_ref, purpose, amount_ore, created_by_member_id, updated_by_member_id)
+       select id, 'FE-020', 'Kept work', 10000, $1::uuid, $1::uuid from finance.funding where public_ref = 'F-S27-020'`,
+      [operatorId],
+    );
+    await sql(
+      `insert into finance.funding_parts (funding_id, public_ref, purpose, amount_ore, created_by_member_id, updated_by_member_id)
+       select id, 'FE-021', 'Other work', 10000, $1::uuid, $1::uuid from finance.funding where public_ref = 'F-S27-021'`,
+      [operatorId],
+    );
+    await call("head", { action: "createBudget", requestId: requestId() });
+    const frame = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'"))[0]?.id;
+    const kept = (await sql<{ id: string }>("select id from finance.funding_parts where public_ref = 'FE-020'"))[0]?.id;
+    const other = (await sql<{ id: string }>("select id from finance.funding_parts where public_ref = 'FE-021'"))[0]?.id;
+    expect((await call("finance", {
+      action: "addItem", requestId: requestId(), expectedRevision: 0,
+      item: { systemId: frame, description: "Frame tube", plannedNok: "10.00", priority: "EM", earmarkId: kept },
+    })).status).toBe(200);
+    await sql("update finance.funding set status = 'deleted'");
+    const item = (await sql<{ id: string; revision: number; earmark_id: string }>(
+      "select id, revision, earmark_id from finance.budget_items where protected = false",
+    ))[0];
+    const before = await version();
+    const added = await call("finance", {
+      action: "addItem", requestId: requestId(), expectedRevision: 0,
+      item: { systemId: frame, description: "New deleted link", plannedNok: "10.00", priority: "EM", earmarkId: other },
+    });
+    expect(added.status).toBe(400);
+    expect(JSON.stringify(added.body)).toContain("deleted");
+    const changed = await call("finance", {
+      action: "editItem", requestId: requestId(), expectedRevision: item?.revision, itemId: item?.id,
+      patch: { earmarkId: other },
+    });
+    expect(changed.status).toBe(400);
+    expect(await version()).toBe(before);
+    expect((await sql<{ earmark_id: string }>("select earmark_id from finance.budget_items where id = $1::uuid", [item?.id]))[0]?.earmark_id).toBe(kept);
+    const edited = await call("finance", {
+      action: "editItem", requestId: requestId(), expectedRevision: item?.revision, itemId: item?.id,
+      patch: { description: "Frame tube updated" },
+    });
+    expect(edited.status).toBe(200);
+    expect(await version()).toBe(String(Number(before) + 1));
+    expect((await sql<{ description: string; earmark_id: string }>(
+      "select description, earmark_id from finance.budget_items where id = $1::uuid",
+      [item?.id],
+    ))[0]).toEqual({ description: "Frame tube updated", earmark_id: kept });
+  });
+
+  it("does not bump the revision or view when an edit changes nothing", async () => {
+    await season();
+    await grant(headId, "head_of_finance");
+    await grant(financeId, "finance");
+    await call("head", { action: "createBudget", requestId: requestId() });
+    const frame = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'"))[0]?.id;
+    expect((await call("finance", {
+      action: "addItem", requestId: requestId(), expectedRevision: 0,
+      item: { systemId: frame, description: "Frame tube", plannedNok: "10.00" },
+    })).status).toBe(200);
+    const item = (await sql<{ id: string; revision: number }>(
+      "select id, revision from finance.budget_items where protected = false",
+    ))[0];
+    const audits = async () => (await sql<{ count: string }>(
+      "select count(*)::text as count from finance.audit_log where entity = 'budget_item' and entity_id = $1",
+      [item?.id],
+    ))[0]?.count;
+    const beforeAudits = await audits();
+    const before = await version();
+    const same = await call("finance", {
+      action: "editItem", requestId: requestId(), expectedRevision: item?.revision, itemId: item?.id,
+      patch: { description: "Frame tube" },
+    });
+    expect(same.status).toBe(200);
+    expect(await version()).toBe(before);
+    expect((await sql<{ revision: number }>("select revision from finance.budget_items where id = $1::uuid", [item?.id]))[0]?.revision).toBe(item?.revision);
+    expect(await audits()).toBe(beforeAudits);
+    const changed = await call("finance", {
+      action: "editItem", requestId: requestId(), expectedRevision: item?.revision, itemId: item?.id,
+      patch: { description: "Replaced tube" },
+    });
+    expect(changed.status).toBe(200);
+    expect(await version()).toBe(String(Number(before) + 1));
+    expect((await sql<{ revision: number; description: string }>(
+      "select revision, description from finance.budget_items where id = $1::uuid",
+      [item?.id],
+    ))[0]).toEqual({ revision: (item?.revision ?? 0) + 1, description: "Replaced tube" });
+  });
+
   it("rolls every successful budget mutation back with the view version", async () => {
     await season();
     await grant(headId, "head_of_finance");

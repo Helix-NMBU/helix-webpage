@@ -212,6 +212,7 @@ type HierarchyRow = {
   earmark_amount_ore: string | null;
   earmark_conditions: string | null;
   earmark_source: string | null;
+  earmark_funding_status: string | null;
   actual_ore: string | null;
 };
 
@@ -240,7 +241,7 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
               i.priority, i.reuse_status, i.expected_purchase_date::text as expected_purchase_date, i.status,
               i.note, i.owner_email, i.protected, i.revision, i.earmark_id,
               part.purpose as earmark_purpose, part.amount_ore::text as earmark_amount_ore, part.conditions as earmark_conditions,
-              fund.source_name as earmark_source,
+              fund.source_name as earmark_source, fund.status as earmark_funding_status,
               coalesce(act.actual_ore, 0)::text as actual_ore
        from finance.systems sys
        join identity.departments d on d.department_key = sys.department_key
@@ -313,6 +314,8 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
       }
       continue;
     }
+    const publicFunding = row.earmark_funding_status === "secured" || row.earmark_funding_status === "received";
+    const showEarmark = caller.capabilities.financing || publicFunding;
     const item: PublicBudgetItem = {
       id: row.item_id,
       publicRef: row.public_ref,
@@ -330,8 +333,8 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
       status: row.status,
       revision: Number(row.revision ?? 0),
       earmarked: row.priority === "EM",
-      earmarkPurpose: row.earmark_purpose,
-      earmarkAmountNok: row.earmark_amount_ore === null ? null : formatOre(ore(row.earmark_amount_ore)),
+      earmarkPurpose: showEarmark ? row.earmark_purpose : null,
+      earmarkAmountNok: showEarmark && row.earmark_amount_ore !== null ? formatOre(ore(row.earmark_amount_ore)) : null,
     };
     if (caller.capabilities.draftBudgetItems) {
       item.note = row.note;

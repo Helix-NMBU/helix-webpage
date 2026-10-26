@@ -5,7 +5,7 @@ Finance is available from the member shell. Overview, Purchases, and Budgets loa
 ## Local evidence
 
 - Injected-identity API tests cover a signed-out caller, a banned session, an unrelated identity, a replaced account, an ordinary member, a platform administrator with no finance profile, business, finance, and head grants, and a revoked grant.
-- Public responses omit item notes, funding source names, earmark conditions, and refund account or phone values. The purchase register includes refund fields only when the files-and-refunds capability is true. Draft budget items are omitted without the draft-items capability. The register query is limited to the current season.
+- Public responses omit item notes, funding source names, earmark conditions, and refund account or phone values. Earmark purpose and amount are included for a member only when the funding is secured or received. A financing profile still receives them when the funding is prospect or deleted. The purchase register includes refund fields only when the files-and-refunds capability is true. Draft budget items are omitted without the draft-items capability. The register query is limited to the current season.
 - Season-budget mutations create one budget, approve it once, maintain items, and bump the view version in the same transaction. A rolled-back call restores the version. Purchase, import, funding, and request mutations still return a service-unavailable response and do not insert purchases, audit rows, or idempotency keys.
 - PGlite applies `db/migrations/011_finance_core.sql` on a minimal identity schema. Every finance table has row level security enabled. `anon`, `authenticated`, `anonymous`, and `public` cannot select `finance.member_grants`. The migration seeds no grants or business rows. The view version starts at 0.
 - Profile flags match the shared capability union for every combination of business, finance, and head. A finance department, a "Head of Finance" title, `team.finance` grants and roles, and the administrator wildcard do not add a finance capability. The same denial is covered in the API and in the capability resolver. Self-grant fails. A grant from a member who is not an active platform administrator fails.
@@ -25,7 +25,7 @@ Commands run on Node 24.19.0 and npm 11.17.0:
 - `npm run typecheck:api`
 - `npm run typecheck:api:runtime`
 - `npm run lint`
-- `npm test`: 89 Vitest files, 1057 tests passed, then 3 deployment-guard tests passed
+- `npm test`: 89 Vitest files, 1061 tests passed, then 3 deployment-guard tests passed
 - `npm run build`: static output 9.23 MB of 10 MB; source functions 11 of 11. The Vite build does not emit `.vercel/output/functions`, so the generated-function comparison is unchanged from the existing guard and is skipped until that directory exists.
 - `git diff --check`
 

@@ -22,7 +22,7 @@ A verified active member can open the public pages, see public earmarks, registe
 
 Active profiles are a union. The server reads them only from `finance.member_grants`. Title, department, `team.finance`, the platform administrator wildcard, and recruiting grants do not add a profile.
 
-Ordinary members receive public budget fields and public earmark purpose and amount. Notes, funding sources, earmark conditions, and refund account or phone values stay out of that response. A draft budget's items are omitted unless the draft-items capability is true. The purchase register is present only when the purchase-register capability is true. Refund account and phone values are present only when the files-and-refunds capability is true, and only for the current season.
+Ordinary members receive public budget fields. An earmark's purpose and amount are included only when its funding is secured or received. A profile with financing still receives the purpose and amount for every linked part. Notes, funding sources, earmark conditions, and refund account or phone values stay out of the ordinary member response. A draft budget's items are omitted unless the draft-items capability is true. The purchase register is present only when the purchase-register capability is true. Refund account and phone values are present only when the files-and-refunds capability is true, and only for the current season.
 
 ## Operator path
 

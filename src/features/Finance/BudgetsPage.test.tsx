@@ -143,6 +143,24 @@ afterEach(() => {
 });
 
 describe("season budget page", () => {
+  it("shows a public earmark and leaves a withheld one blank", async () => {
+    const current = budgets();
+    const frame = current.departments[0]?.systems[0];
+    if (!frame) throw new Error("Missing system");
+    frame.items = [
+      { ...openItem, description: "Public tube", earmarked: true, earmarkPurpose: "Frame work", earmarkAmountNok: "80.00" },
+      { ...openItem, id: "item-withheld", publicRef: "BI-S27-003", description: "Prospect tube", earmarked: true, earmarkPurpose: null, earmarkAmountNok: null },
+    ];
+    session.budgets = current;
+    await render();
+    expect(container.textContent).toContain("Public tube");
+    expect(container.textContent).toContain("Frame work");
+    expect(container.textContent).toContain("80.00");
+    expect(container.textContent).toContain("Prospect tube");
+    expect(container.textContent).not.toContain("Prospect work");
+    expect(container.textContent).not.toContain("null");
+  });
+
   it("shows members the hierarchy and keeps cancelled rows and maintenance hidden", async () => {
     await render();
     expect(container.textContent).toContain("Frame tube");

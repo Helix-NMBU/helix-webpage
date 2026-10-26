@@ -479,6 +479,21 @@ begin
   end if;
   if exists (
     select 1
+    from finance.funding_parts p
+    join finance.funding f on f.id = p.funding_id
+    where p.id = p_earmark_id
+      and f.status = 'deleted'
+      and not exists (
+        select 1
+        from finance.budget_items current_item
+        where current_item.id = p_item_id
+          and current_item.earmark_id is not distinct from p_earmark_id
+      )
+  ) then
+    raise exception 'FINANCE|invalid|Choose an earmarked part from funding that is not deleted.|earmarkId';
+  end if;
+  if exists (
+    select 1
     from finance.budget_items other
     where other.earmark_id = p_earmark_id
       and other.status <> 'cancelled'
@@ -748,6 +763,21 @@ begin
     or new_earmark is distinct from item.earmark_id
   ) then
     raise exception 'FINANCE|invalid|Only the note on an unallocated item can be changed.|note';
+  end if;
+
+  if new_system is not distinct from item.system_id
+     and new_description is not distinct from item.description
+     and new_category is not distinct from item.category
+     and new_planned is not distinct from item.planned_ore
+     and new_priority is not distinct from item.priority
+     and new_reuse is not distinct from item.reuse_status
+     and new_date is not distinct from item.expected_purchase_date
+     and new_owner is not distinct from item.owner_email
+     and new_status is not distinct from item.status
+     and new_note is not distinct from item.note
+     and new_earmark is not distinct from item.earmark_id
+  then
+    return finance.store_budget_result(p_actor, p_request_id, 'editItem', p_payload_hash, item.id);
   end if;
 
   protected_change := new_planned is distinct from item.planned_ore
