@@ -25,12 +25,15 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/009_project_management.sql", import.meta.url), "utf8"));
     // Reapplying an additive migration must preserve existing records.
     await db.exec(readFileSync(new URL("../db/migrations/009_project_management.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/010_department_lead_tasks.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/010_department_lead_tasks.sql", import.meta.url), "utf8"));
     for (const identity of [manager, member, outsider]) {
       await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)', [identity.userId, identity.name, identity.email]);
       await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)', [identity.googleSub, identity.userId]);
       await db.query("insert into identity.members(id,auth_user_id,google_sub,email,full_name) values($1,$1,$2,$3,$4)", [identity.userId, identity.googleSub, identity.email, identity.name]);
     }
     await db.query("insert into project_management.access values($1,true,true),($2,true,false)", [manager.userId, member.userId]);
+    await db.query("update project_management.access set task_lead_categories=array['production','partnership-deliverables','marketing','operations'] where member_id=$1", [manager.userId]);
   });
   afterAll(async () => { await db?.close(); });
 
@@ -38,7 +41,7 @@ describe("project management database and authorization", () => {
     await expect(service(outsider).load("verified")).rejects.toMatchObject({ status: 403 });
     await expect(save(10, task(), 0, outsider)).rejects.toMatchObject({ status: 403 });
     const workspace = await service().load("verified");
-    expect(workspace).toMatchObject({ season: "S27", viewerId: manager.userId, canManage: true, projects: [], tasks: [] });
+    expect(workspace).toMatchObject({ season: "S27", viewerId: manager.userId, canManage: true, taskLeadCategories: ["production", "partnership-deliverables", "marketing", "operations"], projects: [], tasks: [] });
     expect(workspace.members).toEqual([{ id: manager.userId, name: "Manager" }, { id: member.userId, name: "Member" }]);
     expect(JSON.stringify(workspace)).not.toContain("@helixnmbu.no");
   });
@@ -112,5 +115,19 @@ describe("project management database and authorization", () => {
     await expect(service().mutate("verified", { action: "set_status", id: id(999), expectedRevision: 1, status: "done", blockedReason: "" })).rejects.toMatchObject({ status: 404 });
     expect((await db.query("select has_function_privilege('public','project_management.mutate(uuid,text,text,jsonb)','EXECUTE') as allowed")).rows[0]).toEqual({ allowed: false });
     expect((await db.query("select relrowsecurity from pg_class where oid='project_management.tasks'::regclass")).rows[0]).toEqual({ relrowsecurity: true });
+  });
+  it("requires a current Department Lead grant for the task area, independently of project management access", async () => {
+    await db.query("insert into project_management.access(member_id,active,can_manage) values($1,true,true)", [outsider.userId]);
+    expect(await service(outsider).load("verified")).toMatchObject({ canManage: true, taskLeadCategories: [] });
+    await expect(save(90, task(), 0, outsider)).rejects.toMatchObject({ status: 403 });
+    await expect(save(10, task({ assigneeId: outsider.userId }), 5, outsider)).rejects.toMatchObject({ status: 403 });
+    await db.query("update project_management.access set can_manage=false,task_lead_categories=array['production'] where member_id=$1", [outsider.userId]);
+    await save(90, task({ assigneeId: outsider.userId }), 0, outsider);
+    await expect(save(91, task({ category: 'marketing' }), 0, outsider)).rejects.toMatchObject({ status: 403 });
+    const workspace = await save(90, task({ assigneeId: member.userId }), 1, outsider);
+    expect(workspace.tasks.find(item => item.id === id(90))?.assigneeId).toBe(member.userId);
+    await db.query("update project_management.access set task_lead_categories='{}' where member_id=$1", [outsider.userId]);
+    await expect(save(90, task(), 2, outsider)).rejects.toMatchObject({ status: 403 });
+    await expect(service(outsider).mutate("verified", { action: "set_status", id: id(90), expectedRevision: 2, status: "done", blockedReason: "" })).rejects.toMatchObject({ status: 403 });
   });
 });

@@ -12,6 +12,7 @@ export interface ProjectServices {
 
 // A single statement reads one consistent snapshot and the current module grant.
 const workspaceSql = `select a.can_manage as "canManage", a.member_id as "viewerId", 'S27' as season,
+  to_jsonb(a.task_lead_categories) as "taskLeadCategories",
   coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,
     'category',p.category,'departments',p.departments,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
     from project_management.projects p where p.season = 'S27'),'[]'::jsonb) as projects,
@@ -35,6 +36,7 @@ function projectError(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("project_task_lead_required")) throw new MemberCvError(403, "A Department Lead grant for this area is required to create, edit or assign tasks.");
   if (message.includes("project_forbidden")) throw new MemberCvError(403, "Project management access is required. Contact your project manager.");
   if (message.includes("project_not_found")) throw new MemberCvError(404, "This task or project is no longer available.");
   if (message.includes("project_conflict") || code === "23505") throw new MemberCvError(409, "This task or project changed. Reload the workspace before saving again.");

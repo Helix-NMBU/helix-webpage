@@ -42,6 +42,7 @@ export interface ProjectWorkspace {
   season: string;
   viewerId: string;
   canManage: boolean;
+  taskLeadCategories: TaskCategory[];
   projects: Project[];
   tasks: Task[];
   members: ProjectMember[];
