@@ -34,6 +34,7 @@ import {
 } from "@libs/components/ui/table";
 import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
+import { useMemberFeatureAccess } from "./MemberFeatureAccess";
 import { GmailLogo } from "./MailWorkspace";
 import { memberSessionToken } from "../MemberCV/session";
 import {
@@ -60,6 +61,8 @@ const suggestions = [
 ];
 
 export function WorkspaceHomePreview() {
+  const featureAccess = useMemberFeatureAccess();
+  const accessibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team:${team.id}`));
   const [text, setText] = useState("");
   const [scope, setScope] = useState("all");
   const [turn, setTurn] = useState<{ question: string; scope: string } | null>(
@@ -122,7 +125,7 @@ export function WorkspaceHomePreview() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {previewTeams
+                {accessibleTeams
                   .filter(
                     (team) => turn.scope === "all" || turn.scope === team.id,
                   )
@@ -187,7 +190,7 @@ export function WorkspaceHomePreview() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All teams</SelectItem>
-                  {previewTeams.map((team) => (
+                  {accessibleTeams.map((team) => (
                     <SelectItem key={team.id} value={team.id}>
                       {team.title}
                     </SelectItem>
@@ -288,13 +291,14 @@ export function MemberSettingsPreview() {
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const notify = useNotify();
   const account = useMemberAccount();
+  const featureAccess = useMemberFeatureAccess();
+  const accessibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team:${team.id}`));
   const accountEmail = account?.email ?? "";
   const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">(() => {
     const cached = getCachedGmailConnection(accountEmail);
     return cached === null ? "checking" : cached ? "connected" : "disconnected";
   });
   const boundUserId = useRef<string | null>(null);
-  const role = account?.role ?? "Member";
 
   useEffect(() => {
     let active = true;
@@ -433,21 +437,18 @@ export function MemberSettingsPreview() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {role === "Admin" &&
-            previewTeams.map((team) => (
-              <div key={team.id} className="flex items-center gap-3 text-sm">
-                <span className="flex-1">{team.title}</span>
-                <Check
-                  className="size-4 text-muted-foreground"
-                  aria-label="Access granted"
-                />
-              </div>
-            ))}
+          {accessibleTeams.map((team) => (
+            <div key={team.id} className="flex items-center gap-3 text-sm">
+              <span className="flex-1">{team.title}</span>
+              <Check
+                className="size-4 text-muted-foreground"
+                aria-label="Access granted"
+              />
+            </div>
+          ))}
           <Separator />
           <p className="text-sm text-muted-foreground">
-            {role === "Admin"
-              ? "Access to all Helix team areas."
-              : "Helix member access."}
+            {featureAccess.member?.roles.map((item) => item.label).join(", ") || "Helix member"}
           </p>
         </CardContent>
       </Card>

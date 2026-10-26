@@ -18,6 +18,7 @@ vi.mock("../MemberCV/session", async (original) => ({
   ...await original<typeof import("../MemberCV/session")>(),
   authClient: {},
   memberAuthConfigured: true,
+  memberSessionToken: async () => "test-session-token",
   ensureMemberLanding: session.landing,
   watchMemberSession: () => () => undefined,
   signOutMember: session.signOut,
@@ -33,6 +34,10 @@ vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
 
 const signedOut = { phase: "signed-out", token: null, userId: null, status: 401, error: null };
 const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null, account: { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" } };
+let selfAccess = {
+  memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
+  roles: [], features: ["team:business-marketing", "team:finance", "team:mechanical-production", "recruitment.manage", "member_access.manage"],
+};
 
 describe("internal member platform", () => {
   let container: HTMLDivElement;
@@ -48,6 +53,15 @@ describe("internal member platform", () => {
     session.signOut.mockReset().mockResolvedValue(undefined);
     session.editorNavigate.mockReset();
     session.editorSignOut.mockReset();
+    selfAccess = {
+      memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
+      roles: [], features: ["team:business-marketing", "team:finance", "team:mechanical-production", "recruitment.manage", "member_access.manage"],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/gmail-status" ? { connected: false } : {};
+      return { ok: true, status: 200, json: async () => body } as unknown as Response;
+    }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -91,7 +105,7 @@ describe("internal member platform", () => {
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/admin/access", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
@@ -106,6 +120,17 @@ describe("internal member platform", () => {
     expect(router.state.location.pathname).toBe("/");
     expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
     expect(recruitment.list).not.toHaveBeenCalled();
+  });
+
+  it("shows only the assigned department team and blocks direct access to another team", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    selfAccess = { ...selfAccess, features: ["team:finance"] };
+    await open("/");
+    expect(container.textContent).toContain("Finance");
+    expect(container.textContent).not.toContain("Business & Marketing");
+    await act(async () => router.navigate("/teams/business-marketing/campaigns"));
+    expect(router.state.location.pathname).toBe("/");
+    expect(container.textContent).not.toContain("Partner Spotlight");
   });
 
   it("redirects legacy recruitment links to the Recruiting route", async () => {
