@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { contactEmailEnabled, createContactHandler } from "./contact-service.js";
+import { contactEmailEnabled, createContactHandler } from "../../../api/_lib/contact-service.js";
 
 let pg: PGlite;
 const send = vi.fn(async () => undefined);

@@ -2,11 +2,11 @@ import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { emptyCv } from "../../src/features/MemberCV/model.js";
-import type { CvData, CvSharing } from "../../src/features/MemberCV/types.js";
-import type { SponsorDirectoryResponse, SponsorProfileResponse } from "../../src/features/SponsorWorkspace/directory-types.js";
-import { createSponsorAccess, type SponsorDatabase } from "./sponsor-access.js";
-import { createSponsorDirectoryHandler } from "./sponsor-directory.js";
+import { emptyCv } from "../../../src/features/MemberCV/model.js";
+import type { CvData, CvSharing } from "../../../src/features/MemberCV/types.js";
+import type { SponsorDirectoryResponse, SponsorProfileResponse } from "../../../src/features/SponsorWorkspace/directory-types.js";
+import { createSponsorAccess, type SponsorDatabase } from "../../../api/_lib/sponsor-access.js";
+import { createSponsorDirectoryHandler } from "../../../api/_lib/sponsor-directory.js";
 
 const USER = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
@@ -61,7 +61,7 @@ describe("published sponsor directory and current CV authorization", () => {
       insert into neon_auth."user" values ('${USER}','Contact','contact@example.invalid',true,false), ('${OTHER}','Other','other@example.invalid',true,false), ('${MEMBER}','Åse','ase@helixnmbu.no',true,false);
       insert into neon_auth.account("accountId","providerId","userId") values ('google-ase','google','${MEMBER}');`);
     for (const name of ["001_member_cv.sql", "003_sponsor_portal.sql"]) {
-      await db.exec(await readFile(new URL(`../../db/migrations/${name}`, import.meta.url), "utf8"));
+      await db.exec(await readFile(new URL(`../../../db/migrations/${name}`, import.meta.url), "utf8"));
     }
     await db.query("insert into sponsor.organizations(id,name) values ($1,'First company'),($2,'Other company')", [ORG, OTHER_ORG]);
     await db.query("insert into sponsor.contacts(organization_id,email) values ($1,'contact@example.invalid'),($2,'other@example.invalid')", [ORG, OTHER_ORG]);

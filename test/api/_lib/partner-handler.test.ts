@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createPartnerHandler } from "./partner-handler.js";
-import { verifyNeonSession } from "./neon-session.js";
-import { MemberCvError } from "./member-cv-error.js";
-import type { PartnerServices } from "./partner-service.js";
+import { createPartnerHandler } from "../../../api/_lib/partner-handler.js";
+import { verifyNeonSession } from "../../../api/_lib/neon-session.js";
+import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
+import type { PartnerServices } from "../../../api/_lib/partner-service.js";
 
 const userId = "10000000-0000-4000-8000-000000000001";
 const orgId = "20000000-0000-4000-8000-000000000001";

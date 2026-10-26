@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { createSponsorAccess, requireAdmin, requireDirectory, requirePortal, sponsorEntitlements, type SponsorDatabase } from "./sponsor-access.js";
+import { createSponsorAccess, requireAdmin, requireDirectory, requirePortal, sponsorEntitlements, type SponsorDatabase } from "../../../api/_lib/sponsor-access.js";
 
 const USER = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
@@ -14,7 +14,7 @@ async function fixture() {
   const db = new PGlite(); databases.push(db);
   await db.exec(`create schema neon_auth; create table neon_auth."user" (id uuid primary key, email text, "emailVerified" boolean, banned boolean);
     insert into neon_auth."user" values ('${USER}', 'contact@example.com', true, false), ('${OTHER}', 'member@helixnmbu.no', true, false);`);
-  const migration = await readFile(new URL("../../db/migrations/003_sponsor_portal.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../../../db/migrations/003_sponsor_portal.sql", import.meta.url), "utf8");
   await db.exec(migration); await db.exec(migration);
   await db.query("insert into sponsor.organizations(id,name) values ($1,'Example Racing')", [ORG]);
   await db.query("insert into sponsor.contacts(organization_id,email) values ($1,'contact@example.com')", [ORG]);

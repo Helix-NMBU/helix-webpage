@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertGeneratedPdf, createCvStorage, isOwnedPdfPath, PRESIGN_SECONDS } from "./member-cv-storage.js";
+import { assertGeneratedPdf, createCvStorage, isOwnedPdfPath, PRESIGN_SECONDS } from "../../../api/_lib/member-cv-storage.js";
 
 const member = "10000000-0000-4000-8000-000000000001";
 const file = "30000000-0000-4000-8000-000000000001";

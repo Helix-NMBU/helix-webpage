@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assertFreshHelixGoogleAccount, assertLinkedHelixAccount } from "./helix-workspace.js";
-import { MemberCvError } from "./member-cv-error.js";
+import { assertFreshHelixGoogleAccount, assertLinkedHelixAccount } from "../../../api/_lib/helix-workspace.js";
+import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
 
 const fresh = {
   email: "ase@helixnmbu.no",

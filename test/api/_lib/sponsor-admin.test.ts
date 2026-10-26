@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createSponsorAccess, type SponsorDatabase } from "./sponsor-access.js";
-import { createSponsorAdminHandler } from "./sponsor-admin.js";
+import { createSponsorAccess, type SponsorDatabase } from "../../../api/_lib/sponsor-access.js";
+import { createSponsorAdminHandler } from "../../../api/_lib/sponsor-admin.js";
 
 const ADMIN = "00000000-0000-4000-8000-000000000001";
 const MEMBER = "00000000-0000-4000-8000-000000000002";
@@ -13,7 +13,7 @@ beforeEach(async () => {
   db = new PGlite();
   await db.exec(`create schema neon_auth; create table neon_auth."user"(id uuid primary key,email text,"emailVerified" boolean,banned boolean);
     insert into neon_auth."user" values('${ADMIN}','admin@example.invalid',true,false),('${MEMBER}','member@helixnmbu.no',true,false);`);
-  await db.exec(readFileSync(new URL("../../db/migrations/003_sponsor_portal.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../../../db/migrations/003_sponsor_portal.sql", import.meta.url), "utf8"));
   await db.query("insert into sponsor.staff(email,role) values('admin@example.invalid','admin')");
   await db.query("insert into sponsor.organizations(id,name) values($1,'Example Engineering')", [ORG]);
 });

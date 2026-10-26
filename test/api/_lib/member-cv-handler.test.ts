@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { emptyCv } from "../../src/features/MemberCV/model.js";
-import type { CvData, CvSharing } from "../../src/features/MemberCV/types.js";
-import { createMemberCvHandler } from "./member-cv-handler.js";
-import { MemberCvError, type CvServices, type StoredCv } from "./member-cv-service.js";
+import { emptyCv } from "../../../src/features/MemberCV/model.js";
+import type { CvData, CvSharing } from "../../../src/features/MemberCV/types.js";
+import { createMemberCvHandler } from "../../../api/_lib/member-cv-handler.js";
+import { MemberCvError, type CvServices, type StoredCv } from "../../../api/_lib/member-cv-service.js";
 
 const userId = "cfccf73f-0043-4a02-86c8-e86d4d2f02fd";
 const privateChoices: CvSharing = { cv: false, email: false, phone: false };

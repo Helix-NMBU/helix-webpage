@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCvServices, type CvDatabase } from "./member-cv-service.js";
-import type { CvObjectStorage } from "./member-cv-storage.js";
+import { createCvServices, type CvDatabase } from "../../../api/_lib/member-cv-service.js";
+import type { CvObjectStorage } from "../../../api/_lib/member-cv-storage.js";
 
 const authUser = "10000000-0000-4000-8000-00000000000a";
 const memberId = "10000000-0000-4000-8000-000000000001";

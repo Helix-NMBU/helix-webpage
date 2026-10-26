@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFString } from "pdf-lib";
-import { emptyCv, validateCvData } from "../../src/features/MemberCV/model";
-import { generateCvPdf } from "./member-cv-pdf";
-import type { CvData } from "../../src/features/MemberCV/types";
+import { emptyCv, validateCvData } from "../../../src/features/MemberCV/model";
+import { generateCvPdf } from "../../../api/_lib/member-cv-pdf";
+import type { CvData } from "../../../src/features/MemberCV/types";
 
 const shared = { cv: true, email: true, phone: true };
 

@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
-import { createWebsiteServices, applicationSeason } from "./website-service.js";
-import { MemberCvError } from "./member-cv-error.js";
-import type { CvDatabase } from "./member-cv-service.js";
-import type { ApplicationRow } from "./website-validation.js";
-import { MAX_CV_BYTES, parseCv, websiteBody, isApplicationPath } from "./website-validation.js";
-import type { WebsiteStorage } from "./website-storage.js";
-import { createWebsiteMailer, websiteEmailMessage, type WebsiteEmailMessage } from "./website-email.js";
+import { createWebsiteServices, applicationSeason } from "../../../api/_lib/website-service.js";
+import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
+import type { CvDatabase } from "../../../api/_lib/member-cv-service.js";
+import type { ApplicationRow } from "../../../api/_lib/website-validation.js";
+import { MAX_CV_BYTES, parseCv, websiteBody, isApplicationPath } from "../../../api/_lib/website-validation.js";
+import type { WebsiteStorage } from "../../../api/_lib/website-storage.js";
+import { createWebsiteMailer, websiteEmailMessage, type WebsiteEmailMessage } from "../../../api/_lib/website-email.js";
 
 const member = "10000000-0000-4000-8000-000000000001";
 const recruiterId = "20000000-0000-4000-8000-000000000001";
@@ -20,10 +20,10 @@ let db: CvDatabase;
 beforeAll(async () => {
   pg = new PGlite();
   await pg.exec("create schema identity; create table identity.members (id uuid primary key, google_sub text, email text);");
-  const migration = readFileSync(new URL("../../db/migrations/005_website_applications.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../../db/migrations/005_website_applications.sql", import.meta.url), "utf8");
   await pg.exec(migration);
   await pg.exec(migration); // idempotent without broadening permissions
-  await pg.exec(readFileSync(new URL("../../db/migrations/007_application_submission_limits.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/007_application_submission_limits.sql", import.meta.url), "utf8"));
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
 }, 30000);
 beforeEach(async () => {

@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { generateKeyPair, exportJWK, SignJWT, type CryptoKey, type JWK } from "jose";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { verifyGoogleIdToken, verifyNeonSession } from "./neon-session.js";
+import { verifyGoogleIdToken, verifyNeonSession } from "../../../api/_lib/neon-session.js";
 
 const userId = "cfccf73f-0043-4a02-86c8-e86d4d2f02fd";
 const clientId = "helix-google-client";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withVerifyFullSsl } from "./pg-ssl.js";
+import { withVerifyFullSsl } from "../../../api/_lib/pg-ssl.js";
 
 describe("Postgres SSL mode", () => {
   it("rewrites weak sslmode values to verify-full and leaves other modes alone", () => {
