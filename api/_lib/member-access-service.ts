@@ -1,6 +1,5 @@
 import pg from "pg";
-import { bearer, createCvServices, type CvDatabase, type WorkspaceIdentity } from "./member-cv-service.js";
-import { createCvStorage } from "./member-cv-storage.js";
+import { createCvServices, type CvDatabase, type WorkspaceIdentity } from "./member-cv-service.js";
 import { MemberCvError } from "./member-cv-error.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
 
