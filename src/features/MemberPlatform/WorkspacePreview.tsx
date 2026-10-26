@@ -118,11 +118,9 @@ export function WorkspaceHomePreview() {
                 <p>
                   {turn.scope === "business-marketing"
                     ? "The partner spotlight is planned for the newsletter. The workshop stories campaign is ready for review."
-                    : turn.scope === "finance"
-                      ? "Two expense claims are ready for review. The event budget also needs a decision."
-                      : turn.scope === "mechanical-production"
-                        ? "The frame assembly is in workshop preparation. The mounting bracket is ready for design review."
-                        : "The workshop stories campaign is ready for review. Finance has two expense claims awaiting review, and the production team is preparing the frame assembly."}
+                    : turn.scope === "mechanical-production"
+                      ? "The frame assembly is in workshop preparation. The mounting bracket is ready for design review."
+                      : "The workshop stories campaign is ready for review, and the production team is preparing the frame assembly."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

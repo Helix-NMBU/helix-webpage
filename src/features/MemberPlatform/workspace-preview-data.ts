@@ -1,4 +1,4 @@
-import { Megaphone, Wallet, Wrench } from "lucide-react";
+import { Megaphone, Wrench } from "lucide-react";
 
 // Fictional workspace content for the UI preview, never an authorization policy.
 export const previewTeams = [
@@ -28,36 +28,6 @@ export const previewTeams = [
           ["Meet the team", "Social media", "In progress"],
           ["Workshop stories", "Website", "To review"],
           ["Partner spotlight", "Newsletter", "Planned"],
-        ],
-      },
-    ],
-  },
-  {
-    id: "finance",
-    title: "Finance",
-    icon: Wallet,
-    description: "Budgets, expenses and financial planning.",
-    sections: [
-      {
-        id: "budget",
-        title: "Budget",
-        description: "A shared view of planned spending.",
-        columns: ["Budget area", "Planned amount", "Status"],
-        rows: [
-          ["Materials", "NOK 25,000", "In progress"],
-          ["Events", "NOK 8,000", "To review"],
-          ["Team equipment", "NOK 12,000", "Planned"],
-        ],
-      },
-      {
-        id: "expenses",
-        title: "Expenses",
-        description: "Collect claims and follow their approval.",
-        columns: ["Expense", "Amount", "Status"],
-        rows: [
-          ["Workshop supplies", "NOK 1,240", "To review"],
-          ["Event materials", "NOK 860", "To review"],
-          ["Travel reimbursement", "NOK 450", "Planned"],
         ],
       },
     ],

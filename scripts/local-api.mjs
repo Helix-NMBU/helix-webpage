@@ -16,6 +16,7 @@ const handlers = new Map([
   ['/api/member-access', '/api/member-access.ts'],
   ['/api/partner', '/api/partner.ts'],
   ['/api/website', '/api/website.ts'],
+  ['/api/finance', '/api/finance.ts'],
   ['/api/contact', '/api/contact.ts'],
 ]);
 

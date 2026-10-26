@@ -1,5 +1,6 @@
 import { validateCvData, validateSharing } from "./model";
 import type { CvEnvelope, CvMutation } from "./types";
+import { financeReturnPath } from "../Finance/routes";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
 
 export class CvRequestError extends Error {
@@ -141,6 +142,10 @@ export function memberLoginDestination(state: unknown): string {
         ? from.pathname
         : null;
   if (isMemberPlatform()) {
+    if (typeof from === "string") {
+      const financePath = financeReturnPath(from);
+      if (financePath) return financePath;
+    }
     if (pathname === "/recruiting") return pathname;
     return pathname === paths.profile || pathname === "/member/profile" ? paths.profile : paths.home;
   }

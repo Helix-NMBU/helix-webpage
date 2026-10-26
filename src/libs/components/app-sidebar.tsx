@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, Home, Mail, Shield, UsersRound } from "lucide-react";
+import { Bell, Home, Mail, Shield, UsersRound, Wallet } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -14,6 +14,7 @@ import {
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
 import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
+import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 
 export type MemberSidebarActions = {
@@ -31,6 +32,7 @@ export function AppSidebar({
   const location = useLocation();
   const notifications = useMemberNotifications();
   const recruitment = useRecruitmentAccess();
+  const finance = useFinanceAccess();
   const featureAccess = useMemberFeatureAccess();
   const visibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team.${team.id}`));
   const activeTeam = visibleTeams.find((team) =>
@@ -74,6 +76,19 @@ export function AppSidebar({
             },
             { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
             { title: "Mail", url: "/mail", icon: Mail, isActive: location.pathname.startsWith("/mail") },
+            ...(finance.access === "denied" ? [] : [{
+              title: "Finance",
+              url: "/finance",
+              icon: Wallet,
+              isActive: location.pathname.startsWith("/finance"),
+              defaultOpen: true,
+              items: [
+                { title: "Overview", url: "/finance" },
+                { title: "Purchases", url: "/finance/purchases" },
+                { title: "Budgets", url: "/finance/budgets" },
+                ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
+              ],
+            }]),
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
