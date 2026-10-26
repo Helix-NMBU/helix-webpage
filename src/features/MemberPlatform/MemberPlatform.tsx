@@ -132,7 +132,7 @@ function LegacyMemberRedirect({ to }: { to: string }) {
 
 function TeamFeatureRoute() {
   const { teamId = "" } = useParams();
-  return <RequireMemberFeature feature={`team:${teamId}`}><TeamWorkspacePreview /></RequireMemberFeature>;
+  return <RequireMemberFeature feature={`team.${teamId}`}><TeamWorkspacePreview /></RequireMemberFeature>;
 }
 
 function RecruitmentFeatureRoute() {

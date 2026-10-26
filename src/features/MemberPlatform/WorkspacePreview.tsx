@@ -62,7 +62,7 @@ const suggestions = [
 
 export function WorkspaceHomePreview() {
   const featureAccess = useMemberFeatureAccess();
-  const accessibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team:${team.id}`));
+  const accessibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team.${team.id}`));
   const [text, setText] = useState("");
   const [scope, setScope] = useState("all");
   const [turn, setTurn] = useState<{ question: string; scope: string } | null>(
@@ -292,7 +292,7 @@ export function MemberSettingsPreview() {
   const notify = useNotify();
   const account = useMemberAccount();
   const featureAccess = useMemberFeatureAccess();
-  const accessibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team:${team.id}`));
+  const accessibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team.${team.id}`));
   const accountEmail = account?.email ?? "";
   const [gmailStatus, setGmailStatus] = useState<"checking" | "connected" | "disconnected">(() => {
     const cached = getCachedGmailConnection(accountEmail);

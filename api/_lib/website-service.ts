@@ -31,7 +31,7 @@ export function applicationSeason(now: Date): string {
 }
 export function createWebsiteServices(deps: {
   db: CvDatabase; authenticate: (token: string) => Promise<WorkspaceIdentity>;
-  storage: () => WebsiteStorage; positions?: () => Promise<WebsitePosition[]>;
+  storage: () => WebsiteStorage;
   mail: WebsiteMailer; now?: () => Date;
 }): WebsiteServices {
   const { db } = deps;
@@ -70,9 +70,15 @@ export function createWebsiteServices(deps: {
     async createPosition(token, body) {
       await authorize(token);
       const position = parseWebsitePosition(body.position ?? body);
-      const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>(`insert into website.positions (id, document, visible, display_order)
-        values ($1, $2::jsonb, false, coalesce((select max(display_order) + 1 from website.positions), 0))
-        returning document, visible`, [position.id, JSON.stringify(position)]);
+      let rows: { document: WebsitePosition; visible: boolean }[];
+      try {
+        ({ rows } = await db.query<{ document: WebsitePosition; visible: boolean }>(`insert into website.positions (id, document, visible, display_order)
+          values ($1, $2::jsonb, false, coalesce((select max(display_order) + 1 from website.positions), 0))
+          returning document, visible`, [position.id, JSON.stringify(position)]));
+      } catch (error) {
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") throw new MemberCvError(409, "A position with this title already exists. Choose a different title.");
+        throw error;
+      }
       if (!rows[0]) throw new MemberCvError(503, "Could not save the position.");
       return { ...rows[0].document, visible: rows[0].visible };
     },
@@ -194,6 +200,5 @@ export function neonWebsiteServices(): WebsiteServices {
   } });
   return createWebsiteServices({ db, authenticate: token => cv.authenticate(token),
     storage: () => createWebsiteStorage(), mail: createWebsiteMailer(db),
-    positions: async () => [],
   });
 }

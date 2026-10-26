@@ -21,10 +21,10 @@ beforeAll(async () => {
   pg = new PGlite();
   await pg.exec("create schema identity; create table identity.members (id uuid primary key, google_sub text, email text);");
   const migration = readFileSync(new URL("../../db/migrations/005_website_applications.sql", import.meta.url), "utf8");
+  await pg.exec(readFileSync(new URL("../../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
   await pg.exec(migration);
   await pg.exec(migration); // idempotent without broadening permissions
   await pg.exec(readFileSync(new URL("../../db/migrations/007_application_submission_limits.sql", import.meta.url), "utf8"));
-  await pg.exec(readFileSync(new URL("../../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
 }, 30000);
 beforeEach(async () => {
@@ -50,7 +50,7 @@ function fixture(options: { uncertain?: boolean; uploadFails?: boolean; deleteFa
     return { userId: member, googleSub: "google-member", email: "recruiter@helixnmbu.no", name: "Test Recruiter" };
   });
   const mail = vi.fn(async () => { if (options.mailFails) throw new Error("unavailable"); return "skipped" as const; });
-  const service = createWebsiteServices({ db: traced, authenticate, storage: () => storage, positions: async () => positions,
+  const service = createWebsiteServices({ db: traced, authenticate, storage: () => storage,
     mail, now: () => new Date("2026-10-26T12:00:00Z") });
   return { service, storage, mail, calls, authenticate };
 }
@@ -77,6 +77,34 @@ describe("website access and submission against PostgreSQL", () => {
     await expect(f.service.session("member")).rejects.toMatchObject({ status: 403 });
     expect((await db.query("select * from website.recruiters")).rows).toEqual([]);
   });
+  it("creates positions hidden, then publishes and permanently deletes them", async () => {
+    const f = fixture();
+    const inputPosition = {
+      title: "Finance Lead", department: "Finance", applyUrl: "https://apply.example.test/finance",
+      contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build the finance function.",
+      tasks: ["Plan the budget"], achieve: ["Lead finance"],
+    };
+    await expect(f.service.createPosition("member", { position: inputPosition })).rejects.toMatchObject({ status: 403 });
+    await allow();
+    const created = await f.service.createPosition("member", { position: inputPosition });
+    expect(created).toMatchObject({ id: "finance-lead", visible: false, title: "Finance Lead" });
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(false);
+    await expect(f.service.createPosition("member", { position: inputPosition })).rejects.toMatchObject({ status: 409 });
+    await f.service.updatePosition("member", created.id, { position: { ...inputPosition, title: "Finance Director" } });
+    await f.service.setPositionVisibility("member", created.id, true);
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(true);
+    await f.service.deletePosition("member", created.id);
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(false);
+  });
+  it("keeps application position snapshots after the posting is deleted", async () => {
+    await allow();
+    const f = fixture();
+    const submitted = await submit(f);
+    await f.service.deletePosition("member", "software");
+    const row = (await db.query<ApplicationRow>("select * from website.applications where id = $1", [submitted.id])).rows[0];
+    expect(row).toMatchObject({ position_id: "software", position_title: "Software Engineer" });
+    expect((await f.service.positions()).some((position) => position.id === "software")).toBe(false);
+  });
   it("requires member authentication even when the recruiter allowlist is populated", async () => {
     await allow(); const f = fixture();
     await expect(f.service.list("forged", 0)).rejects.toMatchObject({ status: 401 });
@@ -101,7 +129,9 @@ describe("website access and submission against PostgreSQL", () => {
       { cv_base64: "a".repeat(4 * Math.ceil(MAX_CV_BYTES / 3) + 4) }, { email: "invalid" }, { website: "bot" }]) {
       await expect(submit(f, { ...input, ...change })).rejects.toMatchObject({ status: 400 });
     }
-    expect(f.calls).toEqual([]); expect(f.storage.put).not.toHaveBeenCalled();
+    expect(f.calls).toHaveLength(10);
+    expect(f.calls.every(sql => sql.startsWith("select document from website.positions where visible = true"))).toBe(true);
+    expect(f.storage.put).not.toHaveBeenCalled();
   });
   it("enforces case-insensitive email/season uniqueness and only removes the new conflicting file", async () => {
     const f = fixture(); await submit(f);

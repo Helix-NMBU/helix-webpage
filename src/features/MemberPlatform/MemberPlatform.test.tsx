@@ -36,7 +36,7 @@ const signedOut = { phase: "signed-out", token: null, userId: null, status: 401,
 const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null, account: { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" } };
 let selfAccess = {
   memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
-  roles: [], features: ["team:business-marketing", "team:finance", "team:mechanical-production", "recruitment.manage", "member_access.manage"],
+  roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
 };
 
 describe("internal member platform", () => {
@@ -55,7 +55,7 @@ describe("internal member platform", () => {
     session.editorSignOut.mockReset();
     selfAccess = {
       memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
-      roles: [], features: ["team:business-marketing", "team:finance", "team:mechanical-production", "recruitment.manage", "member_access.manage"],
+      roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
     };
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -124,7 +124,7 @@ describe("internal member platform", () => {
 
   it("shows only the assigned department team and blocks direct access to another team", async () => {
     session.landing.mockResolvedValue(signedIn);
-    selfAccess = { ...selfAccess, features: ["team:finance"] };
+    selfAccess = { ...selfAccess, features: ["team.finance"] };
     await open("/");
     expect(container.textContent).toContain("Finance");
     expect(container.textContent).not.toContain("Business & Marketing");

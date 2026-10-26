@@ -39,8 +39,8 @@ const LOCAL_MEMBER: MemberFeatureState = {
     { key: "platform_administrator", label: "Platform administrator" },
   ],
   features: [
-    "team:business-marketing", "team:finance", "team:mechanical-production", "team:electrical",
-    "team:software-autonomous", "team:logistics", "recruitment.manage", "member_access.manage",
+    "team.business-marketing", "team.finance", "team.mechanical-production", "team.electrical",
+    "team.software-autonomous", "team.logistics", "recruitment.manage", "member_access.manage",
   ],
 };
 

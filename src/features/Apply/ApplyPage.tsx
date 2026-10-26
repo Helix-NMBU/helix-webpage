@@ -42,7 +42,7 @@ export default function ApplyPage() {
     return () => { active = false; };
   }, [notify]);
 
-  const openApplication = useMemo(() => positions.find((p) => p.department === "Open") ?? null, [positions]);
+  const openApplications = useMemo(() => positions.filter((p) => p.department === "Open"), [positions]);
 
   const filtered = useMemo(() => {
     const regular = positions.filter((p) => p.department !== "Open");
@@ -437,14 +437,13 @@ export default function ApplyPage() {
         </div>
 
         {/* Open application — always visible */}
-        {openApplication && (() => {
-          const pos = openApplication;
+        {openApplications.length > 0 && <div style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
+          <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
+            Don't see the right fit?
+          </p>
+          {openApplications.map((pos) => {
           const isOpen = openId === pos.id;
           return (
-            <div style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
-              <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
-                Don't see the right fit?
-              </p>
               <div
                 key={pos.id}
                 data-pos-id={pos.id}
@@ -546,9 +545,9 @@ export default function ApplyPage() {
                   )}
                 </AnimatePresence>
               </div>
-            </div>
           );
-        })()}
+          })}
+        </div>}
       </div>
     </div>
   );

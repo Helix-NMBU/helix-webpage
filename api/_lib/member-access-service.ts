@@ -28,7 +28,7 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const { identity, memberId } = await identityAndId(token);
       const { rows } = await db.query<{ department_id: string | null; roles: AccessRole[]; features: string[] }>(`select md.department_key as department_id,
         coalesce((select jsonb_agg(jsonb_build_object('key', r.role_key, 'label', r.label) order by r.sort_order) from identity.member_roles mr join identity.platform_roles r using (role_key) where mr.member_id = m.id), '[]'::jsonb) as roles,
-        coalesce((select array_agg(f.feature_key order by f.sort_order) from identity.member_features(m.id) f join identity.platform_features pf on pf.feature_key = f.feature_key), array[]::text[]) as features
+        coalesce((select array_agg(f.feature_key order by pf.sort_order) from identity.member_features(m.id) f join identity.platform_features pf on pf.feature_key = f.feature_key), array[]::text[]) as features
         from identity.members m left join identity.member_departments md on md.member_id = m.id where m.id = $1::uuid`, [memberId]);
       const row = rows[0];
       if (!row) throw new MemberCvError(404, "Member not found.");
@@ -50,6 +50,7 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const { memberId: actorId } = await identityAndId(token);
       await requireAdmin(actorId);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberId)) throw new MemberCvError(400, "A valid member ID is required.");
+      if (actorId === memberId) throw new MemberCvError(403, "You cannot change your own access assignments.");
       if (departmentId !== null && (typeof departmentId !== "string" || departmentId.length > 80)) throw new MemberCvError(400, "Choose a valid department.");
       if (!Array.isArray(roleKeys) || roleKeys.length > 4 || roleKeys.some(key => typeof key !== "string") || new Set(roleKeys).size !== roleKeys.length) throw new MemberCvError(400, "Choose valid platform roles.");
       try { await db.query("select identity.save_member_access($1::uuid, $2::text, $3::text[])", [memberId, departmentId, roleKeys]); }

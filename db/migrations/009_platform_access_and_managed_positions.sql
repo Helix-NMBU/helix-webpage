@@ -221,7 +221,6 @@ returns void
 language plpgsql security invoker set search_path = pg_catalog, identity
 as $$
 declare
-  has_scoped_role boolean;
   platform_admin_count bigint;
 begin
   if not exists (select 1 from identity.members where id = p_member_id) then

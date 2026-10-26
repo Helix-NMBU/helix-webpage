@@ -32,7 +32,7 @@ export function AppSidebar({
   const notifications = useMemberNotifications();
   const recruitment = useRecruitmentAccess();
   const featureAccess = useMemberFeatureAccess();
-  const visibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team:${team.id}`));
+  const visibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team.${team.id}`));
   const activeTeam = visibleTeams.find((team) =>
     location.pathname.startsWith(`/teams/${team.id}/`),
   );
