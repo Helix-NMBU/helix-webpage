@@ -20,6 +20,7 @@ import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
+import { financePageTitle } from "../Finance/routes";
 
 function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
@@ -31,7 +32,10 @@ function Workspace({ children }: { children?: ReactNode }) {
   const profile = location.pathname === "/profile";
   const mail = location.pathname.startsWith("/mail");
   const page = previewPage(location.pathname);
-  const pageTitle = profile
+  const financeTitle = financePageTitle(location.pathname);
+  const pageTitle = financeTitle
+    ? financeTitle
+    : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
