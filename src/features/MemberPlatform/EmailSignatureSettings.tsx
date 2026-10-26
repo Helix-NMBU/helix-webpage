@@ -87,7 +87,7 @@ export function EmailSignatureSettings() {
         {isAdmin ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <fieldset disabled={busy} className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3"><Switch id="signature-enabled" checked={draft.enabled} onCheckedChange={(enabled) => setDraft({ ...draft, enabled })} /><Label htmlFor="signature-enabled" className="text-xs">Include in outgoing emails</Label></div>
+              <div className="flex items-center gap-3"><Switch id="signature-enabled" checked={draft.enabled} onCheckedChange={(enabled) => setDraft({ ...draft, enabled })} /><Label htmlFor="signature-enabled" className="text-xs">Automatically add signature</Label></div>
               <Button type="button" variant="outline" size="sm" onClick={() => {
                 setDraft({ ...structuredClone(defaultSignatureSettings), enabled: draft.enabled });
                 notify("Helix design loaded", "Save the signature to apply this design to every member.", { variant: "info", href: null });

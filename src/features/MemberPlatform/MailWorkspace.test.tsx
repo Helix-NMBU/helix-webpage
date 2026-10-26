@@ -15,12 +15,12 @@ vi.mock("../MemberCV/session", () => ({ memberSessionToken: async () => "member-
 const member = { name: "Åse Example", email: "ase@helixnmbu.no", role: "Member" as const, helixRole: "Mechanical lead" };
 const original = { id: "unread-1", threadId: "thread-1", from: "Jordan <jordan@example.test>", replyTo: "jordan@example.test", subject: "Team update", date: "2026-10-26T10:00:00Z", snippet: "Meeting agenda", unread: true, starred: false, body: "Original plain text", htmlBody: '<table><tr><td style="color:#123456">Original <b>formatted email</b></td></tr></table><script>evil()</script>' };
 
-function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean; multipleUnread?: boolean; readBeforeOpening?: boolean } = {}) {
+function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean; multipleUnread?: boolean; readBeforeOpening?: boolean; signatureEnabled?: boolean } = {}) {
   const unreadIds = new Set([original.id, ...(options.multipleUnread ? ["unread-2"] : [])]);
   const source = [original, ...(options.multipleUnread ? [{ ...original, id: "unread-2", subject: "Design review" }] : []), { ...original, id: "read-1", subject: "Already read" }];
   const requests: URL[] = [];
   const actions: { action: string; id: string }[] = [];
-  const settings = { ...defaultSignatureSettings, enabled: true };
+  const settings = { ...defaultSignatureSettings, enabled: options.signatureEnabled ?? true };
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input), "https://internal.helixnmbu.no");
     requests.push(url);
@@ -163,6 +163,48 @@ describe("mail workspace", () => {
       expect(dialog.querySelectorAll('[aria-label="Your email signature"]')).toHaveLength(1);
       await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
     }
+  });
+
+  it("preloads the signature and keeps it immediately visible in new drafts, replies, and forwards during refresh", async () => {
+    const server = mailServer();
+    await openLive();
+    await until(() => server.requests.some((url) => url.searchParams.get("action") === "signature"));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]')!.click());
+    await until(() => Boolean(container.querySelector('[aria-label="Reply"]')) && !container.querySelector<HTMLButtonElement>('[aria-label="Reply"]')!.disabled);
+    const originalFetch = fetch;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let refreshes = 0;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (input, init) => {
+      if (new URL(String(input), window.location.origin).searchParams.get("action") === "signature") {
+        refreshes += 1;
+        await gate;
+      }
+      return originalFetch(input, init);
+    }));
+    try {
+      for (const mode of ["New message", "Reply", "Forward"]) {
+        await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${mode}"]`)!.click());
+        const dialog = document.querySelector('[role="dialog"]')!;
+        expect(dialog.querySelectorAll('[aria-label="Your email signature"]')).toHaveLength(1);
+        expect(dialog.querySelector<HTMLIFrameElement>('[aria-label="Your email signature"] iframe')!.srcdoc).toContain("Åse Example");
+        expect(dialog.querySelector('[aria-label="Loading signature"]')).toBeNull();
+        expect(dialog.querySelector<HTMLTextAreaElement>('[aria-label="Message"]')!.value).toBe("");
+        if (mode !== "Forward") await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
+      }
+      expect(refreshes).toBe(1);
+    } finally { await act(async () => release()); }
+    expect(document.querySelectorAll('[aria-label="Your email signature"]')).toHaveLength(1);
+  });
+
+  it("respects an administrator-disabled signature in a new draft", async () => {
+    const server = mailServer({ signatureEnabled: false });
+    await openLive();
+    await until(() => server.requests.some((url) => url.searchParams.get("action") === "signature"));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="New message"]')!.click());
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Your email signature"]')).toBeNull();
   });
 
   it("offers the next unread page when the current page has no remaining unread messages", async () => {

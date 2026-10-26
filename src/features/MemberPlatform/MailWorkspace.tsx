@@ -499,7 +499,7 @@ function MessageComposer({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Label htmlFor="compose-body" className="sr-only">Message</Label>
           <Textarea id="compose-body" className="min-h-40 w-full resize-y rounded-none border-0 bg-transparent px-5 py-5 leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
-          {signatureLoading ? <div className="px-5 py-3" role="status" aria-label="Loading signature"><Skeleton className="h-20 w-52" /></div> : signature?.signature.html ? <div className="flex h-64 min-h-0" aria-label="Your email signature"><EmailHtmlFrame html={signature.signature.html} plainText={signature.signature.text} /></div> : null}
+          {signature?.signature.html ? <div className="pb-4" aria-label="Your email signature"><EmailHtmlFrame html={signature.signature.html} plainText={signature.signature.text} fitContent /></div> : signatureLoading ? <div className="px-5 py-3" role="status" aria-label="Loading signature"><Skeleton className="h-20 w-52" /></div> : null}
           {quotedMessage && <section aria-label="Original message" className="space-y-3 px-5 pb-5 text-muted-foreground">
             <div className="space-y-1 text-xs"><p className="font-medium">{mode === "reply" ? `On ${formatMessageDetailDate(quotedMessage.date)}, ${quotedMessage.from} wrote:` : "Forwarded message"}</p>{mode === "forward" && <><p>From: {quotedMessage.from}</p><p>Date: {formatMessageDetailDate(quotedMessage.date)}</p><p>Subject: {quotedMessage.subject}</p></>}</div>
             <blockquote className="whitespace-pre-wrap break-words border-l-2 border-border pl-4 text-sm leading-6">{quotedMessage.body || quotedMessage.snippet}</blockquote>
@@ -544,12 +544,15 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [quotedMessage, setQuotedMessage] = useState<GmailMessage | null>(null);
-  const [signature, setSignature] = useState<SignatureSnapshot | null>(null);
+  const [signatureSnapshot, setSignature] = useState<SignatureSnapshot | null>(null);
+  const signature = signatureSnapshot?.member.email.toLowerCase() === accountEmail.toLowerCase() ? signatureSnapshot : null;
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirmAction, setConfirmAction] = useState<MessageAction | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const boundUserId = useRef<string | null>(null);
+  const signatureRequestId = useRef(0);
+  const signatureRequest = useRef<{ accountEmail: string; promise: Promise<SignatureSnapshot | null> } | null>(null);
   const listRequestId = useRef(0);
   const lastListContext = useRef<string | null>(null);
   const detailRequestId = useRef(0);
@@ -564,14 +567,28 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     return () => window.removeEventListener("focus", refreshMail);
   }, [refreshMail]);
 
-  const loadSignature = useCallback(async () => {
+  const loadSignature = useCallback(() => {
+    if (signatureRequest.current?.accountEmail === accountEmail) return signatureRequest.current.promise;
+    const requestId = ++signatureRequestId.current;
     setSignatureLoading(true);
-    setSignature(null);
-    try { setSignature(await emailSignatureRequest(boundUserId)); }
-    catch (error) {
-      notify("Could not load signature", error instanceof Error ? error.message : "Please try again.", { id: "composer-signature", variant: "error", href: null, action: { label: "Try again", onClick: () => void loadSignature() } });
-    } finally { setSignatureLoading(false); }
-  }, [notify]);
+    const promise = emailSignatureRequest(boundUserId).then((result) => {
+      if (requestId === signatureRequestId.current) setSignature(result);
+      return result;
+    }).catch((error: unknown) => {
+      if (requestId === signatureRequestId.current) {
+        setSignature(null);
+        notify("Could not load signature", error instanceof Error ? error.message : "Please try again.", { id: "composer-signature", variant: "error", href: null, action: { label: "Try again", onClick: () => void loadSignature() } });
+      }
+      return null;
+    }).finally(() => {
+      if (requestId === signatureRequestId.current) {
+        signatureRequest.current = null;
+        setSignatureLoading(false);
+      }
+    });
+    signatureRequest.current = { accountEmail, promise };
+    return promise;
+  }, [accountEmail, notify]);
 
   useEffect(() => {
     if (connectedOverride !== undefined) return;
@@ -616,6 +633,17 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const connected = connectedOverride ?? connectionState === "connected";
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
   const listContext = JSON.stringify([accountEmail, activeFolder, search.trim(), unreadOnly]);
+
+  useEffect(() => {
+    if (connected && accountEmail) void loadSignature();
+    const revalidateSignature = () => { if (connected && accountEmail) void loadSignature(); };
+    window.addEventListener("focus", revalidateSignature);
+    return () => {
+      window.removeEventListener("focus", revalidateSignature);
+      signatureRequestId.current += 1;
+      signatureRequest.current = null;
+    };
+  }, [connected, accountEmail, loadSignature]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined) return;
