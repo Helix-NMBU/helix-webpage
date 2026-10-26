@@ -1,0 +1,64 @@
+import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
+import { MemberCvError } from "./member-cv-error.js";
+
+function invalid(message = "Invalid project management request."): never { throw new MemberCvError(400, message); }
+function object(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return invalid();
+  return value as Record<string, unknown>;
+}
+function text(value: unknown, label: string, max: number, required = false): string {
+  if (typeof value !== "string" || value.length > max || (required && !value.trim())) return invalid(`Enter a valid ${label}.`);
+  return value.trim();
+}
+function oneOf<T extends string>(value: unknown, choices: readonly T[]): T {
+  if (typeof value !== "string" || !choices.includes(value as T)) return invalid();
+  return value as T;
+}
+function uuid(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return invalid("Choose a valid project or member.");
+  return value.toLowerCase();
+}
+function date(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value < "2000-01-01" || value > "2100-12-31") return invalid("Enter a valid date between 2000 and 2100.");
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return invalid("Enter a valid calendar date.");
+  return value;
+}
+function task(value: unknown): TaskInput {
+  const body = object(value);
+  const input: TaskInput = {
+    title: text(body.title, "title", 200, true), description: text(body.description, "description", 2000),
+    category: oneOf(body.category, TASK_CATEGORIES), projectId: body.projectId === null ? null : uuid(body.projectId),
+    assigneeId: body.assigneeId === null ? null : uuid(body.assigneeId), deadline: date(body.deadline), startDate: date(body.startDate),
+    status: oneOf(body.status, TASK_STATUSES), priority: oneOf(body.priority, TASK_PRIORITIES), kind: oneOf(body.kind, ["task", "milestone"]),
+    partnerName: text(body.partnerName, "partner name", 200), blockedReason: text(body.blockedReason, "blocked reason", 500),
+  };
+  if (input.startDate && input.deadline && input.startDate > input.deadline) return invalid("The start date must be on or before the deadline.");
+  if (input.kind === "milestone" && !input.deadline) return invalid("A milestone needs a deadline.");
+  if (input.category === "partnership-deliverables" && !input.partnerName) return invalid("Enter the partner this deliverable belongs to.");
+  if (input.status === "blocked" && !input.blockedReason) return invalid("Explain what is blocking this task.");
+  return input;
+}
+function project(value: unknown): ProjectInput {
+  const body = object(value);
+  if (!Array.isArray(body.departments) || body.departments.length > 10) return invalid("Choose at most 10 departments.");
+  return { name: text(body.name, "project name", 200, true), description: text(body.description, "description", 2000),
+    category: oneOf(body.category, TASK_CATEGORIES), departments: [...new Set(body.departments.map(value => text(value, "department", 100, true)))], deadline: date(body.deadline) };
+}
+export function parseProjectMutation(value: unknown): ProjectMutation {
+  const body = object(value);
+  if (JSON.stringify(body).length > 20000) return invalid("This request is too large.");
+  const id = uuid(body.id);
+  const expectedRevision = body.expectedRevision;
+  if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
+  if (body.action === "save_task") return { action: body.action, id, expectedRevision, task: task(body.task) };
+  if (body.action === "save_project") return { action: body.action, id, expectedRevision, project: project(body.project) };
+  if (body.action === "set_status") {
+    const status = oneOf(body.status, TASK_STATUSES);
+    const blockedReason = text(body.blockedReason, "blocked reason", 500);
+    if (status === "blocked" && !blockedReason) return invalid("Explain what is blocking this task.");
+    return { action: body.action, id, expectedRevision, status, blockedReason };
+  }
+  return invalid();
+}
