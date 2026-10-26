@@ -83,6 +83,10 @@ html[data-member-theme="dark"] body:has(.member-platform) {
   --platform-canvas: #1c1c1c;
   color-scheme: dark;
 }
+/* Keep internal platform controls and surfaces flat in light mode. Focus rings use their own utilities. */
+html[data-member-theme="light"] body:has(.member-platform:not(.partner-portal)) [class*="shadow"] {
+  box-shadow: none !important;
+}
 html[data-member-theme] .mcv-page.portal-root { --muted-foreground: #65656e; --color-muted-foreground: var(--muted-foreground); }
 html[data-member-theme="dark"] .mcv-page.portal-root { --muted-foreground: #aaa; }
 html[data-member-theme] .mcv-intro .mcv-eyebrow,
