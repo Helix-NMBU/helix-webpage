@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconChevronRight, IconCube } from "@tabler/icons-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Skeleton } from "@libs/components/ui/skeleton";
@@ -284,22 +283,7 @@ export function ProjectDetail({
       aria-busy={busy || loading}
       className="space-y-5 pb-8"
     >
-      <header className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 text-muted-foreground"
-          onClick={() => navigate("/projects")}
-        >
-          Projects
-        </Button>
-        <IconChevronRight
-          aria-hidden="true"
-          className="size-3 text-muted-foreground"
-        />
-        <IconCube aria-hidden="true" className="size-4 text-muted-foreground" />
-        <h1 className="text-base font-medium">{project.name}</h1>
-      </header>
+      <h1 className="sr-only">{project.name}</h1>
       <Tabs value={tab} onValueChange={selectTab} className="flex-col">
         <TabsList
           aria-label="Project views"

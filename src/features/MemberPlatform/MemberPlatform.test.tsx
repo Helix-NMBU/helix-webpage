@@ -448,11 +448,16 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects');
     await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('table button')].find(b=>b.textContent==='Chassis & assembly')!.click());
     expect(router.state.location.pathname).toBe('/projects/00000000-0000-4000-8000-000000000100');
+    const breadcrumb=container.querySelector('nav[aria-label="breadcrumb"]')!;
+    expect(breadcrumb.textContent).toContain('Helix NMBU');expect(breadcrumb.textContent).toContain('Projects');expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('Chassis & assembly');
+    expect(container.querySelector('[aria-label="Chassis & assembly project"] header')).toBeNull();
     const issues=container.querySelector('[aria-label="Project issues"]')!;
     expect(issues.textContent).toContain('Complete chassis design review');expect(issues.textContent).toContain('Verify dimensions');expect(issues.textContent).not.toContain('Publish workshop update');
     const details=container.querySelector('[aria-label="Project details"]')!;
     expect(details.textContent).toContain('Properties');expect(details.textContent).toContain('Milestones');expect(details.textContent).toContain('Progress');
     expect(details.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
+    await act(async()=>[...breadcrumb.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Projects')!.click());
+    expect(router.state.location.pathname).toBe('/projects');
   });
 
   it("toggles a milestone filter off on a second click and keeps progress scoped to the whole project",async()=>{

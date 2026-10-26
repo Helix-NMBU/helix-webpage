@@ -1,3 +1,4 @@
+import { IconCube } from "@tabler/icons-react";
 import { useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "@libs/components/app-sidebar";
@@ -36,8 +37,10 @@ function Workspace({ children }: { children?: ReactNode }) {
   const page = previewPage(location.pathname);
   const projectManagement = location.pathname.startsWith("/project-management");
   const projectSection = location.pathname.split("/")[2];
-  const department = useWorkspace()?.data?.departments.find(item => departmentPath(item.name) === location.pathname);
-  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? "Projects" : location.pathname.startsWith("/departments") ? department?.name ?? "Departments" : null;
+  const directory = useWorkspace()?.data;
+  const department = directory?.departments.find(item => departmentPath(item.name) === location.pathname);
+  const project = directory?.projects.find(item => location.pathname === `/projects/${item.id}`);
+  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department?.name ?? "Departments" : null;
   const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Project Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname === "/tasks" ? "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
@@ -91,11 +94,11 @@ function Workspace({ children }: { children?: ReactNode }) {
         ) : (
           <>
             <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-              <div className="flex items-center gap-2 px-4">
+              <div className="flex min-w-0 items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator orientation="vertical" className="mr-2 h-4" />
-                <Breadcrumb>
-                  <BreadcrumbList>
+                <Breadcrumb className="min-w-0">
+                  <BreadcrumbList className="min-w-0 flex-nowrap">
                     <BreadcrumbItem className="hidden md:block">
                       <BreadcrumbLink asChild>
                         <button
@@ -116,8 +119,19 @@ function Workspace({ children }: { children?: ReactNode }) {
                         <BreadcrumbSeparator className="hidden lg:block" />
                       </>
                     )}
-                    <BreadcrumbItem>
-                      <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                    {project && <>
+                      <BreadcrumbItem>
+                        <BreadcrumbLink asChild>
+                          <button type="button" disabled={disabled} onClick={event => go("/projects", event.currentTarget)}>Projects</button>
+                        </BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>}
+                    <BreadcrumbItem className="min-w-0">
+                      <BreadcrumbPage className="flex min-w-0 items-center gap-2">
+                        {project && <IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />}
+                        <span className="truncate">{pageTitle}</span>
+                      </BreadcrumbPage>
                     </BreadcrumbItem>
                   </BreadcrumbList>
                 </Breadcrumb>
