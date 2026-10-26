@@ -57,6 +57,57 @@ async function call(
   return { status, result, headers };
 }
 describe("workspace request boundary", () => {
+  it("routes department reads and settings without exposing them in the directory payload", async () => {
+    const services = fixture();
+    const department = {
+      load: vi.fn().mockResolvedValue({ departmentId: id(1), revision: 0 }),
+      save: vi.fn().mockResolvedValue({ departmentId: id(1), revision: 1 }),
+    };
+    let status = 0;
+    let body: unknown;
+    const res = {
+      setHeader: () => undefined,
+      status: (value: number) => {
+        status = value;
+        return res;
+      },
+      json: (value: unknown) => {
+        body = value;
+        return res;
+      },
+    };
+    const handler = createWorkspaceHandler(
+      () => services,
+      () => department,
+    );
+    await handler(
+      {
+        method: "GET",
+        query: { department: id(1) },
+        headers: { authorization: "Bearer verified" },
+      } as unknown as VercelRequest,
+      res as unknown as VercelResponse,
+    );
+    expect(department.load).toHaveBeenCalledWith("verified", id(1));
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ revision: 0 });
+    expect(services.load).not.toHaveBeenCalled();
+    await handler(
+      {
+        method: "POST",
+        query: { department: id(1) },
+        body: { action: "save_department_home" },
+        headers: { authorization: "Bearer verified" },
+      } as unknown as VercelRequest,
+      res as unknown as VercelResponse,
+    );
+    expect(department.save).toHaveBeenCalledWith("verified", {
+      action: "save_department_home",
+    });
+    expect(body).toMatchObject({ revision: 1 });
+    expect(services.mutate).not.toHaveBeenCalled();
+  });
+
   it("routes the workspace module through the existing member function", async () => {
     let status = 0;
     const res = {

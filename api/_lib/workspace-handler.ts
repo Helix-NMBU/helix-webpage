@@ -5,8 +5,13 @@ import {
   neonWorkspaceServices,
   type WorkspaceServices,
 } from "./workspace-service.js";
+import {
+  neonDepartmentHomeServices,
+  type DepartmentHomeServices,
+} from "./department-home-service.js";
 export function createWorkspaceHandler(
   getServices: () => WorkspaceServices = neonWorkspaceServices,
+  getDepartmentServices: () => DepartmentHomeServices = neonDepartmentHomeServices,
 ) {
   return async (req: VercelRequest, res: VercelResponse) => {
     res.setHeader("Cache-Control", "no-store");
@@ -18,6 +23,21 @@ export function createWorkspaceHandler(
       const token = bearer(req.headers.authorization);
       if (Number(req.headers["content-length"] ?? 0) > 20000)
         throw new MemberCvError(413, "This request is too large.");
+      if (req.method === "GET" && req.query?.department !== undefined)
+        return res
+          .status(200)
+          .json(
+            await getDepartmentServices().load(token, req.query.department),
+          );
+      if (
+        req.method === "POST" &&
+        req.body &&
+        typeof req.body === "object" &&
+        req.body.action === "save_department_home"
+      )
+        return res
+          .status(200)
+          .json(await getDepartmentServices().save(token, req.body));
       const services = getServices();
       return res
         .status(200)

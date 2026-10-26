@@ -10,6 +10,8 @@ import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
 import { directoryFixture } from '../Workspace/fixtures.test-support';
+const departmentHome = vi.hoisted(() => ({load:vi.fn(),save:vi.fn()}));
+vi.mock('../Workspace/department-home-repository', async original => ({...await original<typeof import('../Workspace/department-home-repository')>(),departmentHomeRepository:async()=>departmentHome}));
 const workspace = vi.hoisted(() => ({ load:vi.fn(),saveMember:vi.fn(),saveProject:vi.fn() }));
 vi.mock('../Workspace/repository', async original => ({...await original<typeof import('../Workspace/repository')>(),workspaceRepository:async()=>workspace}));
 const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn(), positions: vi.fn() }));
@@ -45,6 +47,8 @@ describe("internal member platform", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     window.localStorage.removeItem("helix-member-theme");
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
+    departmentHome.load.mockReset().mockImplementation(async departmentId => ({departmentId,description:'',driveFolderUrl:null,revision:0,canEdit:true}));
+    departmentHome.save.mockReset();
     workspace.load.mockReset().mockResolvedValue(directoryFixture());
     workspace.saveMember.mockReset();
     workspace.saveProject.mockReset();
@@ -375,6 +379,55 @@ describe("internal member platform", () => {
     await act(async()=>router.navigate('/departments/finance'));
     expect(router.state.location.pathname).toBe('/departments');
     expect(container.querySelector('h1')?.textContent).toBe('Departments');
+  });
+
+
+  it("opens the department workspace from both entry points and navigates its tabs", async()=>{
+    session.landing.mockResolvedValue(signedIn);await open('/departments');
+    await act(async()=>container.querySelector<HTMLButtonElement>('table button')!.click());
+    expect(container.querySelector('h1')?.textContent).toBe('Mechanical & Production');
+    expect(container.textContent).toContain('Department resources');
+    expect([...container.querySelectorAll('[role="tab"]')].map(tab=>tab.textContent)).toEqual(['Overview','Documents','Members']);
+    await act(async()=>container.querySelector<HTMLButtonElement>('[role="tab"][data-state="inactive"]')?.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0})));
+    expect(router.state.location.search).toBe('?tab=documents');
+    expect(container.textContent).toContain('Documents are stored in the department’s shared Google Drive folder.');
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(tab=>tab.textContent==='Members')!.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0})));
+    expect(container.querySelector('table')?.textContent).toContain('Sam Example');
+    expect(container.querySelector('table')?.textContent).toContain('Lead');
+    await act(async()=>router.navigate('/members'));
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Mechanical & Production"]')!.click());
+    expect(router.state.location.pathname).toBe('/departments/mechanical-and-production');
+    expect(container.textContent).toContain('Department resources');
+  });
+
+  it("saves a Drive folder through department settings and shows it as a document resource",async()=>{
+    session.landing.mockResolvedValue(signedIn);await open('/departments/mechanical-and-production');
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Department settings')!.click());
+    const description=document.querySelector<HTMLTextAreaElement>('#department-description')!;
+    const folder=document.querySelector<HTMLInputElement>('#department-drive-folder')!;
+    await act(async()=>{
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(description,'Design and build the S27 car.');description.dispatchEvent(new Event('input',{bubbles:true}));
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(folder,'https://drive.google.com/drive/u/0/folders/shared-folder?usp=sharing');folder.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    const id=directoryFixture().departments.find(d=>d.name==='Mechanical & Production')!.id;
+    departmentHome.save.mockResolvedValue({departmentId:id,description:'Design and build the S27 car.',driveFolderUrl:'https://drive.google.com/drive/folders/shared-folder',revision:1,canEdit:true});
+    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(departmentHome.save).toHaveBeenCalledWith(expect.objectContaining({description:'Design and build the S27 car.',driveFolderUrl:'https://drive.google.com/drive/folders/shared-folder',expectedRevision:0}));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('a[href="https://drive.google.com/drive/folders/shared-folder"]')?.getAttribute('target')).toBe('_blank');
+    expect(container.textContent).toContain('Design and build the S27 car.');
+  });
+
+  it("keeps department settings read-only for ordinary members and opens filtered projects",async()=>{
+    session.landing.mockResolvedValue(signedIn);
+    departmentHome.load.mockImplementation(async departmentId=>({departmentId,description:'Department description',driveFolderUrl:null,revision:0,canEdit:false}));
+    await open('/departments/mechanical-and-production');
+    expect([...container.querySelectorAll('button')].some(button=>button.textContent==='Department settings')).toBe(false);
+    const quickLinks=container.querySelector('nav[aria-label="Department quick links"]')!;
+    await act(async()=>[...quickLinks.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.startsWith('Projects'))!.click());
+    expect(router.state.location.pathname).toBe('/projects');
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(container.querySelector('table')?.textContent).toContain('Chassis & assembly');
   });
 
   it("saves member edits through the admin action and retains the form on a failed save",async()=>{

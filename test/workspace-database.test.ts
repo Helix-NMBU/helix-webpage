@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createDepartmentHomeServices } from "../api/_lib/department-home-service.js";
 import { createWorkspaceServices } from "../api/_lib/workspace-service.js";
 import type { WorkspaceIdentity } from "../api/_lib/member-cv-service.js";
 import type {
@@ -76,6 +77,7 @@ describe("Workspace directory authorization and persistence", () => {
       "015_project_departments",
       "016_fixed_departments",
       "017_workspace_directory",
+      "018_department_homes",
     ])
       await db.exec(migration(name));
     for (const person of identities) {
@@ -123,8 +125,12 @@ describe("Workspace directory authorization and persistence", () => {
     expect(
       (await service().load("verified")).members.map((m) => m.id),
     ).not.toContain(id(5));
-    await expect(service(4).load("verified")).rejects.toMatchObject({status:403});
-    await db.query('update neon_auth."user" set banned=false where id=$1', [id(5)]);
+    await expect(service(4).load("verified")).rejects.toMatchObject({
+      status: 403,
+    });
+    await db.query('update neon_auth."user" set banned=false where id=$1', [
+      id(5),
+    ]);
   });
   it("limits member edits to the platform admin even for project managers", async () => {
     const input = change(await service().load("verified"));
@@ -297,6 +303,93 @@ describe("Workspace directory authorization and persistence", () => {
       (
         await db.query(
           "select has_function_privilege('public','identity.save_workspace_member(uuid,text,text,jsonb)','EXECUTE') as allowed",
+        )
+      ).rows[0],
+    ).toEqual({ allowed: false });
+  });
+  it("keeps department resources private to current members and editable only by Leads or joined admins", async () => {
+    const department = (await service().load("verified")).departments.find(
+      (d) => d.name === "Mechanical & Production",
+    )!;
+    const home = (index: number) =>
+      createDepartmentHomeServices({
+        db,
+        authenticate: async () => identities[index],
+      });
+    await expect(home(0).load("verified", department.id)).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await expect(home(2).load("verified", department.id)).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await db.query(
+      "insert into project_management.department_members values($1,$2,false)",
+      [department.id, id(3)],
+    );
+    expect(await home(2).load("verified", department.id)).toMatchObject({
+      revision: 0,
+      canEdit: false,
+      description: "",
+      driveFolderUrl: null,
+    });
+    const input = {
+      action: "save_department_home",
+      departmentId: department.id,
+      expectedRevision: 0,
+      description: "Mechanical team resources",
+      driveFolderUrl:
+        "https://drive.google.com/drive/u/0/folders/shared-folder?usp=sharing&resourcekey=key_123",
+    };
+    await expect(home(2).save("verified", input)).rejects.toMatchObject({
+      status: 403,
+    });
+    const saved = await home(3).save("verified", input);
+    expect(saved).toMatchObject({
+      revision: 1,
+      canEdit: true,
+      description: "Mechanical team resources",
+      driveFolderUrl:
+        "https://drive.google.com/drive/folders/shared-folder?resourcekey=key_123",
+    });
+    expect(JSON.stringify(await service(2).load("verified"))).not.toContain(
+      "shared-folder",
+    );
+    await expect(
+      home(3).save("verified", { ...input, description: "Stale" }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect((await home(2).load("verified", department.id)).description).toBe(
+      "Mechanical team resources",
+    );
+    await db.query(
+      "insert into project_management.department_members values($1,$2,false)",
+      [department.id, id(1)],
+    );
+    expect(
+      await home(0).save("verified", {
+        ...input,
+        expectedRevision: 1,
+        description: "Admin updated",
+        driveFolderUrl: null,
+      }),
+    ).toMatchObject({ revision: 2, driveFolderUrl: null });
+    await db.query(
+      "delete from project_management.department_members where department_id=$1 and member_id=$2",
+      [department.id, id(4)],
+    );
+    await expect(home(3).load("verified", department.id)).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await expect(
+      home(3).save("verified", { ...input, expectedRevision: 2 }),
+    ).rejects.toMatchObject({ status: 403 });
+    await db.exec(migration("018_department_homes"));
+    expect((await home(0).load("verified", department.id)).description).toBe(
+      "Admin updated",
+    );
+    expect(
+      (
+        await db.query(
+          "select has_table_privilege('public','project_management.department_homes','SELECT') as allowed",
         )
       ).rows[0],
     ).toEqual({ allowed: false });

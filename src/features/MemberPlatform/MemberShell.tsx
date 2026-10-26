@@ -20,6 +20,8 @@ import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
+import { useWorkspace } from "../Workspace/WorkspaceContext";
+import { departmentPath } from "../Workspace/types";
 import { CATEGORY_LABELS, type TaskCategory } from "../ProjectManagement/types";
 
 function Workspace({ children }: { children?: ReactNode }) {
@@ -34,7 +36,8 @@ function Workspace({ children }: { children?: ReactNode }) {
   const page = previewPage(location.pathname);
   const projectManagement = location.pathname.startsWith("/project-management");
   const projectSection = location.pathname.split("/")[2];
-  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? "Projects" : location.pathname.startsWith("/departments") ? "Departments" : null;
+  const department = useWorkspace()?.data?.departments.find(item => departmentPath(item.name) === location.pathname);
+  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? "Projects" : location.pathname.startsWith("/departments") ? department?.name ?? "Departments" : null;
   const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Project Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname === "/tasks" ? "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"

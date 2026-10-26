@@ -18,7 +18,12 @@ import {
   LoadDirectory,
 } from "./DirectoryComponents";
 import { IconCube, IconDiamonds } from "@tabler/icons-react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import {
+  Navigate,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { ProgressRing } from "../ProjectManagement/ProgressRing";
 import {
@@ -118,6 +123,7 @@ export function ProjectsPage() {
   const workspace = useWorkspace();
   const data = workspace?.data;
   const { projectId } = useParams();
+  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const notify = useNotify();
   const [search, setSearch] = useState("");
@@ -137,10 +143,15 @@ export function ProjectsPage() {
     (!selected ||
       data.canManageProjects ||
       selected.departments.some((d) => leadDepartments.includes(d)));
-  const projects = data.projects.filter((p) =>
-    `${p.name} ${p.departments.join(" ")}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
+  const departmentId = params.get("department");
+  const department = data.departments.find((item) => item.id === departmentId);
+  const projects = data.projects.filter(
+    (p) =>
+      (!departmentId ||
+        (department && p.departments.includes(department.name))) &&
+      `${p.name} ${p.departments.join(" ")}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   );
   async function save(change: ProjectMutation) {
     if (change.action !== "save_project" || busy || !workspace) return;
@@ -237,6 +248,22 @@ export function ProjectsPage() {
           </>
         ) : (
           <>
+            {departmentId && (
+              <div className="flex items-center justify-between gap-3 border-b px-4 py-3 text-sm">
+                <span>{department?.name ?? "Unknown department"}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const next = new URLSearchParams(params);
+                    next.delete("department");
+                    setParams(next);
+                  }}
+                >
+                  All projects
+                </Button>
+              </div>
+            )}
             <Search label="Find projects" value={search} onChange={setSearch} />
             <ProjectRows data={data} projects={projects} />
           </>

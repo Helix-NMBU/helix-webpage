@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Button } from "@libs/components/ui/button";
 import {
   Table,
   TableBody,
@@ -24,16 +23,7 @@ import { Badge } from "@libs/components/ui/badge";
 import { ORGANIZATION_DEPARTMENTS } from "../ProjectManagement/types";
 import { getDepartmentIcon } from "./department-icons";
 import { departmentPath } from "./types";
-import { ProjectRows } from "./ProjectsPage";
-const descriptions: Record<string, string> = {
-  Management: "Team direction and coordination.",
-  "Mechanical & Production": "Mechanical design, manufacturing and assembly.",
-  Electronics: "Electronics and electrical systems.",
-  "Software & Autonomous": "Software and autonomous systems.",
-  "Business & Marketing": "Partnerships, communication and marketing.",
-  Logistics: "Competition and team logistics.",
-  Finance: "Budgets and financial management.",
-};
+import { DepartmentWorkspace } from "./DepartmentWorkspace";
 export function DepartmentsPage() {
   const workspace = useWorkspace();
   const data = workspace?.data;
@@ -60,56 +50,11 @@ export function DepartmentsPage() {
   if (denied) return <Navigate to="/departments" replace />;
   if (selected)
     return (
-      <div className="space-y-6">
-        <Directory title={selected.name}>
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b p-4">
-            <span className="text-sm text-muted-foreground">
-              {descriptions[selected.name]}
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => navigate("/departments")}
-            >
-              All departments
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-6 p-4 text-sm">
-            <span>
-              {
-                selected.memberIds.filter((id) =>
-                  data.members.some((m) => m.id === id),
-                ).length
-              }{" "}
-              members
-            </span>
-            <AssigneeAvatars
-              assigneeIds={selected.memberIds.filter((id) =>
-                data.members.some((m) => m.id === id),
-              )}
-              members={data.members}
-              assignmentRole="member"
-            />
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Lead</span>
-              <AssigneeAvatars
-                assigneeIds={selected.leadId ? [selected.leadId] : []}
-                members={data.members}
-                assignmentRole="lead"
-                showNames
-              />
-            </div>
-          </div>
-        </Directory>
-        <Directory title="Projects">
-          <ProjectRows
-            data={data}
-            projects={data.projects.filter((p) =>
-              p.departments.includes(selected.name),
-            )}
-          />
-        </Directory>
-      </div>
+      <DepartmentWorkspace
+        key={selected.id}
+        department={selected}
+        data={data}
+      />
     );
   const departments = ORGANIZATION_DEPARTMENTS.map((name) =>
     data.departments.find((d) => d.name === name),
