@@ -222,3 +222,9 @@ The shared New task modal now follows the reference layout: prominent title and 
 Local browser checks covered the new modal, pill layout, expansion, Create more switch and task wording. Automated checks cover full creation fields, blocked status, priority, multiple assignees, milestone creation, repeated creation, failure recovery and keeping the modal open from a project. No schema or API change, migration, push or deployment was performed.
 
 Validation: all 1,132 regression tests passed, along with client TypeScript and the production build (9.30 MB static output; 9 API functions). API and Node-runtime TypeScript, repository lint and both deployment guards also passed during this change.
+
+## Independent project column scrolling — 26 October 2026
+
+The desktop project view is bounded by the viewport, with independent scroll regions for project content and the Properties/Milestones/Progress column. Overscroll stays within each column at its boundaries; the shell breadcrumb and project tabs stay visible. Scroll regions support keyboard focus. Below the desktop breakpoint, content remains stacked with normal page scrolling.
+
+Validation: all 57 member-platform interface tests, client TypeScript and the production build passed (9.30 MB static output; 9 API functions). Browser wheel checks moved the widget column to its bottom while page and task-list scroll offsets remained zero, including another wheel gesture at the bottom. Keyboard scrolling was also checked. Screenshots: `project-scroll-before.png` and `project-independent-scroll.png` in this chat’s visualization folder. The ESLint configuration does not include these TSX files. No push or deployment performed.

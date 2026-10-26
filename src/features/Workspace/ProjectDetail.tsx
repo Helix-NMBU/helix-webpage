@@ -280,13 +280,13 @@ export function ProjectDetail({
       aria-label={`${project.name} project`}
       data-project-progress
       aria-busy={busy || loading}
-      className="space-y-5 pb-8"
+      className="flex min-h-0 flex-1 flex-col pb-8 md:overflow-hidden md:pb-0"
     >
       <h1 className="sr-only">{project.name}</h1>
-      <Tabs value={tab} onValueChange={selectTab} className="flex-col">
+      <Tabs value={tab} onValueChange={selectTab} className="min-h-0 flex-1 flex-col">
         <TabsList
           aria-label="Project views"
-          className="h-auto gap-2 rounded-none bg-transparent p-0"
+          className="h-auto shrink-0 gap-2 rounded-none bg-transparent p-0"
         >
           {[
             ["overview", "Overview"],
@@ -302,9 +302,14 @@ export function ProjectDetail({
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value={tab} className="mt-4">
-          <div className="grid min-w-0 gap-6 md:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
-            <div className="min-w-0">
+        <TabsContent value={tab} className="mt-4 md:min-h-0 md:overflow-hidden">
+          <div className="grid min-w-0 gap-6 md:h-full md:min-h-0 md:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Project content"
+              className="min-w-0 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:pb-2 md:pr-2"
+            >
               {tab === "overview" ? (
                 <section
                   aria-label="Project overview"
