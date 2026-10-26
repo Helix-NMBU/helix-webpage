@@ -1,3 +1,4 @@
+import { IconChevronDown } from "@tabler/icons-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
@@ -319,9 +320,7 @@ export default function ApplyPage() {
                         color: "#03094A",
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 4.5L6 8L10 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <IconChevronDown width={12} height={12} stroke={3} aria-hidden="true" />
                     </span>
                   </span>
                 </button>
@@ -487,9 +486,7 @@ export default function ApplyPage() {
                   </div>
                   <span className="row-chevron" style={{ position: "absolute", right: 0, top: 0, bottom: 0, display: "flex", alignItems: "center", opacity: 0 }}>
                     <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", border: "1.5px solid rgba(3,9,74,0.2)", borderRadius: "50%", transition: "transform 0.25s ease", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", color: "#03094A" }}>
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 4.5L6 8L10 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <IconChevronDown width={12} height={12} stroke={3} aria-hidden="true" />
                     </span>
                   </span>
                 </button>

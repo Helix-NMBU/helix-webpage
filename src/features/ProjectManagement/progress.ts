@@ -35,7 +35,7 @@ export function milestoneProgress(tasks: Task[], milestoneId: string | null) {
 
 export function compatibleMilestones(tasks: Task[], draft: TaskInput, taskId?: string) {
   return tasks.filter(item => item.kind === "milestone" && item.id !== taskId && item.category === draft.category &&
-    (!item.projectId || item.projectId === draft.projectId) && (item.status !== "cancelled" || item.id === draft.milestoneId));
+    (Boolean(item.projectId) && item.projectId === draft.projectId) && (item.status !== "cancelled" || item.id === draft.milestoneId));
 }
 
 export function progressEvent(task: Task, recordedAt = new Date().toISOString()): TaskProgressEvent {
@@ -44,6 +44,10 @@ export function progressEvent(task: Task, recordedAt = new Date().toISOString())
 
 export function updateTaskDraft<K extends keyof TaskInput>(draft: TaskInput, key: K, value: TaskInput[K], tasks: Task[]): TaskInput {
   const next = { ...draft, [key]: value };
+  if (key === "milestoneId" && value) {
+    const milestone = tasks.find(item => item.id === value && item.kind === "milestone" && item.category === draft.category);
+    if (milestone) next.projectId = milestone.projectId;
+  }
   if (next.kind === "milestone" || ((key === "projectId" || key === "kind") && next.milestoneId && !compatibleMilestones(tasks, next).some(item => item.id === next.milestoneId))) next.milestoneId = null;
   return next;
 }

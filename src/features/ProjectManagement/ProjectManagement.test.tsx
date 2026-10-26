@@ -246,12 +246,14 @@ describe("project management interface", () => {
     await open("marketing", false, "?create=milestone");
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Create milestone");
   });
-  it("lets a Lead unlink a task while preserving its other details", async () => {
+  it("keeps a task draft when a Lead clears its required milestone", async () => {
     await open("production"); await click("Confirm material delivery");
     await act(async () => document.getElementById("task-milestone")!.click());
-    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "No milestone")!;
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "Choose milestone")!;
     await act(async () => option.click()); await click("Save task");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ task: expect.objectContaining({ title: "Confirm material delivery", milestoneId: null }) }));
+    expect(mutate).not.toHaveBeenCalled();
+    expect(document.getElementById("task-title")).not.toBeNull();
+    expect(document.querySelector('[data-testid="notifications"]')?.textContent).toContain("Choose a milestone");
   });
   it("renders an empty Overview without inventing task completion or history", async () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], taskLeadCategories: [] });
@@ -269,6 +271,31 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
     expect(document.getElementById("task-status-filter")?.textContent).toBe("All statuses");
+  });
+
+  it("retains legacy work in Needs organization and sends a Lead to its area editor", async () => {
+    const workspace = initialLocalWorkspace();
+    const legacy = { ...workspace.tasks[1], projectId: null, milestoneId: null };
+    load.mockResolvedValue({ ...workspace, tasks: [legacy] });
+    await open();
+    await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.startsWith("Needs organization"))!.click());
+    expect(container.textContent).toContain(legacy.title);
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Organize ${legacy.title}"]`)!.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose a project and milestone");
+    expect(document.getElementById("task-project")?.hasAttribute("disabled")).toBe(false);
+  });
+  it("allows an assignee to update unorganized legacy work without changing its placement", async () => {
+    const workspace = initialLocalWorkspace();
+    load.mockResolvedValue({ ...workspace, tasks: [{ ...workspace.tasks[1], projectId: null, milestoneId: null }], canManage: false, taskLeadCategories: [] });
+    await open("overview", true); await click("Confirm material delivery"); await click("Save task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
+  });
+  it("shows milestones and their tasks nested inside the department project", async () => {
+    await open();
+    const project = container.querySelector('[aria-label="Milestones in Chassis & assembly"]');
+    expect(project?.textContent).toContain("Chassis ready for assembly");
+    expect(project?.textContent).toContain("Confirm material delivery");
+    expect(project?.textContent).not.toContain("Publish workshop update");
   });
 
 });

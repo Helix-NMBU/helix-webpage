@@ -1,4 +1,4 @@
-import { ChevronsUpDown } from "lucide-react";
+import { IconSelector } from "@tabler/icons-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@libs/components/ui/sidebar";
 
@@ -15,7 +15,7 @@ export function TeamSwitcher({ onNavigate, disabled }: { onNavigate: (to: string
             <span className="truncate font-medium">Helix NMBU</span>
             <span className="truncate text-xs">Member platform</span>
           </div>
-          <ChevronsUpDown className="ml-auto" />
+          <IconSelector aria-hidden="true" className="ml-auto" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 rounded-lg" align="start" side={isMobile ? "bottom" : "right"} sideOffset={4}>

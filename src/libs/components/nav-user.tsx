@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronsUpDown, LogOut, Settings, SunMoon, UserRound } from "lucide-react";
+import { IconChevronDown, IconSelector, IconLogout, IconSettings, IconBrightness, IconUser } from "@tabler/icons-react";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
 import { Button } from "@libs/components/ui/button";
 import { Label } from "@libs/components/ui/label";
@@ -66,7 +66,7 @@ export function NavUser({
                 </span>
                 <span className="truncate text-xs">{role}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <IconSelector aria-hidden="true" className="ml-auto size-4" />
             </SidebarMenuButton>
           </PopoverTrigger>
           <PopoverContent
@@ -86,7 +86,7 @@ export function NavUser({
                 onNavigate("/profile", event.currentTarget);
               }}
             >
-              <UserRound />
+              <IconUser aria-hidden="true" />
               Profile
             </Button>
             <Button
@@ -99,12 +99,12 @@ export function NavUser({
                 onNavigate("/settings", event.currentTarget);
               }}
             >
-              <Settings />
+              <IconSettings aria-hidden="true" />
               Settings
             </Button>
             <div className="flex h-8 items-center justify-between gap-2 rounded-md px-2 text-sm">
               <Label id="member-appearance-label" className="flex items-center gap-2 font-normal">
-                <SunMoon aria-hidden="true" className="size-4 text-muted-foreground" />
+                <IconBrightness aria-hidden="true" className="size-4 text-muted-foreground" />
                 Appearance
               </Label>
               <DropdownMenu>
@@ -116,7 +116,7 @@ export function NavUser({
                     className="shadow-none"
                   >
                     <span id="member-appearance-value">{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
-                    <ChevronDown aria-hidden="true" />
+                    <IconChevronDown aria-hidden="true" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" sideOffset={4}>
@@ -139,7 +139,7 @@ export function NavUser({
                 onSignOut();
               }}
             >
-              <LogOut />
+              <IconLogout aria-hidden="true" />
               Sign out
             </Button>
           </PopoverContent>

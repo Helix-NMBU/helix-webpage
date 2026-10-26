@@ -9,7 +9,7 @@ const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStar
 export function initialLocalWorkspace(): ProjectWorkspace {
   const today = osloDate();
   const task = (number: number, title: string, category: TaskCategory, offset: number, extra: Partial<Task> = {}): Task => ({
-    id: id(number), season: "S27", title, category, description: "", projectId: category === "production" ? id(100) : null, milestoneId: null,
+    id: id(number), season: "S27", title, category, description: "", projectId: category === "production" ? id(100) : category === "marketing" ? id(101) : category === "partnership-deliverables" ? id(102) : id(103), milestoneId: null,
     assigneeIds: [id(1)], deadline: addDays(today, offset), startDate: addDays(today, -7), status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "", revision: 1, createdAt: `${addDays(today, -7)}T10:00:00.000Z`, updatedAt: new Date().toISOString(), completedAt: null, ...extra,
   });
   const tasks = [
@@ -17,13 +17,17 @@ export function initialLocalWorkspace(): ProjectWorkspace {
       task(11, "Confirm material delivery", "production", -1, { milestoneId: id(13), status: "blocked", priority: "high", blockedReason: "Waiting for the supplier to confirm the delivery date." }),
       task(12, "Assemble suspension mounts", "production", 6, { milestoneId: id(13), status: "in_progress", assigneeIds: [id(2)] }),
       task(13, "Chassis ready for assembly", "production", 35, { kind: "milestone", startDate: null }),
-      task(14, "Deliver partner team photographs", "partnership-deliverables", 4, { partnerName: "Example Engineering", assigneeIds: [id(1), id(2)] }),
-      task(15, "Publish workshop update", "marketing", 3, { status: "in_progress" }),
+      task(14, "Deliver partner team photographs", "partnership-deliverables", 4, { milestoneId: id(17), partnerName: "Example Engineering", assigneeIds: [id(1), id(2)] }),
+      task(15, "Publish workshop update", "marketing", 3, { milestoneId: id(18), status: "in_progress" }),
       task(16, "Submit competition registration", "operations", 12, { kind: "milestone", startDate: null, priority: "urgent" }),
+      task(17, "Partner launch commitments", "partnership-deliverables", 14, { kind: "milestone", partnerName: "Example Engineering" }),
+      task(18, "Campaign launch", "marketing", 14, { kind: "milestone" }),
   ];
   return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
-    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical", "Electrical"], deadline: addDays(today, 35), revision: 1 }],
+    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical", "Electrical"], deadline: addDays(today, 35), revision: 1 },
+      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: [name], deadline: addDays(today, 35), revision: 1 })),
+    ],
     tasks,
     progressEvents: [
       ...tasks.map(item => progressEvent({ ...item, status: "todo" }, `${addDays(today, -7)}T10:00:00.000Z`)),
@@ -62,12 +66,14 @@ export function createLocalProjectRepository(): ProjectRepository {
         if (mutation.action === "save_task" && (!workspace.taskLeadCategories.includes(mutation.task.category) || (previous && !workspace.taskLeadCategories.includes(previous.category)))) throw new ProjectRequestError("A Department Lead grant for this area is required to create, edit or assign tasks.", 403);
         if (mutation.action === "set_status" && !previous) throw new ProjectRequestError("Task not found.", 404);
         if (mutation.action === "set_status" && previous && !workspace.canManage && !previous.assigneeIds.includes(workspace.viewerId) && !workspace.taskLeadCategories.includes(previous.category)) throw new ProjectRequestError("You can update only your assigned tasks.", 403);
-        const task = validateTask(mutation.action === "save_task" ? mutation.task : { ...previous!, status: mutation.status, blockedReason: mutation.blockedReason });
-        if (task.assigneeIds.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all assignments.");
-        if (task.projectId && !workspace.projects.some(project => project.id === task.projectId && project.category === task.category)) throw new Error("Choose a project in the same area.");
-        const milestone = workspace.tasks.find(item => item.id === task.milestoneId);
-        if (task.milestoneId && (task.kind !== "task" || task.milestoneId === mutation.id || !milestone || milestone.kind !== "milestone" || milestone.category !== task.category || (milestone.projectId && milestone.projectId !== task.projectId) || (milestone.status === "cancelled" && previous?.milestoneId !== milestone.id))) throw new Error("Choose an available milestone in the same area and project.");
-        if (workspace.tasks.some(item => item.milestoneId === mutation.id && (task.kind !== "milestone" || item.category !== task.category || (task.projectId && task.projectId !== item.projectId)))) throw new Error("Unlink this milestone's tasks before changing its type, area or project.");
+        const task = validateTask(mutation.action === "save_task" ? mutation.task : { ...previous!, status: mutation.status, blockedReason: mutation.blockedReason }, { allowUnorganized: mutation.action === "set_status" });
+        if (mutation.action === "save_task") {
+          if (task.assigneeIds.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all assignments.");
+          if (task.projectId && !workspace.projects.some(project => project.id === task.projectId && project.category === task.category)) throw new Error("Choose a project in the same area.");
+          const milestone = workspace.tasks.find(item => item.id === task.milestoneId);
+          if (task.milestoneId && (task.kind !== "task" || task.milestoneId === mutation.id || !milestone || milestone.kind !== "milestone" || milestone.category !== task.category || (!milestone.projectId || milestone.projectId !== task.projectId) || (milestone.status === "cancelled" && previous?.milestoneId !== milestone.id))) throw new Error("Choose an available milestone in the same area and project.");
+          if (workspace.tasks.some(item => item.milestoneId === mutation.id && (task.kind !== "milestone" || item.category !== task.category || (task.projectId && task.projectId !== item.projectId)))) throw new Error("Unlink this milestone's tasks before changing its type, area or project.");
+        }
         workspace.tasks = [...workspace.tasks.filter(item => item.id !== mutation.id), { ...task, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1, createdAt: previous?.createdAt ?? now, updatedAt: now, completedAt: task.status === "done" ? previous?.completedAt ?? now : null }];
       }
       if (mutation.action !== "save_project") {

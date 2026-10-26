@@ -1,11 +1,11 @@
-import { Megaphone, Wallet } from "lucide-react";
+import { IconSpeakerphone, IconWallet } from "@tabler/icons-react";
 
 // Fictional workspace content for the UI preview, never an authorization policy.
 export const previewTeams = [
   {
     id: "business-marketing",
     title: "Business & Marketing",
-    icon: Megaphone,
+    icon: IconSpeakerphone,
     description: "Partnerships, campaigns and the Helix story.",
     sections: [
       {
@@ -35,7 +35,7 @@ export const previewTeams = [
   {
     id: "finance",
     title: "Finance",
-    icon: Wallet,
+    icon: IconWallet,
     description: "Budgets, expenses and financial planning.",
     sections: [
       {

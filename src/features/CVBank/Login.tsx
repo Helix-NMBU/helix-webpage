@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LoaderCircle } from "lucide-react";
+import { IconLoader2 } from "@tabler/icons-react";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { Button } from "@libs/components/ui/button";
 import { memberLoginDestination } from "../MemberCV/repository";
@@ -89,7 +89,7 @@ export default function CVBankLogin() {
               <p>{t("Sign in with your Helix account.")}</p>
             </div>
             <Button type="button" variant="outline" className="member-login-google" disabled={!memberAuthConfigured || frame === "loading" || busy} onClick={() => void signIn()}>
-              {frame === "loading" || busy ? <LoaderCircle className="size-5 animate-spin" aria-hidden="true" /> : <img src="/google-g.png" width="20" height="20" alt="" />}
+              {frame === "loading" || busy ? <IconLoader2 className="size-5 animate-spin" aria-hidden="true" /> : <img src="/google-g.png" width="20" height="20" alt="" />}
               {t("Sign in with Google")}
             </Button>
           </section>

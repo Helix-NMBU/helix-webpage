@@ -51,7 +51,7 @@ function uuidOrNull(value: unknown): string | null {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new Error("Choose a valid member or project.");
   return value;
 }
-export function validateTask(input: TaskInput): TaskInput {
+export function validateTask(input: TaskInput, { allowUnorganized = false }: { allowUnorganized?: boolean } = {}): TaskInput {
   if (!Array.isArray(input.assigneeIds) || input.assigneeIds.length > MAX_TASK_ASSIGNEES) throw new Error(`Choose up to ${MAX_TASK_ASSIGNEES} assignees.`);
   const assigneeIds = [...new Set(input.assigneeIds.map(id => {
     if (typeof id !== "string") throw new Error("Choose a valid member.");
@@ -59,6 +59,8 @@ export function validateTask(input: TaskInput): TaskInput {
   }))];
   if (!TASK_CATEGORIES.includes(input.category) || !TASK_STATUSES.includes(input.status) || !TASK_PRIORITIES.includes(input.priority) || !["task", "milestone"].includes(input.kind)) throw new Error("Choose a valid category, status, priority and task type.");
   const value = { ...input, title: text(input.title, "Title", 200, true), description: text(input.description, "Description", 2000), partnerName: text(input.partnerName, "Partner name", 200), blockedReason: text(input.blockedReason, "Blocked reason", 500), assigneeIds, milestoneId: uuidOrNull(input.milestoneId), projectId: uuidOrNull(input.projectId), deadline: date(input.deadline), startDate: date(input.startDate) };
+  if (!allowUnorganized && !value.projectId) throw new Error("Choose a project for this work.");
+  if (!allowUnorganized && value.kind === "task" && !value.milestoneId) throw new Error("Choose a milestone for this task.");
   if (value.category === "partnership-deliverables" && !value.partnerName) throw new Error("Enter the sponsor or partner name for this deliverable.");
   if (value.status === "blocked" && !value.blockedReason) throw new Error("Describe what is blocking this task.");
   if (value.kind === "milestone" && value.milestoneId) throw new Error("A milestone cannot belong to another milestone.");

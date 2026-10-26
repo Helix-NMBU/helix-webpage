@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, FolderKanban, Home, SquareCheckBig, Mail, UsersRound } from "lucide-react";
+import { IconBell, IconLayoutKanban, IconHome, IconCheckbox, IconMail, IconUsersGroup } from "@tabler/icons-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -49,14 +49,14 @@ export function AppSidebar({
     {
       title: "Project Management",
       url: "/project-management/overview",
-      icon: FolderKanban,
+      icon: IconLayoutKanban,
       isActive: projectManagement,
       items: [{ title: "Overview", url: "/project-management/overview" }, ...TASK_CATEGORIES.map(category => ({ title: CATEGORY_LABELS[category], url: `/project-management/${category}` }))],
     },
     ...(recruitment.access === "allowed" ? [{
       title: "Recruiting",
       url: "/recruiting",
-      icon: UsersRound,
+      icon: IconUsersGroup,
       isActive: location.pathname === "/recruiting",
     }] : []),
   ];
@@ -71,12 +71,12 @@ export function AppSidebar({
             {
               title: "Home",
               url: "/",
-              icon: Home,
+              icon: IconHome,
               isActive: location.pathname === "/",
             },
-            { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
-            { title: "Mail", url: "/mail", icon: Mail, isActive: location.pathname.startsWith("/mail") },
-            { title: "Tasks", url: "/tasks", icon: SquareCheckBig, isActive: location.pathname === "/tasks" },
+            { title: "Notifications", url: "/notifications", icon: IconBell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
+            { title: "Mail", url: "/mail", icon: IconMail, isActive: location.pathname.startsWith("/mail") },
+            { title: "Tasks", url: "/tasks", icon: IconCheckbox, isActive: location.pathname === "/tasks" },
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}

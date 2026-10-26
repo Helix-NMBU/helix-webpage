@@ -1,3 +1,4 @@
+import { IconCheck, IconX } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -598,9 +599,7 @@ export default function ApplicationFormPage() {
                                     }}
                                   >
                                     {active && (
-                                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                                        <path d="M2.5 6.5L5 9L9.5 3.5" stroke="#FDFDFD" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
+                                      <IconCheck width={10} height={10} stroke={3.6} color="#FDFDFD" aria-hidden="true" />
                                     )}
                                   </span>
                                   <input
@@ -700,9 +699,7 @@ export default function ApplicationFormPage() {
                             }}
                           >
                             {consent && (
-                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                                <path d="M2.5 6.5L5 9L9.5 3.5" stroke="#FDFDFD" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
+                              <IconCheck width={11} height={11} stroke={3.6} color="#FDFDFD" aria-hidden="true" />
                             )}
                           </span>
                           <input
@@ -896,9 +893,7 @@ function FileDropField({
                 color: "#03094A",
               }}
             >
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
-                <path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <IconX width={9} height={9} stroke={3.6} aria-hidden="true" />
             </button>
           </div>
         ) : (

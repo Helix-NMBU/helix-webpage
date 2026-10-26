@@ -45,7 +45,7 @@ describe("milestone membership", () => {
     const extra = { ...workspace.tasks[0], id: "cancelled", status: "cancelled" as const };
     expect(milestoneProgress([...workspace.tasks, extra, { ...milestone, id: "nested", milestoneId: milestone.id }], milestone.id)).toMatchObject({ total: 3, done: 1, percent: 33 });
     expect(milestoneProgress([milestone], milestone.id)).toMatchObject({ total: 0, percent: 0 });
-    expect(milestoneProgress(workspace.tasks, null)).toMatchObject({ total: 2 });
+    expect(milestoneProgress(workspace.tasks, null)).toMatchObject({ total: 0 });
   });
   it("offers compatible area and project goals and retains a task's existing cancelled goal", () => {
     const task = workspace.tasks[0];
@@ -53,7 +53,7 @@ describe("milestone membership", () => {
     const otherArea = { ...milestone, id: "marketing", category: "marketing" as const };
     const otherProject = { ...milestone, id: "other-project", projectId: "another" };
     const season = { ...milestone, id: "season", projectId: null };
-    expect(compatibleMilestones([cancelled, otherArea, otherProject, season], task).map(item => item.id)).toEqual([milestone.id, "season"]);
+    expect(compatibleMilestones([cancelled, otherArea, otherProject, season], task).map(item => item.id)).toEqual([milestone.id]);
     expect(compatibleMilestones([cancelled], { ...task, milestoneId: null })).toEqual([]);
   });
   it("clears an incompatible link when changing project or converting a task into a milestone", () => {

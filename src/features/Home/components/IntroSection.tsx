@@ -1,3 +1,4 @@
+import { IconArrowRight } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -115,7 +116,7 @@ export default function IntroSection() {
               to="/apply"
               className="w-fit text-sm uppercase tracking-widest border-b border-black/30 pb-0.5 hover:border-black transition-colors"
             >
-              Join us →
+              Join us <IconArrowRight className="ml-1 inline-block size-3.5" aria-hidden="true" />
             </Link>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Link } from "react-router-dom";
-import { Linkedin, Instagram, Facebook } from "lucide-react";
+import { IconBrandLinkedin, IconBrandInstagram, IconBrandFacebook } from "@tabler/icons-react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
@@ -18,9 +18,9 @@ const getInvolved = [
 ];
 
 const socials = [
-  { href: "https://instagram.com/helixnmbu", label: "Instagram", Icon: Instagram },
-  { href: "https://www.facebook.com/profile.php?id=100091245669131", label: "Facebook", Icon: Facebook },
-  { href: "https://www.linkedin.com/company/helix-nmbu", label: "LinkedIn", Icon: Linkedin },
+  { href: "https://instagram.com/helixnmbu", label: "Instagram", Icon: IconBrandInstagram },
+  { href: "https://www.facebook.com/profile.php?id=100091245669131", label: "Facebook", Icon: IconBrandFacebook },
+  { href: "https://www.linkedin.com/company/helix-nmbu", label: "LinkedIn", Icon: IconBrandLinkedin },
 ];
 
 const MAX_ROWS = 3;
@@ -116,7 +116,7 @@ const Footer = () => {
                 rel="noopener noreferrer"
                 className={`footer-row-${i} flex items-center gap-2 text-base transition-colors text-white/80 hover:text-white w-fit`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon aria-hidden="true" className="w-4 h-4" />
                 {label}
               </a>
             ))}

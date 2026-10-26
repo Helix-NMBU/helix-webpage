@@ -5,7 +5,7 @@ import { cn } from "@libs/lib/utils"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@libs/components/ui/button"
-import { XIcon } from "lucide-react"
+import { IconX } from "@tabler/icons-react"
 
 function Dialog({
   ...props
@@ -78,7 +78,7 @@ function DialogContent({
               className="absolute top-4 right-4"
               size="icon-sm"
             >
-              <XIcon
+              <IconX aria-hidden="true"
               />
               <span className="sr-only">{closeLabel}</span>
             </Button>

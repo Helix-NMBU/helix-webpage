@@ -4,7 +4,7 @@ import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { Flip } from 'gsap/Flip'
-import { ArrowLeft } from 'lucide-react'
+import { IconArrowLeft } from '@tabler/icons-react'
 
 gsap.registerPlugin(useGSAP, ScrollTrigger, Flip)
 
@@ -420,7 +420,7 @@ export default function AboutPage() {
           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
         >
-          <ArrowLeft size={14} />
+          <IconArrowLeft aria-hidden="true" size={14} />
           Back to Home
         </Link>
 

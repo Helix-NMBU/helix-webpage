@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { LoaderCircle } from "lucide-react";
+import { IconLoader2 } from "@tabler/icons-react";
 import {
   Navigate,
   Outlet,
@@ -86,7 +86,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   if (!landing)
     return (
       <main className="member-platform-status">
-        <LoaderCircle className="size-6 animate-spin" aria-label="Verifying your Helix account" />
+        <IconLoader2 className="size-6 animate-spin" aria-label="Verifying your Helix account" />
       </main>
     );
   if (landing.phase === "signed-out") {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import { IconChevronRight, type TablerIcon } from "@tabler/icons-react";
 
 import {
   Collapsible,
@@ -34,7 +34,7 @@ export function NavMain({
   items: {
     title: string;
     url: string;
-    icon?: LucideIcon;
+    icon?: TablerIcon;
     isActive?: boolean;
     badge?: number;
     items?: {
@@ -58,7 +58,7 @@ export function NavMain({
                 disabled={disabled}
                 onClick={(event) => onNavigate(item.url, event.currentTarget)}
               >
-                {item.icon && <item.icon />}
+                {item.icon && <item.icon aria-hidden="true" />}
                 <span>{item.title}</span>
               </SidebarMenuButton>
               {Boolean(item.badge) && <SidebarMenuBadge aria-label={`${item.badge} unread notifications`}>{item.badge}</SidebarMenuBadge>}
@@ -79,9 +79,9 @@ export function NavMain({
                       if (state === "collapsed") setOpen(true);
                     }}
                   >
-                    {item.icon && <item.icon />}
+                    {item.icon && <item.icon aria-hidden="true" />}
                     <span>{item.title}</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    <IconChevronRight aria-hidden="true" className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <CollapsibleContent>

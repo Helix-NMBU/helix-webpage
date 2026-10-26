@@ -88,4 +88,18 @@ describe("dedicated local project mode", () => {
     expect(await repository.load()).toEqual(updated);
   });
 
+  it("organizes legacy work without losing its assignment or observed history", async () => {
+    const repository = createLocalProjectRepository();
+    const initial = await repository.load();
+    const task = initial.tasks[1];
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...initial, tasks: initial.tasks.map(item => item.id === task.id ? { ...item, projectId: null, milestoneId: null } : item) }));
+    const legacy = (await repository.load()).tasks.find(item => item.id === task.id)!;
+    const updated = await repository.mutate({ action: "set_status", id: legacy.id, expectedRevision: legacy.revision, status: "done", blockedReason: "" });
+    const saved = updated.tasks.find(item => item.id === task.id)!;
+    await expect(repository.mutate({ action: "save_task", id: saved.id, expectedRevision: saved.revision, task: saved })).rejects.toThrow("project");
+    const organized = await repository.mutate({ action: "save_task", id: saved.id, expectedRevision: saved.revision, task: { ...saved, projectId: task.projectId, milestoneId: task.milestoneId } });
+    expect(organized.tasks.find(item => item.id === task.id)).toMatchObject({ projectId: task.projectId, milestoneId: task.milestoneId, assigneeIds: task.assigneeIds, status: "done" });
+    expect(organized.progressEvents).toEqual(updated.progressEvents);
+  });
+
 });
