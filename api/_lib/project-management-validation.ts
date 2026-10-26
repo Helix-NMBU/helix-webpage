@@ -1,4 +1,4 @@
-import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
+import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
 import { MemberCvError } from "./member-cv-error.js";
 
 function invalid(message = "Invalid project management request."): never { throw new MemberCvError(400, message); }
@@ -27,10 +27,11 @@ function date(value: unknown): string | null {
 }
 function task(value: unknown): TaskInput {
   const body = object(value);
+  if (!Array.isArray(body.assigneeIds) || body.assigneeIds.length > MAX_TASK_ASSIGNEES) return invalid(`Choose up to ${MAX_TASK_ASSIGNEES} assignees.`);
   const input: TaskInput = {
     title: text(body.title, "title", 200, true), description: text(body.description, "description", 2000),
     category: oneOf(body.category, TASK_CATEGORIES), projectId: body.projectId === null ? null : uuid(body.projectId),
-    assigneeId: body.assigneeId === null ? null : uuid(body.assigneeId), deadline: date(body.deadline), startDate: date(body.startDate),
+    assigneeIds: [...new Set(body.assigneeIds.map(uuid))], deadline: date(body.deadline), startDate: date(body.startDate),
     status: oneOf(body.status, TASK_STATUSES), priority: oneOf(body.priority, TASK_PRIORITIES), kind: oneOf(body.kind, ["task", "milestone"]),
     partnerName: text(body.partnerName, "partner name", 200), blockedReason: text(body.blockedReason, "blocked reason", 500),
   };

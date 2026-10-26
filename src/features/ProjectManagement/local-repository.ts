@@ -9,7 +9,7 @@ export function initialLocalWorkspace(): ProjectWorkspace {
   const today = osloDate();
   const task = (number: number, title: string, category: TaskCategory, offset: number, extra: Partial<Task> = {}): Task => ({
     id: id(number), season: "S27", title, category, description: "", projectId: category === "production" ? id(100) : null,
-    assigneeId: id(1), deadline: addDays(today, offset), startDate: addDays(today, -7), status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "", revision: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), completedAt: null, ...extra,
+    assigneeIds: [id(1)], deadline: addDays(today, offset), startDate: addDays(today, -7), status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "", revision: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), completedAt: null, ...extra,
   });
   return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
@@ -17,9 +17,9 @@ export function initialLocalWorkspace(): ProjectWorkspace {
     tasks: [
       task(10, "Complete chassis design review", "production", -3, { status: "done", completedAt: new Date().toISOString() }),
       task(11, "Confirm material delivery", "production", -1, { status: "blocked", priority: "high", blockedReason: "Waiting for the supplier to confirm the delivery date." }),
-      task(12, "Assemble suspension mounts", "production", 6, { status: "in_progress", assigneeId: id(2) }),
+      task(12, "Assemble suspension mounts", "production", 6, { status: "in_progress", assigneeIds: [id(2)] }),
       task(13, "Chassis ready for assembly", "production", 35, { kind: "milestone", startDate: null }),
-      task(14, "Deliver partner team photographs", "partnership-deliverables", 4, { partnerName: "Example Engineering" }),
+      task(14, "Deliver partner team photographs", "partnership-deliverables", 4, { partnerName: "Example Engineering", assigneeIds: [id(1), id(2)] }),
       task(15, "Publish workshop update", "marketing", 3, { status: "in_progress" }),
       task(16, "Submit competition registration", "operations", 12, { kind: "milestone", startDate: null, priority: "urgent" }),
     ],
@@ -31,8 +31,11 @@ export function createLocalProjectRepository(): ProjectRepository {
   function read(): ProjectWorkspace {
     const saved = localStorage.getItem(KEY);
     const workspace = saved ? JSON.parse(saved) as ProjectWorkspace : initialLocalWorkspace();
-    // Upgrade only the dedicated local fixture account's pre-permission data.
-    return { ...workspace, taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
+    // Upgrade permissions and older single-person assignments only in dedicated local fixtures.
+    return { ...workspace, taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES], tasks: workspace.tasks.map(item => {
+      const { assigneeId: legacy, ...task } = item as Task & { assigneeId?: string | null };
+      return { ...task, assigneeIds: Array.isArray(task.assigneeIds) ? task.assigneeIds : legacy ? [legacy] : [] };
+    }) };
   }
   return {
     async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return workspace; },
@@ -51,9 +54,9 @@ export function createLocalProjectRepository(): ProjectRepository {
         const previous = workspace.tasks.find(item => item.id === mutation.id);
         if (mutation.action === "save_task" && (!workspace.taskLeadCategories.includes(mutation.task.category) || (previous && !workspace.taskLeadCategories.includes(previous.category)))) throw new ProjectRequestError("A Department Lead grant for this area is required to create, edit or assign tasks.", 403);
         if (mutation.action === "set_status" && !previous) throw new ProjectRequestError("Task not found.", 404);
-        if (mutation.action === "set_status" && previous && !workspace.canManage && previous.assigneeId !== workspace.viewerId && !workspace.taskLeadCategories.includes(previous.category)) throw new ProjectRequestError("You can update only your assigned tasks.", 403);
+        if (mutation.action === "set_status" && previous && !workspace.canManage && !previous.assigneeIds.includes(workspace.viewerId) && !workspace.taskLeadCategories.includes(previous.category)) throw new ProjectRequestError("You can update only your assigned tasks.", 403);
         const task = validateTask(mutation.action === "save_task" ? mutation.task : { ...previous!, status: mutation.status, blockedReason: mutation.blockedReason });
-        if (task.assigneeId && !workspace.members.some(member => member.id === task.assigneeId)) throw new Error("Choose an active member.");
+        if (task.assigneeIds.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all assignments.");
         if (task.projectId && !workspace.projects.some(project => project.id === task.projectId && project.category === task.category)) throw new Error("Choose a project in the same area.");
         workspace.tasks = [...workspace.tasks.filter(item => item.id !== mutation.id), { ...task, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1, createdAt: previous?.createdAt ?? now, updatedAt: now, completedAt: task.status === "done" ? previous?.completedAt ?? now : null }];
       }

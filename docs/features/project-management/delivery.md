@@ -50,3 +50,15 @@ The user supplied Attio screenshots and requested a compact personal task list a
 - Integrated the refinement and repair onto `codex/project-management` in the canonical checkout as `68e4e50` and `5407b1b`. Its pre-existing unrelated changes remain unstaged and preserved.
 - Browser verification on port 5193 confirmed compact grouped rows, one-click completion moving a task to Completed, compact area-specific task creation with an assignee and deadline, appearance in My tasks, and persistence after reload. Screenshots are saved outside the repository as `my-tasks-attio.png` and `task-composer.png` in this chat's visualization directory.
 - A local `.env.local` with the member-platform flag is ignored by Git. The isolated preview runs on loopback port 5193; it does not use real identities, write to Neon or import Attio tasks. Production grants and migrations remain unapplied.
+
+
+## Multiple task assignees and avatars, 26 October 2026
+
+The user requested the shadcn Avatar presentation and multiple people per task. Work continues in the canonical checkout on `codex/project-management`.
+
+- Shared avatar groups now appear in task tables and the searchable multi-person assignment picker. Eligible authentication-profile photos use the existing shadcn Avatar component, with initials as the fallback and an overflow count for larger groups.
+- Task contracts use `assigneeIds` arrays, with deduplication and a 20-person limit. Each assignee sees the shared task in My tasks and may update its shared status. Department Lead permissions still control creation, assignment and task details.
+- Migration `011_task_assignees.sql` adds the normalized assignment relation, preserves old assignments and removes the singular column. Assignment replacement and task revisions remain atomic. Reapplying the migration cannot restore a previously removed assignee. Every selected member must retain an eligible verified Google identity and active module grant. The client, API and migration require a coordinated release; old single-assignee payloads are rejected.
+- Local fixture storage upgrades old assignments without resetting data. Browser verification on loopback port 5190 added Alex as a second assignee to a task already assigned to Sam, saved it, confirmed both avatars, and verified its appearance in Alex's My tasks after reload. Profile-photo rendering uses the existing Avatar image/fallback behavior; real Google photos and authentication were not exercised.
+- Focused tests cover multi-person creation and removal, second-assignee visibility, legacy data upgrades, validation, migration backfill/idempotency, co-assignee status updates, conflicting shared edits, assignment rollback and revoked ownership. The 13 database integration tests passed in isolation; 79 focused project, API and member-shell tests also passed. All three TypeScript checks, lint and the production build passed (9.20 MB output and 9 API functions in the current checkout).
+- The pre-existing sidebar CircleCheckBig change and unrelated checkout changes remain unstaged. No push, PR, real Neon migration or deployment was performed.

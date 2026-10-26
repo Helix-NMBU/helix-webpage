@@ -1,4 +1,4 @@
-import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type Task, type TaskInput } from "./types";
+import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type Task, type TaskInput } from "./types";
 
 export function osloDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
@@ -52,8 +52,13 @@ function uuidOrNull(value: unknown): string | null {
   return value;
 }
 export function validateTask(input: TaskInput): TaskInput {
+  if (!Array.isArray(input.assigneeIds) || input.assigneeIds.length > MAX_TASK_ASSIGNEES) throw new Error(`Choose up to ${MAX_TASK_ASSIGNEES} assignees.`);
+  const assigneeIds = [...new Set(input.assigneeIds.map(id => {
+    if (typeof id !== "string") throw new Error("Choose a valid member.");
+    return uuidOrNull(id)!.toLowerCase();
+  }))];
   if (!TASK_CATEGORIES.includes(input.category) || !TASK_STATUSES.includes(input.status) || !TASK_PRIORITIES.includes(input.priority) || !["task", "milestone"].includes(input.kind)) throw new Error("Choose a valid category, status, priority and task type.");
-  const value = { ...input, title: text(input.title, "Title", 200, true), description: text(input.description, "Description", 2000), partnerName: text(input.partnerName, "Partner name", 200), blockedReason: text(input.blockedReason, "Blocked reason", 500), assigneeId: uuidOrNull(input.assigneeId), projectId: uuidOrNull(input.projectId), deadline: date(input.deadline), startDate: date(input.startDate) };
+  const value = { ...input, title: text(input.title, "Title", 200, true), description: text(input.description, "Description", 2000), partnerName: text(input.partnerName, "Partner name", 200), blockedReason: text(input.blockedReason, "Blocked reason", 500), assigneeIds, projectId: uuidOrNull(input.projectId), deadline: date(input.deadline), startDate: date(input.startDate) };
   if (value.category === "partnership-deliverables" && !value.partnerName) throw new Error("Enter the sponsor or partner name for this deliverable.");
   if (value.status === "blocked" && !value.blockedReason) throw new Error("Describe what is blocking this task.");
   if (value.kind === "milestone" && !value.deadline) throw new Error("Set a deadline for this milestone.");

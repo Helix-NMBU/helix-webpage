@@ -14,6 +14,7 @@ import { formatDate, isOpen, osloDate, summarize, taskUrgency } from "./model";
 import { projectRepository, ProjectRequestError } from "./repository";
 import { Choice, ProjectEditor, TaskEditor } from "./TaskEditor";
 import { PersonalTasks } from "./PersonalTasks";
+import { AssigneeAvatars } from "./TaskAssignees";
 import { TaskComposer } from "./TaskComposer";
 
 export const PROJECT_SECTIONS = [{ id: "overview", title: "Overview" }, ...TASK_CATEGORIES.map(id => ({ id, title: CATEGORY_LABELS[id] }))];
@@ -24,12 +25,12 @@ function ProgressBar({ done, total, percent }: { done: number; total: number; pe
 
 function TaskTable({ tasks, workspace, deliveries, onOpen }: { tasks: Task[]; workspace: ProjectWorkspace; deliveries: boolean; onOpen: (task: Task) => void }) {
   const today = osloDate();
-  return <Table><TableHeader><TableRow><TableHead className="min-w-64">Task</TableHead>{deliveries && <TableHead>Partner</TableHead>}<TableHead>Status</TableHead><TableHead>Assignee</TableHead><TableHead>Deadline</TableHead><TableHead>Priority</TableHead></TableRow></TableHeader>
+  return <Table><TableHeader><TableRow><TableHead className="min-w-64">Task</TableHead>{deliveries && <TableHead>Partner</TableHead>}<TableHead>Status</TableHead><TableHead>Assigned to</TableHead><TableHead>Deadline</TableHead><TableHead>Priority</TableHead></TableRow></TableHeader>
     <TableBody>{tasks.map(task => <TableRow key={task.id}>
       <TableCell className="max-w-md whitespace-normal py-4"><button className="text-left font-medium underline-offset-4 hover:underline focus-visible:underline" onClick={() => onOpen(task)}>{task.title}</button><div className="mt-1 text-xs text-muted-foreground">{task.kind === "milestone" ? "Milestone · " : ""}{workspace.projects.find(project => project.id === task.projectId)?.name ?? CATEGORY_LABELS[task.category]}</div>{task.status === "blocked" && task.blockedReason && <p className="mt-1 max-w-sm text-xs text-muted-foreground">{task.blockedReason}</p>}</TableCell>
       {deliveries && <TableCell>{task.partnerName}</TableCell>}
       <TableCell><Badge variant={task.status === "blocked" ? "destructive" : task.status === "done" ? "default" : "secondary"}>{deliveries && task.status === "done" ? "Delivered" : STATUS_LABELS[task.status]}</Badge></TableCell>
-      <TableCell>{workspace.members.find(member => member.id === task.assigneeId)?.name ?? (task.assigneeId ? "Inactive member" : "Unassigned")}</TableCell>
+      <TableCell><AssigneeAvatars assigneeIds={task.assigneeIds} members={workspace.members} /></TableCell>
       <TableCell className="whitespace-nowrap"><span className={taskUrgency(task, today) === "overdue" ? "text-destructive" : ""}>{formatDate(task.deadline)}</span>{taskUrgency(task, today) && <div className="mt-1 text-xs text-muted-foreground">{taskUrgency(task, today) === "overdue" ? "Overdue" : "Due within 7 days"}</div>}</TableCell>
       <TableCell className="capitalize">{task.priority}</TableCell>
     </TableRow>)}</TableBody></Table>;
@@ -108,12 +109,12 @@ export default function ProjectManagement({ personal = false, repository: suppli
   }
   if (!valid) return <Navigate to="/project-management/overview" replace />;
   if (!workspace) return loading ? <div role="status" aria-label="Loading project management" className="space-y-6 py-8"><Skeleton className="h-10 w-64" /><div className="grid gap-4 sm:grid-cols-4">{[1, 2, 3, 4].map(item => <Skeleton key={item} className="h-28" />)}</div><Skeleton className="h-80 w-full" /></div> : <div className="py-8"><Button variant="outline" onClick={() => void load()}>Try again</Button></div>;
-  const scope = workspace.tasks.filter(task => personal ? task.assigneeId === workspace.viewerId : !category || task.category === category);
+  const scope = workspace.tasks.filter(task => personal ? task.assigneeIds.includes(workspace.viewerId) : !category || task.category === category);
   const projects = workspace.projects.filter(project => !category || project.category === category);
   const stats = summarize(scope);
   const title = personal ? "My tasks" : category ? CATEGORY_LABELS[category] : "Overview";
   const descriptions: Record<string, string> = { overview: "A shared view of the season, its progress, and the work ahead.", production: "From design to assembly. Track production work and upcoming milestones.", "partnership-deliverables": "Track recorded commitments to this season's sponsors and partners.", marketing: "Plan campaigns, content, and the Helix story.", operations: "Competition deadlines and the work that keeps the team running." };
-  const filtered = scope.filter(task => (status === "all" || (status === "open" ? isOpen(task) : task.status === status)) && (projectId === "all" || task.projectId === projectId) && (!search || [task.title, task.description, task.partnerName, workspace.members.find(member => member.id === task.assigneeId)?.name].join(" ").toLowerCase().includes(search.toLowerCase()))).sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.title.localeCompare(b.title));
+  const filtered = scope.filter(task => (status === "all" || (status === "open" ? isOpen(task) : task.status === status)) && (projectId === "all" || task.projectId === projectId) && (!search || [task.title, task.description, task.partnerName, workspace.members.filter(member => task.assigneeIds.includes(member.id)).map(member => member.name).join(" ")].join(" ").toLowerCase().includes(search.toLowerCase()))).sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.title.localeCompare(b.title));
   const departmentNames = [...new Set(projects.flatMap(project => project.departments))].sort();
   if (personal) return <>
     <PersonalTasks workspace={workspace} busy={busy} loading={loading} onRefresh={() => void load()} onOpen={task => setTaskEditor({ task })} onComplete={task => void save({ action: "set_status", id: task.id, expectedRevision: task.revision, status: task.status === "done" ? "todo" : "done", blockedReason: task.blockedReason })} />

@@ -61,6 +61,35 @@ describe("project management interface", () => {
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", expectedRevision: 0, task: expect.objectContaining({ title: "Publish sponsor interview", category: "marketing" }) }));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
+  it("creates a task with several assignees through the avatar picker", async () => {
+    await open("marketing"); await click("New task"); await fill("new-task-title", "Shared campaign");
+    await act(async () => document.getElementById("new-task-assignee")!.click());
+    for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${name}"]`)!.click());
+    expect(document.querySelector('[aria-label="Assign Alex Example"]')?.getAttribute("aria-checked")).toBe("true");
+    expect(document.querySelector('[aria-label="Assign Sam Example"]')?.getAttribute("aria-checked")).toBe("true");
+    await click("Done"); await click("Save");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ assigneeIds: initialLocalWorkspace().members.map(member => member.id) }) }));
+  });
+  it("includes a shared task when the viewer is its second assignee and shows all assignment avatars", async () => {
+    const workspace = initialLocalWorkspace();
+    const secondMember = workspace.members[1];
+    const shared = { ...workspace.tasks[0], assigneeIds: workspace.members.map(member => member.id), title: "Shared design review", status: "todo" as const };
+    load.mockResolvedValue({ ...workspace, viewerId: secondMember.id, canManage: false, taskLeadCategories: [], tasks: [shared] });
+    await open("overview", true);
+    expect(container.textContent).toContain("Shared design review");
+    expect(container.querySelector('[aria-label="Assigned to Alex Example, Sam Example"]')).not.toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Complete Shared design review"]')!.click());
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", id: shared.id, status: "done" }));
+  });
+  it("removes one co-assignee without clearing the other member", async () => {
+    await open("partnership-deliverables");
+    await click("Deliver partner team photographs");
+    await act(async () => document.getElementById("task-assignee")!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example"]')!.click());
+    expect(document.querySelector('[aria-label="Assign Alex Example"]')?.getAttribute("aria-checked")).toBe("true");
+    await click("Done"); await click("Save task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ task: expect.objectContaining({ assigneeIds: [initialLocalWorkspace().viewerId] }) }));
+  });
   it("retains unsaved input after a revision conflict", async () => {
     mutate.mockRejectedValue(new ProjectRequestError("This task changed. Reload before saving.", 409));
     await open("production"); await click("Confirm material delivery"); await fill("task-title", "My unsaved edit"); await click("Save task");

@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/pop
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
-import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
+import { AssigneeAvatars } from "./TaskAssignees";
 import { Badge } from "@libs/components/ui/badge";
 import { CATEGORY_LABELS, type ProjectWorkspace, type Task } from "./types";
 import { formatDate, osloDate } from "./model";
@@ -27,7 +27,7 @@ export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onC
   const [showContext, setShowContext] = useState(true);
   const [showAssignee, setShowAssignee] = useState(true);
   const today = osloDate();
-  const assigned = workspace.tasks.filter(task => task.assigneeId === workspace.viewerId);
+  const assigned = workspace.tasks.filter(task => task.assigneeIds.includes(workspace.viewerId));
   const filtered = assigned.filter(task => (area === "all" || task.category === area) && (!search || [task.title, task.description, task.partnerName, workspace.projects.find(project => project.id === task.projectId)?.name].join(" ").toLowerCase().includes(search.toLowerCase()))).sort((a, b) => {
     if (sort === "title") return a.title.localeCompare(b.title);
     if (sort === "created") return b.createdAt.localeCompare(a.createdAt) || a.title.localeCompare(b.title);
@@ -41,7 +41,6 @@ export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onC
     { label: "Cancelled", tasks: showCancelled ? filtered.filter(task => task.status === "cancelled") : [] },
   ].filter(group => group.tasks.length);
   const columns = 2 + Number(showContext) + Number(showAssignee);
-  const member = workspace.members.find(item => item.id === workspace.viewerId);
   return <section className="mx-auto w-full max-w-7xl py-5" aria-labelledby="my-tasks-title" aria-busy={busy || loading}>
     <div className="mb-5 flex items-center justify-between gap-3"><h1 id="my-tasks-title" className="text-2xl font-medium tracking-tight">My tasks</h1><Button variant="ghost" size="sm" disabled={busy || loading} onClick={onRefresh}>Refresh</Button></div>
     <div className="overflow-hidden rounded-xl border bg-background">
@@ -66,11 +65,11 @@ export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onC
               <TableCell className="px-4 py-4"><div className="flex items-start gap-3"><Checkbox className="mt-0.5 size-4 rounded-full" checked={task.status === "done"} disabled={busy || loading || task.status === "cancelled"} aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`} onCheckedChange={() => onComplete(task)} /><div className="min-w-0"><button className={`text-left leading-5 underline-offset-4 hover:underline ${closed ? "line-through decoration-muted-foreground/50" : "font-medium"}`} onClick={() => onOpen(task)}>{task.title}</button>{task.status === "blocked" && <div className="mt-1 flex flex-wrap items-center gap-2"><Badge variant="secondary" className="text-xs">Blocked</Badge>{task.blockedReason && <span className="text-xs text-muted-foreground">{task.blockedReason}</span>}</div>}{task.kind === "milestone" && <p className="mt-1 text-xs text-muted-foreground">Milestone</p>}</div></div></TableCell>
               <TableCell className={`whitespace-nowrap ${!closed && task.deadline && task.deadline < today ? "text-destructive" : "text-muted-foreground"}`}>{task.deadline ? `Due ${formatDate(task.deadline)}` : "No due date"}</TableCell>
               {showContext && <TableCell><button className="max-w-64 truncate text-left underline-offset-4 hover:underline" title={context} onClick={() => navigate(`/project-management/${task.category}`)}>{context}</button></TableCell>}
-              {showAssignee && <TableCell><span className="inline-flex max-w-52 items-center gap-1.5 rounded-md border bg-muted/40 px-1.5 py-0.5 text-xs"><Avatar className="size-4"><AvatarFallback className="text-[9px]">{(member?.name ?? "You").split(" ").slice(0, 2).map(word => word[0]).join("")}</AvatarFallback></Avatar><span className="truncate">{member?.name ?? "You"}</span></span></TableCell>}
+              {showAssignee && <TableCell><AssigneeAvatars assigneeIds={task.assigneeIds} members={workspace.members} /></TableCell>}
             </TableRow>;
           })}
         </TableBody>)}</Table> : <Empty className="min-h-64"><EmptyHeader><EmptyTitle>{assigned.length ? "No matching tasks" : "No tasks assigned to you"}</EmptyTitle><EmptyDescription>{assigned.length ? "Adjust the search, filters or view settings." : "Your Department Lead's assignments will appear here."}</EmptyDescription></EmptyHeader></Empty>}
     </div>
-    <p className="mt-3 text-xs text-muted-foreground">Select a circle to complete or reopen a task. Department Leads create and assign work in Project Management.</p>
+    <p className="mt-3 text-xs text-muted-foreground">Select a circle to complete or reopen a task for all its assignees. Department Leads create and assign work in Project Management.</p>
   </section>;
 }

@@ -54,4 +54,16 @@ describe("dedicated local project mode", () => {
     const reloaded = await createLocalProjectRepository().load();
     expect(reloaded.tasks.find(item => item.id === task.id)).toMatchObject({ title: "Updated task", revision: 2 });
   });
+  it("preserves old local assignments when upgrading to multiple assignees", async () => {
+    const initial = await createLocalProjectRepository().load();
+    const legacy = { ...initial, tasks: initial.tasks.map(({ assigneeIds, ...task }) => ({ ...task, assigneeId: assigneeIds[0] ?? null })) };
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify(legacy));
+    const upgraded = await createLocalProjectRepository().load();
+    expect(upgraded.tasks[0].assigneeIds).toEqual(initial.tasks[0].assigneeIds);
+    expect(upgraded.tasks[0]).not.toHaveProperty("assigneeId");
+    const task = upgraded.tasks[0];
+    const both = upgraded.members.map(member => member.id);
+    await createLocalProjectRepository().mutate({ action: "save_task", id: task.id, expectedRevision: task.revision, task: { ...task, assigneeIds: both } });
+    expect((await createLocalProjectRepository().load()).tasks.find(item => item.id === task.id)?.assigneeIds).toEqual(both);
+  });
 });

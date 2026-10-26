@@ -6,6 +6,7 @@ import { Label } from "@libs/components/ui/label";
 import { Textarea } from "@libs/components/ui/textarea";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
+import { AssigneePicker } from "./TaskAssignees";
 import { Choice, Field } from "./TaskEditor";
 import { CATEGORY_LABELS, type ProjectMutation, type ProjectWorkspace, type TaskCategory, type TaskInput } from "./types";
 import { formatDate, validateTask } from "./model";
@@ -16,7 +17,7 @@ export function TaskComposer({ workspace, category, projectId, busy, onSave, onC
   onSave: (mutation: ProjectMutation) => Promise<boolean>; onClose: () => void;
 }) {
   const [id, setId] = useState(() => crypto.randomUUID());
-  const [draft, setDraft] = useState<TaskInput>(() => ({ title: "", description: "", category, projectId, assigneeId: null, deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" }));
+  const [draft, setDraft] = useState<TaskInput>(() => ({ title: "", description: "", category, projectId, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" }));
   const [details, setDetails] = useState(false);
   const [createMore, setCreateMore] = useState(false);
   const notify = useNotify();
@@ -43,7 +44,7 @@ export function TaskComposer({ workspace, category, projectId, busy, onSave, onC
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
           <Popover><PopoverTrigger asChild><Button type="button" variant="ghost" size="sm">{draft.deadline ? formatDate(draft.deadline) : "Due date"}</Button></PopoverTrigger><PopoverContent className="w-64" align="start"><Field id="new-task-deadline" label="Due date"><Input id="new-task-deadline" type="date" min={draft.startDate ?? "2000-01-01"} max="2100-12-31" value={draft.deadline ?? ""} onChange={event => change("deadline", event.target.value || null)} /></Field></PopoverContent></Popover>
-          <div className="w-40"><Choice id="new-task-assignee" ariaLabel="Assign task to" disabled={busy} value={draft.assigneeId ?? "unassigned"} onChange={value => change("assigneeId", value === "unassigned" ? null : value)} options={[{ value: "unassigned", label: "Assign to…" }, ...workspace.members.map(member => ({ value: member.id, label: member.name }))]} /></div>
+          <div className="min-w-44"><AssigneePicker id="new-task-assignee" disabled={busy} value={draft.assigneeIds} onChange={value => change("assigneeIds", value)} members={workspace.members} /></div>
           <div className="w-36"><Choice id="new-task-project" ariaLabel="Related project" disabled={busy} value={draft.projectId ?? "season"} onChange={value => change("projectId", value === "season" ? null : value)} options={[{ value: "season", label: `${workspace.season} season` }, ...workspace.projects.filter(project => project.category === category).map(project => ({ value: project.id, label: project.name }))]} /></div>
           <Button type="button" variant="ghost" size="sm" onClick={() => setDetails(value => !value)} aria-expanded={details}>{details ? "Fewer details" : "More details"}</Button>
           <div className="flex flex-1 items-center justify-end gap-3"><div className="flex items-center gap-2 whitespace-nowrap"><Checkbox id="create-another-task" checked={createMore} disabled={busy} onCheckedChange={value => setCreateMore(value === true)} /><Label htmlFor="create-another-task" className="text-xs font-normal">Create another</Label></div><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" size="sm" disabled={busy}>{busy ? "Saving…" : "Save"}</Button></div>

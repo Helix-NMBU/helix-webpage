@@ -17,11 +17,11 @@ const workspaceSql = `select a.can_manage as "canManage", a.member_id as "viewer
     'category',p.category,'departments',p.departments,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
     from project_management.projects p where p.season = 'S27'),'[]'::jsonb) as projects,
   coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'season',t.season,'title',t.title,'description',t.description,
-    'category',t.category,'projectId',t.project_id,'assigneeId',t.assignee_id,'deadline',t.deadline,'startDate',t.start_date,
+    'category',t.category,'projectId',t.project_id,'assigneeIds',coalesce((select jsonb_agg(ta.member_id order by ta.member_id) from project_management.task_assignees ta where ta.task_id=t.id),'[]'::jsonb),'deadline',t.deadline,'startDate',t.start_date,
     'status',t.status,'priority',t.priority,'kind',t.kind,'partnerName',t.partner_name,'blockedReason',t.blocked_reason,
     'revision',t.revision,'createdAt',t.created_at,'updatedAt',t.updated_at,'completedAt',t.completed_at)
     order by t.deadline nulls last,t.created_at,t.id) from project_management.tasks t where t.season = 'S27'),'[]'::jsonb) as tasks,
-  coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name) order by m.full_name,m.id)
+  coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name,'avatarUrl',to_jsonb(u)->>'image') order by m.full_name,m.id)
     from project_management.access eligible join identity.members m on m.id = eligible.member_id
     join neon_auth."user" u on u.id = m.auth_user_id
     where eligible.active and u.banned is not true and u."emailVerified" is true and lower(u.email) = m.email

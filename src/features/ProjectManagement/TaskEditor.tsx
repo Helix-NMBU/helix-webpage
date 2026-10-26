@@ -1,3 +1,4 @@
+import { AssigneePicker } from "./TaskAssignees";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
@@ -27,11 +28,11 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
 }) {
   const [id] = useState(() => task?.id ?? crypto.randomUUID());
   const [revision] = useState(task?.revision ?? 0);
-  const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, assigneeId: null, deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
+  const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
   const notify = useNotify();
   const canLeadTask = workspace.taskLeadCategories.includes(task?.category ?? category);
   const manager = !statusOnly && canLeadTask;
-  const canEdit = canLeadTask || workspace.canManage || (task?.assigneeId === workspace.viewerId);
+  const canEdit = canLeadTask || workspace.canManage || (task?.assigneeIds.includes(workspace.viewerId) ?? false);
   const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => ({ ...previous, [key]: value }));
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -50,7 +51,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="task-category" label="Area"><Input id="task-category" readOnly value={CATEGORY_LABELS[draft.category]} /></Field>
           <Field id="task-project" label="Project"><Choice id="task-project" disabled={busy || !manager} value={draft.projectId ?? "season"} onChange={value => change("projectId", value === "season" ? null : value)} options={[{ value: "season", label: `${workspace.season} season` }, ...workspace.projects.filter(project => project.category === draft.category).map(project => ({ value: project.id, label: project.name }))]} /></Field>
-          <Field id="task-assignee" label="Assignee"><Choice id="task-assignee" disabled={busy || !manager} value={draft.assigneeId ?? "unassigned"} onChange={value => change("assigneeId", value === "unassigned" ? null : value)} options={[{ value: "unassigned", label: "Unassigned" }, ...workspace.members.map(member => ({ value: member.id, label: member.name }))]} /></Field>
+          <Field id="task-assignee" label="Assignees"><AssigneePicker id="task-assignee" disabled={busy || !manager} value={draft.assigneeIds} onChange={value => change("assigneeIds", value)} members={workspace.members} /></Field>
           <Field id="task-kind" label="Type"><Choice id="task-kind" disabled={busy || !manager} value={draft.kind} onChange={value => change("kind", value as TaskInput["kind"])} options={[{ value: "task", label: "Task" }, { value: "milestone", label: "Milestone" }]} /></Field>
           <Field id="task-start" label="Start date"><Input id="task-start" type="date" min="2000-01-01" max="2100-12-31" value={draft.startDate ?? ""} onChange={event => change("startDate", event.target.value || null)} /></Field>
           <Field id="task-deadline" label="Deadline"><Input id="task-deadline" type="date" min={draft.startDate ?? "2000-01-01"} max="2100-12-31" required={draft.kind === "milestone"} value={draft.deadline ?? ""} onChange={event => change("deadline", event.target.value || null)} /></Field>

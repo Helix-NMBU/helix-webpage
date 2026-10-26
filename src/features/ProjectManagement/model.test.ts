@@ -31,4 +31,12 @@ describe("project progress and deadlines", () => {
     expect(() => validateTask({ ...base, category: "partnership-deliverables", partnerName: "" })).toThrow("partner");
     expect(validateProject({ name: " Shared project ", description: "", departments: ["Mechanical", "Electrical", "Mechanical"], category: "production", deadline: null }).departments).toEqual(["Mechanical", "Electrical"]);
   });
+  it("accepts several unique assignees and rejects malformed assignment lists", () => {
+    const base = initialLocalWorkspace().tasks[0];
+    const ids = initialLocalWorkspace().members.map(member => member.id);
+    expect(validateTask({ ...base, assigneeIds: [...ids, ids[0]] }).assigneeIds).toEqual(ids);
+    expect(validateTask({ ...base, assigneeIds: [] }).assigneeIds).toEqual([]);
+    expect(() => validateTask({ ...base, assigneeIds: ["not-a-member"] })).toThrow();
+    expect(() => validateTask({ ...base, assigneeIds: Array(21).fill(ids[0]) })).toThrow("20");
+  });
 });

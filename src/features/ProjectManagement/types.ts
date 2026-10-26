@@ -4,6 +4,7 @@ export const TASK_STATUSES = ["todo", "in_progress", "blocked", "done", "cancell
 export type TaskStatus = typeof TASK_STATUSES[number];
 export const TASK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type TaskPriority = typeof TASK_PRIORITIES[number];
+export const MAX_TASK_ASSIGNEES = 20;
 export const CATEGORY_LABELS: Record<TaskCategory, string> = { production: "Production", "partnership-deliverables": "Partnership deliverables", marketing: "Marketing", operations: "Operations" };
 export const STATUS_LABELS: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
 
@@ -20,7 +21,7 @@ export interface TaskInput {
   description: string;
   category: TaskCategory;
   projectId: string | null;
-  assigneeId: string | null;
+  assigneeIds: string[];
   deadline: string | null;
   startDate: string | null;
   status: TaskStatus;
@@ -37,7 +38,7 @@ export interface Task extends TaskInput {
   updatedAt: string;
   completedAt: string | null;
 }
-export interface ProjectMember { id: string; name: string; }
+export interface ProjectMember { id: string; name: string; avatarUrl?: string | null; }
 export interface ProjectWorkspace {
   season: string;
   viewerId: string;
