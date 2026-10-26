@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Alert, AlertDescription } from "../../libs/components/ui/alert";
 import { Badge } from "../../libs/components/ui/badge";
 import { Button } from "../../libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../libs/components/ui/card";
@@ -8,6 +7,7 @@ import { Input } from "../../libs/components/ui/input";
 import { Label } from "../../libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../libs/components/ui/select";
 import { Textarea } from "../../libs/components/ui/textarea";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 import type { RequestAdmin, RequestDetail, RequestHistory, RequestList, RequestSummary } from "./request-types";
 import type { SponsorContext } from "./types";
 import {
@@ -16,7 +16,7 @@ import {
 } from "./requests";
 
 type Transport = <T>(action: string, options?: RequestInit & { query?: Record<string, string> }) => Promise<T>;
-export type RequestsPanelProps = { context: SponsorContext; request: Transport };
+export type RequestsPanelProps = { context: SponsorContext; request: Transport; heading?: string };
 function message(error: unknown) { return error instanceof Error ? error.message : "Could not load requests. Try again."; }
 function date(value: string) { return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
 function historyText(event: RequestHistory): string {
@@ -29,7 +29,7 @@ function allowedStatuses(current: RequestStatus): RequestStatus[] {
   return REQUEST_STATUSES.filter(status => { try { assertRequestTransition(current, status, "admin"); return true; } catch { return false; } });
 }
 
-export default function RequestsPanel({ context, request }: RequestsPanelProps) {
+export default function RequestsPanel({ context, request, heading = "Collaboration requests" }: RequestsPanelProps) {
   const [requests, setRequests] = useState<RequestSummary[]>([]);
   const [administrators, setAdministrators] = useState<RequestAdmin[]>([]);
   const [detail, setDetail] = useState<RequestDetail | null>(null);
@@ -37,8 +37,7 @@ export default function RequestsPanel({ context, request }: RequestsPanelProps) 
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const notify = useNotify();
   const [newOpen, setNewOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [type, setType] = useState<RequestType>("general_collaboration");
@@ -54,13 +53,13 @@ export default function RequestsPanel({ context, request }: RequestsPanelProps) 
   useEffect(() => {
     let current = true;
     sequence.current += 1;
-    setDetail(null); setRequests([]); setAdministrators([]); setReply(""); setError(""); setNotice("");
+    setDetail(null); setRequests([]); setAdministrators([]); setReply("");
     setNewOpen(false); setCancelOpen(false); setTitle(""); setBody(""); setLoading(true); setBusy(false); setOpening(false);
     void request<RequestList>("requests").then(result => {
       if (current) { setRequests(result.requests); setAdministrators(result.administrators); }
-    }).catch(cause => { if (current) setError(message(cause)); }).finally(() => { if (current) setLoading(false); });
+    }).catch(cause => { if (current) notify("Could not load requests", message(cause), { variant: "error", href: null, action: { label: "Try again", onClick: () => { void refresh(); } } }); }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; sequence.current += 1; };
-  }, [context.authUserId, context.organizationId, context.role, context.contactId, context.portal, request]);
+  }, [context.authUserId, context.organizationId, context.role, context.contactId, context.portal, request, notify]);
 
   async function refresh(version = sequence.current) {
     const result = await request<RequestList>("requests");
@@ -68,28 +67,29 @@ export default function RequestsPanel({ context, request }: RequestsPanelProps) 
   }
   async function open(id: string) {
     const version = ++sequence.current;
-    setOpening(true); setError(""); setNotice(""); if (detail?.id !== id) setReply("");
+    setOpening(true); if (detail?.id !== id) setReply("");
     try {
       const result = await request<{ request: RequestDetail }>("request", { query: { id } });
       if (sequence.current === version) setDetail(result.request);
-    } catch (cause) { if (sequence.current === version) setError(message(cause)); }
+    } catch (cause) { if (sequence.current === version) notify("Could not open request", message(cause), { variant: "error", href: null, action: { label: "Try again", onClick: () => { void open(id); } } }); }
     finally { if (sequence.current === version) setOpening(false); }
   }
   async function create(event: FormEvent) {
     const version = sequence.current;
-    event.preventDefault(); setBusy(true); setError(""); setNotice("");
+    event.preventDefault(); setBusy(true);
     try {
       const draft = validateRequestDraft({ type, title, body });
       const result = await request<{ request: RequestDetail }>("requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
       if (sequence.current !== version) return;
-      setDetail(result.request); setNewOpen(false); setCancelOpen(false); setTitle(""); setBody(""); setReply(""); setFilter("all"); setNotice("Request submitted.");
+      setDetail(result.request); setNewOpen(false); setCancelOpen(false); setTitle(""); setBody(""); setReply(""); setFilter("all");
+      notify("Request submitted", "Helix will follow up in this shared conversation.", { variant: "success", href: null });
       await refresh(version);
-    } catch (cause) { if (sequence.current === version) setError(message(cause)); } finally { if (sequence.current === version) setBusy(false); }
+    } catch (cause) { if (sequence.current === version) notify("Could not submit request", message(cause), { variant: "error", href: null }); } finally { if (sequence.current === version) setBusy(false); }
   }
   async function mutate(operation: "reply" | "status" | "assign", extra: Record<string, unknown>) {
     if (!detail) return;
     const version = sequence.current;
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true);
     try {
       if (operation === "reply") extra = { body: validateRequestReply(extra.body) };
       const result = await request<{ request: RequestDetail }>("request", {
@@ -98,19 +98,18 @@ export default function RequestsPanel({ context, request }: RequestsPanelProps) 
       });
       if (sequence.current !== version) return;
       setDetail(result.request); if (operation === "reply") setReply("");
-      setCancelOpen(false); setNotice(operation === "reply" ? "Reply added." : "Request updated.");
+      setCancelOpen(false);
+      notify(operation === "reply" ? "Reply added" : "Request updated", "The shared request history has been updated.", { variant: "success", href: null });
       await refresh(version);
-    } catch (cause) { if (sequence.current === version) setError(message(cause)); } finally { if (sequence.current === version) setBusy(false); }
+    } catch (cause) { if (sequence.current === version) notify("Could not update request", message(cause), { variant: "error", href: null, action: { label: "Reload request", onClick: () => { void open(detail.id); } } }); } finally { if (sequence.current === version) setBusy(false); }
   }
   const visible = requests.filter(item => filter === "all" || item.status === filter);
 
   return <section className="space-y-6" aria-labelledby="requests-heading">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 id="requests-heading" className="text-xl font-semibold">Collaboration requests</h2><p className="text-sm text-muted-foreground">{admin ? "Manage sponsor enquiries and shared conversations." : "Send an enquiry to Helix and follow its progress."}</p></div>
-      {!admin && context.portal && <Button onClick={() => { setError(""); setNewOpen(true); }} disabled={busy}>New request</Button>}
+      <div><h2 id="requests-heading" className="text-xl font-semibold">{heading}</h2><p className="text-sm text-muted-foreground">{admin ? "Manage sponsor enquiries and shared conversations." : "Send an enquiry to Helix and follow its progress."}</p></div>
+      {!admin && context.portal && <Button onClick={() => { setNewOpen(true); }} disabled={busy}>New request</Button>}
     </div>
-    {error && <Alert variant="destructive"><AlertDescription>{error} <Button variant="link" disabled={busy || opening} onClick={() => { void (detail ? open(detail.id) : refresh().then(() => setError("")).catch(cause => setError(message(cause)))); }}>Reload requests</Button></AlertDescription></Alert>}
-    {notice && <p role="status" className="text-sm">{notice}</p>}
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(16rem,1fr)_minmax(0,2fr)]">
       <Card className="min-w-0"><CardHeader><CardTitle>Requests</CardTitle><Label htmlFor="request-status-filter">Status</Label>
         <Select value={filter} onValueChange={setFilter}><SelectTrigger id="request-status-filter"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{REQUEST_STATUSES.map(status => <SelectItem key={status} value={status}>{REQUEST_STATUS_LABELS[status]}</SelectItem>)}</SelectContent></Select>
@@ -143,7 +142,7 @@ export default function RequestsPanel({ context, request }: RequestsPanelProps) 
       <div className="space-y-2"><Label htmlFor="new-request-type">Request type</Label><Select value={type} onValueChange={value => setType(value as RequestType)} disabled={busy}><SelectTrigger id="new-request-type"><SelectValue /></SelectTrigger><SelectContent>{REQUEST_TYPES.map(value => <SelectItem key={value} value={value}>{REQUEST_TYPE_LABELS[value]}</SelectItem>)}</SelectContent></Select></div>
       <div className="space-y-2"><Label htmlFor="new-request-title">Title</Label><Input id="new-request-title" value={title} onChange={event => setTitle(event.target.value)} required maxLength={REQUEST_TITLE_LIMIT} disabled={busy} /></div>
       <div className="space-y-2"><Label htmlFor="new-request-message">Message</Label><Textarea id="new-request-message" value={body} onChange={event => setBody(event.target.value)} required maxLength={REQUEST_BODY_LIMIT} rows={6} disabled={busy} /></div>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setNewOpen(false)}>Close</Button><Button type="submit" disabled={busy}>{busy ? "Submitting..." : "Submit request"}</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setNewOpen(false)}>Close</Button><Button type="submit" disabled={busy}>{busy ? "Submitting..." : "Submit request"}</Button></DialogFooter>
     </form></DialogContent></Dialog>
     <Dialog open={cancelOpen} onOpenChange={value => { if (!busy) setCancelOpen(value); }}><DialogContent><DialogHeader><DialogTitle>Cancel this request?</DialogTitle><DialogDescription>The conversation will become read-only. You can submit a new request later.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>Keep request</Button><Button disabled={busy} onClick={() => { void mutate("status", { status: "cancelled" }); }}>{busy ? "Cancelling..." : "Cancel request"}</Button></DialogFooter></DialogContent></Dialog>
   </section>;
