@@ -16,7 +16,10 @@ export default function SponsorLogin() {
     catch (failure) { setError(failure instanceof Error ? failure.message : "Could not request a sign-in link. Try again."); }
     finally { setPending(false); }
   }
-  return <main className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+  return <main className="relative min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+    <Button asChild variant="outline" className="absolute right-4 top-4 sm:right-6 sm:top-6">
+      <a href="https://www.helixnmbu.no">Go back to the webpage</a>
+    </Button>
     <Card className="w-full max-w-md">
       <CardHeader><CardTitle>Sponsor portal</CardTitle><CardDescription>Sign in with the email address Helix invited.</CardDescription></CardHeader>
       <CardContent><form className="space-y-4" onSubmit={submit}>

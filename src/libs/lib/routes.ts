@@ -18,11 +18,11 @@ export const mobilePrimaryNavLinks: NavLinkConfig[] = [
 ];
 
 export const mobileSecondaryNavLinks: NavLinkConfig[] = [
-  { label: "Sponsorportal", to: "/sponsorportal-login" },
+  { label: "Sponsorportal", to: "https://partner.helixnmbu.no/login" },
 ];
 
 export const appCtaLinks: NavLinkConfig[] = [
-  { label: "Sponsorportal", to: "/sponsorportal-login" },
+  { label: "Sponsorportal", to: "https://partner.helixnmbu.no/login" },
 ];
 
 export const knownRoutes = new Set([
