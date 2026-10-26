@@ -105,5 +105,7 @@ export function validateTask(input: TaskInput, { allowUnorganized = false }: { a
 export function validateProject(input: ProjectInput): ProjectInput {
   if (!TASK_CATEGORIES.includes(input.category) || !Array.isArray(input.departments) || input.departments.length > 10) throw new Error("Choose a category and up to ten departments.");
   if (input.departments.some(name => !ORGANIZATION_DEPARTMENTS.includes(name.trim() as typeof ORGANIZATION_DEPARTMENTS[number]))) throw new Error("Choose departments from the organization list.");
-  return { name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline: date(input.deadline) };
+  if (input.priority !== undefined && !TASK_PRIORITIES.includes(input.priority)) throw new Error("Choose a valid priority.");
+  if (input.leadIds !== undefined && (!Array.isArray(input.leadIds) || input.leadIds.length > MAX_TASK_ASSIGNEES || input.leadIds.some(id => typeof id !== "string" || !id))) throw new Error("Choose up to 20 project Leads.");
+  return { priority: input.priority ?? "normal", leadIds: [...new Set(input.leadIds ?? [])], name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline: date(input.deadline) };
 }

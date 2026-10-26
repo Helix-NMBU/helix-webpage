@@ -34,7 +34,8 @@ function Workspace({ children }: { children?: ReactNode }) {
   const page = previewPage(location.pathname);
   const projectManagement = location.pathname.startsWith("/project-management");
   const projectSection = location.pathname.split("/")[2];
-  const pageTitle = projectManagement ? (projectSection === "overview" ? "Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname === "/tasks" ? "Tasks" : profile
+  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? "Projects" : location.pathname.startsWith("/departments") ? "Departments" : null;
+  const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Project Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname === "/tasks" ? "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
@@ -44,7 +45,7 @@ function Workspace({ children }: { children?: ReactNode }) {
         ? "Notifications"
         : location.pathname.startsWith("/mail")
           ? "Mail"
-          : (page?.section.title ?? "Home");
+          : (page?.section.title ?? "Home"));
   const disabled = busy || Boolean(navigation?.editor?.busy);
 
   function go(to: string, opener?: HTMLElement) {

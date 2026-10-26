@@ -70,8 +70,11 @@ export function createLocalProjectRepository(): ProjectRepository {
         if (department.memberIds.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active platform members for this department.");
         workspace.departments = [...workspace.departments.filter(item => item.id !== mutation.id), { ...department, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
       } else if (mutation.action === "save_project") {
-        if (!workspace.canManage) throw new ProjectRequestError("Project management access is required.", 403);
         const project = validateProject(mutation.project);
+        const ledDepartments = workspace.departments.filter(d => d.leadId === workspace.viewerId).map(d => d.name);
+        const previousProject = workspace.projects.find(p => p.id === mutation.id);
+        if (!workspace.canManage && (!project.departments.some(d => ledDepartments.includes(d)) || (previousProject && !previousProject.departments.some(d => ledDepartments.includes(d))))) throw new ProjectRequestError("Only project managers or a Lead for this department can manage projects.", 403);
+        if (project.leadIds?.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all project Leads.");
         if (workspace.tasks.some(task => task.projectId === mutation.id && task.category !== project.category)) throw new Error("Move the project's tasks before changing its category.");
         workspace.projects = [...workspace.projects.filter(item => item.id !== mutation.id), { ...project, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
       } else if (mutation.action === "update_milestone") {

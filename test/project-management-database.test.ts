@@ -59,6 +59,7 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/015_project_departments.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/017_workspace_directory.sql", import.meta.url), "utf8"));
 
   }, 60000);
   afterAll(async () => { await db?.close(); });

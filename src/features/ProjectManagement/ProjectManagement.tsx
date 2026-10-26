@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@libs/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
+import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_STATUSES, type Project, type ProjectDepartment, type ProjectMutation, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
 import { addDays, formatDate, isOpen, osloDate, summarize, taskUrgency, validateMilestoneChanges } from "./model";
@@ -98,6 +99,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const active = useRef(false);
   const generation = useRef(0);
   const saving = useRef(false);
+  const directory = useWorkspace()?.data;
   const notify = useNotify();
   const navigate = useNavigate();
   const getRepository = useCallback(() => repository.current ??= supplied ? Promise.resolve(supplied) : projectRepository(), [supplied]);
@@ -141,7 +143,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
     try {
       const next = await (await getRepository()).mutate(mutation);
       if (!active.current) return false;
-      setWorkspace(next); setTaskEditor(null); setProjectEditor(null); setDepartmentEditor(null);
+      setWorkspace(next); window.dispatchEvent(new Event("helix-workspace-updated")); setTaskEditor(null); setProjectEditor(null); setDepartmentEditor(null);
       notify(mutation.action === "save_department" ? "Department saved" : mutation.action === "save_project" ? "Project saved" : "Task saved", mutation.action === "save_department" ? "Members and department Lead have been updated." : mutation.action === "save_project" ? "The project is ready to manage." : "Progress and assignments have been updated.", { variant: "success", href: null });
       return true;
     } catch (error) {
@@ -174,7 +176,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   </>;
   return <section className="mx-auto w-full max-w-7xl space-y-7 py-6" aria-labelledby="project-page-title" aria-busy={loading || busy}>
     <div className="flex flex-wrap items-start justify-between gap-4"><div className="space-y-2"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{workspace.season} · Project management</p><h1 id="project-page-title" className="text-3xl font-medium tracking-tight">{title}</h1><p className="max-w-2xl text-sm text-muted-foreground">{descriptions[section]}</p></div><div className="flex flex-wrap gap-2">{category && <Button variant="outline" disabled={loading || busy} onClick={() => void load()}>Refresh</Button>}{workspace.canManage && <Button variant="outline" disabled={busy} onClick={() => setProjectEditor({ project: null })}>New project</Button>}{category && workspace.taskLeadCategories.includes(category) && <Button disabled={busy || loading} onClick={() => { setComposerKind("task"); setComposerOpen(true); }}>New task</Button>}{category && workspace.taskLeadCategories.includes(category) && <Button variant="outline" disabled={busy || loading} onClick={() => { setComposerKind("milestone"); setComposerOpen(true); }}>New milestone</Button>}</div></div>
-    {!category && <OverviewProgress workspace={workspace} busy={busy || loading} onOpenProject={project => setProjectEditor({ project })} onCreateProject={() => setProjectEditor({ project: null })} onSelectProject={id => { const project = workspace.projects.find(item => item.id === id); if (project) navigate(`/project-management/${project.category}?project=${encodeURIComponent(id)}`); }} onNeedsOrganization={() => setOrganizationOpen(true)} onEditDepartment={setDepartmentEditor} />}
+    {!category && <OverviewProgress workspace={directory ? { ...workspace, members: directory.members } : workspace} busy={busy || loading} onOpenProject={project => setProjectEditor({ project })} onCreateProject={() => setProjectEditor({ project: null })} onSelectProject={id => { const project = workspace.projects.find(item => item.id === id); if (project) navigate(`/project-management/${project.category}?project=${encodeURIComponent(id)}`); }} onNeedsOrganization={() => setOrganizationOpen(true)} onEditDepartment={setDepartmentEditor} />}
     {category && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: "Task completion", value: `${stats.percent}%`, detail: `${stats.done} of ${stats.total} tasks complete` }, { label: "Overdue", value: stats.overdue, detail: "Open tasks and milestones past deadline" }, { label: "Due within 7 days", value: stats.upcoming, detail: "Including today's deadlines" }, { label: "Blocked", value: stats.blocked, detail: "Work that needs a next step" }].map(item => <Card key={item.label} className="gap-3 py-5"><CardHeader className="px-5"><CardDescription>{item.label}</CardDescription><CardTitle className="text-3xl font-medium tabular-nums">{item.value}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{item.detail}</CardContent></Card>)}</div>}
     {category && <p className="text-sm text-muted-foreground">{scope.some(isOpen) ? <>Latest open task or milestone deadline: {formatDate(stats.lastDeadline)}. {stats.unscheduled > 0 ? `${stats.unscheduled} open item${stats.unscheduled === 1 ? " has" : "s have"} no deadline.` : "All open work has a deadline."}</> : "No open tasks or milestones."}</p>}
     {category === "partnership-deliverables" && <PartnerDeliverables tasks={scope} onSelect={partner => { setSearch(partner); setStatus("all"); setProjectId("all"); }} />}
@@ -191,9 +193,9 @@ export default function ProjectManagement({ personal = false, repository: suppli
       <p className="text-xs leading-relaxed text-muted-foreground">Completion uses recorded task status and excludes cancelled work and milestones. Milestone progress uses completed linked tasks; milestone status and deadline are tracked separately. {category === "partnership-deliverables" ? "This list contains recorded obligations for S27." : "Scheduled deadlines do not account for effort, dependencies, or team capacity."}</p>
     </div>}
     {organizationOpen && <OrganizationQueue workspace={workspace} onClose={() => setOrganizationOpen(false)} onOpen={task => { setOrganizationOpen(false); setTaskEditor({ task }); }} onOrganize={task => { setOrganizationOpen(false); navigate(`/project-management/${task.category}?organize=${task.id}`); }} />}
-    {departmentEditor && <DepartmentEditor key={departmentEditor.id} department={departmentEditor} workspace={workspace} busy={busy} onSave={save} onClose={() => setDepartmentEditor(null)} />}
+    {departmentEditor && <DepartmentEditor key={departmentEditor.id} department={departmentEditor} workspace={directory ? { ...workspace, members: directory.members } : workspace} busy={busy} onSave={save} onClose={() => setDepartmentEditor(null)} />}
     {taskEditor && <TaskEditor key={taskEditor.task?.id ?? "new-task"} task={taskEditor.task} workspace={workspace} category={category ?? "production"} statusOnly={!category} busy={busy} onSave={save} onClose={() => setTaskEditor(null)} />}
-    {projectEditor && <ProjectEditor key={projectEditor.project?.id ?? "new-project"} project={projectEditor.project} category={category ?? "production"} busy={busy} onSave={save} onClose={() => setProjectEditor(null)} />}
+    {projectEditor && <ProjectEditor members={workspace.members} key={projectEditor.project?.id ?? "new-project"} project={projectEditor.project} category={category ?? "production"} busy={busy} onSave={save} onClose={() => setProjectEditor(null)} />}
     {composerOpen && category && workspace.taskLeadCategories.includes(category) && <TaskComposer key={`${category}-${composerKind}`} initialKind={composerKind} workspace={workspace} category={category} projectId={projects.some(project => project.id === projectId) ? projectId : null} busy={busy} onSave={save} onClose={() => setComposerOpen(false)} />}
   </section>;
 }

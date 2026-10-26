@@ -1,5 +1,15 @@
 import * as React from "react";
-import { IconBell, IconLayoutKanban, IconHome, IconCheckbox, IconMail, IconUsersGroup } from "@tabler/icons-react";
+import {
+  IconBell,
+  IconLayoutKanban,
+  IconSmartHome,
+  IconCube,
+  IconUsers,
+  IconBuildingCommunity,
+  IconCheckbox,
+  IconMail,
+  IconUsersGroup,
+} from "@tabler/icons-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -12,9 +22,9 @@ import {
   SidebarRail,
 } from "@libs/components/ui/sidebar";
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
-import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
+import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
+import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
-import { CATEGORY_LABELS, TASK_CATEGORIES } from "@/features/ProjectManagement/types";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -31,34 +41,36 @@ export function AppSidebar({
   const location = useLocation();
   const notifications = useMemberNotifications();
   const recruitment = useRecruitmentAccess();
-  const activeTeam = previewTeams.find((team) =>
-    location.pathname.startsWith(`/teams/${team.id}/`),
-  );
-  const projectManagement = location.pathname.startsWith("/project-management");
-  const teamItems = [
-    ...previewTeams.map((team) => ({
-      title: team.title,
-      url: `/teams/${team.id}`,
-      icon: team.icon,
-      isActive: activeTeam?.id === team.id,
-      items: team.sections.map((section) => ({
-        title: section.title,
-        url: `/teams/${team.id}/${section.id}`,
-      })),
-    })),
-    {
-      title: "Project Management",
-      url: "/project-management/overview",
-      icon: IconLayoutKanban,
-      isActive: projectManagement,
-      items: [{ title: "Overview", url: "/project-management/overview" }, ...TASK_CATEGORIES.map(category => ({ title: CATEGORY_LABELS[category], url: `/project-management/${category}` }))],
-    },
-    ...(recruitment.access === "allowed" ? [{
-      title: "Recruiting",
-      url: "/recruiting",
-      icon: IconUsersGroup,
-      isActive: location.pathname === "/recruiting",
-    }] : []),
+  const workspace = useWorkspace()?.data;
+  const spaceItems = [
+    ...(workspace?.projectAccess
+      ? [
+          {
+            title: "Project Overview",
+            url: "/project-management/overview",
+            icon: IconLayoutKanban,
+            isActive: location.pathname.startsWith("/project-management"),
+          },
+        ]
+      : []),
+    ...(recruitment.access === "allowed"
+      ? [
+          {
+            title: "Recruiting",
+            url: "/recruiting",
+            icon: IconUsersGroup,
+            isActive: location.pathname === "/recruiting",
+          },
+        ]
+      : []),
+    ...(workspace?.departments
+      .filter((department) => department.memberIds.includes(workspace.viewerId))
+      .map((department) => ({
+        title: department.name,
+        url: departmentPath(department.name),
+        icon: IconBuildingCommunity,
+        isActive: location.pathname === departmentPath(department.name),
+      })) ?? []),
   ];
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -71,21 +83,63 @@ export function AppSidebar({
             {
               title: "Home",
               url: "/",
-              icon: IconHome,
+              icon: IconSmartHome,
               isActive: location.pathname === "/",
             },
-            { title: "Notifications", url: "/notifications", icon: IconBell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
-            { title: "Mail", url: "/mail", icon: IconMail, isActive: location.pathname.startsWith("/mail") },
-            { title: "Tasks", url: "/tasks", icon: IconCheckbox, isActive: location.pathname === "/tasks" },
+            {
+              title: "Notifications",
+              url: "/notifications",
+              icon: IconBell,
+              isActive: location.pathname === "/notifications",
+              badge: notifications?.unread || undefined,
+            },
+            {
+              title: "Mail",
+              url: "/mail",
+              icon: IconMail,
+              isActive: location.pathname.startsWith("/mail"),
+            },
+            {
+              title: "Tasks",
+              url: "/tasks",
+              icon: IconCheckbox,
+              isActive: location.pathname === "/tasks",
+            },
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
           disabled={disabled}
         />
         <NavMain
-          key={projectManagement ? "project-management" : activeTeam?.id ?? "teams"}
-          title="Teams"
-          items={teamItems}
+          title="Workspace"
+          collapsible
+          items={[
+            {
+              title: "Members",
+              url: "/members",
+              icon: IconUsers,
+              isActive: location.pathname === "/members",
+            },
+            {
+              title: "Projects",
+              url: "/projects",
+              icon: IconCube,
+              isActive: location.pathname.startsWith("/projects"),
+            },
+            {
+              title: "Departments",
+              url: "/departments",
+              icon: IconBuildingCommunity,
+              isActive: location.pathname === "/departments",
+            },
+          ]}
+          activeUrl={location.pathname}
+          onNavigate={onNavigate}
+          disabled={disabled}
+        />
+        <NavMain
+          title="Your spaces"
+          items={spaceItems}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
           disabled={disabled}

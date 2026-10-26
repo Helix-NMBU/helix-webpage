@@ -27,10 +27,11 @@ import { clearGmailSessionCache } from "./gmail-session-cache";
 import { MailWorkspace } from "./MailWorkspace";
 import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
+import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
+import { MembersPage, ProjectsPage, DepartmentsPage } from "../Workspace/WorkspacePages";
 import ProjectManagement from "../ProjectManagement/ProjectManagement";
 import {
   MemberSettingsPreview,
-  TeamWorkspacePreview,
   WorkspaceHomePreview,
 } from "./WorkspacePreview";
 import "@fontsource-variable/geist";
@@ -115,7 +116,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   return (
     <MemberAccountProvider account={landing.account ?? null}>
       <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
-        <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</RecruitmentAccessProvider>
+        <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}><WorkspaceProvider key={landing.userId}>{children ?? <Outlet />}</WorkspaceProvider></RecruitmentAccessProvider>
       </MemberNotificationsProvider>
     </MemberAccountProvider>
   );
@@ -146,12 +147,17 @@ export default function MemberPlatform() {
                 <Route path="notifications" element={<MemberNotificationsPage />} />
                 <Route path="recruiting" element={<RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess>} />
                 <Route path="mail" element={<MailWorkspace />} />
+                <Route path="members" element={<MembersPage />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="projects/:projectId" element={<ProjectsPage />} />
+                <Route path="departments" element={<DepartmentsPage />} />
+                <Route path="departments/:departmentId" element={<DepartmentsPage />} />
                 <Route path="tasks" element={<ProjectManagement personal />} />
                 <Route path="project-management" element={<Navigate to="/project-management/overview" replace />} />
                 <Route path="project-management/:section" element={<ProjectManagement />} />
                 <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/project-management/production" />} />
                 <Route path="settings" element={<MemberSettingsPreview />} />
-                <Route path="teams/:teamId/:sectionId" element={<TeamWorkspacePreview />} />
+                <Route path="teams/:teamId/:sectionId" element={<LegacyMemberRedirect to="/departments" />} />
               </Route>
               <Route path="recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
               <Route path="recruitment" element={<LegacyMemberRedirect to="/recruiting" />} />

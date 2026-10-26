@@ -12,6 +12,8 @@ export const CATEGORY_LABELS: Record<TaskCategory, string> = { production: "Prod
 export const STATUS_LABELS: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
 
 export interface ProjectInput {
+  priority?: TaskPriority;
+  leadIds?: string[];
   name: string;
   description: string;
   category: TaskCategory;

@@ -9,6 +9,9 @@ import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
+import { directoryFixture } from '../Workspace/fixtures.test-support';
+const workspace = vi.hoisted(() => ({ load:vi.fn(),saveMember:vi.fn(),saveProject:vi.fn() }));
+vi.mock('../Workspace/repository', async original => ({...await original<typeof import('../Workspace/repository')>(),workspaceRepository:async()=>workspace}));
 const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn(), positions: vi.fn() }));
 vi.mock("../Recruitment/website-api", async original => ({ ...await original<typeof import("../Recruitment/website-api")>(), createRecruitmentApi: () => recruitment }));
 import { RecruitmentRequestError } from "../Recruitment/website-api";
@@ -42,6 +45,9 @@ describe("internal member platform", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     window.localStorage.removeItem("helix-member-theme");
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
+    workspace.load.mockReset().mockResolvedValue(directoryFixture());
+    workspace.saveMember.mockReset();
+    workspace.saveProject.mockReset();
     recruitment.session.mockReset().mockRejectedValue(new RecruitmentRequestError("Recruiter access required", 403));
     recruitment.list.mockReset().mockResolvedValue([]);
     recruitment.positions.mockReset().mockResolvedValue([]);
@@ -170,7 +176,7 @@ describe("internal member platform", () => {
     expect(googleSignInRequest("/recruiting", "https://internal.helixnmbu.no").callbackURL).toBe("https://internal.helixnmbu.no/recruiting");
   });
 
-  it.each(["/tasks", "/project-management/overview", "/project-management/production?view=timeline#tasks", "/project-management/partnership-deliverables"])("preserves %s through both member login and Google callback", path => {
+  it.each(["/members", "/projects", "/departments/mechanical-and-production", "/tasks", "/project-management/overview", "/project-management/production?view=timeline#tasks", "/project-management/partnership-deliverables"])("preserves %s through both member login and Google callback", path => {
     expect(memberLoginDestination({ from: path })).toBe(path);
     expect(googleSignInRequest(path, "https://internal.helixnmbu.no").callbackURL).toBe(`https://internal.helixnmbu.no${path}`);
   });
@@ -242,13 +248,14 @@ describe("internal member platform", () => {
   it("keeps profile and CV access in the account panel and guards Settings navigation from the editor", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
-    expect(container.textContent).toContain("Business & Marketing");
-    expect(container.textContent).toContain("Finance");
-    expect(container.textContent).toContain("Project Management");
+    expect(container.textContent).toContain("Workspace");
+    expect(container.textContent).toContain("Your spaces");
+    expect(container.textContent).toContain("Project Overview");
     const mail = container.querySelector('[aria-label="Mail"]')!;
     const tasks = container.querySelector('[aria-label="Tasks"]')!;
     expect(mail.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(container.textContent).not.toContain("Mechanical & Production");
+    expect(container.textContent).toContain("Mechanical & Production");
+    expect(container.querySelector('[aria-label="Business & Marketing"]')).toBeNull();
     expect(container.querySelector('a[href^="/profile"]')).toBeNull();
     expect(container.querySelector('[aria-label="Profile"]')).toBeNull();
     await profileMenu();
@@ -314,6 +321,75 @@ describe("internal member platform", () => {
     }
     expect(memberLoginDestination({ from: "/profile" })).toBe("/profile");
   });
+
+  it("shows an unlabeled platform group, a collapsible Workspace, and only accessible spaces", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/members");
+    expect(container.querySelector('[data-sidebar="group-label"]')?.textContent).toBe("Workspace");
+    expect(container.querySelector('[aria-label="Home"] svg')?.classList.contains('tabler-icon-smart-home')).toBe(true);
+    expect(container.querySelector('[aria-label="Project Overview"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Mechanical & Production"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Electronics"]')).toBeNull();
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Toggle Workspace"]')?.click());
+    expect(container.querySelector('button[aria-label="Members"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Mechanical & Production"]')).not.toBeNull();
+  });
+
+  it("lets ordinary members view members and all projects without editing controls", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    const data=directoryFixture();data.canAdmin=false;data.canManageProjects=false;data.departments=data.departments.map(d=>({...d,leadId:null}));workspace.load.mockResolvedValue(data);
+    await open('/members');
+    expect(container.querySelector('h1')?.textContent).toBe('Members');
+    expect(container.querySelector('table')?.textContent).toContain('Sam Example');
+    expect(container.querySelector('[aria-label="Edit Sam Example"]')).toBeNull();
+    expect(container.textContent).not.toContain('Invite');
+    await act(async()=>router.navigate('/projects'));
+    expect(container.querySelector('h1')?.textContent).toBe('Projects');
+    expect(container.querySelector('table')?.textContent).toContain('Chassis & assembly');
+    expect([...container.querySelectorAll('button')].some(b=>b.textContent==='New project')).toBe(false);
+    expect(container.querySelector('table')?.textContent).toContain('Department');
+    expect(container.querySelector('table')?.textContent).not.toContain('Health');
+  });
+
+  it.each(['manager','lead'])("lets a %s open the project creation form",async role=>{
+    session.landing.mockResolvedValue(signedIn);
+    const data=directoryFixture();data.canAdmin=false;data.canManageProjects=role==='manager';workspace.load.mockResolvedValue(data);
+    await open('/projects');
+    const create=[...container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='New project');
+    expect(create).toBeDefined();await act(async()=>create!.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('New project');
+    expect(document.querySelector('#project-leads')).not.toBeNull();
+    expect(document.querySelector('#project-priority')).not.toBeNull();
+  });
+
+  it("lists every department but only opens the viewer's departments",async()=>{
+    session.landing.mockResolvedValue(signedIn);await open('/departments');
+    const table=container.querySelector('table')!;
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(7);
+    expect([...table.querySelectorAll('button')].map(b=>b.textContent)).toEqual(['Mechanical & Production']);
+    await act(async()=>[...table.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Mechanical & Production')!.click());
+    expect(router.state.location.pathname).toBe('/departments/mechanical-and-production');
+    expect(container.querySelector('h1')?.textContent).toBe('Mechanical & Production');
+    await act(async()=>router.navigate('/departments/finance'));
+    expect(router.state.location.pathname).toBe('/departments');
+    expect(container.querySelector('h1')?.textContent).toBe('Departments');
+  });
+
+  it("saves member edits through the admin action and retains the form on a failed save",async()=>{
+    session.landing.mockResolvedValue(signedIn);await open('/members');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Sam Example"]')!.click());
+    const input=document.querySelector<HTMLInputElement>('#member-name')!;
+    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'Sam Updated');input.dispatchEvent(new Event('input',{bubbles:true}));});
+    workspace.saveMember.mockRejectedValueOnce(new Error('Record changed. Reload before saving.'));
+    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(document.querySelector<HTMLInputElement>('#member-name')?.value).toBe('Sam Updated');
+    expect(workspace.saveMember).toHaveBeenCalledWith(expect.objectContaining({name:'Sam Updated',expectedRevision:1,departments:expect.any(Array)}));
+    const saved=directoryFixture();saved.members[1].name='Sam Updated';workspace.saveMember.mockResolvedValue(saved);
+    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('table')?.textContent).toContain('Sam Updated');
+  });
+
   it("uses notifications for unavailable connections across the app", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/settings");
