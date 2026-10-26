@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import RequestsPanel, { type RequestsPanelProps } from "./RequestsPanel";
 import type { RequestDetail, RequestList } from "./request-types";
@@ -11,8 +12,8 @@ const initial: RequestDetail = { id: "request-a", organizationId: "organization-
 
 describe("sponsor request conversations", () => {
   let container: HTMLDivElement; let root: Root;
-  beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
-  afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+  beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.spyOn(toast, "success"); vi.spyOn(toast, "warning"); vi.spyOn(toast, "error"); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
+  afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
   function transport(options: { failMutation?: boolean; detail?: RequestDetail; deferredMutation?: Promise<{ request: RequestDetail }> } = {}) {
     let detail = structuredClone(options.detail ?? initial);
     const calls = vi.fn(async (action: string, init?: RequestInit & { query?: Record<string, string> }): Promise<unknown> => {
@@ -48,12 +49,12 @@ describe("sponsor request conversations", () => {
     await enterReply("Here are the details."); await submitReply();
     const mutation = calls.mock.calls.find(([, init]) => init?.method === "POST")!;
     expect(JSON.parse(String(mutation[1]?.body))).toEqual({ id: "request-a", expectedRevision: 2, operation: "reply", body: "Here are the details." });
-    expect(container.textContent).toContain("Reply added."); expect(container.textContent).toContain("Under review"); expect(container.textContent).toContain("Here are the details.");
+    expect(toast.success).toHaveBeenCalledWith("Reply added", expect.any(Object)); expect(container.textContent).toContain("Under review"); expect(container.textContent).toContain("Here are the details.");
   });
   it("preserves an unsent reply when a stale revision is rejected", async () => {
     const { request } = transport({ failMutation: true }); await mount(request); await open(); await enterReply("Keep this draft."); await submitReply();
     expect(container.querySelector<HTMLTextAreaElement>("#request-reply")?.value).toBe("Keep this draft.");
-    expect(container.textContent).toContain("This request changed. Reload it before trying again.");
+    expect(toast.error).toHaveBeenCalledWith("Could not update request", expect.objectContaining({ description: "This request changed. Reload it before trying again." }));
   });
   it("submits the sponsor form and clears the previous conversation's reply draft", async () => {
     const { calls, request } = transport(); await mount(request); await open(); await enterReply("Old conversation draft");
@@ -66,7 +67,26 @@ describe("sponsor request conversations", () => {
     await act(async () => document.querySelector("#new-request-title")!.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     const mutation = calls.mock.calls.find(([action, init]) => action === "requests" && init?.method === "POST")!;
     expect(JSON.parse(String(mutation[1]?.body))).toEqual({ type: "general_collaboration", title: "New request title", body: "New request message" });
-    expect(container.textContent).toContain("Request submitted."); expect(container.querySelector<HTMLTextAreaElement>("#request-reply")?.value).toBe("");
+    expect(toast.success).toHaveBeenCalledWith("Request submitted", expect.any(Object)); expect(container.querySelector<HTMLTextAreaElement>("#request-reply")?.value).toBe("");
+  });
+  it("reports a saved request as successful if the follow-up list refresh fails", async () => {
+    const base = transport();
+    let listReads = 0;
+    const request: RequestsPanelProps["request"] = async <T,>(action: string, init?: RequestInit & { query?: Record<string, string> }) => {
+      if (action === "requests" && !init?.method && ++listReads > 1) throw new Error("Temporary refresh failure.");
+      return base.request<T>(action, init);
+    };
+    await mount(request);
+    await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "New request")!.click());
+    for (const [selector, value] of [["#new-request-title", "Saved request"], ["#new-request-message", "Saved request message"]]) {
+      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
+      const prototype = input.tagName === "INPUT" ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+      await act(async () => { Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    }
+    await act(async () => document.querySelector("#new-request-title")!.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(toast.success).toHaveBeenCalledWith("Request submitted", expect.any(Object));
+    expect(toast.warning).toHaveBeenCalledWith("Request saved, but the list could not refresh", expect.objectContaining({ description: "Temporary refresh failure." }));
+    expect(toast.error).not.toHaveBeenCalledWith("Could not submit request", expect.anything());
   });
   it("does not offer reply or cancellation on a terminal conversation", async () => {
     const { request } = transport({ detail: { ...initial, status: "completed" } }); await mount(request); await open();
