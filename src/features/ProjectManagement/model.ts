@@ -1,0 +1,66 @@
+import { TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type ProjectInput, type Task, type TaskInput } from "./types";
+
+export function osloDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  return ["year", "month", "day"].map(key => parts.find(part => part.type === key)!.value).join("-");
+}
+
+export function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+export function isOpen(task: Task): boolean { return task.status !== "done" && task.status !== "cancelled"; }
+export function taskUrgency(task: Task, today = osloDate()): "overdue" | "soon" | null {
+  if (!isOpen(task) || !task.deadline) return null;
+  if (task.deadline < today) return "overdue";
+  return task.deadline <= addDays(today, 7) ? "soon" : null;
+}
+
+export function summarize(tasks: Task[], today = osloDate()) {
+  // Milestones are tracked separately so they do not double-count task progress.
+  const work = tasks.filter(task => task.status !== "cancelled" && task.kind === "task");
+  const done = work.filter(task => task.status === "done").length;
+  const scheduled = tasks.filter(task => isOpen(task) && task.deadline).sort((a, b) => a.deadline!.localeCompare(b.deadline!));
+  return {
+    total: work.length, done, percent: work.length ? Math.round(done / work.length * 100) : 0,
+    overdue: tasks.filter(task => taskUrgency(task, today) === "overdue").length,
+    upcoming: tasks.filter(task => taskUrgency(task, today) === "soon").length,
+    blocked: tasks.filter(task => task.status === "blocked").length,
+    lastDeadline: scheduled[scheduled.length - 1]?.deadline ?? null,
+    unscheduled: tasks.filter(task => isOpen(task) && !task.deadline).length,
+  };
+}
+
+export function formatDate(value: string | null): string {
+  return value ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`)) : "No deadline";
+}
+
+function text(value: unknown, label: string, max: number, required = false): string {
+  if (typeof value !== "string" || value.trim().length > max || (required && !value.trim())) throw new Error(`${label} ${required ? `must contain 1–${max}` : `must contain at most ${max}`} characters.`);
+  return value.trim();
+}
+function date(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number(value.slice(0, 4)) < 2000 || Number(value.slice(0, 4)) > 2100 || !Number.isFinite(Date.parse(`${value}T12:00:00Z`)) || new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) !== value) throw new Error("Enter a valid date between 2000 and 2100.");
+  return value;
+}
+function uuidOrNull(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new Error("Choose a valid member or project.");
+  return value;
+}
+export function validateTask(input: TaskInput): TaskInput {
+  if (!TASK_CATEGORIES.includes(input.category) || !TASK_STATUSES.includes(input.status) || !TASK_PRIORITIES.includes(input.priority) || !["task", "milestone"].includes(input.kind)) throw new Error("Choose a valid category, status, priority and task type.");
+  const value = { ...input, title: text(input.title, "Title", 200, true), description: text(input.description, "Description", 2000), partnerName: text(input.partnerName, "Partner name", 200), blockedReason: text(input.blockedReason, "Blocked reason", 500), assigneeId: uuidOrNull(input.assigneeId), projectId: uuidOrNull(input.projectId), deadline: date(input.deadline), startDate: date(input.startDate) };
+  if (value.category === "partnership-deliverables" && !value.partnerName) throw new Error("Enter the sponsor or partner name for this deliverable.");
+  if (value.status === "blocked" && !value.blockedReason) throw new Error("Describe what is blocking this task.");
+  if (value.kind === "milestone" && !value.deadline) throw new Error("Set a deadline for this milestone.");
+  if (value.startDate && value.deadline && value.startDate > value.deadline) throw new Error("The start date must be on or before the deadline.");
+  return value;
+}
+export function validateProject(input: ProjectInput): ProjectInput {
+  if (!TASK_CATEGORIES.includes(input.category) || !Array.isArray(input.departments) || input.departments.length > 10) throw new Error("Choose a category and up to ten departments.");
+  return { name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline: date(input.deadline) };
+}

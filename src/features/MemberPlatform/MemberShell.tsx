@@ -20,6 +20,7 @@ import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
+import { CATEGORY_LABELS, type TaskCategory } from "../ProjectManagement/types";
 
 function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
@@ -31,7 +32,9 @@ function Workspace({ children }: { children?: ReactNode }) {
   const profile = location.pathname === "/profile";
   const mail = location.pathname.startsWith("/mail");
   const page = previewPage(location.pathname);
-  const pageTitle = profile
+  const projectManagement = location.pathname.startsWith("/project-management");
+  const projectSection = location.pathname.split("/")[2];
+  const pageTitle = projectManagement ? (projectSection === "overview" ? "Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname === "/tasks" ? "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
@@ -101,10 +104,10 @@ function Workspace({ children }: { children?: ReactNode }) {
                       </BreadcrumbLink>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator className="hidden md:block" />
-                    {page && (
+                    {(page || projectManagement) && (
                       <>
                         <BreadcrumbItem className="hidden lg:block">
-                          {page.team.title}
+                          {projectManagement ? "Project Management" : page?.team.title}
                         </BreadcrumbItem>
                         <BreadcrumbSeparator className="hidden lg:block" />
                       </>

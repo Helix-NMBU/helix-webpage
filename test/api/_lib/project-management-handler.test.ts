@@ -4,6 +4,7 @@ import { createProjectHandler } from "../../../api/_lib/project-management-handl
 import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
 import type { ProjectServices } from "../../../api/_lib/project-management-service.js";
 import { parseProjectMutation } from "../../../api/_lib/project-management-validation.js";
+import memberApi from "../../../api/member-login.js";
 
 const fixture = () => ({ load: vi.fn(), mutate: vi.fn() });
 async function call(services: ProjectServices, args: { method?: string; token?: string; body?: unknown; length?: string } = {}) {
@@ -16,6 +17,16 @@ async function call(services: ProjectServices, args: { method?: string; token?: 
   return { status, result, headers };
 }
 describe("project management HTTP boundaries", () => {
+  it("preserves authentication and method handling through the shared member API", async () => {
+    let status = 0;
+    const res = { setHeader: vi.fn(), status: (value: number) => { status = value; return res; }, json: vi.fn() };
+    await memberApi({ method: "GET", query: { __module: "projects" }, headers: {} } as unknown as VercelRequest, res as unknown as VercelResponse);
+    expect(status).toBe(401);
+    await memberApi({ method: "DELETE", query: { __module: "projects" }, headers: {} } as unknown as VercelRequest, res as unknown as VercelResponse);
+    expect(status).toBe(405);
+    await memberApi({ method: "GET", query: {}, headers: {} } as unknown as VercelRequest, res as unknown as VercelResponse);
+    expect(status).toBe(405);
+  });
   it("requires bearer authentication before every read and mutation", async () => {
     const services = fixture();
     expect((await call(services)).status).toBe(401);

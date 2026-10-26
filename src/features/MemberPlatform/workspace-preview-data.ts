@@ -1,4 +1,4 @@
-import { Megaphone, Wallet, Wrench } from "lucide-react";
+import { Megaphone, Wallet } from "lucide-react";
 
 // Fictional workspace content for the UI preview, never an authorization policy.
 export const previewTeams = [
@@ -62,36 +62,7 @@ export const previewTeams = [
       },
     ],
   },
-  {
-    id: "mechanical-production",
-    title: "Mechanical & Production",
-    icon: Wrench,
-    description: "Build plans, workshop activity and parts.",
-    sections: [
-      {
-        id: "production",
-        title: "Production plan",
-        description: "Coordinate the next steps from design to assembly.",
-        columns: ["Work item", "Stage", "Status"],
-        rows: [
-          ["Mounting bracket", "Design review", "To review"],
-          ["Frame assembly", "Workshop preparation", "In progress"],
-          ["Fit and finish", "Final inspection", "Planned"],
-        ],
-      },
-      {
-        id: "inventory",
-        title: "Parts & inventory",
-        description: "See which parts are ready and what needs ordering.",
-        columns: ["Part", "Location", "Status"],
-        rows: [
-          ["Fastener kit", "Workshop shelf A", "Ready"],
-          ["Aluminium stock", "Materials rack", "To review"],
-          ["Bearing set", "Incoming delivery", "Planned"],
-        ],
-      },
-    ],
-  },
+
 ];
 
 export function previewPage(pathname: string) {
