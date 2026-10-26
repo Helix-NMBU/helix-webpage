@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailCallbackHandler } from "./_lib/gmail-callback-handler.js";
-import { stateCookie } from "./_lib/gmail-connect-handler.js";
-import type { GmailConnectionStore } from "./_lib/gmail-connection.js";
+import { createGmailCallbackHandler } from "../_lib/gmail-callback-handler.js";
+import { stateCookie } from "../_lib/gmail-connect-handler.js";
+import type { GmailConnectionStore } from "../_lib/gmail-connection.js";
 
 function response() {
   let status = 200;

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createMemberCvFileHandler } from "./member-cv-file.js";
-import { MemberCvError, type CvServices } from "./_lib/member-cv-service.js";
+import { createMemberCvFileHandler } from "../member-cv-file.js";
+import { MemberCvError, type CvServices } from "../_lib/member-cv-service.js";
 
 const userId = "cfccf73f-0043-4a02-86c8-e86d4d2f02fd";
 

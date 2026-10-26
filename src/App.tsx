@@ -12,8 +12,7 @@ import Garage from './features/Garage/Garage.tsx'
 import Members from './features/Team/Team.tsx'
 import ApplyPage from './features/Apply/ApplyPage.tsx'
 import ApplicationFormPage from './features/Apply/ApplicationFormPage.tsx'
-import SponsorPortalLogin from './features/SponsorPortal/SponsorportalLogin.tsx'
-import SponsorPortal from './features/SponsorPortal/Sponsorportal.tsx'
+import SponsorWorkspace from './features/SponsorWorkspace/SponsorWorkspace.tsx'
 import CVBankLogin from './features/CVBank/Login.tsx'
 import RecruitmentLogin from './features/Recruitment/RecruitmentLogin.tsx'
 import RecruitmentPortal from './features/Recruitment/RecruitmentPortal.tsx'
@@ -30,7 +29,12 @@ import { isMemberPlatform } from './features/MemberPlatform/routes.ts'
 {/*import  Contactside  from './Contactside.tsx'*/}
 
 function AppContent() {
-  useEffect(() => { void claimNeonAuthSession(); }, []);
+  const location = useLocation();
+  const sponsorPath = location.pathname === '/sponsor' || location.pathname.startsWith('/sponsor/') || location.pathname === '/sponsorportal' || location.pathname === '/sponsorportal-login';
+  useEffect(() => { if (!sponsorPath) void claimNeonAuthSession(); }, [sponsorPath]);
+  if (location.pathname === '/sponsorportal-login') return <Navigate to="/sponsor/login" replace />;
+  if (location.pathname === '/sponsorportal') return <Navigate to="/sponsor" replace />;
+  if (sponsorPath) return <SponsorWorkspace />;
   return isMemberPlatform() ? <MemberPlatform /> : <PublicAppContent />;
 }
 
@@ -59,8 +63,6 @@ function PublicAppContent() {
         <Route path="/members" element={<Members />} />
         <Route path="/apply" element={<ApplyPage />} />
         <Route path="/apply/form" element={<ApplicationFormPage />} />
-        <Route path="/sponsorportal-login" element={<SponsorPortalLogin />} />
-        <Route path="/sponsorportal" element={<SponsorPortal />} />
         <Route path="/recruitment/login" element={<RecruitmentLogin />} />
         <Route path="/recruitment" element={<RecruitmentPortal />} />
         <Route path="/cv-bank" element={<Navigate to="/member/login" replace />} />

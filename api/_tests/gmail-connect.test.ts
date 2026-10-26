@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createGmailConnectHandler, GMAIL_MODIFY_SCOPE, GMAIL_OAUTH_STATE_COOKIE } from "./_lib/gmail-connect-handler.js";
+import { createGmailConnectHandler, GMAIL_MODIFY_SCOPE, GMAIL_OAUTH_STATE_COOKIE } from "../_lib/gmail-connect-handler.js";
 
 function response() {
   let status = 200;

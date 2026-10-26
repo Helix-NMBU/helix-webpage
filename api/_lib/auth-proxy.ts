@@ -343,6 +343,11 @@ export async function proxyNeonAuth(input: AuthProxyRequest): Promise<Response> 
   const rawUrl = input.rawUrl ?? "/";
   const target = upstreamUrl(baseUrl, rawUrl);
   if (!target) return jsonResponse(400, "Invalid auth path.");
+  // Sponsor email login must enter through the server invitation gate. Blocking
+  // the raw proxy prevents a browser from skipping it. Verification callbacks,
+  // the existing Google flow and session endpoints remain available.
+  const targetPath = decodeURIComponent(decodeURIComponent(target.pathname)).replace(/\/+$/, "");
+  if (targetPath.endsWith("/sign-in/magic-link")) return jsonResponse(403, "Use the sponsor sign-in form to request an email link.");
   const method = (input.method ?? "GET").toUpperCase();
   if (!allowsAuthStateChange({ method, headers: input.headers, allowedHosts: input.allowedHosts })) {
     console.error("Rejected a cross-site Neon auth request.");
