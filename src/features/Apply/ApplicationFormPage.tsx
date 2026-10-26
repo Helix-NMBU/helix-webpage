@@ -6,6 +6,7 @@ import gsap from "gsap";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { cvBase64 } from "../Recruitment/website-api";
 import { currentSeason } from "../../libs/lib/season";
+import { fetchPublicPositions } from "./positions-api";
 
 gsap.registerPlugin(useGSAP);
 
@@ -144,12 +145,8 @@ export default function ApplicationFormPage() {
   const [status, setStatus] = useState<SubmitStatus>({ state: "idle" });
 
   useEffect(() => {
-    fetch("/api/website?action=positions")
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Could not load available positions. Please try again.");
-        return (await r.json()).positions;
-      })
-      .then((data: Position[]) => {
+    fetchPublicPositions()
+      .then((data) => {
         setPositions(data.map(({ id, title, department }) => ({ id, title, department })));
         // A tampered/stale ?position= that matches nothing sends the user back
         // to the position step instead of carrying an invalid value along.
