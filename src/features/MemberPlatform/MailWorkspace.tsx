@@ -475,28 +475,28 @@ function MessageComposer({
         <div className="shrink-0 divide-y divide-border">
           <div className="flex min-h-11 items-center gap-3 px-5">
             <Label htmlFor="compose-to" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">To</Label>
-            <Input id="compose-to" type="text" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus aria-label="To" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+            <Input id="compose-to" type="text" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus aria-label="To" className="h-10 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent" />
           </div>
           <div className="flex min-h-11 items-center gap-3 px-5">
             <Label htmlFor="compose-cc" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">Cc</Label>
-            <Input id="compose-cc" type="text" value={cc} onChange={(event) => onCcChange(event.target.value)} placeholder="Optional recipients" aria-label="Cc" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+            <Input id="compose-cc" type="text" value={cc} onChange={(event) => onCcChange(event.target.value)} placeholder="Optional recipients" aria-label="Cc" className="h-10 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent" />
           </div>
           <div className="flex min-h-11 items-center gap-3 px-5">
             <Label htmlFor="compose-subject" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">Subject</Label>
-            <Input id="compose-subject" value={subject} onChange={(event) => onSubjectChange(event.target.value)} aria-label="Subject" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+            <Input id="compose-subject" value={subject} onChange={(event) => onSubjectChange(event.target.value)} aria-label="Subject" className="h-10 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent" />
           </div>
           <div className="flex min-h-11 items-center gap-3 px-5">
             <Label htmlFor="compose-from" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">From</Label>
-            <Input id="compose-from" value={from} readOnly disabled aria-label="From" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+            <Input id="compose-from" value={from} readOnly aria-label="From" className="h-10 rounded-none border-0 bg-transparent px-0 text-muted-foreground shadow-none focus-visible:ring-0 dark:bg-transparent" />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Label htmlFor="compose-body" className="sr-only">Message</Label>
-          <Textarea id="compose-body" className="min-h-40 w-full resize-y rounded-none border-0 px-5 py-5 leading-6 shadow-none focus-visible:ring-0" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
+          <Textarea id="compose-body" className="min-h-40 w-full resize-y rounded-none border-0 bg-transparent px-5 py-5 leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
           {signatureLoading ? <div className="px-5 py-3" role="status" aria-label="Loading signature"><Skeleton className="h-20 w-52" /></div> : signature?.signature.html ? <div className="flex h-64 min-h-0" aria-label="Your email signature"><EmailHtmlFrame html={signature.signature.html} plainText={signature.signature.text} /></div> : null}
-          {quotedMessage && <section aria-label="Original message" className="border-t">
-            <div className="space-y-1 px-5 py-3 text-xs text-muted-foreground"><p className="font-medium text-foreground">{mode === "reply" ? `On ${formatMessageDetailDate(quotedMessage.date)}, ${quotedMessage.from} wrote:` : "Forwarded message"}</p>{mode === "forward" && <><p>From: {quotedMessage.from}</p><p>Date: {formatMessageDetailDate(quotedMessage.date)}</p><p>Subject: {quotedMessage.subject}</p></>}</div>
-            <div className="flex h-96 min-h-0 border-l-2 border-border ml-5"><EmailHtmlFrame html={quotedMessage.htmlBody} plainText={quotedMessage.body} /></div>
+          {quotedMessage && <section aria-label="Original message" className="space-y-3 px-5 pb-5 text-muted-foreground">
+            <div className="space-y-1 text-xs"><p className="font-medium">{mode === "reply" ? `On ${formatMessageDetailDate(quotedMessage.date)}, ${quotedMessage.from} wrote:` : "Forwarded message"}</p>{mode === "forward" && <><p>From: {quotedMessage.from}</p><p>Date: {formatMessageDetailDate(quotedMessage.date)}</p><p>Subject: {quotedMessage.subject}</p></>}</div>
+            <blockquote className="whitespace-pre-wrap break-words border-l-2 border-border pl-4 text-sm leading-6">{quotedMessage.body || quotedMessage.snippet}</blockquote>
           </section>}
         </div>
       </div>

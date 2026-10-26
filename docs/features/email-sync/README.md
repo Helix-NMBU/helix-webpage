@@ -4,7 +4,7 @@ Branch `codex/email-sync` starts at `origin/main` commit `317ad4d64c5760396453e8
 
 ## Reply and forward composition
 
-The writing area starts empty. The original message renders below it with the existing sandboxed email renderer, preserving HTML layout and falling back to plain text. The close control belongs to the 48-pixel composer header and is centered vertically.
+The writing area starts empty. Replies and forwards show the original message as inline, quoted plain text in the same scroll area, preserving line breaks and using the modal's theme. The main reading pane continues to render HTML emails. Composer fields and the writing area use a transparent background in both themes. The close control belongs to the 48-pixel composer header and is centered vertically.
 
 Sending creates a MIME `multipart/alternative` message with UTF-8 plain-text and HTML versions. The server reads the original message from the member's own Gmail connection, sanitizes its HTML, and adds the current shared signature above the quote. Replies preserve Gmail thread IDs and RFC reply references. Client-supplied HTML, member names, and roles cannot override the generated signature.
 

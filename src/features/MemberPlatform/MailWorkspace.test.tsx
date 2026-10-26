@@ -100,7 +100,7 @@ describe("mail workspace", () => {
     expect(getCachedGmailMessage(member.email, "unread-1")?.unread).toBe(true);
   });
 
-  it("renders HTML in reply and forward with an empty writing area and one header close button", async () => {
+  it("integrates the original plain text in reply and forward with an empty writing area and one header close button", async () => {
     await openLive();
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]')!.click());
     await until(() => Boolean(container.querySelector('[aria-label="Reply"]')) && !container.querySelector<HTMLButtonElement>('[aria-label="Reply"]')!.disabled);
@@ -108,10 +108,10 @@ describe("mail workspace", () => {
       await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${mode}"]`)!.click());
       await until(() => Boolean(document.querySelector('[aria-label="Your email signature"]')));
       const dialog = document.querySelector('[role="dialog"]')!;
-      const quote = dialog.querySelector('section[aria-label="Original message"] iframe') as HTMLIFrameElement;
-      expect(quote.srcdoc).toContain("<b>formatted email</b>");
-      expect(quote.srcdoc).toContain("color:#123456");
-      expect(quote.srcdoc).not.toContain("<script>");
+      const quote = dialog.querySelector('section[aria-label="Original message"]')!;
+      expect(quote.querySelector("blockquote")?.textContent).toBe(original.body);
+      expect(quote.querySelector("iframe")).toBeNull();
+      expect(quote.textContent).not.toContain("formatted email");
       expect(dialog.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')!.value).toBe("");
       expect(dialog.querySelectorAll('[aria-label="Close"]')).toHaveLength(1);
       expect(dialog.querySelector('[data-slot="dialog-header"] [aria-label="Close"]')).not.toBeNull();
