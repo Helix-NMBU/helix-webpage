@@ -118,3 +118,10 @@ Client TypeScript and all 33 ProjectManagement UI tests passed. Regression cover
 ## Compact Overview height, 26 October 2026
 
 The user requested roughly half the Progress widget's total height while retaining its full width. The plot now uses a fixed 80px drawing area, with readable HTML axis labels and fixed-size current-value markers. Tighter card spacing, inline totals and compact two-column department rows reduce the desktop card from about 720px to about 355px in browser inspection. Milestones remains below it. TypeScript and all 33 ProjectManagement UI tests passed; the rendered result was inspected in the loopback preview. Screenshot: `overview-compact-height.png` in this chat's visualization directory. No data, migration, push or deployment changes.
+
+
+## Projects overview widget, 26 October 2026
+
+Overview now shows projects beneath Progress, using Tabler cube icons and task completion per project. Selecting a project clears the existing search and milestone/status filters and opens all its tasks; project editing remains manager-only. Needs organization is retained. The department helper sentence, visible progress-data disclosure and Overview Refresh button are removed. Screen readers retain a non-interactive history table. Task saves update the workspace immediately, and navigating into Overview reloads it.
+
+Client TypeScript and all 36 ProjectManagement UI tests passed, including navigation reload, immediate completion progress and project-edit access. The repository ESLint configuration does not cover TSX, so its targeted invocation only reported ignored files. Browser inspection confirmed page reload, project selection, cube icons and the compact layout. Screenshot: `overview-project-widget.png` in this chat's visualization directory. No migration, push or deployment performed.

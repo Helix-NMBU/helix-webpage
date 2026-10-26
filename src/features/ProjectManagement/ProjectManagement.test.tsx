@@ -28,6 +28,7 @@ describe("project management interface", () => {
   async function open(section = "overview", personal = false, query = "") {
     const router = createMemoryRouter([{ path: "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [`/project-management/${section}${query}`] });
     await act(async () => root.render(<RouterProvider key={`${section}-${personal}`} router={router} />));
+    return router;
   }
   const button = (title: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(element => element.textContent === title)!;
   async function click(title: string) { await act(async () => button(title).click()); }
@@ -209,17 +210,49 @@ describe("project management interface", () => {
     expect(mutate.mock.calls[2][0]).toMatchObject({ id: failedId, task: { category: "marketing", title: "Second update" } });
     expect(first.id).not.toBe(failedId);
   });
-  it("replaces Overview summary cards with observed progress and linked milestone completion", async () => {
+  it("shows observed progress and project completion in Overview", async () => {
     await open();
     expect(container.querySelector('[aria-label="Task progress over time"]')).not.toBeNull();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed1");
-    expect(container.querySelector('[aria-label="Chassis ready for assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Chassis & assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(container.textContent).toContain("Shaded area: future");
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label^="See tasks for milestone Chassis ready for assembly,"]')!.click());
+    expect(button("Refresh")).toBeUndefined();
+    expect(container.textContent).not.toContain("Completion by department");
+    expect(container.textContent).not.toContain("View progress data");
+    expect(container.querySelector('.tabler-icon-cube')).not.toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label^="See tasks for project Chassis & assembly,"]')!.click());
     const tables = container.querySelectorAll("table");
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
     expect(tables[tables.length - 1].textContent).not.toContain("Publish workshop update");
     expect(tables[tables.length - 1].textContent).not.toContain("Submit competition registration");
+  });
+  it("reloads the workspace when entering Overview from another work area", async () => {
+    const router = await open("production");
+    const next = initialLocalWorkspace();
+    next.projects[0].name = "Updated project";
+    load.mockResolvedValueOnce(next);
+    await act(async () => router.navigate("/project-management/overview"));
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[aria-label^="See tasks for project Updated project,"]')).not.toBeNull();
+  });
+  it("updates Overview progress from a completed task without a refresh", async () => {
+    const next = initialLocalWorkspace();
+    next.tasks = next.tasks.map(task => task.title === "Confirm material delivery" ? { ...task, status: "done" as const } : task);
+    mutate.mockResolvedValueOnce(next);
+    await open(); await click("Confirm material delivery");
+    await act(async () => document.getElementById("task-status")!.click());
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === "Done")!.click());
+    await click("Save task");
+    expect(container.querySelector('[aria-label="Chassis & assembly: 2 of 3 tasks complete, 67%"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed2");
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+  it("hides project editing controls from members without management access", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
+    await open();
+    expect(container.querySelector('[aria-label="Create project"]')).toBeNull();
+    expect(container.querySelector('[aria-label^="Edit project"]')).toBeNull();
+    expect(container.querySelector('[aria-label^="See tasks for project"]')).not.toBeNull();
   });
   it("creates a dated milestone in its authorized work area", async () => {
     await open("marketing"); await click("New milestone");
