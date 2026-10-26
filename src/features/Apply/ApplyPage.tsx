@@ -6,16 +6,8 @@ import gsap from "gsap";
 
 gsap.registerPlugin(useGSAP);
 
-type Position = {
-  id: string;
-  title: string;
-  department: string;
-  applyUrl: string;
-  contact: { name: string; email: string; linkedin?: string };
-  about: string;
-  tasks: string[];
-  achieve: string[];
-};
+import { publicPositions, type RecruitmentPosition as Position } from "../Recruitment/positions";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 
 const DEPARTMENTS = [
   "All",
@@ -28,6 +20,7 @@ const DEPARTMENTS = [
 ];
 
 export default function ApplyPage() {
+  const notify = useNotify();
   const [positions, setPositions] = useState<Position[]>([]);
   const [activeDept, setActiveDept] = useState("All");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -37,21 +30,26 @@ export default function ApplyPage() {
   const firstDataLoad = useRef(true);
 
   useEffect(() => {
-    fetch("/positions.json")
-      .then((r) => r.json())
-      .then(setPositions);
-  }, []);
+    let active = true;
+    void publicPositions().then(data => { if (active) setPositions(data); }).catch((error: unknown) => {
+      if (active) notify("Could not load positions", error instanceof Error ? error.message : "Please try again.", {
+        variant: "error", href: null, action: { label: "Reload", onClick: () => window.location.reload() },
+      });
+    });
+    return () => { active = false; };
+  }, [notify]);
 
-  const openApplication = useMemo(() => positions.find((p) => p.department === "Open") ?? null, [positions]);
+  const openApplications = useMemo(() => positions.filter((p) => p.department === "Open"), [positions]);
+  const departments = useMemo(() => [...new Set([...DEPARTMENTS, ...positions.map(p => p.department).filter(department => department !== "Open")])], [positions]);
 
   const filtered = useMemo(() => {
     const regular = positions.filter((p) => p.department !== "Open");
     const sorted =
       activeDept === "All"
-        ? [...regular].sort((a, b) => DEPARTMENTS.indexOf(a.department) - DEPARTMENTS.indexOf(b.department))
+        ? [...regular].sort((a, b) => departments.indexOf(a.department) - departments.indexOf(b.department))
         : regular.filter((p) => p.department === activeDept);
     return sorted;
-  }, [positions, activeDept]);
+  }, [positions, activeDept, departments]);
 
   const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
 
@@ -189,7 +187,7 @@ export default function ApplyPage() {
 
         {/* Department filters */}
         <div className="flex flex-wrap gap-2 mb-10">
-          {DEPARTMENTS.map((dept) => {
+          {departments.map((dept) => {
             const active = activeDept === dept;
             return (
               <button
@@ -399,7 +397,7 @@ export default function ApplyPage() {
                           </div>
 
                           <Link
-                            to={`/apply/form?position=${pos.id}`}
+                            to={pos.applyUrl || `/apply/form?position=${encodeURIComponent(pos.id)}`}
                             style={{
                               display: "block",
                               textAlign: "center",
@@ -436,12 +434,11 @@ export default function ApplyPage() {
           )}
         </div>
 
-        {/* Open application — always visible */}
-        {openApplication && (() => {
-          const pos = openApplication;
+        {/* Published open applications */}
+        {openApplications.map(pos => {
           const isOpen = openId === pos.id;
           return (
-            <div style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
+            <div key={pos.id} style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
               <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
                 Don't see the right fit?
               </p>
@@ -533,7 +530,7 @@ export default function ApplyPage() {
                             <a href={`mailto:${pos.contact.email}`} style={{ display: "block", fontSize: "14px", color: "#002EC4", textDecoration: "none" }}>{pos.contact.email}</a>
                           </div>
                           <Link
-                            to={`/apply/form?position=${pos.id}`}
+                            to={pos.applyUrl || `/apply/form?position=${encodeURIComponent(pos.id)}`}
                             style={{ display: "block", textAlign: "center", backgroundColor: "#03094A", color: "#FDFDFD", padding: "14px 24px", fontSize: "13px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none", borderRadius: "6px", transition: "background-color 0.18s ease", fontFamily: "inherit" }}
                             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
@@ -548,7 +545,7 @@ export default function ApplyPage() {
               </div>
             </div>
           );
-        })()}
+        })}
       </div>
     </div>
   );

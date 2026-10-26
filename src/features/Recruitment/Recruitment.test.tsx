@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, Outlet } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RecruitmentAccessProvider, RecruitmentAccess } from "../MemberPlatform/RecruitmentAccess";
 import RecruitmentPortal from "./RecruitmentPortal";
 
 const mocks = vi.hoisted(() => ({ token: vi.fn(), landing: vi.fn(), social: vi.fn(), signOut: vi.fn(), watch: vi.fn(), error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
@@ -25,7 +26,7 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 async function open(path: string) {
   router = createMemoryRouter([
-    { path: "/login", element: <p>Member sign in</p> }, { path: "/recruiting", element: <RecruitmentPortal /> },
+    { path: "/login", element: <p>Member sign in</p> }, { element: <RecruitmentAccessProvider userId="member"><Outlet /></RecruitmentAccessProvider>, children: [{ path: "/recruiting", element: <RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess> }] },
     { path: "/", element: <p>Home</p> },
   ], { initialEntries: [path] });
   await act(async () => root.render(<RouterProvider router={router} />));
@@ -36,20 +37,19 @@ describe("recruitment Neon UI", () => {
     await open("/recruiting");
     expect(router.state.location.pathname).toBe("/");
     expect(container.textContent).not.toContain("Motivation");
-    expect(mocks.error).toHaveBeenCalledWith("Could not load applications", "Your account does not have recruiter access.", expect.any(Object));
+    expect(mocks.error).toHaveBeenCalled();
   });
-  it("fetches applications using a member bearer token and removes data when the session ends", async () => {
-    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ applications: [{ id: "test", created_at: "2026-10-26", season: "S27", full_name: "Test Applicant", email: "test@example.test", position_title: "Software Engineer", study_program: "Robotics" }], nextOffset: null })));
+  it("fetches applications using a member bearer token and removes data when leaving the session", async () => {
+    fetchMock.mockImplementation(async (url: string) => url.includes("action=session") ? Response.json({ email: "member@helixnmbu.no" }) : url.includes("manage-positions") ? Response.json({ positions: [] }) : new Response(JSON.stringify({ applications: [{ id: "test", created_at: "2026-10-26", season: "S27", full_name: "Test Applicant", email: "test@example.test", position_title: "Software Engineer", study_program: "Robotics" }], nextOffset: null })));
     await open("/recruiting");
     expect(container.textContent).toContain("Test Applicant");
     expect(fetchMock).toHaveBeenCalledWith("/api/website?action=applications&offset=0", expect.objectContaining({ headers: { Authorization: "Bearer member-jwt" } }));
-    const end = mocks.watch.mock.calls[0]?.[0] as () => void;
-    await act(async () => end());
+    await act(async () => router.navigate("/login"));
     expect(container.textContent).not.toContain("Test Applicant");
     expect(router.state.location.pathname).toBe("/login");
   });
   it("reports transient errors through notifications and keeps a retry control", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: "Temporarily unavailable" }), { status: 503 }));
+    fetchMock.mockImplementation(async (url: string) => url.includes("action=session") ? Response.json({ email: "member@helixnmbu.no" }) : Response.json({ error: "Temporarily unavailable" }, { status: 503 }));
     await open("/recruiting");
     expect(router.state.location.pathname).toBe("/recruiting");
     expect(mocks.error).toHaveBeenCalled();

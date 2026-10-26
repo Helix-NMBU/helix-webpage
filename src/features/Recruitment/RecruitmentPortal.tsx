@@ -11,19 +11,15 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "..
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../libs/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../libs/components/ui/select";
 import { currentSeason } from "../../libs/lib/season";
-import { watchMemberSession } from "../MemberCV/session";
-import { createRecruitmentApi, type ApplicationRow } from "./website-api";
+import { PositionsPanel } from "./PositionsPanel";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../libs/components/ui/tabs";
+import { type ApplicationRow } from "./website-api";
 
 
 export default function RecruitmentPortal() {
   const navigate = useNavigate();
   const notify = useNotify();
-  const { deny } = useRecruitmentAccess();
-  const owner = useRef<string | null>(null);
-  const api = useMemo(() => createRecruitmentApi(owner), []);
-  const [applications, setApplications] = useState<ApplicationRow[]>([]);
-  const [ready, setReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { deny, api, applications, positions, ready, loading, refresh: load, removeApplication, savePosition, deletePosition } = useRecruitmentAccess();
   const [season, setSeason] = useState(currentSeason());
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -38,34 +34,15 @@ export default function RecruitmentPortal() {
     notify("Could not load applications", error instanceof Error ? error.message : "Please try again.", { id: "recruitment-access", variant: "error", href: null });
     if (status === 401 || status === 403) {
       generation.current += 1;
-      setApplications([]);
-      setReady(false);
       setTarget(null);
       if (status === 403) deny();
       navigate(status === 401 ? "/login" : "/", { replace: true });
     }
   }, [navigate, notify, deny]);
-  const load = useCallback(async () => {
-    const current = ++generation.current;
-    setLoading(true);
-    setApplications([]); setTarget(null); setReady(false);
-    try {
-      // list() itself checks member authentication and the recruiter allowlist.
-      const rows = await api.list();
-      if (active.current && current === generation.current) { setApplications(rows); setReady(true); }
-    } catch (error) { if (active.current && current === generation.current) fail(error); }
-    finally { if (active.current && current === generation.current) setLoading(false); }
-  }, [api, fail]);
   useEffect(() => {
     active.current = true;
-    void load();
-    const stop = watchMemberSession(() => {
-      generation.current += 1;
-      setApplications([]); setTarget(null); setReady(false);
-      navigate("/login", { replace: true });
-    }, undefined, owner);
-    return () => { active.current = false; generation.current += 1; stop(); };
-  }, [load, navigate]);
+    return () => { active.current = false; generation.current += 1; };
+  }, []);
   const seasons = [...new Set([currentSeason(), ...applications.map(a => a.season)])].sort().reverse();
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -90,13 +67,12 @@ export default function RecruitmentPortal() {
     const current = generation.current;
     mutation.current = true; setBusy(true);
     try {
-      const result = await (target.reject ? api.reject(target.row.id) : api.remove(target.row.id));
+      const result = await removeApplication(target.row.id, target.reject);
       if (!active.current || current !== generation.current) return;
-      setApplications(rows => rows.filter(row => row.id !== target.row.id));
       setTarget(null);
       notify("Application removed", result.emailStatus === "sent" ? "Rejection email sent." : "No email was sent.", { variant: "success", href: null });
       if (result.cleanupPending) notify("File deletion pending", "Contact Helix to complete cleanup.", { variant: "warning", href: null });
-    } catch (error) { if (active.current) fail(error); }
+    } catch { /* The session provider reports failures and retains the application. */ }
     finally { mutation.current = false; if (active.current) setBusy(false); }
   };
   return (
@@ -106,6 +82,10 @@ export default function RecruitmentPortal() {
           <div><h1 className="text-3xl font-medium">Applications</h1></div>
           <Button variant="outline" size="icon" aria-label="Refresh applications" title="Refresh applications" disabled={loading || busy} onClick={() => void load()}><RefreshCw aria-hidden="true" /></Button>
         </header>
+        <Tabs defaultValue="applications">
+          <TabsList aria-label="Recruiting views"><TabsTrigger value="applications">Applications</TabsTrigger><TabsTrigger value="positions">Positions</TabsTrigger></TabsList>
+          <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} /></TabsContent>
+          <TabsContent value="applications" className="space-y-6">
         {loading && <div role="status" aria-label="Loading applications" className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-20 w-full" />)}</div>}
         {ready && !loading && <>
           <div className="flex flex-wrap items-end gap-4">
@@ -144,6 +124,8 @@ export default function RecruitmentPortal() {
             </EmptyHeader>
           </Empty>}
         </>}
+          </TabsContent>
+        </Tabs>
         <Dialog open={target !== null} onOpenChange={open => { if (!open && !busy) setTarget(null); }}>
           <DialogContent showCloseButton={!busy} onEscapeKeyDown={e => { if (busy) e.preventDefault(); }} onPointerDownOutside={e => { if (busy) e.preventDefault(); }}>
             <DialogHeader><DialogTitle>{target?.reject ? "Reject" : "Delete"} {target?.row.full_name}?</DialogTitle>

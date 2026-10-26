@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { publicPositions } from "../Recruitment/positions";
 import { cvBase64 } from "../Recruitment/website-api";
 import { currentSeason } from "../../libs/lib/season";
 
@@ -144,11 +145,7 @@ export default function ApplicationFormPage() {
   const [status, setStatus] = useState<SubmitStatus>({ state: "idle" });
 
   useEffect(() => {
-    fetch("/api/website?action=positions")
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Could not load available positions. Please try again.");
-        return (await r.json()).positions;
-      })
+    publicPositions()
       .then((data: Position[]) => {
         setPositions(data.map(({ id, title, department }) => ({ id, title, department })));
         // A tampered/stale ?position= that matches nothing sends the user back

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import pg from "pg";
 import { createCvServices, type CvDatabase, type WorkspaceIdentity } from "./member-cv-service.js";
 import { createCvStorage } from "./member-cv-storage.js";
@@ -8,10 +7,13 @@ import { memberAccount } from "./member-account.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
 import { createWebsiteStorage, type WebsiteStorage } from "./website-storage.js";
 import { createWebsiteMailer, type EmailStatus, type WebsiteMailer } from "./website-email.js";
-import { applicationId, isApplicationPath, parseApplication, parseCv, type ApplicationRow, type WebsitePosition } from "./website-validation.js";
+import { applicationId, isApplicationPath, parseApplication, parseCv, parsePosition, positionId, type ApplicationRow, type WebsitePosition } from "./website-validation.js";
 
 export interface WebsiteServices {
   positions(): Promise<WebsitePosition[]>;
+  managePositions(token: string): Promise<WebsitePosition[]>;
+  savePosition(token: string, value: unknown): Promise<WebsitePosition>;
+  deletePosition(token: string, id: string): Promise<{ deleted: true }>;
   submit(body: Record<string, unknown>, rateLimitKey: string): Promise<{ id: string; emailStatus: EmailStatus | "pending" }>;
   session(token: string): Promise<{ email: string; name: string }>;
   list(token: string, offset: number): Promise<{ applications: ApplicationRow[]; nextOffset: number | null }>;
@@ -28,7 +30,7 @@ export function applicationSeason(now: Date): string {
 }
 export function createWebsiteServices(deps: {
   db: CvDatabase; authenticate: (token: string) => Promise<WorkspaceIdentity>;
-  storage: () => WebsiteStorage; positions: () => Promise<WebsitePosition[]>;
+  storage: () => WebsiteStorage;
   mail: WebsiteMailer; now?: () => Date;
 }): WebsiteServices {
   const { db } = deps;
@@ -52,10 +54,35 @@ export function createWebsiteServices(deps: {
     if (keys.some(path => !isApplicationPath(row, path))) throw new MemberCvError(409, "Application file ownership could not be verified. Contact Helix.");
     return keys;
   }
+  async function positions(includeHidden = false): Promise<WebsitePosition[]> {
+    const { rows } = await db.query<{ position: WebsitePosition }>(`select document || jsonb_build_object('visible', visible) as position
+      from website.positions ${includeHidden ? "" : "where visible = true"} order by created_at, id`);
+    return rows.map(row => row.position);
+  }
   return {
-    positions: deps.positions,
+    positions: () => positions(),
+    async managePositions(token) { await authorize(token); return positions(true); },
+    async savePosition(token, value) {
+      await authorize(token);
+      const suppliedId = value && typeof value === "object" && "id" in value ? value.id : undefined;
+      const id = suppliedId === undefined ? randomUUID() : positionId(suppliedId);
+      const position = parsePosition(value, id);
+      if (suppliedId === undefined) {
+        await db.query("insert into website.positions (id, document, visible) values ($1, $2::jsonb, $3)", [id, JSON.stringify(position), position.visible]);
+      } else {
+        const updated = await db.query("update website.positions set document = $2::jsonb, visible = $3 where id = $1 returning id", [id, JSON.stringify(position), position.visible]);
+        if (!updated.rows.length) throw new MemberCvError(404, "Position no longer exists. Refresh the positions list.");
+      }
+      return position;
+    },
+    async deletePosition(token, id) {
+      await authorize(token);
+      const removed = await db.query("delete from website.positions where id = $1 returning id", [positionId(id)]);
+      if (!removed.rows.length) throw new MemberCvError(404, "Position no longer exists. Refresh the positions list.");
+      return { deleted: true };
+    },
     async submit(body, rateLimitKey) {
-      const input = parseApplication(body, await deps.positions());
+      const input = parseApplication(body, await positions());
       const bytes = parseCv(body.cv_base64);
       await db.query("delete from website.application_submission_limits where window_started_at < now() - interval '2 days'");
       const limited = await db.query<{ request_count: number }>(`insert into website.application_submission_limits (rate_key, window_started_at, request_count)
@@ -151,6 +178,5 @@ export function neonWebsiteServices(): WebsiteServices {
   } });
   return createWebsiteServices({ db, authenticate: token => cv.authenticate(token),
     storage: () => createWebsiteStorage(), mail: createWebsiteMailer(db),
-    positions: async () => JSON.parse(readFileSync(new URL("../../public/positions.json", import.meta.url), "utf8")) as WebsitePosition[],
   });
 }

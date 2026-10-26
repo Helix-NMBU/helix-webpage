@@ -1,3 +1,4 @@
+import type { RecruitmentPosition } from "./positions";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "../MemberPlatform/local-mode";
 
@@ -11,6 +12,8 @@ export class RecruitmentRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 export function createRecruitmentApi(owner: { current: string | null }) {
+  let localPositions: RecruitmentPosition[] = [];
+  const local = () => isLocalMemberMode() && localMemberSignedIn();
   async function request<T>(query: string, body?: object): Promise<T> {
     // Read a fresh member JWT for every server-authorized operation.
     const token = await memberSessionToken(owner);
@@ -38,6 +41,22 @@ export function createRecruitmentApi(owner: { current: string | null }) {
         offset = page.nextOffset;
       }
       return applications;
+    },
+    async positions() {
+      if (local()) return localPositions;
+      return (await request<{ positions: RecruitmentPosition[] }>("?action=manage-positions")).positions;
+    },
+    async savePosition(position: Omit<RecruitmentPosition, "id"> & { id?: string }) {
+      if (local()) {
+        const saved = { ...position, id: position.id ?? crypto.randomUUID() };
+        localPositions = [...localPositions.filter(row => row.id !== saved.id), saved];
+        return saved;
+      }
+      return (await request<{ position: RecruitmentPosition }>("", { action: "save-position", position })).position;
+    },
+    async deletePosition(id: string) {
+      if (local()) { localPositions = localPositions.filter(row => row.id !== id); return; }
+      await request("", { action: "delete-position", position_id: id });
     },
     file: (id: string, kind: "cv" | "photo") => request<{ url: string; expiresIn: number }>(`?action=file&id=${encodeURIComponent(id)}&kind=${kind}`),
     reject: (id: string) => request<{ emailStatus: "sent" | "skipped"; cleanupPending: boolean }>("", { action: "reject", application_id: id }),

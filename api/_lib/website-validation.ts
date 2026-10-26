@@ -5,7 +5,41 @@ export const MAX_CV_BYTES = 500 * 1024;
 // 500 KiB PDF becomes 683 KiB base64, leaving ample room for bounded fields.
 export const MAX_BODY_BYTES = 768 * 1024;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export type WebsitePosition = { id: string; title: string; department: string; [key: string]: unknown };
+export type WebsitePosition = {
+  id: string; title: string; department: string; applyUrl: string;
+  contact: { name: string; email: string; linkedin?: string };
+  about: string; tasks: string[]; achieve: string[]; visible: boolean;
+};
+export function positionId(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(value)) throw new MemberCvError(400, "A valid position ID is required.");
+  return value;
+}
+export function parsePosition(value: unknown, id: string): WebsitePosition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position fields.");
+  const body = value as Record<string, unknown>;
+  const contact = body.contact;
+  if (!contact || typeof contact !== "object" || Array.isArray(contact)) throw new MemberCvError(400, "Check the contact fields.");
+  const details = contact as Record<string, unknown>;
+  const email = text(details, "email", 254).toLowerCase();
+  if (!isValidEmail(email)) throw new MemberCvError(400, "Enter a valid contact email.");
+  function url(input: unknown, relative = false): string {
+    if (input === undefined || input === "") return "";
+    if (typeof input !== "string" || input.length > 2048 || /[\\\u0000-\u0020]/.test(input)) throw new MemberCvError(400, "Enter a valid position URL.");
+    if (relative && input.startsWith("/") && !input.startsWith("//")) return input;
+    try { const parsed = new URL(input); if (["https:", "http:"].includes(parsed.protocol) && !parsed.username && !parsed.password) return input; } catch { /* handled below */ }
+    throw new MemberCvError(400, "Enter an HTTP or HTTPS URL.");
+  }
+  function lines(key: string): string[] {
+    const values = body[key];
+    if (!Array.isArray(values) || values.length > 50 || values.some(item => typeof item !== "string" || !item.trim() || item.length > 1000 || /[\u0000]/.test(item))) throw new MemberCvError(400, `Check the ${key} field.`);
+    return values.map(item => (item as string).trim());
+  }
+  if (body.visible !== undefined && typeof body.visible !== "boolean") throw new MemberCvError(400, "Check the public visibility field.");
+  const linkedin = url(details.linkedin);
+  return { id: positionId(id), title: text(body, "title", 200), department: text(body, "department", 100),
+    applyUrl: url(body.applyUrl, true), contact: { name: text(details, "name", 200), email, ...(linkedin ? { linkedin } : {}) },
+    about: text(body, "about", 10000), tasks: lines("tasks"), achieve: lines("achieve"), visible: body.visible === true };
+}
 export type ApplicationInput = {
   full_name: string; email: string; phone: string; study_program: string;
   study_program_other: string | null; year_of_study: number; motivation: string;

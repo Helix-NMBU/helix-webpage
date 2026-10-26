@@ -9,7 +9,7 @@ import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
-const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn() }));
+const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn(), positions: vi.fn() }));
 vi.mock("../Recruitment/website-api", async original => ({ ...await original<typeof import("../Recruitment/website-api")>(), createRecruitmentApi: () => recruitment }));
 import { RecruitmentRequestError } from "../Recruitment/website-api";
 
@@ -44,6 +44,7 @@ describe("internal member platform", () => {
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
     recruitment.session.mockReset().mockRejectedValue(new RecruitmentRequestError("Recruiter access required", 403));
     recruitment.list.mockReset().mockResolvedValue([]);
+    recruitment.positions.mockReset().mockResolvedValue([]);
     session.landing.mockReset().mockResolvedValue(signedOut);
     session.signOut.mockReset().mockResolvedValue(undefined);
     session.editorNavigate.mockReset();
@@ -78,8 +79,8 @@ describe("internal member platform", () => {
     expect(trigger?.textContent).not.toContain("Member account");
     await profileMenu();
     const menu = document.querySelector('[aria-label="Account menu"]');
-    expect(menu?.textContent).toContain(account.name);
-    expect(menu?.textContent).toContain(account.role);
+    expect(menu?.textContent).toContain("Profile");
+    expect(menu?.textContent).toContain("Sign out");
   });
 
   it.each(["/", "/settings", "/teams/business-marketing/campaigns"])("removes preview notices from %s", async (path) => {
@@ -130,13 +131,35 @@ describe("internal member platform", () => {
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
 
-  it("rechecks access on focus and removes recruitment content after revocation", async () => {
+  it("preloads once at login and retains data and access across navigation and focus", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    recruitment.session.mockResolvedValue({ email: signedIn.account.email });
+    recruitment.list.mockResolvedValue([{ id: "app", created_at: "2026-10-26", season: "S27", full_name: "Applicant One", email: "one@example.test", position_title: "Engineer", study_program: "Robotics" }]);
+    await open("/");
+    expect(recruitment.list).toHaveBeenCalledOnce();
+    expect(recruitment.positions).toHaveBeenCalledOnce();
+    await act(async () => router.navigate("/recruiting"));
+    expect(container.textContent).toContain("Applicant One");
+    await act(async () => router.navigate("/profile"));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await act(async () => router.navigate("/recruiting"));
+    expect(container.textContent).toContain("Applicant One");
+    expect(recruitment.session).toHaveBeenCalledOnce();
+    expect(recruitment.list).toHaveBeenCalledOnce();
+    expect(recruitment.positions).toHaveBeenCalledOnce();
+    recruitment.list.mockResolvedValue([]);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]')?.click());
+    expect(container.textContent).not.toContain("Applicant One");
+    expect(recruitment.list).toHaveBeenCalledTimes(2);
+    expect(recruitment.session).toHaveBeenCalledOnce();
+  });
+
+  it("clears private data and the sidebar grant when an operation is denied", async () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     await open("/recruiting");
-    expect(container.querySelector("h1")?.textContent).toBe("Applications");
-    recruitment.session.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
-    await act(async () => window.dispatchEvent(new Event("focus")));
+    recruitment.list.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]')?.click());
     expect(router.state.location.pathname).toBe("/");
     expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
     expect(container.textContent).not.toContain("Applications");
@@ -185,9 +208,9 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
     await profileMenu();
-    const appearance = document.querySelector('[role="combobox"][aria-label="Appearance"]');
+    const appearance = document.querySelector('button[aria-labelledby="member-appearance-label member-appearance-value"]');
     await act(async () => appearance?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
-    const dark = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent?.includes("Dark"));
+    const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
     expect(dark).toBeDefined();
     await act(async () => dark?.click());
     expect(document.documentElement.dataset.memberTheme).toBe("dark");
