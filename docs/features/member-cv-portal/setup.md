@@ -81,7 +81,21 @@ where email = 'member@helixnmbu.no';
 
 The sign-in and CV responses read this value from the server-verified member row. Neither the personal-profile modal nor CV mutations write it. Onboarding preserves existing assignments. The query accepts the pre-migration schema so an incremental deployment cannot break sign-in; unassigned titles are omitted from the profile card. A new page load refreshes account metadata. Local development uses the sample role in `local-mode.ts`.
 
-The profile card's Edit modal changes the CV draft's name, phone number, field of study and graduation year. It uses the existing revision-checked private save, preserving other draft data and the current published version.
+The profile card's Edit modal changes phone number, field of study and graduation year. It uses the existing revision-checked private save, preserving other draft data and the current published version. The member cannot change their name there or in the CV wizard.
+
+## Administrator-managed member names
+
+Apply `db/migrations/003_admin_managed_member_names.sql` after migrations 001/002 before deploying the administrator-name change. It preserves the existing `identity.members.full_name` on subsequent Google logins. It creates no new column and changes no existing member names, CV drafts or publications. This migration is prepared and tested locally, not applied to the live database.
+
+A database administrator sets the name through the same member record as the Helix role:
+
+```sql
+update identity.members
+set full_name = 'Alex Example'
+where email = 'member@helixnmbu.no';
+```
+
+The authentication response re-reads this record after onboarding. Profile display and new CV save/preview/publication requests use this name. Submitted CV names and name translations cannot override it. Existing private drafts receive the current name in their API response without a write; other content and revisions remain intact. A normal private save persists the current name. Existing published snapshots and downloaded files remain unchanged until explicit republishing. A page reload refreshes sidebar account metadata after an administrator's change.
 
 ## CV setup and language output
 
