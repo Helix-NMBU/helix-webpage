@@ -117,8 +117,8 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   return (
     <MemberAccountProvider account={landing.account ?? null}>
       <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
-        <MemberFeatureAccessProvider userId={landing.userId}>
-          <RecruitmentAccessProvider>{children ?? <Outlet />}</RecruitmentAccessProvider>
+        <MemberFeatureAccessProvider key={landing.userId} userId={landing.userId}>
+          <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</RecruitmentAccessProvider>
         </MemberFeatureAccessProvider>
       </MemberNotificationsProvider>
     </MemberAccountProvider>

@@ -5,32 +5,41 @@ export const MAX_CV_BYTES = 500 * 1024;
 // 500 KiB PDF becomes 683 KiB base64, leaving ample room for bounded fields.
 export const MAX_BODY_BYTES = 768 * 1024;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export type WebsitePosition = { id: string; title: string; department: string; [key: string]: unknown };
+export type WebsitePosition = {
+  id: string; title: string; department: string; applyUrl: string;
+  contact: { name: string; email: string; linkedin?: string };
+  about: string; tasks: string[]; achieve: string[];
+};
 export type ManagedWebsitePosition = WebsitePosition & { visible: boolean };
 const POSITION_DEPARTMENTS = new Set(["Open", "Finance", "Mechanical & Production", "Electrical", "Software & Autonomous", "Business & Marketing", "Logistics"]);
 export function parseWebsitePosition(value: unknown): WebsitePosition {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position details.");
   const raw = value as Record<string, unknown>;
-  const field = (key: string, max: number, required = true) => {
+  const field = (key: string, max: number, required = true, multiline = false) => {
     const v = raw[key];
     if (v === undefined && !required) return undefined;
-    if (typeof v !== "string" || (required && !v.trim()) || v.length > max || /[\u0000-\u001f]/.test(v)) throw new MemberCvError(400, `Check the ${key} field.`);
+    if (typeof v !== "string" || (required && !v.trim()) || v.length > max || (multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/ : /[\u0000-\u001f]/).test(v)) throw new MemberCvError(400, `Check the ${key} field.`);
     return v.trim();
   };
   const title = field("title", 160)!;
   const department = field("department", 100)!;
   if (!POSITION_DEPARTMENTS.has(department)) throw new MemberCvError(400, "Choose a valid department.");
-  const about = field("about", 5000)!;
-  const applyUrl = field("applyUrl", 2048)!;
-  try { if (new URL(applyUrl).protocol !== "https:") throw new Error(); } catch { throw new MemberCvError(400, "Use a valid HTTPS application link."); }
+  const about = field("about", 5000, true, true)!;
+  function safeUrl(value: unknown, relative = false): string {
+    if (value === undefined || value === "") return "";
+    if (typeof value !== "string" || value.length > 2048 || /[\\\u0000-\u0020]/.test(value)) throw new MemberCvError(400, "Use a valid HTTPS application link.");
+    if (relative && value.startsWith("/") && !value.startsWith("//")) return value;
+    try { const url = new URL(value); if (url.protocol === "https:" && !url.username && !url.password) return value; } catch { /* handled below */ }
+    throw new MemberCvError(400, "Use a valid HTTPS application link.");
+  }
+  const applyUrl = safeUrl(raw.applyUrl, true);
   const contactRaw = raw.contact;
   if (!contactRaw || typeof contactRaw !== "object" || Array.isArray(contactRaw)) throw new MemberCvError(400, "Check the contact details.");
   const contact = contactRaw as Record<string, unknown>;
   const contactName = typeof contact.name === "string" && contact.name.trim().length <= 160 ? contact.name.trim() : "";
   const contactEmail = typeof contact.email === "string" && contact.email.trim().length <= 254 ? contact.email.trim().toLowerCase() : "";
   if (!contactName || !isValidEmail(contactEmail)) throw new MemberCvError(400, "Check the contact details.");
-  const linkedin = contact.linkedin;
-  if (linkedin !== undefined && (typeof linkedin !== "string" || linkedin.length > 2048 || (linkedin && !/^https:\/\//i.test(linkedin)))) throw new MemberCvError(400, "Check the contact LinkedIn link.");
+  const linkedin = safeUrl(contact.linkedin);
   const list = (key: "tasks" | "achieve") => {
     const v = raw[key];
     if (!Array.isArray(v) || v.length > 20 || v.some(item => typeof item !== "string" || !item.trim() || item.length > 500)) throw new MemberCvError(400, `Check the ${key} list.`);

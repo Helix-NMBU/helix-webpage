@@ -4,9 +4,10 @@ import { motion, AnimatePresence } from "motion/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { publicPositions } from "../Recruitment/positions";
 import { cvBase64 } from "../Recruitment/website-api";
+import { publicWebsiteApiUrl } from "./public-api";
 import { currentSeason } from "../../libs/lib/season";
-import { fetchPublicPositions } from "./positions-api";
 
 gsap.registerPlugin(useGSAP);
 
@@ -145,8 +146,8 @@ export default function ApplicationFormPage() {
   const [status, setStatus] = useState<SubmitStatus>({ state: "idle" });
 
   useEffect(() => {
-    fetchPublicPositions()
-      .then((data) => {
+    publicPositions()
+      .then((data: Position[]) => {
         setPositions(data.map(({ id, title, department }) => ({ id, title, department })));
         // A tampered/stale ?position= that matches nothing sends the user back
         // to the position step instead of carrying an invalid value along.
@@ -268,7 +269,7 @@ export default function ApplicationFormPage() {
     submitting.current = true;
     setStatus({ state: "submitting" });
     try {
-      const response = await fetch("/api/website", {
+      const response = await fetch(publicWebsiteApiUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

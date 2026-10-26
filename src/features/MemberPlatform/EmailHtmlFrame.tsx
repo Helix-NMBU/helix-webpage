@@ -122,4 +122,3 @@ export function EmailHtmlFrame({ html, plainText }: { html: string; plainText: s
     </div>
   );
 }
-

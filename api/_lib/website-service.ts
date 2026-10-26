@@ -10,6 +10,7 @@ import { applicationId, isApplicationPath, parseApplication, parseCv, parseWebsi
 
 export interface WebsiteServices {
   positions(): Promise<WebsitePosition[]>;
+  savePosition(token: string, value: unknown): Promise<ManagedWebsitePosition>;
   managedPositions(token: string): Promise<ManagedWebsitePosition[]>;
   createPosition(token: string, body: Record<string, unknown>): Promise<ManagedWebsitePosition>;
   updatePosition(token: string, id: string, body: Record<string, unknown>): Promise<ManagedWebsitePosition>;
@@ -66,6 +67,24 @@ export function createWebsiteServices(deps: {
       await authorize(token);
       const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>("select document, visible from website.positions order by display_order, id");
       return rows.map(row => ({ ...row.document, visible: row.visible }));
+    },
+    async savePosition(token, value) {
+      await authorize(token);
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position fields.");
+      const input = value as Record<string, unknown>;
+      const isNew = input.id === undefined;
+      const id = isNew ? randomUUID() : positionId(input.id as string);
+      if (input.visible !== undefined && typeof input.visible !== "boolean") throw new MemberCvError(400, "Check the public visibility field.");
+      const position = parseWebsitePosition({ ...input, id });
+      const visible = input.visible === true;
+      if (isNew) {
+        await db.query(`insert into website.positions (id, document, visible, display_order)
+          values ($1, $2::jsonb, $3, coalesce((select max(display_order) + 1 from website.positions), 0))`, [id, JSON.stringify(position), visible]);
+      } else {
+        const updated = await db.query("update website.positions set document = $2::jsonb, visible = $3, updated_at = now() where id = $1 returning id", [id, JSON.stringify(position), visible]);
+        if (!updated.rows.length) throw new MemberCvError(404, "Position no longer exists. Refresh the positions list.");
+      }
+      return { ...position, visible };
     },
     async createPosition(token, body) {
       await authorize(token);
