@@ -150,7 +150,7 @@ describe("internal member platform", () => {
     expect(link).not.toBeNull();
     await act(async () => link!.click());
     expect(router.state.location.pathname).toBe("/recruiting");
-    expect(container.querySelector("h1")?.textContent).toBe("Applications");
+    expect(container.querySelector("h1")?.textContent).toBe("Recruitment");
     expect(container.querySelector('[aria-label="Profile menu"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
@@ -159,7 +159,7 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     await open("/recruiting");
-    expect(container.querySelector("h1")?.textContent).toBe("Applications");
+    expect(container.querySelector("h1")?.textContent).toBe("Recruitment");
     recruitment.session.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
     await act(async () => window.dispatchEvent(new Event("focus")));
     expect(router.state.location.pathname).toBe("/");
