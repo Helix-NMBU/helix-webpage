@@ -83,7 +83,7 @@ describe("internal member platform", () => {
   it.each([
     { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" },
     { name: "Åse Hansen", email: "ase@helixnmbu.no", role: "Member" },
-  ])("shows the signed-in account $name and its role", async (account) => {
+  ])("shows the signed-in account $name and its role in the sidebar", async (account) => {
     session.landing.mockResolvedValue({ ...signedIn, account });
     await open("/");
     const trigger = container.querySelector('[aria-label="Profile menu"]');
@@ -92,8 +92,8 @@ describe("internal member platform", () => {
     expect(trigger?.textContent).not.toContain("Member account");
     await profileMenu();
     const menu = document.querySelector('[aria-label="Account menu"]');
-    expect(menu?.textContent).toContain(account.name);
-    expect(menu?.textContent).toContain(account.role);
+    expect(menu?.textContent).not.toContain(account.name);
+    expect(menu?.textContent).not.toContain(account.role);
   });
 
   it.each(["/", "/settings", "/teams/business-marketing/campaigns"])("removes preview notices from %s", async (path) => {
@@ -155,16 +155,16 @@ describe("internal member platform", () => {
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
 
-  it("rechecks access on focus and removes recruitment content after revocation", async () => {
+  it("loads recruitment access once for the session instead of rechecking on focus", async () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     await open("/recruiting");
     expect(container.querySelector("h1")?.textContent).toBe("Recruitment");
-    recruitment.session.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
+    expect(recruitment.session).toHaveBeenCalledOnce();
     await act(async () => window.dispatchEvent(new Event("focus")));
-    expect(router.state.location.pathname).toBe("/");
-    expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
-    expect(container.textContent).not.toContain("Applications");
+    expect(router.state.location.pathname).toBe("/recruiting");
+    expect(recruitment.session).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("Applications");
   });
 
   it("preserves recruitment as a safe member login destination", () => {
@@ -210,9 +210,9 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
     await profileMenu();
-    const appearance = document.querySelector('[role="combobox"][aria-label="Appearance"]');
+    const appearance = [...document.querySelectorAll<HTMLButtonElement>('[aria-labelledby="member-appearance-label member-appearance-value"]')][0];
     await act(async () => appearance?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
-    const dark = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent?.includes("Dark"));
+    const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
     expect(dark).toBeDefined();
     await act(async () => dark?.click());
     expect(document.documentElement.dataset.memberTheme).toBe("dark");

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "@libs/components/app-sidebar";
 import {
   Breadcrumb,
@@ -21,7 +21,7 @@ import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
 
-function Workspace({ children }: { children: ReactNode }) {
+function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { setOpenMobile, isMobile } = useSidebar();
@@ -79,7 +79,7 @@ function Workspace({ children }: { children: ReactNode }) {
       <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : ""}`}>
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-            {children}
+            {children ?? <Outlet />}
           </div>
         ) : (
           <>
@@ -117,7 +117,7 @@ function Workspace({ children }: { children: ReactNode }) {
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-              {children}
+              {children ?? <Outlet />}
             </div>
           </>
         )}
@@ -126,7 +126,7 @@ function Workspace({ children }: { children: ReactNode }) {
   );
 }
 
-export function MemberShell({ children }: { children: ReactNode }) {
+export function MemberShell({ children }: { children?: ReactNode }) {
   return (
     <SidebarProvider>
       <Workspace>{children}</Workspace>
