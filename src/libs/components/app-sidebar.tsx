@@ -6,14 +6,6 @@ import {
   IconCube,
   IconUsers,
   IconUserSquare,
-  IconBriefcase,
-  IconTools,
-  IconCpu,
-  IconCode,
-  IconSpeakerphone,
-  IconTruckDelivery,
-  IconWallet,
-  type TablerIcon,
   IconCheckbox,
   IconMail,
   IconUsersGroup,
@@ -31,18 +23,9 @@ import {
 } from "@libs/components/ui/sidebar";
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
 import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
+import { getDepartmentIcon } from "@/features/Workspace/department-icons";
 import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
-
-const departmentIcons: Record<string, TablerIcon> = {
-  Management: IconBriefcase,
-  "Mechanical & Production": IconTools,
-  Electronics: IconCpu,
-  "Software & Autonomous": IconCode,
-  "Business & Marketing": IconSpeakerphone,
-  Logistics: IconTruckDelivery,
-  Finance: IconWallet,
-};
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -86,7 +69,7 @@ export function AppSidebar({
       .map((department) => ({
         title: department.name,
         url: departmentPath(department.name),
-        icon: departmentIcons[department.name] ?? IconUserSquare,
+        icon: getDepartmentIcon(department.name),
         isActive: location.pathname === departmentPath(department.name),
       })) ?? []),
   ];

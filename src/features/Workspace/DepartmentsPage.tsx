@@ -22,6 +22,7 @@ import { IconCheck, IconCube } from "@tabler/icons-react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
 import { ORGANIZATION_DEPARTMENTS } from "../ProjectManagement/types";
+import { getDepartmentIcon } from "./department-icons";
 import { departmentPath } from "./types";
 import { ProjectRows } from "./ProjectsPage";
 const descriptions: Record<string, string> = {
@@ -135,6 +136,7 @@ export function DepartmentsPage() {
         <TableBody>
           {departments.map((d) => {
             if (!d) return null;
+            const DepartmentIcon = getDepartmentIcon(d.name);
             const joined = d.memberIds.includes(data.viewerId);
             const members = d.memberIds.filter((id) =>
               data.members.some((m) => m.id === id),
@@ -142,17 +144,23 @@ export function DepartmentsPage() {
             return (
               <TableRow key={d.id}>
                 <TableCell className="py-4 pl-4 font-medium">
-                  {joined ? (
-                    <button
-                      type="button"
-                      className="hover:underline"
-                      onClick={() => navigate(departmentPath(d.name))}
-                    >
-                      {d.name}
-                    </button>
-                  ) : (
-                    <span>{d.name}</span>
-                  )}
+                  <span className="inline-flex items-center gap-2">
+                    <DepartmentIcon
+                      aria-hidden="true"
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
+                    {joined ? (
+                      <button
+                        type="button"
+                        className="hover:underline"
+                        onClick={() => navigate(departmentPath(d.name))}
+                      >
+                        {d.name}
+                      </button>
+                    ) : (
+                      <span>{d.name}</span>
+                    )}
+                  </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {descriptions[d.name]}
