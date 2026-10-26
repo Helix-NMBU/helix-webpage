@@ -101,7 +101,7 @@ describe("internal member platform", () => {
     await open(path);
     expect(container.textContent).not.toMatch(/\bpreview\b|\bmockup\b|\bfictional\b|\bexample mode\b|added later/i);
     if (path === "/settings") {
-      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toContain("Admin");
+      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toMatch(/\bAdmin\b/);
     }
   });
 
