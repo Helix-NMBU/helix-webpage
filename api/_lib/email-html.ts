@@ -1,4 +1,4 @@
-import sanitizeHtml from "sanitize-html";
+import sanitizeHtml from "./generated/email-sanitizer.mjs";
 
 /** Preserve email layout without carrying executable markup into an outgoing quote. */
 export function sanitizeQuotedEmail(html: string): string {
