@@ -192,7 +192,12 @@ describe('repository API integration', () => {
       expect(response.json()).toEqual({ error: 'Log in to continue.' });
     }
     expect((await request(repo.port, '/api/contact')).status).toBe(405);
-    expect((await request(repo.port, '/api/apply-confirmation')).status).toBe(405);
+    for (const path of ['/api/reject', '/api/apply-confirmation']) {
+      expect((await request(repo.port, path)).status, path).toBe(405);
+      const response = await request(repo.port, path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_id: '10000000-0000-4000-8000-000000000001' }) });
+      expect(response.status, path).toBe(401);
+    }
   });
 
   it('passes rewritten auth paths and raw request bytes through the existing auth handler', async () => {
