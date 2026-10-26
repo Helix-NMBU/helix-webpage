@@ -53,7 +53,10 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
       const body = financeBody(req.body, Number.isFinite(length) ? length : undefined);
       return res.status(200).json(await services.mutate(token, body));
     } catch (error) {
-      if (error instanceof FinanceError || error instanceof MemberCvError) return res.status(error.status).json({ error: error.message });
+      if (error instanceof FinanceError || error instanceof MemberCvError) {
+        const errors = error instanceof FinanceError ? error.errors : undefined;
+        return res.status(error.status).json(errors?.length ? { error: error.message, errors } : { error: error.message });
+      }
       return res.status(503).json({ error: "The finance service is temporarily unavailable. Please try again." });
     }
   };

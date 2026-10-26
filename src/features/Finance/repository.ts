@@ -2,6 +2,8 @@ import { capabilitiesForProfiles } from "./access";
 import { osloToday } from "./money";
 import type {
   FinanceCapabilitiesResponse,
+  FinanceFieldError,
+  FinanceMutationResult,
   FinancingView,
   PublicBudgets,
   PublicOverview,
@@ -11,7 +13,7 @@ import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 
 export class FinanceRequestError extends Error {
-  constructor(message: string, readonly status: number) { super(message); }
+  constructor(message: string, readonly status: number, readonly errors: FinanceFieldError[] = []) { super(message); }
 }
 
 function localCapabilities(): FinanceCapabilitiesResponse {
@@ -31,7 +33,7 @@ function localOverview(): PublicOverview {
 }
 
 function localBudgets(): PublicBudgets {
-  return { viewVersion: 0, seasonCode: null, budgetStatus: "absent", departments: [] };
+  return { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 0, departments: [], choices: { systems: [], items: [] } };
 }
 
 function localPurchases(): PurchasesView {
@@ -46,9 +48,22 @@ export function createFinanceApi(owner: { current: string | null }) {
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}` },
     });
-    const body = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new FinanceRequestError(body.error || "Could not load finance.", response.status);
+    const body = await response.json().catch(() => ({})) as { error?: string; errors?: FinanceFieldError[] };
+    if (!response.ok) throw new FinanceRequestError(body.error || "Could not load finance.", response.status, body.errors ?? []);
     return body as T;
+  }
+  async function mutate(action: Record<string, unknown>): Promise<FinanceMutationResult> {
+    if (local()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
+    const token = await memberSessionToken(owner);
+    const response = await fetch("/api/finance", {
+      method: "POST",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(action),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string; errors?: FinanceFieldError[] };
+    if (!response.ok) throw new FinanceRequestError(body.error || "Could not save the budget change.", response.status, body.errors ?? []);
+    return body as FinanceMutationResult;
   }
   return {
     capabilities: () => local() ? Promise.resolve(localCapabilities()) : request<FinanceCapabilitiesResponse>("capabilities"),
@@ -58,5 +73,6 @@ export function createFinanceApi(owner: { current: string | null }) {
     financing: () => local()
       ? Promise.reject(new FinanceRequestError("Financing access is required.", 403))
       : request<FinancingView>("financing"),
+    mutate,
   };
 }

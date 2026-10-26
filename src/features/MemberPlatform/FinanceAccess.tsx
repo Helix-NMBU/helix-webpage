@@ -8,6 +8,8 @@ import type { FinancePageId } from "../Finance/routes";
 import type {
   FinanceCapabilitiesResponse,
   FinanceCapabilitySet,
+  FinanceMutation,
+  FinanceMutationResult,
   FinanceProfile,
   FinancingView,
   PublicBudgets,
@@ -34,6 +36,7 @@ type FinanceState = {
 type FinanceSession = FinanceState & {
   retry: () => void;
   loadPage: (page: FinancePageId) => Promise<void>;
+  mutate: (action: FinanceMutation) => Promise<FinanceMutationResult>;
 };
 
 const emptyState: FinanceState = {
@@ -59,7 +62,7 @@ function errorStatus(error: unknown): number {
 
 function visibleBudgets(budgets: PublicBudgets | null, capabilities: FinanceCapabilitySet): PublicBudgets | null {
   if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems) return budgets;
-  return { ...budgets, departments: [] };
+  return { ...budgets, departments: [], choices: { systems: [], items: [] }, earmarkChoices: [] };
 }
 
 export function FinanceAccessProvider({ children, userId }: { children: ReactNode; userId: string }) {
@@ -189,7 +192,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       });
     }
   }, [api, fail, notify]);
-  const value = useMemo(() => ({ ...state, retry, loadPage }), [state, retry, loadPage]);
+  const mutate = useCallback((action: FinanceMutation) => api.mutate(action), [api]);
+  const value = useMemo(() => ({ ...state, retry, loadPage, mutate }), [state, retry, loadPage, mutate]);
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
 
