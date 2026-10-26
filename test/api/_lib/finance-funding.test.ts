@@ -502,6 +502,106 @@ describe("financing and earmarked funding", () => {
     ]);
   });
 
+  it("gives a deleted status the same audit, view bump, warning, and previous status as delete", async () => {
+    await openSeason();
+    await grant("business");
+    const fundingIds: string[] = [];
+    const revisions: number[] = [];
+    const partIds: string[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const created = await call({ token: "member", body: addFundingBody() });
+      expect(created.status).toBe(200);
+      const fundingId = (created.body as { id: string; revision: number }).id;
+      const revision = (created.body as { revision: number }).revision;
+      const added = await call({
+        token: "member",
+        body: {
+          action: "addEarmark",
+          requestId: nextRequestId(),
+          expectedRevision: revision,
+          part: { fundingId, purpose: "Frame work", amountNok: "100.00", spendBy: null, conditions: "Private condition text" },
+        },
+      });
+      expect(added.status).toBe(200);
+      fundingIds.push(fundingId);
+      revisions.push(revision + 1);
+      partIds.push((added.body as { id: string }).id);
+    }
+    await sql("insert into finance.systems (department_key, code, name) values ('mechanical-production', 'SYS-FR', 'Frame')");
+    const seasonId = (await sql<{ id: string }>("select id from finance.seasons where code = 'S27'")).rows[0]?.id;
+    const systemId = (await sql<{ id: string }>("select id from finance.systems")).rows[0]?.id;
+    await sql(
+      `insert into finance.budgets (season_id, public_ref, status, approved_by_member_id, approved_on, created_by_member_id, updated_by_member_id)
+       values ($1::uuid, 'B-S27', 'approved', $2::uuid, '2026-10-01', $2::uuid, $2::uuid)`,
+      [seasonId, operatorId],
+    );
+    await sql(
+      `insert into finance.budget_items (
+         budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, earmark_id, created_by_member_id, updated_by_member_id
+       )
+       select b.id, $1::uuid, 'BI-S27-' || lpad(n.ordinal::text, 3, '0'), 'Frame tube', 'material', 10000, 'EM', 'new', 'active', n.part_id, $2::uuid, $2::uuid
+       from finance.budgets b
+       join (values (1, $3::uuid), (2, $4::uuid)) as n(ordinal, part_id) on true`,
+      [systemId, operatorId, partIds[0], partIds[1]],
+    );
+
+    async function deletion(index: number, body: Record<string, unknown>) {
+      const fundingId = fundingIds[index];
+      const beforeVersion = await version();
+      const beforeAudits = Number((await sql<{ count: string }>(
+        "select count(*)::text as count from finance.audit_log where entity = 'funding' and entity_id = $1",
+        [fundingId],
+      )).rows[0]?.count);
+      const result = await call({ token: "member", body });
+      expect(result.status).toBe(200);
+      const stored = await sql<{ status: string; prior_status: string | null }>(
+        "select status, prior_status from finance.funding where id = $1::uuid",
+        [fundingId],
+      );
+      const audits = await sql<{ field_name: string; old_value: string | null; new_value: string | null; reason: string | null }>(
+        `select field_name, old_value, new_value, reason
+         from finance.audit_log
+         where entity = 'funding' and entity_id = $1 and field_name = 'status' and new_value = 'deleted'`,
+        [fundingId],
+      );
+      const afterAudits = Number((await sql<{ count: string }>(
+        "select count(*)::text as count from finance.audit_log where entity = 'funding' and entity_id = $1",
+        [fundingId],
+      )).rows[0]?.count);
+      return {
+        warnings: (result.body as { warnings: unknown }).warnings,
+        viewDelta: (await version()) - beforeVersion,
+        status: stored.rows[0]?.status,
+        priorStatus: stored.rows[0]?.prior_status,
+        auditDelta: afterAudits - beforeAudits,
+        audit: audits.rows,
+      };
+    }
+
+    const byAction = await deletion(0, {
+      action: "deleteFunding",
+      requestId: nextRequestId(),
+      fundingId: fundingIds[0],
+      expectedRevision: revisions[0],
+    });
+    const byStatus = await deletion(1, {
+      action: "editFunding",
+      requestId: nextRequestId(),
+      fundingId: fundingIds[1],
+      expectedRevision: revisions[1],
+      patch: { ...fundingFields, status: "deleted" },
+    });
+    expect(byAction).toEqual({
+      warnings: [{ message: "This funding still pays for 1 budget item that is not cancelled." }],
+      viewDelta: 1,
+      status: "deleted",
+      priorStatus: "secured",
+      auditDelta: 1,
+      audit: [{ field_name: "status", old_value: "secured", new_value: "deleted", reason: null }],
+    });
+    expect(byStatus).toEqual(byAction);
+  });
+
   it("restores from the audit trail when the remembered status is missing, otherwise falls back to applied", async () => {
     await openSeason();
     await grant("business");

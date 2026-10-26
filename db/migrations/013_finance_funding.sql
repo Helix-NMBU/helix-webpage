@@ -48,6 +48,42 @@ begin
 end;
 $fn$;
 
+-- Soft-delete used by deleteFunding and by an edit that sets status to deleted.
+-- Does not bump the view version; the caller does that once for the whole change.
+create or replace function finance.soft_delete_funding(p_actor_member_id uuid, p_funding_id uuid)
+returns integer
+language plpgsql
+security invoker
+set search_path = pg_catalog, finance
+as $fn$
+declare
+  funding_row finance.funding%rowtype;
+  new_revision integer;
+begin
+  if p_actor_member_id is null or p_funding_id is null then
+    raise exception 'finance:INVALID' using errcode = '22023';
+  end if;
+  select * into funding_row from finance.funding where id = p_funding_id for update;
+  if not found then
+    raise exception 'finance:FUNDING_NOT_FOUND' using errcode = 'P0002';
+  end if;
+  if funding_row.status = 'deleted' then
+    raise exception 'finance:ALREADY_DELETED' using errcode = 'P0001';
+  end if;
+  perform 1 from finance.funding_parts where funding_id = funding_row.id for update;
+  update finance.funding
+    set prior_status = funding_row.status,
+        status = 'deleted',
+        revision = revision + 1,
+        updated_at = clock_timestamp(),
+        updated_by_member_id = p_actor_member_id
+    where id = funding_row.id
+    returning revision into new_revision;
+  perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'status', funding_row.status, 'deleted');
+  return new_revision;
+end;
+$fn$;
+
 -- Issues the next funding or earmark reference. Does not bump the view version; the caller does.
 create or replace function finance.issue_counter(p_key text, p_actor_member_id uuid)
 returns bigint
@@ -333,44 +369,51 @@ begin
       or (agreement_link is not null and char_length(agreement_link) > 2000) then
       raise exception 'finance:INVALID' using errcode = '22023';
     end if;
-    warn_links := status = 'deleted' and funding_row.status <> 'deleted';
-    update finance.funding
-      set source_name = change.source_name,
-          owner_name = change.owner_name,
-          funding_type = change.funding_type,
-          amount_ore = change.amount_ore,
-          status = change.status,
-          prior_status = case
-            when change.status = 'deleted' and finance.funding.status <> 'deleted' then finance.funding.status
-            when change.status <> 'deleted' and finance.funding.status = 'deleted' then null
-            else finance.funding.prior_status
-          end,
-          confidence = change.confidence,
-          expected_date = change.expected_date,
-          received_date = change.received_date,
-          owner_email = change.owner_email,
-          reporting_required = change.reporting_required,
-          agreement_link = change.agreement_link,
-          note = change.note,
-          revision = finance.funding.revision + 1,
-          updated_at = clock_timestamp(),
-          updated_by_member_id = p_actor_member_id
-      where id = funding_row.id
-      returning revision into result_revision;
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'source_name', funding_row.source_name, source_name);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'owner_name', funding_row.owner_name, owner_name);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'funding_type', funding_row.funding_type, funding_type);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'amount_nok', finance.format_ore(funding_row.amount_ore), finance.format_ore(amount_ore));
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'status', funding_row.status, status);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'confidence', funding_row.confidence, confidence);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'expected_date', to_char(funding_row.expected_date, 'YYYY-MM-DD'), to_char(expected_date, 'YYYY-MM-DD'));
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'received_date', to_char(funding_row.received_date, 'YYYY-MM-DD'), to_char(received_date, 'YYYY-MM-DD'));
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'owner_email', funding_row.owner_email, owner_email);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'reporting_required', funding_row.reporting_required::text, reporting_required::text);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'agreement_link', funding_row.agreement_link, agreement_link);
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'note', funding_row.note, note);
-    target_funding := funding_row.id;
-    result_id := funding_row.id;
+    if status = 'deleted' and funding_row.status <> 'deleted' then
+      result_revision := finance.soft_delete_funding(p_actor_member_id, funding_row.id);
+      target_funding := funding_row.id;
+      result_id := funding_row.id;
+      warn_links := true;
+    else
+      warn_links := false;
+      update finance.funding
+        set source_name = change.source_name,
+            owner_name = change.owner_name,
+            funding_type = change.funding_type,
+            amount_ore = change.amount_ore,
+            status = change.status,
+            prior_status = case
+              when change.status = 'deleted' and finance.funding.status <> 'deleted' then finance.funding.status
+              when change.status <> 'deleted' and finance.funding.status = 'deleted' then null
+              else finance.funding.prior_status
+            end,
+            confidence = change.confidence,
+            expected_date = change.expected_date,
+            received_date = change.received_date,
+            owner_email = change.owner_email,
+            reporting_required = change.reporting_required,
+            agreement_link = change.agreement_link,
+            note = change.note,
+            revision = finance.funding.revision + 1,
+            updated_at = clock_timestamp(),
+            updated_by_member_id = p_actor_member_id
+        where id = funding_row.id
+        returning revision into result_revision;
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'source_name', funding_row.source_name, source_name);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'owner_name', funding_row.owner_name, owner_name);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'funding_type', funding_row.funding_type, funding_type);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'amount_nok', finance.format_ore(funding_row.amount_ore), finance.format_ore(amount_ore));
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'status', funding_row.status, status);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'confidence', funding_row.confidence, confidence);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'expected_date', to_char(funding_row.expected_date, 'YYYY-MM-DD'), to_char(expected_date, 'YYYY-MM-DD'));
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'received_date', to_char(funding_row.received_date, 'YYYY-MM-DD'), to_char(received_date, 'YYYY-MM-DD'));
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'owner_email', funding_row.owner_email, owner_email);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'reporting_required', funding_row.reporting_required::text, reporting_required::text);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'agreement_link', funding_row.agreement_link, agreement_link);
+      perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'note', funding_row.note, note);
+      target_funding := funding_row.id;
+      result_id := funding_row.id;
+    end if;
 
   elsif action = 'deleteFunding' then
     select * into funding_row
@@ -383,19 +426,7 @@ begin
     if funding_row.revision <> (p_command->>'expectedRevision')::integer then
       raise exception 'finance:REVISION_CONFLICT' using errcode = '40001';
     end if;
-    if funding_row.status = 'deleted' then
-      raise exception 'finance:ALREADY_DELETED' using errcode = 'P0001';
-    end if;
-    perform 1 from finance.funding_parts where funding_id = funding_row.id for update;
-    update finance.funding
-      set prior_status = funding_row.status,
-          status = 'deleted',
-          revision = revision + 1,
-          updated_at = clock_timestamp(),
-          updated_by_member_id = p_actor_member_id
-      where id = funding_row.id
-      returning revision into result_revision;
-    perform finance.audit_change(p_actor_member_id, 'funding', funding_row.id::text, 'status', funding_row.status, 'deleted');
+    result_revision := finance.soft_delete_funding(p_actor_member_id, funding_row.id);
     target_funding := funding_row.id;
     result_id := funding_row.id;
     warn_links := true;
