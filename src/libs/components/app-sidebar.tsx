@@ -5,7 +5,15 @@ import {
   IconSmartHome,
   IconCube,
   IconUsers,
-  IconBuildingCommunity,
+  IconUserSquare,
+  IconBriefcase,
+  IconTools,
+  IconCpu,
+  IconCode,
+  IconSpeakerphone,
+  IconTruckDelivery,
+  IconWallet,
+  type TablerIcon,
   IconCheckbox,
   IconMail,
   IconUsersGroup,
@@ -25,6 +33,16 @@ import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifica
 import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
 import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
+
+const departmentIcons: Record<string, TablerIcon> = {
+  Management: IconBriefcase,
+  "Mechanical & Production": IconTools,
+  Electronics: IconCpu,
+  "Software & Autonomous": IconCode,
+  "Business & Marketing": IconSpeakerphone,
+  Logistics: IconTruckDelivery,
+  Finance: IconWallet,
+};
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -68,7 +86,7 @@ export function AppSidebar({
       .map((department) => ({
         title: department.name,
         url: departmentPath(department.name),
-        icon: IconBuildingCommunity,
+        icon: departmentIcons[department.name] ?? IconUserSquare,
         isActive: location.pathname === departmentPath(department.name),
       })) ?? []),
   ];
@@ -129,7 +147,7 @@ export function AppSidebar({
             {
               title: "Departments",
               url: "/departments",
-              icon: IconBuildingCommunity,
+              icon: IconUserSquare,
               isActive: location.pathname === "/departments",
             },
           ]}
