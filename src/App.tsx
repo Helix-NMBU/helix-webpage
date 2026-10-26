@@ -12,10 +12,9 @@ import Garage from './features/Garage/Garage.tsx'
 import Members from './features/Team/Team.tsx'
 import ApplyPage from './features/Apply/ApplyPage.tsx'
 import ApplicationFormPage from './features/Apply/ApplicationFormPage.tsx'
-import SponsorWorkspace from './features/SponsorWorkspace/SponsorWorkspace.tsx'
+import PartnerPortal from './features/PartnerPortal/PartnerPortal.tsx'
 import CVBankLogin from './features/CVBank/Login.tsx'
-import RecruitmentLogin from './features/Recruitment/RecruitmentLogin.tsx'
-import RecruitmentPortal from './features/Recruitment/RecruitmentPortal.tsx'
+import RecruitmentEntry from './features/Recruitment/RecruitmentEntry.tsx'
 import MemberCV from './features/MemberCV/MemberCV.tsx'
 import NotFound from './features/NotFound/NotFound.tsx'
 import { Navbar } from './libs/components/navbar/Navbar.tsx'
@@ -26,16 +25,32 @@ import { PageLoader } from './libs/components/PageLoader.tsx'
 import { claimNeonAuthSession } from './features/MemberCV/session.ts'
 import MemberPlatform from './features/MemberPlatform/MemberPlatform.tsx'
 import { isMemberPlatform } from './features/MemberPlatform/routes.ts'
+import { getApplicationUrl, resolveAppHost } from './libs/lib/app-hosts.ts'
+import { MemberNotificationsProvider } from './features/MemberPlatform/MemberNotifications.tsx'
+import { Toaster } from './libs/components/ui/sonner.tsx'
 {/*import  Contactside  from './Contactside.tsx'*/}
 
 function AppContent() {
   const location = useLocation();
-  const sponsorPath = location.pathname === '/login' || location.pathname === '/sponsor' || location.pathname.startsWith('/sponsor/') || location.pathname === '/sponsorportal' || location.pathname === '/sponsorportal-login';
-  useEffect(() => { if (!sponsorPath) void claimNeonAuthSession(); }, [sponsorPath]);
-  if (location.pathname === '/sponsorportal-login') return <Navigate to="https://partner.helixnmbu.no/login" replace />;
-  if (location.pathname === '/sponsorportal') return <Navigate to="/sponsor" replace />;
-  if (sponsorPath) return <SponsorWorkspace />;
-  return isMemberPlatform() ? <MemberPlatform /> : <PublicAppContent />;
+  useEffect(() => { void claimNeonAuthSession(); }, []);
+  if (isMemberPlatform()) return <MemberPlatform />;
+  const host = resolveAppHost(window.location.hostname);
+  if (host.application === 'partner') return <PartnerPortal />;
+  if (location.pathname === '/sponsorportal' || location.pathname === '/sponsorportal-login') {
+    return <PartnerEntry />;
+  }
+  return <MemberNotificationsProvider renderToaster={false}>
+    <PublicAppContent />
+    <Toaster theme="system" position="top-right" closeButton />
+  </MemberNotificationsProvider>;
+}
+
+function PartnerEntry() {
+  const source = window.location.origin;
+  const permanent = resolveAppHost(window.location.hostname).environment === 'production';
+  const destination = permanent ? getApplicationUrl('partner', source, '/login') : null;
+  useEffect(() => { if (destination) window.location.replace(destination); }, [destination]);
+  return destination ? null : <PartnerPortal />;
 }
 
 function PublicAppContent() {
@@ -63,8 +78,8 @@ function PublicAppContent() {
         <Route path="/members" element={<Members />} />
         <Route path="/apply" element={<ApplyPage />} />
         <Route path="/apply/form" element={<ApplicationFormPage />} />
-        <Route path="/recruitment/login" element={<RecruitmentLogin />} />
-        <Route path="/recruitment" element={<RecruitmentPortal />} />
+        <Route path="/recruitment/*" element={<RecruitmentEntry />} />
+        <Route path="/recruiting/*" element={<RecruitmentEntry />} />
         <Route path="/cv-bank" element={<Navigate to="/member/login" replace />} />
         <Route path="/cv-bank/login" element={<Navigate to="/member/login" replace />} />
         <Route path="/cv-bank/profile" element={<Navigate to="/member/profile" replace />} />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import supabase from "./libs/lib/utils";
+import { useNotify } from "./features/MemberPlatform/MemberNotifications";
 
 type ContactForm = {
   name: string;
@@ -13,6 +13,8 @@ type ContactForm = {
 
 
 export default function Contactside() {
+  const notify = useNotify();
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<ContactForm>({
     name: "",
     email: "",
@@ -30,55 +32,24 @@ export default function Contactside() {
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-  e.preventDefault();
-
-  if (!supabase) {
-    console.error("Supabase er ikke konfigurert");
-    return;
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "Could not send your message. Try again.");
+      setForm({ name: "", email: "", subject: "", message: "" });
+      notify("Message received", "Thank you for contacting Helix.", { href: null });
+    } catch (error) {
+      notify("Could not send message", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null });
+    } finally { setBusy(false); }
   }
 
-  // 1. Lagre i databasen
-const { error } = await supabase
-  .from("kontakt skjema")
-  .insert({
-    Name: form.name,
-    Subject: form.subject,
-    Email: form.email,
-    Message: form.message,
-  });
-  if (error) {
-    console.error("Kunne ikke lagre kontaktskjemaet:", error);
-    return;
-  }
-
-  // 2. Send e-post
-  const { error: emailError } = await supabase.functions.invoke(
-    "email-sender-function",
-    {
-      body: {
-        name: form.name,
-        email: form.email,
-        subject: form.subject,
-        message: form.message,
-      },
-    }
-  );
-
-  if (emailError) {
-    console.error("Kunne ikke sende e-post:", emailError);
-    return;
-  }
-
-  // 3. Alt gikk bra
-  console.log("Kontaktskjema sendt:", form);
-
-  setForm({
-    name: "",
-    email: "",
-    subject: "",
-    message: "",
-  });
-}
 	return (
     <main className="contact-layout" style= {{ 
       background: "#f6f7fb", 
@@ -206,7 +177,7 @@ const { error } = await supabase
 
 
        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
+                <button disabled={busy}
                   type="submit"
                   style={{
                     padding: "14px 28px",

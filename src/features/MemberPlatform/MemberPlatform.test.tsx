@@ -9,6 +9,10 @@ import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
+const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn() }));
+vi.mock("../Recruitment/website-api", async original => ({ ...await original<typeof import("../Recruitment/website-api")>(), createRecruitmentApi: () => recruitment }));
+import { RecruitmentRequestError } from "../Recruitment/website-api";
+
 const session = vi.hoisted(() => ({ landing: vi.fn(), signOut: vi.fn(), editorNavigate: vi.fn(), editorSignOut: vi.fn() }));
 vi.mock("../MemberCV/session", async (original) => ({
   ...await original<typeof import("../MemberCV/session")>(),
@@ -38,6 +42,8 @@ describe("internal member platform", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     window.localStorage.removeItem("helix-member-theme");
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
+    recruitment.session.mockReset().mockRejectedValue(new RecruitmentRequestError("Recruiter access required", 403));
+    recruitment.list.mockReset().mockResolvedValue([]);
     session.landing.mockReset().mockResolvedValue(signedOut);
     session.signOut.mockReset().mockResolvedValue(undefined);
     session.editorNavigate.mockReset();
@@ -85,13 +91,60 @@ describe("internal member platform", () => {
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
     expect(container.textContent).not.toContain("Private CV editor");
     expect(container.textContent).not.toContain("What are we working on?");
     expect(container.querySelector('a[href="https://helixnmbu.no"]')).toBeNull();
+  });
+
+  it("hides Recruiting and denies direct links to ordinary members", async () => {
+    session.landing.mockResolvedValue({ ...signedIn, account: { ...signedIn.account, role: "Member" } });
+    await open("/recruitment");
+    expect(router.state.location.pathname).toBe("/");
+    expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
+    expect(recruitment.list).not.toHaveBeenCalled();
+  });
+
+  it("redirects legacy recruitment links to the Recruiting route", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    recruitment.session.mockResolvedValue({ email: signedIn.account.email });
+    await open("/recruitment?season=S27#applications");
+    expect(router.state.location.pathname).toBe("/recruiting");
+    expect(router.state.location.search).toBe("?season=S27");
+    expect(router.state.location.hash).toBe("#applications");
+  });
+
+  it.each(["Admin", "Member"])("uses the server grant for %s and opens recruitment in the member shell", async role => {
+    session.landing.mockResolvedValue({ ...signedIn, account: { ...signedIn.account, role } });
+    recruitment.session.mockResolvedValue({ email: signedIn.account.email });
+    await open("/");
+    const link = container.querySelector<HTMLButtonElement>('[aria-label="Recruiting"]');
+    expect(link).not.toBeNull();
+    await act(async () => link!.click());
+    expect(router.state.location.pathname).toBe("/recruiting");
+    expect(container.querySelector("h1")?.textContent).toBe("Applications");
+    expect(container.querySelector('[aria-label="Profile menu"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Recruiter sign in");
+  });
+
+  it("rechecks access on focus and removes recruitment content after revocation", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    recruitment.session.mockResolvedValue({ email: signedIn.account.email });
+    await open("/recruiting");
+    expect(container.querySelector("h1")?.textContent).toBe("Applications");
+    recruitment.session.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(router.state.location.pathname).toBe("/");
+    expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
+    expect(container.textContent).not.toContain("Applications");
+  });
+
+  it("preserves recruitment as a safe member login destination", () => {
+    expect(memberLoginDestination({ from: "/recruiting" })).toBe("/recruiting");
+    expect(googleSignInRequest("/recruiting", "https://internal.helixnmbu.no").callbackURL).toBe("https://internal.helixnmbu.no/recruiting");
   });
 
   it("opens Notifications from below Home and shows an honest empty state", async () => {
