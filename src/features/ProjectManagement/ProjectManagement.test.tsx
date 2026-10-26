@@ -8,7 +8,7 @@ import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import ProjectManagement from "./ProjectManagement";
 import { initialLocalWorkspace } from "./local-repository";
 import { createProjectRepository, ProjectRequestError } from "./repository";
-import { addDays, osloDate } from "./model";
+import { addDays, formatDate, osloDate } from "./model";
 import { CvRequestError } from "../MemberCV/repository";
 
 function NotificationProbe() {
@@ -310,9 +310,100 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     const table = tables[tables.length - 1];
     expect([...table.querySelectorAll("tbody tr")].map(row => row.querySelector("button")?.textContent)).toEqual(["Due today", "Due in 30 days"]);
-    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Priority", "Leads", "Target date", "Tasks", "Status"]);
+    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Department", "Priority", "Leads", "Target date", "Tasks", "Status"]);
     expect(container.querySelector('[aria-label="Search tasks"]')).toBeNull();
     expect(button("Timeline")).toBeUndefined();
+  });
+  function inlineWorkspace() {
+    const workspace = initialLocalWorkspace();
+    workspace.tasks = workspace.tasks.map(task => task.title === "Chassis ready for assembly" ? { ...task, deadline: addDays(osloDate(), 7) } : task);
+    return workspace;
+  }
+  const inlineButton = (field: string) => document.querySelector<HTMLButtonElement>(`[aria-label="Change ${field} for Chassis ready for assembly"]`)!;
+  it("keeps departments in a separate column and milestone names free of subtitles", async () => {
+    load.mockResolvedValue(inlineWorkspace()); await open();
+    const row = button("Chassis ready for assembly").closest("tr")!;
+    const cells = row.querySelectorAll("td");
+    expect(cells[0].textContent).toBe("Chassis ready for assembly");
+    expect(cells[1].textContent).toBe("Mechanical, Electrical");
+    expect(cells[0].textContent).not.toContain("Chassis & assembly");
+  });
+  it("saves priority inline with the existing revision and unchanged hierarchy", async () => {
+    const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
+    const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    await act(async () => inlineButton("priority").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })));
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent === "High")!.click());
+    expect(mutate).toHaveBeenCalledWith({ action: "save_task", id: goal.id, expectedRevision: goal.revision, task: expect.objectContaining({ title: goal.title, priority: "high", assigneeIds: goal.assigneeIds, deadline: goal.deadline, projectId: goal.projectId, milestoneId: null }) });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+  it("saves several Leads inline without an invite option", async () => {
+    const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
+    await act(async () => inlineButton("leads").click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example as lead"]')!.click());
+    expect(document.querySelector('[data-slot="popover-content"]')?.textContent).not.toContain("Invite");
+    await click("Save leads");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", expectedRevision: 1, task: expect.objectContaining({ kind: "milestone", assigneeIds: workspace.members.map(member => member.id) }) }));
+  });
+  it("discards an unsaved Lead selection when its menu is cancelled", async () => {
+    load.mockResolvedValue(inlineWorkspace()); await open();
+    await act(async () => inlineButton("leads").click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example as lead"]')!.click());
+    await click("Cancel");
+    await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+    await act(async () => inlineButton("leads").click());
+    expect(document.querySelector('[aria-label="Assign Sam Example as lead"]')?.getAttribute("aria-checked")).toBe("false");
+    expect(mutate).not.toHaveBeenCalled();
+  });
+  it("lets a date change move a milestone out of the upcoming window", async () => {
+    const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
+    const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    const deadline = addDays(osloDate(), 31);
+    mutate.mockResolvedValue({ ...workspace, tasks: workspace.tasks.map(task => task.id === goal.id ? { ...task, deadline, revision: 2 } : task) });
+    await act(async () => inlineButton("target date").click());
+    await fill(`milestone-date-${goal.id}`, deadline); await click("Save date");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ id: goal.id, expectedRevision: 1, task: expect.objectContaining({ deadline, priority: goal.priority, assigneeIds: goal.assigneeIds }) }));
+    expect(button(goal.title)).toBeUndefined();
+  });
+  it("supports arrow-key calendar navigation and selecting a day", async () => {
+    const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
+    const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    await act(async () => inlineButton("target date").click());
+    const selected = document.querySelector<HTMLButtonElement>(`[data-day="${goal.deadline}"]`)!;
+    await act(async () => { selected.focus(); selected.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+    const next = addDays(goal.deadline!, 1);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe(formatDate(next));
+    await act(async () => (document.activeElement as HTMLButtonElement).click());
+    await click("Save date");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ task: expect.objectContaining({ deadline: next }) }));
+  });
+  it("keeps the date draft after a conflict and reports recovery through notifications", async () => {
+    const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
+    const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    mutate.mockRejectedValueOnce(new ProjectRequestError("This milestone changed. Reload before saving.", 409));
+    await act(async () => inlineButton("target date").click());
+    const deadline = addDays(osloDate(), 10);
+    await fill(`milestone-date-${goal.id}`, deadline); await click("Save date");
+    expect((document.getElementById(`milestone-date-${goal.id}`) as HTMLInputElement).value).toBe(deadline);
+    expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Reload tasks");
+  });
+  it("validates inline dates before sending and retains invalid drafts", async () => {
+    const workspace = inlineWorkspace(); load.mockResolvedValue(workspace); await open();
+    const goal = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    await act(async () => inlineButton("target date").click());
+    await fill(`milestone-date-${goal.id}`, ""); await click("Save date");
+    expect(mutate).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Set a deadline");
+    expect(document.getElementById(`milestone-date-${goal.id}`)).not.toBeNull();
+  });
+  it("requires a scoped Department Lead grant and organized placement for inline editing", async () => {
+    const workspace = inlineWorkspace();
+    load.mockResolvedValue({ ...workspace, canManage: true, taskLeadCategories: ["marketing"] }); await open();
+    expect(inlineButton("priority")).toBeNull();
+    expect(inlineButton("leads")).toBeNull();
+    expect(inlineButton("target date")).toBeNull();
+    load.mockResolvedValue({ ...workspace, tasks: workspace.tasks.map(task => task.kind === "milestone" ? { ...task, projectId: null } : task) });
+    await open(); expect(inlineButton("priority")).toBeNull();
+    expect(mutate).not.toHaveBeenCalled();
   });
   it("creates a milestone with multiple leads using the member picker", async () => {
     await open("marketing"); await click("New milestone");

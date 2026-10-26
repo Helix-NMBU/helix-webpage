@@ -139,3 +139,10 @@ All 70 focused project-management tests, client TypeScript and production build 
 ## Upcoming milestone icons and dates, 26 October 2026
 
 Upcoming Milestones uses icon-only priority cells: Tabler signal bars for Low, Normal and High, and an exclamation circle for Urgent. Accessible labels and tooltips identify each priority. Target dates use a leading calendar icon and day/month text without the year, while retaining the full machine-readable date and tooltip. Client TypeScript and all 42 ProjectManagement UI tests passed; the rendered widget was inspected locally. Screenshot: `upcoming-priority-icons.png` in this chat's visualization directory.
+
+
+## Inline milestone menus and Department column, 26 October 2026
+
+Upcoming Milestones now has a Department column sourced from its project's departments and no text underneath milestone names. Authorized area Department Leads can edit priority, multiple Leads and target date from the table. The menus use shared UI components, existing member selection without invitations, and a target-date calendar with input, month navigation and keyboard support. Full saves preserve all unrelated fields and use the existing revision guard. Legacy work must be organized before these detail edits. Failed saves retain input and offer recovery through shared notifications.
+
+All 79 focused project-management tests, client TypeScript and the production build passed (9.23 MB static output, 9 source functions). Regression coverage includes permissions, field preservation, cancellation, revision conflicts, date validation and calendar keyboard navigation. Browser checks saved High priority, two Leads and 16 November on the local Manufacturing sign-off milestone and confirmed all three values persisted after reload. Screenshot: `milestone-inline-calendar.png` in this chat's visualization directory. No API/schema changes, live migration, push or deployment.
