@@ -18,11 +18,11 @@ export const mobilePrimaryNavLinks: NavLinkConfig[] = [
 ];
 
 export const mobileSecondaryNavLinks: NavLinkConfig[] = [
-  { label: "Partner portal", to: "/sponsorportal-login" },
+  { label: "Sponsor portal", to: "/sponsorportal-login" },
 ];
 
 export const appCtaLinks: NavLinkConfig[] = [
-  { label: "Partner portal", to: "/sponsorportal-login" },
+  { label: "Sponsor portal", to: "/sponsorportal-login" },
 ];
 
 export const knownRoutes = new Set([

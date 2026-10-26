@@ -1,9 +1,9 @@
-/* Internal-only tokens also reach Radix dialogs, sheets and dropdown portals. */
+/* shadcn preset b1Z5baiCQ. Scoped to internal workspaces and their Radix portals. */
 html[data-member-theme] {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
   --default-font-family: var(--font-sans);
-  --radius: 0.625rem;
+  --radius: 0.45rem;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -14,73 +14,84 @@ html[data-member-theme] {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-html[data-member-theme="light"] { color-scheme: light; background: #f4f4f7; }
-html[data-member-theme="dark"] { color-scheme: dark; background: #1c1c1c; }
+html[data-member-theme="light"] { color-scheme: light; background: oklch(1 0 0); }
+html[data-member-theme="dark"] { color-scheme: dark; background: oklch(0.145 0 0); }
 html[data-member-theme] body,
 html[data-member-theme] .portal-root { font-family: var(--font-sans); }
 html[data-member-theme] .portal-root,
 html[data-member-theme] body:has(.member-platform) {
-  --background: #fff;
-  --foreground: #18181b;
-  --card: #fff;
-  --card-foreground: #18181b;
-  --popover: #fff;
-  --popover-foreground: #18181b;
-  --primary: #002ec4;
-  --primary-foreground: #fff;
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
-  --border: #e4e4e7;
-  --input: #d4d4d8;
-  --ring: #002ec4;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.488 0.243 264.376);
+  --primary-foreground: oklch(0.97 0.014 254.604);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.546 0.245 262.881);
+  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
   --destructive-foreground: #fff;
-  --sidebar: #fafafa;
-  --sidebar-foreground: #27272a;
-  --sidebar-primary: #002ec4;
-  --sidebar-primary-foreground: #fff;
-  --sidebar-accent: #f4f4f5;
-  --sidebar-accent-foreground: #18181b;
-  --sidebar-border: #e4e4e7;
-  --sidebar-ring: #002ec4;
-  --platform-canvas: #f4f4f7;
+  --platform-canvas: var(--muted);
   --color-destructive: var(--destructive);
   color-scheme: light;
 }
 html[data-member-theme="dark"] .portal-root,
 html[data-member-theme="dark"] body:has(.member-platform) {
-  --background: #101010;
-  --foreground: #ededed;
-  --card: #151515;
-  --card-foreground: #ededed;
-  --popover: #191919;
-  --popover-foreground: #ededed;
-  --primary: #fff;
-  --primary-foreground: #101010;
-  --secondary: #202020;
-  --secondary-foreground: #ededed;
-  --muted: #202020;
-  --muted-foreground: #aaa;
-  --accent: #282828;
-  --accent-foreground: #f5f5f5;
-  --border: #2c2c2c;
-  --input: #424242;
-  --ring: #fff;
-  --destructive: #ff8f8f;
-  --destructive-foreground: #101010;
-  --sidebar: #171717;
-  --sidebar-foreground: #ddd;
-  --sidebar-primary: #fff;
-  --sidebar-primary-foreground: #101010;
-  --sidebar-accent: #282828;
-  --sidebar-accent-foreground: #fff;
-  --sidebar-border: #2c2c2c;
-  --sidebar-ring: #fff;
-  --platform-canvas: #1c1c1c;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.424 0.199 265.638);
+  --primary-foreground: oklch(0.97 0.014 254.604);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.623 0.214 259.815);
+  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  --destructive-foreground: #fff;
+  --platform-canvas: var(--muted);
+  --color-destructive: var(--destructive);
   color-scheme: dark;
 }
 /* Remove Tailwind's shadow layer without overriding the box-shadow used by focus rings. */
@@ -96,7 +107,7 @@ html[data-member-theme] .mcv-page .mcv-nav-link,
 html[data-member-theme] .mcv-nav-label { color: var(--foreground); }
 html[data-member-theme] .mcv-demo-label { font-family: inherit; }
 html[data-member-theme] .member-login-brand-icon,
-html[data-member-theme] .member-login-brand-panel { background: #002ec4; }
+html[data-member-theme] .member-login-brand-panel { background: var(--primary); }
 
 /* Reading rhythm for assistant prose; controls keep their component typography. */
 html[data-member-theme] .typeset-chat {

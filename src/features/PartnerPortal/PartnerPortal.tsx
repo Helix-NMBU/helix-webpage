@@ -130,8 +130,10 @@ function PartnerPortalContent() {
 
   return <div className="member-platform partner-portal min-h-dvh bg-background text-foreground">
     <header className="border-b"><div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
-      <a href="https://helixnmbu.no" className="text-lg font-medium tracking-tight">Helix</a>
-      {hasSession && <Button variant="outline" disabled={busy} onClick={() => { void signOut(); }}>Sign out</Button>}
+      {hasSession ? <a href="https://www.helixnmbu.no" className="text-lg font-medium tracking-tight">Helix</a> : <span aria-hidden="true" />}
+      {hasSession
+        ? <Button variant="outline" disabled={busy} onClick={() => { void signOut(); }}>Sign out</Button>
+        : <a href="https://www.helixnmbu.no" className="text-sm underline underline-offset-4">Go back to the webpage</a>}
     </div></header>
     {loading ? <main className="mx-auto max-w-6xl p-6" aria-busy="true"><span className="sr-only">Loading partner portal</span></main>
       : session ? <PartnerDirectoryView key={session.user.email} session={session} onAccessLost={accessLost} />

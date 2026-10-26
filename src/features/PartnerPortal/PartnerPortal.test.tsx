@@ -70,6 +70,16 @@ describe("partner portal recovery and identity isolation", () => {
     expect(container.textContent).not.toMatch(/demo|mockup|local preview/i);
   });
 
+  it("shows a return-to-webpage link on the invitation sign-in page", async () => {
+    vi.mocked(hasPartnerAuthSession).mockResolvedValue(false);
+    await open();
+    const back = container.querySelector<HTMLAnchorElement>('a[href="https://www.helixnmbu.no"]');
+    expect(back?.textContent).toBe("Go back to the webpage");
+    expect(container.textContent).not.toContain("Sign out");
+    expect(container.querySelector("nav")).toBeNull();
+    expect(container.querySelector("footer")).toBeNull();
+  });
+
   it("uses the settled SDK session without initiating a second session refresh", async () => {
     vi.mocked(watchPartnerAuthSession).mockImplementation((clear, load) => { clear(); load(true); return stop; });
     await open();

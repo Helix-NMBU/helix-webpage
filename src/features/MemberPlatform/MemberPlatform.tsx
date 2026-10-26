@@ -8,6 +8,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
+import { TooltipProvider } from "@libs/components/ui/tooltip";
 import CVBankLogin from "../CVBank/Login";
 import MemberCV from "../MemberCV/MemberCV";
 import {
@@ -129,7 +130,8 @@ function LegacyMemberRedirect({ to }: { to: string }) {
 export default function MemberPlatform() {
   return (
     <MemberThemeProvider>
-      <MemberNavigationProvider>
+      <TooltipProvider>
+        <MemberNavigationProvider>
         <div className="member-platform portal-root">
           <Routes>
             <Route path="/login" element={<CVBankLogin />} />
@@ -212,7 +214,8 @@ export default function MemberPlatform() {
           </Routes>
           <MemberNotificationToaster />
         </div>
-      </MemberNavigationProvider>
+        </MemberNavigationProvider>
+      </TooltipProvider>
     </MemberThemeProvider>
   );
 }

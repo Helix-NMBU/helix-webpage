@@ -14,6 +14,8 @@ type LinkConfig = {
   delay: string;
 };
 
+const isExternalHref = (to: string) => /^https?:\/\//i.test(to);
+
 const primaryLinks: LinkConfig[] = mobilePrimaryNavLinks.map((link, index) => ({
   ...link,
   delay: `${0.4 + index * 0.1}s`,
@@ -107,13 +109,9 @@ export const MobileNavLinks: React.FC<MobileNavLinksProps> = ({
         >
           {secondaryLinks.map((link, idx) => (
             <span key={link.to}>
-              <Link
-                to={link.to}
-                className="transition-colors text-foreground/70 hover:text-accent"
-                onClick={closeMenu}
-              >
-                {link.label}
-              </Link>
+              {isExternalHref(link.to)
+                ? <a href={link.to} className="transition-colors text-foreground/70 hover:text-accent" onClick={closeMenu}>{link.label}</a>
+                : <Link to={link.to} className="transition-colors text-foreground/70 hover:text-accent" onClick={closeMenu}>{link.label}</Link>}
               {idx < secondaryLinks.length - 1 && (
                 <span className="text-foreground/50 mx-3">|</span>
               )}

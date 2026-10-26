@@ -1,5 +1,13 @@
 # Helix Webpage
 
+## Local sponsor portal
+
+Run `npm run dev:sponsor`, then open http://127.0.0.1:5192/sponsor?account=sponsor. Use `?account=admin` for administration and request follow-up. Bronze, expired, developer and unentitled fixture accounts are documented in [the pilot checklist](docs/features/sponsor-portal-mvp/pilot.md).
+
+This dedicated loopback mode uses the actual sponsor API and SQL against an in-memory database with fictional profiles. It sends no emails and connects to no live service. Restarting the server clears its data. Ordinary development and production require real authentication and authorization.
+
+Architecture, approved scope, implementation evidence and remaining live rollout gates are in [the sponsor portal feature directory](docs/features/sponsor-portal-mvp/verification.md). `npm run check:sponsor-config` validates configuration shape without contacting services or printing values.
+
 ## Local member platform
 
 Run `npm run dev:member`, then open http://127.0.0.1:5190/profile. Home, Profile, Settings and team navigation use the normal member-platform routes.

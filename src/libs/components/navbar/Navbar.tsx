@@ -8,6 +8,8 @@ import { useMemberNav, type MemberLanguageAppearance } from "./member-nav";
 
 gsap.registerPlugin(useGSAP);
 
+const isExternalHref = (to: string) => /^https?:\/\//i.test(to);
+
 const NavLink = ({ to, label, isActive, onClick }: { to: string; label: string; isActive: boolean; onClick?: () => void }) => (
   <Link
     to={to}
@@ -36,16 +38,12 @@ const DesktopNavLink = ({
     : isActive
     ? "text-[#00007A]"
     : "text-gray-800 hover:text-gray-400";
-  return (
-    <Link
-      to={to}
-      className={`text-base lg:text-lg transition-colors whitespace-nowrap ${
-        isActive ? "font-semibold" : "font-medium"
-      } ${color}`}
-    >
-      {label}
-    </Link>
-  );
+  const className = `text-base lg:text-lg transition-colors whitespace-nowrap ${
+    isActive ? "font-semibold" : "font-medium"
+  } ${color}`;
+  return isExternalHref(to)
+    ? <a href={to} className={className}>{label}</a>
+    : <Link to={to} className={className}>{label}</Link>;
 };
 
 const PILL_BACKDROP = "blur(20px) saturate(1.8)";
@@ -402,14 +400,9 @@ export const Navbar = () => {
             </div>
             <div className="mt-auto border-t border-gray-200 py-5 md:py-8 flex flex-col gap-3 md:gap-4">
               {!memberNav && appCtaLinks.map((cta) => (
-                <Link
-                  key={cta.to}
-                  to={cta.to}
-                  className="text-base font-normal text-gray-500 hover:text-gray-900 transition-colors"
-                  onClick={closeDrawer}
-                >
-                  {cta.label}
-                </Link>
+                isExternalHref(cta.to)
+                  ? <a key={cta.to} href={cta.to} className="text-base font-normal text-gray-500 hover:text-gray-900 transition-colors" onClick={closeDrawer}>{cta.label}</a>
+                  : <Link key={cta.to} to={cta.to} className="text-base font-normal text-gray-500 hover:text-gray-900 transition-colors" onClick={closeDrawer}>{cta.label}</Link>
               ))}
               {memberNav && <MemberNavControls appearance="on-light" placement="drawer" />}
             </div>
