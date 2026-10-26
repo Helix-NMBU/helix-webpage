@@ -35,7 +35,7 @@ function AppContent() {
   useEffect(() => { void claimNeonAuthSession(); }, []);
   const host = resolveAppHost(window.location.hostname);
   if (host.application === 'partner') return <PartnerPortal />;
-  if (location.pathname === '/sponsorportal' || location.pathname === '/sponsorportal-login') {
+  if (['/sponsor', '/sponsorportal', '/sponsorportal-login'].includes(location.pathname)) {
     return <PartnerEntry />;
   }
   if (isMemberPlatform()) return <MemberPlatform />;
