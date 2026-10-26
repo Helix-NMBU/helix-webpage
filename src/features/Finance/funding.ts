@@ -289,6 +289,48 @@ export function parseFundingChange(body: Record<string, unknown>): FundingParseR
   return { ok: true, change: { action: "editEarmark", partId, expectedRevision, fields: Object.keys(stored), values: stored } };
 }
 
+export const deleteWithOtherChangesMessage = "Delete on its own, or save your other changes first.";
+export const concurrentFundingRequestMessage = "This request was already used with different details.";
+
+type ComparableFunding = {
+  sourceName: string;
+  ownerName: string;
+  fundingType: string;
+  amountNok: string;
+  status: string;
+  confidence: string;
+  expectedDate: string;
+  receivedDate: string;
+  ownerEmail: string;
+  reportingRequired: boolean;
+  agreementLink: string;
+  note: string;
+};
+
+function blank(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function statusDeleteHasOtherChanges(baseline: ComparableFunding, current: ComparableFunding): boolean {
+  if (current.status !== "deleted" || baseline.status === "deleted") return false;
+  const baseAmount = parseNokToOre(baseline.amountNok);
+  const nextAmount = parseNokToOre(current.amountNok);
+  return baseline.sourceName.trim() !== current.sourceName.trim()
+    || baseline.ownerName.trim() !== current.ownerName.trim()
+    || baseline.fundingType !== current.fundingType
+    || baseAmount === null
+    || nextAmount === null
+    || baseAmount !== nextAmount
+    || (baseline.confidence || null) !== (current.confidence || null)
+    || blank(baseline.expectedDate) !== blank(current.expectedDate)
+    || blank(baseline.receivedDate) !== blank(current.receivedDate)
+    || blank(baseline.ownerEmail) !== blank(current.ownerEmail)
+    || baseline.reportingRequired !== current.reportingRequired
+    || blank(baseline.agreementLink) !== blank(current.agreementLink)
+    || blank(baseline.note) !== blank(current.note);
+}
+
 export function fundingWarnings(excessOre: bigint, linkedItemCount: number): FinanceWarning[] {
   const warnings: FinanceWarning[] = [];
   if (excessOre > 0n) warnings.push({ message: `Earmarked parts exceed this funding by ${formatOre(excessOre)} NOK.` });

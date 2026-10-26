@@ -602,6 +602,105 @@ describe("financing and earmarked funding", () => {
     expect(byStatus).toEqual(byAction);
   });
 
+  it("rejects a delete mixed with another change and writes nothing", async () => {
+    await openSeason();
+    await grant("business");
+    const created = await call({ token: "member", body: addFundingBody() });
+    const fundingId = (created.body as { id: string; revision: number }).id;
+    const revision = (created.body as { revision: number }).revision;
+    const beforeVersion = await version();
+    const before = await sql<{ status: string; note: string | null; revision: number }>(
+      "select status, note, revision from finance.funding where id = $1::uuid",
+      [fundingId],
+    );
+    const beforeAudits = Number((await sql<{ count: string }>(
+      "select count(*)::text as count from finance.audit_log where entity = 'funding' and entity_id = $1",
+      [fundingId],
+    )).rows[0]?.count);
+    const requestId = nextRequestId();
+    const mixed = await call({
+      token: "member",
+      body: {
+        action: "editFunding",
+        requestId,
+        fundingId,
+        expectedRevision: revision,
+        patch: { note: "Changed note", status: "deleted" },
+      },
+    });
+    expect(mixed).toEqual({
+      status: 400,
+      body: {
+        error: "Delete on its own, or save your other changes first.",
+        errors: [{ field: "status", message: "Delete on its own, or save your other changes first." }],
+      },
+    });
+    const after = await sql<{ status: string; note: string | null; revision: number }>(
+      "select status, note, revision from finance.funding where id = $1::uuid",
+      [fundingId],
+    );
+    expect(after.rows).toEqual(before.rows);
+    expect(await version()).toBe(beforeVersion);
+    const afterAudits = Number((await sql<{ count: string }>(
+      "select count(*)::text as count from finance.audit_log where entity = 'funding' and entity_id = $1",
+      [fundingId],
+    )).rows[0]?.count);
+    expect(afterAudits).toBe(beforeAudits);
+    const storedRequests = Number((await sql<{ count: string }>(
+      "select count(*)::text as count from finance.idempotency_keys where request_id = $1::uuid",
+      [requestId],
+    )).rows[0]?.count);
+    expect(storedRequests).toBe(0);
+  });
+
+  it("soft-deletes when a patch changes only the status to deleted", async () => {
+    await openSeason();
+    await grant("business");
+    const created = await call({ token: "member", body: addFundingBody() });
+    const fundingId = (created.body as { id: string; revision: number }).id;
+    const revision = (created.body as { revision: number }).revision;
+    const beforeVersion = await version();
+    const beforeAudits = Number((await sql<{ count: string }>(
+      "select count(*)::text as count from finance.audit_log where entity = 'funding' and entity_id = $1",
+      [fundingId],
+    )).rows[0]?.count);
+    const deleted = await call({
+      token: "member",
+      body: {
+        action: "editFunding",
+        requestId: nextRequestId(),
+        fundingId,
+        expectedRevision: revision,
+        patch: { status: "deleted" },
+      },
+    });
+    expect(deleted.status).toBe(200);
+    const stored = await sql<{ status: string; prior_status: string | null; note: string | null }>(
+      "select status, prior_status, note from finance.funding where id = $1::uuid",
+      [fundingId],
+    );
+    expect(stored.rows[0]).toEqual({ status: "deleted", prior_status: "secured", note: "Synthetic note" });
+    expect(await version()).toBe(beforeVersion + 1);
+    const audits = await sql<{ field_name: string; old_value: string | null; new_value: string | null; reason: string | null }>(
+      `select field_name, old_value, new_value, reason
+       from finance.audit_log
+       where entity = 'funding' and entity_id = $1
+         and occurred_at > (
+           select max(occurred_at) from finance.audit_log
+           where entity = 'funding' and entity_id = $1 and new_value = 'secured' and field_name = 'status'
+         )`,
+      [fundingId],
+    );
+    expect(audits.rows).toEqual([
+      { field_name: "status", old_value: "secured", new_value: "deleted", reason: null },
+    ]);
+    const afterAudits = Number((await sql<{ count: string }>(
+      "select count(*)::text as count from finance.audit_log where entity = 'funding' and entity_id = $1",
+      [fundingId],
+    )).rows[0]?.count);
+    expect(afterAudits - beforeAudits).toBe(1);
+  });
+
   it("restores from the audit trail when the remembered status is missing, otherwise falls back to applied", async () => {
     await openSeason();
     await grant("business");

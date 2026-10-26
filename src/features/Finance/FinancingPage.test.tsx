@@ -249,6 +249,27 @@ describe("financing page", () => {
     }));
   });
 
+  it("keeps the form and asks to delete on its own when another field changed", async () => {
+    await render();
+    await click("Edit funding");
+    await fill("funding-note", "Changed note");
+    await act(async () => document.getElementById("funding-status")!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const option = [...document.querySelectorAll<HTMLElement>("[role='option']")].find((element) => element.textContent === "Deleted");
+    expect(option).toBeTruthy();
+    await act(async () => option!.click());
+    await submit();
+    expect(api.mutate).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(
+      "Could not save financing",
+      "Delete on its own, or save your other changes first.",
+      expect.objectContaining({ variant: "error" }),
+    );
+    expect(container.textContent).toContain("Delete on its own, or save your other changes first.");
+    expect((document.getElementById("funding-note") as HTMLTextAreaElement).value).toBe("Changed note");
+    expect(document.getElementById("funding-status")?.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector("form")).not.toBeNull();
+  });
+
   it("keeps unsaved edits when a newer financing view arrives", async () => {
     await render();
     await click("Edit funding");

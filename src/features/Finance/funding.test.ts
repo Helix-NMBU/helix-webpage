@@ -6,6 +6,7 @@ import {
   isFundingAction,
   parseFundingChange,
   stableJson,
+  statusDeleteHasOtherChanges,
 } from "./funding";
 import { formatOre } from "./money";
 
@@ -114,6 +115,27 @@ describe("funding changes", () => {
     expect(isFundingAction("deleteEarmark")).toBe(false);
     expect(isFundingAction("addEarmark")).toBe(true);
     expect(parseFundingChange({ action: "deleteEarmark", partId, expectedRevision: 1 }).ok).toBe(false);
+  });
+
+  it("treats a delete with another edited field as mixed and an equal amount as unchanged", () => {
+    const stored = {
+      sourceName: "Example source",
+      ownerName: "Example owner",
+      fundingType: "grant",
+      amountNok: "1000.00",
+      status: "secured",
+      confidence: "high",
+      expectedDate: "2027-03-01",
+      receivedDate: "",
+      ownerEmail: "owner@example.test",
+      reportingRequired: true,
+      agreementLink: "https://example.test/agreement",
+      note: "Synthetic note",
+    };
+    expect(statusDeleteHasOtherChanges(stored, { ...stored, status: "deleted", amountNok: "1000" })).toBe(false);
+    expect(statusDeleteHasOtherChanges(stored, { ...stored, status: "deleted" })).toBe(false);
+    expect(statusDeleteHasOtherChanges(stored, { ...stored, status: "deleted", note: " Changed note " })).toBe(true);
+    expect(statusDeleteHasOtherChanges(stored, { ...stored, status: "rejected", note: "Changed note" })).toBe(false);
   });
 
   it("keeps an edit that only changes one stored field", () => {

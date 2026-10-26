@@ -16,9 +16,11 @@ import {
   FUNDING_CONFIDENCE,
   FUNDING_STATUSES,
   FUNDING_TYPES,
+  deleteWithOtherChangesMessage,
   fundingStatusLabel,
   fundingTypeLabel,
   parseFundingChange,
+  statusDeleteHasOtherChanges,
 } from "./funding";
 import type { FinanceFieldError, FundingPartRecord, FundingRecord, FundingStatus, FundingType } from "./types";
 
@@ -145,6 +147,19 @@ export function FinancingPage() {
         action: { label: "Review fields", onClick: () => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus() },
       });
       return;
+    }
+    if (editor.kind === "funding" && editor.mode === "edit") {
+      const record = records.find((item) => item.id === editor.fundingId);
+      if (record && statusDeleteHasOtherChanges(fundingValues(record), editor.values)) {
+        focusErrors([{ field: "status", message: deleteWithOtherChangesMessage }]);
+        notify("Could not save financing", deleteWithOtherChangesMessage, {
+          id: "financing-delete-with-changes",
+          variant: "error",
+          href: null,
+          action: { label: "Review fields", onClick: () => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus() },
+        });
+        return;
+      }
     }
     setSaving(true);
     try {

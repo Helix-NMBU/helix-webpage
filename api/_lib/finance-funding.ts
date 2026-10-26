@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { FinanceError } from "./finance-error.js";
-import { fundingWarnings, parseFundingChange, stableJson } from "../../src/features/Finance/funding.js";
+import { concurrentFundingRequestMessage, deleteWithOtherChangesMessage, fundingWarnings, parseFundingChange, stableJson } from "../../src/features/Finance/funding.js";
 import type { CvDatabase } from "./member-cv-service.js";
 import type { FinanceMutationResult } from "./finance-types.js";
 
@@ -35,7 +35,10 @@ export function mapFundingDatabaseError(error: unknown): FinanceError {
   if (message.includes("finance:REVISION_CONFLICT")) return new FinanceError(409, "This record was updated by someone else. Reload the page and try again.");
   if (message.includes("finance:FUNDING_NOT_FOUND")) return new FinanceError(404, "Funding was not found.");
   if (message.includes("finance:PART_NOT_FOUND")) return new FinanceError(404, "The earmarked part was not found.");
-  if (message.includes("finance:IDEMPOTENCY_CONFLICT")) return new FinanceError(409, "This request was already used with different details.");
+  if (message.includes("finance:IDEMPOTENCY_CONFLICT")) return new FinanceError(409, concurrentFundingRequestMessage);
+  if (message.includes(deleteWithOtherChangesMessage)) {
+    return new FinanceError(400, deleteWithOtherChangesMessage, [{ field: "status", message: deleteWithOtherChangesMessage }]);
+  }
   if (message.includes("finance:ALREADY_DELETED")) return new FinanceError(409, "This funding is already deleted.");
   if (message.includes("finance:NOT_DELETED")) return new FinanceError(409, "This funding is not deleted.");
   if (message.includes("finance:INVALID") || code === "22007" || code === "22008" || code === "22023" || code === "22P02" || code === "23502" || code === "23514") {

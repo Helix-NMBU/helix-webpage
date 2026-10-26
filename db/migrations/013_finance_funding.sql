@@ -48,7 +48,8 @@ begin
 end;
 $fn$;
 
--- Soft-delete used by deleteFunding and by an edit that sets status to deleted.
+-- Soft-delete used by deleteFunding and by an edit whose only change is status deleted.
+-- A delete mixed with any other changed field is rejected before this runs.
 -- Does not bump the view version; the caller does that once for the whole change.
 create or replace function finance.soft_delete_funding(p_actor_member_id uuid, p_funding_id uuid)
 returns integer
@@ -370,6 +371,20 @@ begin
       raise exception 'finance:INVALID' using errcode = '22023';
     end if;
     if status = 'deleted' and funding_row.status <> 'deleted' then
+      if source_name is distinct from funding_row.source_name
+        or owner_name is distinct from funding_row.owner_name
+        or funding_type is distinct from funding_row.funding_type
+        or amount_ore is distinct from funding_row.amount_ore
+        or confidence is distinct from funding_row.confidence
+        or expected_date is distinct from funding_row.expected_date
+        or received_date is distinct from funding_row.received_date
+        or owner_email is distinct from funding_row.owner_email
+        or reporting_required is distinct from funding_row.reporting_required
+        or agreement_link is distinct from funding_row.agreement_link
+        or note is distinct from funding_row.note
+      then
+        raise exception 'finance:INVALID Delete on its own, or save your other changes first.' using errcode = '22023';
+      end if;
       result_revision := finance.soft_delete_funding(p_actor_member_id, funding_row.id);
       target_funding := funding_row.id;
       result_id := funding_row.id;
