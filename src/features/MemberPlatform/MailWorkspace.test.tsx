@@ -188,7 +188,10 @@ describe("mail workspace", () => {
         await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${mode}"]`)!.click());
         const dialog = document.querySelector('[role="dialog"]')!;
         expect(dialog.querySelectorAll('[aria-label="Your email signature"]')).toHaveLength(1);
-        expect(dialog.querySelector<HTMLIFrameElement>('[aria-label="Your email signature"] iframe')!.srcdoc).toContain("Åse Example");
+        const signature = dialog.querySelector('[aria-label="Your email signature"]')!;
+        expect(signature.textContent).toContain("Åse Example");
+        expect(signature.querySelector("iframe")).toBeNull();
+        expect(signature.querySelector('a[href="https://www.linkedin.com/company/helix-nmbu"]')?.textContent).toBe("LinkedIn");
         expect(dialog.querySelector('[aria-label="Loading signature"]')).toBeNull();
         expect(dialog.querySelector<HTMLTextAreaElement>('[aria-label="Message"]')!.value).toBe("");
         if (mode !== "Forward") await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
