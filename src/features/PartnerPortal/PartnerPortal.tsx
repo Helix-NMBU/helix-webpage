@@ -128,19 +128,20 @@ function PartnerPortalContent() {
       action: { label: "Try again", onClick: () => { void load(); } } });
   }
 
-  return <div className="member-platform partner-portal min-h-dvh bg-background text-foreground">
-    <header className="border-b"><div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
-      {hasSession ? <a href="https://www.helixnmbu.no" className="text-lg font-medium tracking-tight">Helix</a> : <span aria-hidden="true" />}
-      {hasSession
-        ? <Button variant="outline" disabled={busy} onClick={() => { void signOut(); }}>Sign out</Button>
-        : <a href="https://www.helixnmbu.no" className="text-sm underline underline-offset-4">Go back to the webpage</a>}
-    </div></header>
+  return <div className={`member-platform partner-portal min-h-dvh bg-background text-foreground${hasSession ? "" : " partner-login-scene"}`}>
+    {hasSession ? <header className="border-b"><div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
+      <a href="https://www.helixnmbu.no" className="text-lg font-medium tracking-tight">Helix</a>
+      <Button variant="outline" disabled={busy} onClick={() => { void signOut(); }}>Sign out</Button>
+    </div></header> : <>
+      <div aria-hidden="true" className="partner-login-grid" />
+      <a href="https://www.helixnmbu.no" className="partner-login-back">Go back to the webpage</a>
+    </>}
     {loading ? <main className="mx-auto max-w-6xl p-6" aria-busy="true"><span className="sr-only">Loading partner portal</span></main>
       : session ? <PartnerDirectoryView key={session.user.email} session={session} onAccessLost={accessLost} />
-      : <main className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
-        <div className="space-y-3"><h1 className="text-3xl font-medium tracking-tight">Partner portal</h1>
-          <p className="text-sm text-muted-foreground">Meet Helix members and explore the CVs they have chosen to share.</p></div>
-        <Card className="shadow-none"><CardHeader><h2 className="font-medium">{otpEmail ? "Enter your sign-in code" : "Sign in with email"}</h2>
+      : <main className="partner-login-main">
+        <h1 className="partner-login-title">Sponsor portal</h1>
+        <div className="partner-login-form">
+        <Card className="partner-login-card"><CardHeader><h2 className="font-medium">{otpEmail ? "Enter your sign-in code" : "Sign in with email"}</h2>
           <CardDescription>{otpEmail ? `If this address can sign in, enter the code for ${otpEmail}.` : "Use the email address in your partner invitation. We'll send you a one-time code."}</CardDescription>
         </CardHeader><CardContent>
           {otpEmail ? <form className="space-y-5" onSubmit={(event) => { void verifyCode(event); }}>
@@ -156,7 +157,8 @@ function PartnerPortalContent() {
             <Button className="w-full" type="submit" disabled={busy || now < resendAt}>{busy ? "Requesting code…" : "Send sign-in code"}</Button>
           </form>}
         </CardContent></Card>
-        <p className="text-sm text-muted-foreground">Partner access is by invitation. For access, <a className="underline underline-offset-4" href="mailto:post@helixnmbu.no">contact Helix</a>.</p>
+        <p className="partner-login-footer">Partner access is by invitation. For access, <a href="mailto:post@helixnmbu.no">contact Helix</a>.</p>
+        </div>
       </main>}
   </div>;
 }
