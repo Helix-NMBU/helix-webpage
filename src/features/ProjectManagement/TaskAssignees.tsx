@@ -24,18 +24,19 @@ function MemberAvatar({ member }: { member: ProjectMember }) {
   </Avatar>;
 }
 
-export function AssigneeAvatars({ assigneeIds, members, maxVisible = 3 }: { assigneeIds: string[]; members: ProjectMember[]; maxVisible?: number }) {
+export function AssigneeAvatars({ assigneeIds, members, maxVisible = 3, assignmentRole = "assignee", showNames = false }: { assigneeIds: string[]; members: ProjectMember[]; maxVisible?: number; assignmentRole?: "assignee" | "lead"; showNames?: boolean }) {
   const assigned = assigneeIds.map(id => members.find(member => member.id === id) ?? { id, name: "Inactive member" });
-  if (!assigned.length) return <span className="text-sm text-muted-foreground">Unassigned</span>;
+  if (!assigned.length) return <span className="text-sm text-muted-foreground">{assignmentRole === "lead" ? "No leads" : "Unassigned"}</span>;
   const remaining = assigned.slice(maxVisible);
-  return <AvatarGroup role="group" aria-label={`Assigned to ${assigned.map(member => member.name).join(", ")}`}>
+  const avatars = <AvatarGroup role="group" aria-label={`${assignmentRole === "lead" ? "Leads:" : "Assigned to"} ${assigned.map(member => member.name).join(", ")}`}>
     {assigned.slice(0, maxVisible).map(member => <MemberAvatar key={member.id} member={member} />)}
     {remaining.length > 0 && <AvatarGroupCount role="img" aria-label={remaining.map(member => member.name).join(", ")} title={remaining.map(member => member.name).join(", ")}>+{remaining.length}</AvatarGroupCount>}
   </AvatarGroup>;
+  return showNames ? <div className="inline-flex max-w-64 items-center gap-2">{avatars}<span className="truncate text-sm" title={assigned.map(member => member.name).join(", ")} aria-hidden="true">{assigned.map(member => member.name).join(", ")}</span></div> : avatars;
 }
 
-export function AssigneePicker({ id, value, members, onChange, disabled = false }: {
-  id: string; value: string[]; members: ProjectMember[]; onChange: (ids: string[]) => void; disabled?: boolean;
+export function AssigneePicker({ id, value, members, onChange, disabled = false, assignmentRole = "assignee" }: {
+  id: string; value: string[]; members: ProjectMember[]; onChange: (ids: string[]) => void; disabled?: boolean; assignmentRole?: "assignee" | "lead";
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -46,17 +47,17 @@ export function AssigneePicker({ id, value, members, onChange, disabled = false 
     if (disabled) return;
     if (value.includes(memberId)) onChange(value.filter(key => key !== memberId));
     else if (value.length < MAX_TASK_ASSIGNEES) onChange([...value, memberId]);
-    else notify("Assignment limit reached", `A task can have up to ${MAX_TASK_ASSIGNEES} assignees.`, { variant: "warning", href: null });
+    else notify("Assignment limit reached", `A ${assignmentRole === "lead" ? "milestone" : "task"} can have up to ${MAX_TASK_ASSIGNEES} ${assignmentRole === "lead" ? "leads" : "assignees"}.`, { variant: "warning", href: null });
   }
   return <Popover open={open} onOpenChange={next => { if (!disabled) { setOpen(next); if (!next) setSearch(""); } }}>
-    <PopoverTrigger asChild><Button id={id} type="button" variant="outline" disabled={disabled} aria-label="Choose task assignees" aria-describedby={`${id}-summary`} className="h-9 w-full justify-start gap-2 font-normal">
-      {value.length ? <><AssigneeAvatars assigneeIds={value} members={members} maxVisible={2} /><span className="truncate text-xs">{value.length === 1 ? options.find(member => member.id === value[0])?.name : `${value.length} assignees`}</span></> : "Assign to…"}
+    <PopoverTrigger asChild><Button id={id} type="button" variant="outline" disabled={disabled} aria-label={assignmentRole === "lead" ? "Choose milestone leads" : "Choose task assignees"} aria-describedby={`${id}-summary`} className="h-9 w-full justify-start gap-2 font-normal">
+      {value.length ? <><AssigneeAvatars assigneeIds={value} members={members} maxVisible={2} assignmentRole={assignmentRole} /><span className="truncate text-xs">{value.length === 1 ? options.find(member => member.id === value[0])?.name : `${value.length} ${assignmentRole === "lead" ? "leads" : "assignees"}`}</span></> : assignmentRole === "lead" ? "Add leads…" : "Assign to…"}
     </Button></PopoverTrigger>
-    <span id={`${id}-summary`} className="sr-only">{value.length ? `Assigned to ${value.map(key => options.find(member => member.id === key)?.name).join(", ")}.` : "Unassigned."}</span>
+    <span id={`${id}-summary`} className="sr-only">{value.length ? `${assignmentRole === "lead" ? "Leads:" : "Assigned to"} ${value.map(key => options.find(member => member.id === key)?.name).join(", ")}.` : assignmentRole === "lead" ? "No leads." : "Unassigned."}</span>
     <PopoverContent align="start" className="w-72 p-2"><div className="p-1"><Input autoFocus aria-label="Search members to assign" placeholder="Search members…" value={search} onChange={event => setSearch(event.target.value)} /></div>
-      <div className="mt-1 max-h-64 overflow-y-auto" role="group" aria-label="Task assignees">
+      <div className="mt-1 max-h-64 overflow-y-auto" role="group" aria-label={assignmentRole === "lead" ? "Milestone leads" : "Task assignees"}>
         {filtered.map(member => <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent">
-          <Checkbox aria-label={`Assign ${member.name}`} checked={value.includes(member.id)} disabled={disabled} onCheckedChange={() => toggle(member.id)} /><MemberAvatar member={member} /><span className="truncate">{member.name}</span>
+          <Checkbox aria-label={`Assign ${member.name}${assignmentRole === "lead" ? " as lead" : ""}`} checked={value.includes(member.id)} disabled={disabled} onCheckedChange={() => toggle(member.id)} /><MemberAvatar member={member} /><span className="truncate">{member.name}</span>
         </label>)}
         {!filtered.length && <p className="px-2 py-4 text-sm text-muted-foreground">No members found.</p>}
       </div>

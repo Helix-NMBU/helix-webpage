@@ -8,6 +8,7 @@ import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import ProjectManagement from "./ProjectManagement";
 import { initialLocalWorkspace } from "./local-repository";
 import { createProjectRepository, ProjectRequestError } from "./repository";
+import { addDays, osloDate } from "./model";
 import { CvRequestError } from "../MemberCV/repository";
 
 function NotificationProbe() {
@@ -55,6 +56,7 @@ describe("project management interface", () => {
     await act(async () => { button("Timeline").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })); });
     expect(container.textContent).toContain("Scheduled dates come from task deadlines");
     expect(container.textContent).toContain("Chassis ready for assembly");
+    expect(container.querySelector('[aria-label="Chassis ready for assembly: 1 of 3 tasks complete, 33%"]')?.getAttribute("aria-valuenow")).toBe("33");
   });
   it("creates a task through the repository and closes the editor on success", async () => {
     await open("marketing"); await click("New task"); await fill("new-task-title", "Publish sponsor interview");
@@ -180,13 +182,15 @@ describe("project management interface", () => {
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
   });
   it("lets a scoped Lead without project-management permission update another member's status in Overview", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: ["production"] });
+    const workspace = initialLocalWorkspace();
+    workspace.tasks = workspace.tasks.map(task => task.title === "Chassis ready for assembly" ? { ...task, deadline: addDays(osloDate(), 5), assigneeIds: [workspace.members[1].id] } : task);
+    load.mockResolvedValue({ ...workspace, canManage: false, taskLeadCategories: ["production"] });
     await open("overview");
-    await click("Assemble suspension mounts");
+    await click("Chassis ready for assembly");
     expect(document.getElementById("task-assignee")?.hasAttribute("disabled")).toBe(true);
     expect(document.getElementById("task-status")?.hasAttribute("disabled")).toBe(false);
     await click("Save task");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "in_progress" }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "todo" }));
   });
   it("can hide completed work through the personal view settings", async () => {
     await open("overview", true);
@@ -222,6 +226,7 @@ describe("project management interface", () => {
     expect(container.querySelector('.tabler-icon-cube')).not.toBeNull();
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label^="See tasks for project Chassis & assembly,"]')!.click());
     const tables = container.querySelectorAll("table");
+    expect(document.getElementById("task-project-filter")?.textContent).toBe("Chassis & assembly");
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
     expect(tables[tables.length - 1].textContent).not.toContain("Publish workshop update");
     expect(tables[tables.length - 1].textContent).not.toContain("Submit competition registration");
@@ -235,17 +240,19 @@ describe("project management interface", () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[aria-label^="See tasks for project Updated project,"]')).not.toBeNull();
   });
-  it("updates Overview progress from a completed task without a refresh", async () => {
+  it("updates Overview progress when returning after a task completion", async () => {
     const next = initialLocalWorkspace();
     next.tasks = next.tasks.map(task => task.title === "Confirm material delivery" ? { ...task, status: "done" as const } : task);
     mutate.mockResolvedValueOnce(next);
-    await open(); await click("Confirm material delivery");
+    const router = await open("production"); await click("Confirm material delivery");
     await act(async () => document.getElementById("task-status")!.click());
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === "Done")!.click());
     await click("Save task");
+    load.mockResolvedValueOnce(next);
+    await act(async () => router.navigate("/project-management/overview"));
     expect(container.querySelector('[aria-label="Chassis & assembly: 2 of 3 tasks complete, 67%"]')).not.toBeNull();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed2");
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledTimes(2);
   });
   it("hides project editing controls from members without management access", async () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
@@ -253,6 +260,90 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label="Create project"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Edit project"]')).toBeNull();
     expect(container.querySelector('[aria-label^="See tasks for project"]')).not.toBeNull();
+  });
+  it("places Upcoming Milestones directly after the overview widgets", async () => {
+    await open();
+    expect(container.textContent).not.toContain("Projects in S27");
+    expect(container.textContent).not.toContain("Department progress");
+    expect(container.textContent).not.toContain("Latest open task or milestone deadline");
+    expect(container.querySelector('[data-project-progress]')?.nextElementSibling?.textContent).toMatch(/^Upcoming Milestones/);
+  });
+  it("always sorts the work list by earliest deadline with undated work last", async () => {
+    const workspace = initialLocalWorkspace();
+    const late = workspace.tasks.find(task => task.title === "Chassis ready for assembly")!;
+    const early = workspace.tasks.find(task => task.title === "Confirm material delivery")!;
+    const undated = { ...workspace.tasks.find(task => task.title === "Assemble suspension mounts")!, deadline: null };
+    load.mockResolvedValue({ ...workspace, tasks: [late, undated, early] });
+    await open("production");
+    const tables = container.querySelectorAll("table");
+    const table = tables[tables.length - 1];
+    expect([...table.querySelectorAll("tbody tr")].map(row => row.querySelector("button")?.textContent)).toEqual([early.title, late.title, undated.title]);
+    expect(table.querySelector('[aria-sort="ascending"]')?.textContent).toBe("Target date");
+  });
+  it("shows milestone completion from every linked active task, including children outside the date window", async () => {
+    const workspace = initialLocalWorkspace();
+    workspace.tasks = workspace.tasks.map(task => task.title === "Assemble suspension mounts" ? { ...task, status: "cancelled" as const } : task.kind === "milestone" ? { ...task, deadline: addDays(osloDate(), 5), assigneeIds: workspace.members.map(member => member.id) } : task);
+    load.mockResolvedValue(workspace);
+    await open();
+    const row = button("Chassis ready for assembly").closest("tr")!;
+    expect(row.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
+    expect(row.querySelector('[aria-label="1 of 2 tasks complete"]')?.textContent).toBe("1 / 2");
+    expect(row.querySelectorAll('[role="progressbar"] circle')).toHaveLength(2);
+    expect(row.querySelector('[aria-label="Leads: Alex Example, Sam Example"]')).not.toBeNull();
+    expect(row.querySelector('.tabler-icon-diamonds')).not.toBeNull();
+  });
+  it("limits Upcoming Milestones to open goals due today through day 30", async () => {
+    const workspace = initialLocalWorkspace();
+    const goal = workspace.tasks.find(task => task.kind === "milestone")!;
+    const today = osloDate();
+    load.mockResolvedValue({ ...workspace, tasks: [
+      { ...goal, id: "day31", title: "Beyond window", deadline: addDays(today, 31) },
+      { ...goal, id: "day30", title: "Due in 30 days", deadline: addDays(today, 30) },
+      { ...goal, id: "today", title: "Due today", deadline: today },
+      { ...goal, id: "past", title: "Overdue milestone", deadline: addDays(today, -1) },
+      { ...goal, id: "undated", title: "Undated milestone", deadline: null },
+      { ...goal, id: "done", title: "Completed milestone", deadline: addDays(today, 1), status: "done" },
+      { ...goal, id: "cancelled", title: "Cancelled milestone", deadline: addDays(today, 2), status: "cancelled" },
+      { ...workspace.tasks[1], title: "An ordinary task", deadline: addDays(today, 1) },
+    ] });
+    await open();
+    const tables = container.querySelectorAll("table");
+    const table = tables[tables.length - 1];
+    expect([...table.querySelectorAll("tbody tr")].map(row => row.querySelector("button")?.textContent)).toEqual(["Due today", "Due in 30 days"]);
+    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Priority", "Leads", "Target date", "Tasks", "Status"]);
+    expect(container.querySelector('[aria-label="Search tasks"]')).toBeNull();
+    expect(button("Timeline")).toBeUndefined();
+  });
+  it("creates a milestone with multiple leads using the member picker", async () => {
+    await open("marketing"); await click("New milestone");
+    await fill("new-task-title", "Partner campaign launch");
+    await click("Due date"); await fill("new-task-deadline", "2026-12-15");
+    await click("15 Dec 2026");
+    await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+    const picker = document.getElementById("new-task-assignee")!;
+    expect(picker.getAttribute("aria-label")).toBe("Choose milestone leads");
+    await act(async () => picker.click());
+    for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${name} as lead"]`)!.click());
+    await click("Done");
+    expect(picker.textContent).toContain("2 leads");
+    await click("Save");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ kind: "milestone", assigneeIds: initialLocalWorkspace().members.map(member => member.id) }) }));
+  });
+  it("edits milestone leads without dropping the remaining lead", async () => {
+    const workspace = initialLocalWorkspace();
+    workspace.tasks = workspace.tasks.map(task => task.kind === "milestone" ? { ...task, assigneeIds: workspace.members.map(member => member.id) } : task);
+    load.mockResolvedValue(workspace);
+    await open("production");
+    // The area project card also contains the milestone; use the table row's button.
+    const tables = container.querySelectorAll("table");
+    const table = tables[tables.length - 1];
+    await act(async () => [...table.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Chassis ready for assembly")!.click());
+    const picker = document.getElementById("task-assignee")!;
+    expect(document.querySelector('label[for="task-assignee"]')?.textContent).toBe("Leads");
+    await act(async () => picker.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example as lead"]')!.click());
+    await click("Done"); await click("Save task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ kind: "milestone", assigneeIds: [workspace.viewerId] }) }));
   });
   it("creates a dated milestone in its authorized work area", async () => {
     await open("marketing"); await click("New milestone");
@@ -297,8 +388,8 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
   });
 
-  it("includes completed children when selecting a milestone through the list filter", async () => {
-    await open();
+  it("includes completed children when selecting a milestone through the work-area list filter", async () => {
+    await open("production");
     await act(async () => document.getElementById("task-milestone-filter")!.click());
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "Chassis ready for assembly")!;
     await act(async () => option.click());
@@ -313,8 +404,8 @@ describe("project management interface", () => {
     load.mockResolvedValue({ ...workspace, tasks: [legacy] });
     await open();
     await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.startsWith("Needs organization"))!.click());
-    expect(container.textContent).toContain(legacy.title);
-    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Organize ${legacy.title}"]`)!.click());
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(legacy.title);
+    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Organize ${legacy.title}"]`)!.click());
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose a project and milestone");
     expect(document.getElementById("task-project")?.hasAttribute("disabled")).toBe(false);
   });
@@ -324,8 +415,8 @@ describe("project management interface", () => {
     await open("overview", true); await click("Confirm material delivery"); await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
   });
-  it("shows milestones and their tasks nested inside the department project", async () => {
-    await open();
+  it("shows milestones and their tasks nested inside the department project in its work area", async () => {
+    await open("production");
     const project = container.querySelector('[aria-label="Milestones in Chassis & assembly"]');
     expect(project?.textContent).toContain("Chassis ready for assembly");
     expect(project?.textContent).toContain("Confirm material delivery");
@@ -333,7 +424,7 @@ describe("project management interface", () => {
   });
 
   it("clears an unrelated search when opening a milestone from a project card", async () => {
-    await open();
+    await open("production");
     const search = container.querySelector<HTMLInputElement>('[aria-label="Search tasks"]')!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "no matching task"); search.dispatchEvent(new Event("input", { bubbles: true })); });
     const project = container.querySelector('[aria-label="Milestones in Chassis & assembly"]')!;

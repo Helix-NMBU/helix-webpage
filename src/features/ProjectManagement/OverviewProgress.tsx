@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/ca
 import { addDays, formatDate, osloDate, summarize } from "./model";
 import { isOrganized } from "./hierarchy";
 import { progressSeries, progressStepPath } from "./progress";
+import { ProgressRing } from "./ProgressRing";
 import { type Project, type ProjectWorkspace, type Task } from "./types";
 
 const series = [
@@ -14,12 +15,6 @@ const series = [
 ] as const;
 const dayNumber = (date: string) => Date.parse(`${date}T12:00:00Z`) / 86400000;
 const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
-
-function ProgressRing({ done, total, percent, label }: { done: number; total: number; percent: number; label: string }) {
-  return <span className="inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground" aria-label={`${label}: ${done} of ${total} tasks complete, ${percent}%`}>
-    <svg viewBox="0 0 20 20" className="size-4 -rotate-90" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted" /><circle cx="10" cy="10" r="8" fill="none" stroke="var(--progress-completed)" strokeWidth="2" pathLength="100" strokeDasharray={`${percent} 100`} strokeLinecap="round" /></svg><span className="tabular-nums">{percent}% <span className="ml-1">of {total}</span></span>
-  </span>;
-}
 
 function ProgressChart({ workspace }: { workspace: ProjectWorkspace }) {
   const patternId = useId().replace(/:/g, "");
@@ -77,7 +72,7 @@ export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrga
     <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3><ProgressBreakdown rows={areaRows} /></section></CardContent></Card>
     <Card className="gap-3 py-5"><CardHeader className="flex flex-row items-center justify-between px-5"><CardTitle className="text-sm font-medium text-muted-foreground">Projects <span className="ml-1 tabular-nums">{projects.length}</span></CardTitle>{workspace.canManage && <Button size="icon" variant="ghost" className="-my-2 size-7" disabled={busy} aria-label="Create project" onClick={onCreateProject}><IconPlus aria-hidden="true" className="size-4" /></Button>}</CardHeader><CardContent className="px-2">
       {projects.map(project => { const progress = summarize(workspace.tasks.filter(task => task.projectId === project.id)); return <div key={project.id} className="group flex items-center gap-1 rounded-md px-2 hover:bg-muted/50"><button className="flex min-w-0 flex-1 items-center gap-2 py-3 text-left" onClick={() => onSelectProject(project.id)} aria-label={`See tasks for project ${project.name}, ${progress.done} of ${progress.total} tasks complete, ${progress.percent}%`}><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1"><span className="block truncate text-sm">{project.name}</span><span className="mt-1 block text-xs text-muted-foreground">{project.departments.join(", ") || "No department"} · {formatDate(project.deadline)}</span></span><ProgressRing {...progress} label={project.name} /></button>{workspace.canManage && <Button size="icon" variant="ghost" className="size-7 shrink-0" disabled={busy} aria-label={`Edit project ${project.name}`} onClick={() => onOpenProject(project)}><IconDots aria-hidden="true" className="size-4" /></Button>}</div>; })}
-      {!projects.length && <p className="px-3 py-4 text-sm text-muted-foreground">No projects yet. Add a project to track its milestones and tasks.</p>}
+      {!projects.length && <p className="px-3 py-4 text-sm text-muted-foreground">No projects yet. A project and milestone are needed before adding tasks.</p>}
       <button className="mt-1 flex w-full items-center justify-between gap-3 rounded-md border-t px-3 py-3 text-left text-sm text-muted-foreground hover:bg-muted/50" onClick={onNeedsOrganization}><span>Needs organization</span><span className="text-xs tabular-nums">{unorganized.length} item{unorganized.length === 1 ? "" : "s"}</span></button>
       <p className="px-3 pt-3 text-xs leading-relaxed text-muted-foreground">Progress uses completed project tasks. Cancelled tasks are excluded.</p>
     </CardContent></Card>
