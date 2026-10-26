@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconDiamonds } from "@tabler/icons-react";
+import { IconAntennaBars2, IconAntennaBars3, IconAntennaBars4, IconCalendar, IconDiamonds, IconExclamationCircle } from "@tabler/icons-react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Badge } from "@libs/components/ui/badge";
@@ -24,6 +24,9 @@ import { ProgressRing } from "./ProgressRing";
 import { ProjectMilestones } from "./ProjectMilestones";
 import { OverviewProgress } from "./OverviewProgress";
 
+const priorityIcons = { low: IconAntennaBars2, normal: IconAntennaBars3, high: IconAntennaBars4, urgent: IconExclamationCircle };
+const targetDateFormatter = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
 export const PROJECT_SECTIONS = [{ id: "overview", title: "Overview" }, ...TASK_CATEGORIES.map(id => ({ id, title: CATEGORY_LABELS[id] }))];
 
 function ProgressBar({ done, total, percent, label = "Task completion" }: { done: number; total: number; percent: number; label?: string }) {
@@ -38,12 +41,12 @@ function WorkItemStatus({ task, workspace, deliveries = false }: { task: Task; w
 function TaskTable({ tasks, workspace, deliveries = false, milestonesOnly = false, onOpen, onOrganize }: { tasks: Task[]; workspace: ProjectWorkspace; deliveries?: boolean; milestonesOnly?: boolean; onOpen: (task: Task) => void; onOrganize: (task: Task) => void }) {
   const today = osloDate();
   return <Table><TableHeader><TableRow><TableHead className="min-w-64">{milestonesOnly ? "Milestone" : "Task"}</TableHead>{deliveries && <TableHead>Partner</TableHead>}<TableHead>Priority</TableHead><TableHead>{milestonesOnly ? "Leads" : "Leads / Assignees"}</TableHead><TableHead aria-sort="ascending">Target date</TableHead><TableHead>Tasks</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-    <TableBody>{tasks.map(task => { const progress = task.kind === "milestone" ? milestoneProgress(workspace.tasks, task.id) : null; return <TableRow key={task.id}>
+    <TableBody>{tasks.map(task => { const progress = task.kind === "milestone" ? milestoneProgress(workspace.tasks, task.id) : null; const PriorityIcon = priorityIcons[task.priority]; return <TableRow key={task.id}>
       <TableCell className="max-w-md whitespace-normal py-4"><button className="inline-flex items-center gap-2 text-left font-medium underline-offset-4 hover:underline focus-visible:underline" onClick={() => onOpen(task)}>{task.kind === "milestone" && <IconDiamonds className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}{task.title}</button><div className="mt-1 text-xs text-muted-foreground">{!milestonesOnly && task.kind === "milestone" ? "Milestone · " : ""}{workspace.projects.find(project => project.id === task.projectId)?.name ?? CATEGORY_LABELS[task.category]}{task.kind === "task" && task.milestoneId && ` · ${workspace.tasks.find(item => item.id === task.milestoneId)?.title ?? "Milestone"}`}</div>{!isOrganized(task, workspace) && <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground"><span>Needs organization</span>{workspace.taskLeadCategories.includes(task.category) && <button type="button" className="underline underline-offset-4" aria-label={`Organize ${task.title}`} onClick={() => onOrganize(task)}>Organize</button>}</div>}{task.status === "blocked" && task.blockedReason && <p className="mt-1 max-w-sm text-xs text-muted-foreground">{task.blockedReason}</p>}</TableCell>
       {deliveries && <TableCell>{task.partnerName}</TableCell>}
-      <TableCell className="capitalize">{task.priority}</TableCell>
+      <TableCell className="capitalize">{milestonesOnly ? <span className="inline-flex text-muted-foreground" role="img" aria-label={`${task.priority} priority`} title={`${task.priority[0].toUpperCase()}${task.priority.slice(1)} priority`}><PriorityIcon aria-hidden="true" className="size-4" /></span> : task.priority}</TableCell>
       <TableCell><AssigneeAvatars assigneeIds={task.assigneeIds} members={workspace.members} assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} showNames /></TableCell>
-      <TableCell className="whitespace-nowrap"><span className={taskUrgency(task, today) === "overdue" ? "text-destructive" : ""}>{formatDate(task.deadline)}</span>{!milestonesOnly && taskUrgency(task, today) && <div className="mt-1 text-xs text-muted-foreground">{taskUrgency(task, today) === "overdue" ? "Overdue" : "Due within 7 days"}</div>}</TableCell>
+      <TableCell className="whitespace-nowrap"><span className={taskUrgency(task, today) === "overdue" ? "text-destructive" : ""}>{milestonesOnly && task.deadline ? <span className="inline-flex items-center gap-2"><IconCalendar aria-hidden="true" className="size-4 text-muted-foreground" /><time dateTime={task.deadline} title={formatDate(task.deadline)}>{targetDateFormatter.format(new Date(`${task.deadline}T12:00:00Z`))}</time></span> : formatDate(task.deadline)}</span>{!milestonesOnly && taskUrgency(task, today) && <div className="mt-1 text-xs text-muted-foreground">{taskUrgency(task, today) === "overdue" ? "Overdue" : "Due within 7 days"}</div>}</TableCell>
       <TableCell className="tabular-nums">{progress ? <span aria-label={`${progress.done} of ${progress.total} tasks complete`}>{progress.done} / {progress.total}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
       <TableCell><WorkItemStatus task={task} workspace={workspace} deliveries={deliveries} /></TableCell>
     </TableRow>; })}</TableBody></Table>;
