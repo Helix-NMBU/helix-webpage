@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { initialLocalWorkspace } from "./local-repository";
-import { compatibleMilestones, milestoneProgress, progressCounts, progressEvent, progressSeries, updateTaskDraft } from "./progress";
+import { compatibleMilestones, milestoneProgress, progressCounts, progressEvent, progressSeries, progressStepPath, updateTaskDraft } from "./progress";
 
 describe("observed task progress", () => {
   const task = initialLocalWorkspace().tasks[0];
@@ -21,6 +21,10 @@ describe("observed task progress", () => {
       { date: "2026-10-25", scope: 2, started: 1, completed: 1 },
       { date: "2026-10-26", scope: 1, started: 0, completed: 0 },
     ]);
+  });
+  it("holds the previous observation steady until the next change rather than interpolating quiet days", () => {
+    const points = [{ date: "2026-10-01", scope: 1, started: 0, completed: 0 }, { date: "2026-10-10", scope: 1, started: 1, completed: 1 }];
+    expect(progressStepPath(points, "completed", date => date === "2026-10-01" ? 0 : 9, value => 10 - value * 10)).toBe("M0,10 H9 V0");
   });
   it("does not infer history from scheduled dates or draw future observations", () => {
     const current = { ...task, startDate: "2026-09-01", deadline: "2026-12-01" };

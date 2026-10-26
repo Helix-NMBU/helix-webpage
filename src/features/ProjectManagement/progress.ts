@@ -47,3 +47,7 @@ export function updateTaskDraft<K extends keyof TaskInput>(draft: TaskInput, key
   if (next.kind === "milestone" || ((key === "projectId" || key === "kind") && next.milestoneId && !compatibleMilestones(tasks, next).some(item => item.id === next.milestoneId))) next.milestoneId = null;
   return next;
 }
+
+export function progressStepPath(points: ReturnType<typeof progressSeries>, key: "scope" | "started" | "completed", x: (date: string) => number, y: (value: number) => number): string {
+  return points.map((point, index) => index ? `H${x(point.date)} V${y(point[key])}` : `M${x(point.date)},${y(point[key])}`).join(" ");
+}

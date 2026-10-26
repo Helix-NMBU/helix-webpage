@@ -261,4 +261,14 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
   });
 
+  it("includes completed children when selecting a milestone through the list filter", async () => {
+    await open();
+    await act(async () => document.getElementById("task-milestone-filter")!.click());
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "Chassis ready for assembly")!;
+    await act(async () => option.click());
+    const tables = container.querySelectorAll("table");
+    expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
+    expect(document.getElementById("task-status-filter")?.textContent).toBe("All statuses");
+  });
+
 });
