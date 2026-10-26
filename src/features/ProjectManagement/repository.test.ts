@@ -2,9 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProjectRepository, ProjectRequestError } from "./repository";
 import { createLocalProjectRepository } from "./local-repository";
+import { CvRequestError } from "../MemberCV/repository";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("project repository", () => {
+  it.each([401, 403])("turns rejected session acquisition (%s) into sign-in recovery without a request", async status => {
+    const request = vi.fn();
+    const repository = createProjectRepository(async () => { throw new CvRequestError("Sign in again.", status); }, request);
+    await expect(repository.load()).rejects.toMatchObject({ status: 401 });
+    expect(request).not.toHaveBeenCalled();
+  });
   it("sends the authenticated token and does not use shared response caching", async () => {
     const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ season: "S27" })));
     const repository = createProjectRepository(async () => "member-token", request);

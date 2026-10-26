@@ -21,5 +21,16 @@ Statuses: To do, In progress, Blocked, Done, Cancelled. Progress is Done divided
 ## Execution
 
 - Shared type contract defined in src/features/ProjectManagement/types.ts.
-- Backend and UI implementation pending.
-- Verification and independent review pending. No tracker tickets have been closed; the milestone remains open.
+- Backend worker `/root/project_backend` used `/Users/henrik.noteless/.codex/worktrees/project-management-api/helix-webpage`, branch `codex/project-management-api`, base `a9b814f`. Its commit `c9a728c` was integrated as `fdf8e4d`. API, SQL migration and 15 security/database tests passed. The clean worker worktree is retained; the app declined archival because it considers it a primary checkout.
+- UI, model, local repository, navigation, documentation and client tests integrated at `621f491`. Continue work in the canonical `/Users/henrik.noteless/Documents/Github/helix-webpage` checkout on `codex/project-management`; the backend worktree is not the feature integration checkout.
+- The public `/api/projects` URL now rewrites to the existing authenticated member entrypoint, `/api/member-login?__module=projects`. It adds no function. The feature has 11 source functions without the separate user consolidation, and the working checkout has 9 with that consolidation. No unrelated consolidation changes were committed.
+
+## Verification and review
+
+- Full suite after session recovery repairs: 982 tests across 79 files, plus 2 Node deployment guards, passed. After API entrypoint consolidation: 99 focused UI/auth/API tests and 12 local HTTP adapter tests passed.
+- Client TypeScript, API TypeScript, Node runtime API TypeScript, ESLint and production build passed. ESLint's existing configuration excludes TypeScript files; typechecks and tests cover the new TypeScript. Static output is 9.18 MB under the 10 MB limit. Source function count is 9 in the working checkout. No generated Vercel deployment was built or deployed.
+- Browser on `127.0.0.1:5190`, dedicated member-local mode, with the existing untracked `.env.local`: verified task creation, assignment, reload persistence, personal assignment filtering, sponsor completion updating Delivered/Outstanding counts, and navigation. Screenshot stored outside the repo at `/Users/henrik.noteless/.codex/visualizations/2026/10/26/01a178e3-9f76-7250-b8d2-385063cfcf12/project-management.png`.
+- Fresh Standards reviewer `/root/pm_standards_review` and Spec/correctness reviewer `/root/pm_spec_review` inspected base `59eca243` through `621f491`. They identified typed token failures missing sign-in recovery, a superseded-refresh loading state, and incomplete Google return-path handling. All three were repaired with regression tests. A validation-duplication heuristic remains a nonblocking maintainability note; both boundaries continue validating inputs.
+- Independent recheck of the recovery repairs and consolidated entrypoint is pending.
+- No live Neon migration or real Google login was exercised. Explicit database grants and production setup remain operator steps. Attio mappings, tier checklist generation and actual sponsorship obligation coverage remain open. No tracker tickets were closed; the milestone remains open.
+- No push, PR, production migration or deployment performed. Publishing and deployment require separate user authorization.

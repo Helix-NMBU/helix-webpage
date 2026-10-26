@@ -7,7 +7,8 @@ import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPl
 import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import ProjectManagement from "./ProjectManagement";
 import { initialLocalWorkspace } from "./local-repository";
-import { ProjectRequestError } from "./repository";
+import { createProjectRepository, ProjectRequestError } from "./repository";
+import { CvRequestError } from "../MemberCV/repository";
 
 function NotificationProbe() {
   const notifications = useMemberNotifications();
@@ -62,6 +63,28 @@ describe("project management interface", () => {
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.body.textContent).toContain("Could not save changes");
     expect(document.body.textContent).toContain("Reload tasks");
+  });
+  it("settles loading when a save supersedes a pending refresh", async () => {
+    await open("production");
+    let finish!: (data: ReturnType<typeof initialLocalWorkspace>) => void;
+    load.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    await click("Refresh"); await click("Confirm material delivery"); await click("Save task");
+    await act(async () => finish(initialLocalWorkspace()));
+    expect(button("Refresh").disabled).toBe(false);
+    expect(container.querySelector("section")?.getAttribute("aria-busy")).toBe("false");
+  });
+  it.each(["refresh", "save"])("clears stale workspace and offers sign-in when token acquisition rejects during %s", async action => {
+    const token = vi.fn().mockResolvedValueOnce("member-token").mockRejectedValue(new CvRequestError("Your session has ended.", 401));
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify(initialLocalWorkspace())));
+    const repository = createProjectRepository(token, request);
+    load.mockImplementation(repository.load); mutate.mockImplementation(repository.mutate);
+    await open("production");
+    if (action === "save") { await click("Confirm material delivery"); await click("Save task"); }
+    else await click("Refresh");
+    expect(container.querySelector("h1")).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Sign in");
+    expect(request).toHaveBeenCalledTimes(1);
   });
   it("uses shared notifications and recovery when access cannot load", async () => {
     load.mockRejectedValue(new ProjectRequestError("Project access is required.", 403));

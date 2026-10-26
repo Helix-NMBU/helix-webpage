@@ -6,7 +6,7 @@ The member platform uses `/project-management/overview`, `/project-management/pr
 
 Keep credentials in the existing untracked `.env.local`. Run `npm run dev:member` and open `http://127.0.0.1:5190/project-management/overview`. The dedicated `member-local` mode provides local accounts and project fixtures. Its tasks persist in browser local storage under `helix-member-local-projects-v1`; removing that key resets only the project fixtures. These fixtures do not call Neon and cannot be enabled in a production build or on a non-loopback host.
 
-The regular development server uses the real `/api/projects` handler, the existing member session, and `DATABASE_URL`. It does not accept fixture tokens. Use an isolated Neon database branch to validate real authentication and persistence. Never point schema setup at production as part of a local UI check.
+The regular development server uses `/api/projects`, which rewrites to the shared `/api/member-login?__module=projects` entrypoint to avoid adding a Vercel function. The project handler uses the existing member session and `DATABASE_URL`. It does not accept fixture tokens. Use an isolated Neon database branch to validate real authentication and persistence. Never point schema setup at production as part of a local UI check.
 
 ## Database and authorization
 

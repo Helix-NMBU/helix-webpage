@@ -170,6 +170,11 @@ describe("internal member platform", () => {
     expect(googleSignInRequest("/recruiting", "https://internal.helixnmbu.no").callbackURL).toBe("https://internal.helixnmbu.no/recruiting");
   });
 
+  it.each(["/tasks", "/project-management/overview", "/project-management/production?view=timeline#tasks", "/project-management/partnership-deliverables"])("preserves %s through both member login and Google callback", path => {
+    expect(memberLoginDestination({ from: path })).toBe(path);
+    expect(googleSignInRequest(path, "https://internal.helixnmbu.no").callbackURL).toBe(`https://internal.helixnmbu.no${path}`);
+  });
+
   it("opens Notifications from below Home and shows an honest empty state", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");

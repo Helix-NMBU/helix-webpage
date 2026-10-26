@@ -78,6 +78,7 @@ beforeAll(async () => {
     }
   `);
   await writeFile(join(fixtureRoot, 'api/website.ts'), "export { default } from './contact.ts';");
+  await writeFile(join(fixtureRoot, 'api/member-login.ts'), "export { default } from './contact.ts';");
   local = await harness(fixtureRoot);
 });
 
@@ -88,6 +89,11 @@ afterAll(async () => {
 });
 
 describe('local API HTTP adapter', () => {
+  it('rewrites project management through the shared authenticated member entrypoint', async () => {
+    const response = await request(local.port, '/api/projects?__module=untrusted');
+    expect(response.status).toBe(202);
+    expect(response.json().query).toEqual({ __module: 'projects' });
+  });
   it('loads a TypeScript handler with method, headers, JSON body, repeated query and cookies', async () => {
     const response = await request(local.port, '/api/contact?tag=a&tag=b&name=Alex+Example', {
       method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Example': 'present', Cookie: 'one=1; two=a=b' },

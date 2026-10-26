@@ -63,6 +63,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const repository = useRef<Promise<ProjectRepository> | null>(null);
   const active = useRef(false);
   const generation = useRef(0);
+  const saving = useRef(false);
   const notify = useNotify();
   const navigate = useNavigate();
   const getRepository = useCallback(() => repository.current ??= supplied ? Promise.resolve(supplied) : projectRepository(), [supplied]);
@@ -72,6 +73,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
     notify(denied ? "Project access unavailable" : "Could not load project management", error instanceof Error ? error.message : "Please try again.", { id: "project-management-load", variant: "error", href: null, action: error instanceof ProjectRequestError && error.status === 401 ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Try again", onClick: retry } });
   }, [navigate, notify]);
   const load = useCallback(async () => {
+    if (saving.current) return;
     const request = ++generation.current;
     setLoading(true);
     try { const next = await (await getRepository()).load(); if (active.current && request === generation.current) setWorkspace(next); }
@@ -81,9 +83,11 @@ export default function ProjectManagement({ personal = false, repository: suppli
   useEffect(() => { active.current = true; void load(); return () => { active.current = false; generation.current++; }; }, [load]);
   useEffect(() => { setSearch(""); setStatus(personal || section === "partnership-deliverables" ? "all" : "open"); setProjectId("all"); setView("tasks"); setTaskEditor(null); setProjectEditor(null); }, [section, personal]);
   async function save(mutation: ProjectMutation) {
-    if (busy) return;
+    if (saving.current) return;
+    saving.current = true;
     setBusy(true);
     generation.current++;
+    setLoading(false);
     try {
       const next = await (await getRepository()).mutate(mutation);
       if (!active.current) return;
@@ -91,9 +95,11 @@ export default function ProjectManagement({ personal = false, repository: suppli
       notify(mutation.action === "save_project" ? "Project saved" : "Task saved", mutation.action === "save_project" ? "The project is ready to manage." : "Progress and assignments have been updated.", { variant: "success", href: null });
     } catch (error) {
       if (!active.current) return;
-      if (error instanceof ProjectRequestError && [401, 403].includes(error.status)) { setWorkspace(null); setTaskEditor(null); setProjectEditor(null); }
-      notify("Could not save changes", `${error instanceof Error ? error.message : "Please try again."} Your input has been kept where access allows.`, { id: "project-management-save", variant: "error", href: null, action: { label: "Reload tasks", onClick: () => void load() } });
-    } finally { if (active.current) setBusy(false); }
+      const denied = error instanceof ProjectRequestError && [401, 403].includes(error.status);
+      const expired = error instanceof ProjectRequestError && error.status === 401;
+      if (denied) { setWorkspace(null); setTaskEditor(null); setProjectEditor(null); }
+      notify(expired ? "Sign-in required" : "Could not save changes", `${error instanceof Error ? error.message : "Please try again."}${denied ? "" : " Your input has been kept."}`, { id: "project-management-save", variant: "error", href: null, action: expired ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Reload tasks", onClick: () => void load() } });
+    } finally { saving.current = false; if (active.current) setBusy(false); }
   }
   if (!valid) return <Navigate to="/project-management/overview" replace />;
   if (!workspace) return loading ? <div role="status" aria-label="Loading project management" className="space-y-6 py-8"><Skeleton className="h-10 w-64" /><div className="grid gap-4 sm:grid-cols-4">{[1, 2, 3, 4].map(item => <Skeleton key={item} className="h-28" />)}</div><Skeleton className="h-80 w-full" /></div> : <div className="py-8"><Button variant="outline" onClick={() => void load()}>Try again</Button></div>;
@@ -107,7 +113,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   return <section className="mx-auto w-full max-w-7xl space-y-7 py-6" aria-labelledby="project-page-title" aria-busy={loading || busy}>
     <div className="flex flex-wrap items-start justify-between gap-4"><div className="space-y-2"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{workspace.season} · Project management</p><h1 id="project-page-title" className="text-3xl font-medium tracking-tight">{title}</h1><p className="max-w-2xl text-sm text-muted-foreground">{personal ? "All work assigned to you, across projects and departments." : descriptions[section]}</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || busy} onClick={() => void load()}>Refresh</Button>{workspace.canManage && <><Button variant="outline" disabled={busy} onClick={() => setProjectEditor({ project: null })}>New project</Button><Button disabled={busy} onClick={() => setTaskEditor({ task: null })}>New task</Button></>}</div></div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: "Task completion", value: `${stats.percent}%`, detail: `${stats.done} of ${stats.total} tasks complete` }, { label: "Overdue", value: stats.overdue, detail: "Open tasks and milestones past deadline" }, { label: "Due within 7 days", value: stats.upcoming, detail: "Including today's deadlines" }, { label: "Blocked", value: stats.blocked, detail: "Work that needs a next step" }].map(item => <Card key={item.label} className="gap-3 py-5"><CardHeader className="px-5"><CardDescription>{item.label}</CardDescription><CardTitle className="text-3xl font-medium tabular-nums">{item.value}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{item.detail}</CardContent></Card>)}</div>
-    <p className="text-sm text-muted-foreground">Latest open task or milestone deadline: {formatDate(stats.lastDeadline)}. {stats.unscheduled > 0 ? `${stats.unscheduled} open item${stats.unscheduled === 1 ? " has" : "s have"} no deadline.` : "All open work has a deadline."}</p>
+    <p className="text-sm text-muted-foreground">{scope.some(isOpen) ? <>Latest open task or milestone deadline: {formatDate(stats.lastDeadline)}. {stats.unscheduled > 0 ? `${stats.unscheduled} open item${stats.unscheduled === 1 ? " has" : "s have"} no deadline.` : "All open work has a deadline."}</> : "No open tasks or milestones."}</p>
     {category === "partnership-deliverables" && <PartnerDeliverables tasks={scope} onSelect={partner => { setSearch(partner); setStatus("all"); setProjectId("all"); }} />}
     {!personal && <div className="space-y-4"><div className="flex items-center justify-between gap-3"><h2 className="text-lg font-medium">Projects</h2><span className="text-sm text-muted-foreground">{projects.length} in {workspace.season}</span></div>{projects.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{projects.map(project => {
       const projectTasks = scope.filter(task => task.projectId === project.id);

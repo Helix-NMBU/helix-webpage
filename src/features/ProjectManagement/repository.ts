@@ -1,4 +1,5 @@
 import { memberSessionToken } from "../MemberCV/session";
+import { CvRequestError } from "../MemberCV/repository";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import type { ProjectMutation, ProjectRepository, ProjectWorkspace } from "./types";
 
@@ -10,9 +11,15 @@ export function createProjectRepository(token?: () => Promise<string>, request: 
   const owner = { current: null as string | null };
   const getToken = token ?? (() => memberSessionToken(owner));
   async function call(mutation?: ProjectMutation): Promise<ProjectWorkspace> {
+    let accessToken: string;
+    try { accessToken = await getToken(); }
+    catch (error) {
+      if (error instanceof CvRequestError) throw new ProjectRequestError(error.message, [401, 403].includes(error.status) ? 401 : error.status);
+      throw error;
+    }
     const response = await request("/api/projects", {
       method: mutation ? "POST" : "GET", cache: "no-store",
-      headers: { Authorization: `Bearer ${await getToken()}`, ...(mutation ? { "Content-Type": "application/json" } : {}) },
+      headers: { Authorization: `Bearer ${accessToken}`, ...(mutation ? { "Content-Type": "application/json" } : {}) },
       ...(mutation ? { body: JSON.stringify(mutation) } : {}),
     });
     const data = await response.json().catch(() => ({}));
