@@ -93,6 +93,8 @@ type GmailMessage = GmailMessageSummary & {
   replyTo: string;
 };
 
+type RetainedInboxRow = { message: GmailMessageSummary; index: number; context: string };
+
 type MessageAction = "archive" | "trash" | "junk";
 type ComposeMode = "new" | "reply" | "forward";
 
@@ -365,6 +367,7 @@ function ConnectedMailSidebar({
                       key={message.id}
                       type="button"
                       aria-label={`${message.from}, ${message.subject}`}
+                      aria-description={message.unread ? "Unread" : undefined}
                       aria-current={selectedMessageId === message.id ? "true" : undefined}
                       disabled={loading}
                       className={`block w-full px-4 py-3 text-left transition-colors hover:bg-sidebar-accent ${selectedMessageId === message.id ? "bg-sidebar-accent" : ""}`}
@@ -374,7 +377,10 @@ function ConnectedMailSidebar({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className={`truncate text-sm ${message.unread ? "font-semibold text-foreground" : "text-foreground/80"}`}>{displaySender(message.from)}</span>
-                        <time className="shrink-0 text-[11px] text-muted-foreground" dateTime={message.date}>{formatMessageDate(message.date)}</time>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {message.unread && <span role="img" aria-label="Unread" className="size-1.5 shrink-0 rounded-full bg-blue-500" />}
+                          <time className="text-[11px] text-muted-foreground" dateTime={message.date}>{formatMessageDate(message.date)}</time>
+                        </span>
                       </div>
                       <p className={`mt-1 truncate text-sm ${message.unread ? "font-semibold" : "font-medium"}`}>{message.subject}</p>
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.snippet}</p>
@@ -521,6 +527,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [nextPageToken, setNextPageToken] = useState<string | null>(() => getCachedGmailList(accountEmail, mailListCacheKey("inbox", "", false))?.nextPageToken ?? null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<GmailMessage | null>(null);
+  const [retainedInboxRow, setRetainedInboxRow] = useState<RetainedInboxRow | null>(null);
   const [messageLoading, setMessageLoading] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<"checking" | "connected" | "disconnected" | "unavailable">(() => {
@@ -544,6 +551,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [actionPending, setActionPending] = useState(false);
   const boundUserId = useRef<string | null>(null);
   const listRequestId = useRef(0);
+  const lastListContext = useRef<string | null>(null);
   const detailRequestId = useRef(0);
   const readRequests = useRef(new Set<string>());
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -607,14 +615,18 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
 
   const connected = connectedOverride ?? connectionState === "connected";
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
+  const listContext = JSON.stringify([accountEmail, activeFolder, search.trim(), unreadOnly]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined) return;
     const requestId = ++listRequestId.current;
     const queryKey = mailListCacheKey(activeFolder, search, unreadOnly);
+    const contextChanged = lastListContext.current !== listContext;
+    lastListContext.current = listContext;
     const cachedList = getCachedGmailList(accountEmail, queryKey);
     const cachedMessages = inboxMessages(cachedList?.messages ?? [], activeFolder, unreadOnly);
-    setMessages(cachedMessages);
+    // Read-state changes invalidate unread caches; keep existing rows during that refresh.
+    setMessages((current) => cachedList ? cachedMessages : contextChanged ? [] : inboxMessages(current, activeFolder, unreadOnly));
     setNextPageToken(cachedList?.nextPageToken ?? null);
     setListError(null);
     setListLoading(true);
@@ -645,7 +657,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             const message = error instanceof Error ? error.message : "Could not load Gmail messages.";
             setListError(message);
             notify("Could not load mail", message, { id: "mail-list", variant: "error", href: null, action: { label: "Try again", onClick: refreshMail } });
-            if (!cachedList) {
+            if (!cachedList && contextChanged) {
               setMessages([]);
               setNextPageToken(null);
               setSelectedMessageId(null);
@@ -661,7 +673,17 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       window.clearTimeout(timer);
       if (requestId === listRequestId.current) listRequestId.current += 1;
     };
-  }, [accountEmail, activeFolder, connected, connectedOverride, search, unreadOnly, refreshVersion, refreshMail, notify]);
+  }, [accountEmail, activeFolder, connected, connectedOverride, search, unreadOnly, refreshVersion, refreshMail, notify, listContext]);
+
+  const applyReadState = useCallback((messageId: string, unread: boolean) => {
+    updateCachedGmailUnread(accountEmail, messageId, unread);
+    // Invalidate lists started before Gmail confirmed the current label state.
+    listRequestId.current += 1;
+    setListLoading(false);
+    setMessages((current) => current.map((message) => message.id === messageId ? { ...message, unread } : message));
+    setSelectedMessage((current) => current?.id === messageId ? { ...current, unread } : current);
+    refreshMail();
+  }, [accountEmail, refreshMail]);
 
   const updateReadState = useCallback(async (messageId: string, unread: boolean) => {
     if (readRequests.current.has(messageId)) return;
@@ -674,20 +696,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || "Could not update the message's read state.");
-      updateCachedGmailUnread(accountEmail, messageId, unread);
-      // Invalidate lists started before Gmail acknowledged the label change.
-      listRequestId.current += 1;
-      setListLoading(false);
-      setMessages((current) => current.map((message) => message.id === messageId ? { ...message, unread } : message));
-      setSelectedMessage((current) => current?.id === messageId ? { ...current, unread } : current);
-      refreshMail();
+      applyReadState(messageId, unread);
     } catch (error) {
       notify("Could not update read state", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null, action: { label: "Try again", onClick: () => void updateReadState(messageId, unread) } });
     } finally {
       readRequests.current.delete(messageId);
       setReadPending(readRequests.current.size > 0);
     }
-  }, [accountEmail, notify, refreshMail]);
+  }, [applyReadState, notify]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined || !selectedMessageId) return;
@@ -709,6 +725,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         setSelectedMessage(body);
         // Only opening a selected message marks it read. Hover/focus prefetch is read-only.
         if (body.unread) void updateReadState(body.id, false);
+        else applyReadState(body.id, false);
       } catch (error) {
         if (requestId === detailRequestId.current) {
           const message = error instanceof Error ? error.message : "Could not open this message.";
@@ -720,7 +737,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       }
     })();
     return () => { detailRequestId.current += 1; };
-  }, [accountEmail, connected, connectedOverride, selectedMessageId, updateReadState, detailRetry, notify]);
+  }, [accountEmail, connected, connectedOverride, selectedMessageId, updateReadState, applyReadState, detailRetry, notify]);
 
   async function prefetchMessage(messageId: string) {
     if (getCachedGmailMessage(accountEmail, messageId)) return;
@@ -738,10 +755,17 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   }
 
   function selectMessage(messageId: string) {
+    const index = messages.findIndex((message) => message.id === messageId);
+    const message = messages[index];
+    const retainedRow = activeFolder === "inbox" && unreadOnly && message?.unread ? { message, index, context: listContext } : null;
     if (messageId === selectedMessageId) {
-      if (selectedMessage?.unread) void updateReadState(messageId, false);
+      if (selectedMessage?.unread) {
+        setRetainedInboxRow(retainedRow);
+        void updateReadState(messageId, false);
+      }
       return;
     }
+    setRetainedInboxRow(retainedRow);
     setSelectedMessageId(messageId);
     const cachedMessage = getCachedGmailMessage(accountEmail, messageId);
     setSelectedMessage(cachedMessage);
@@ -842,6 +866,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         nextPageToken,
       });
       setMessages(remainingMessages);
+      setRetainedInboxRow(activeFolder === "inbox" && unreadOnly && nextMessage?.unread ? { message: nextMessage, index: remainingMessages.findIndex((message) => message.id === nextMessage.id), context: listContext } : null);
       setSelectedMessageId(nextMessage?.id ?? null);
       setSelectedMessage(null);
       setMessageError(null);
@@ -852,6 +877,16 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     } finally {
       setActionPending(false);
     }
+  }
+
+  const visibleMessages = inboxMessages(messages, activeFolder, unreadOnly);
+  // Keep only the currently opened row while Gmail's unread list is revalidated.
+  // This presentation-only row never enters the unread cache or changes its labels.
+  if (activeFolder === "inbox" && unreadOnly && retainedInboxRow?.context === listContext && retainedInboxRow.message.id === selectedMessageId) {
+    const retainedMessage = selectedMessage?.id === selectedMessageId ? selectedMessage : retainedInboxRow.message;
+    const existingIndex = visibleMessages.findIndex((message) => message.id === selectedMessageId);
+    if (existingIndex >= 0) visibleMessages[existingIndex] = { ...visibleMessages[existingIndex], unread: retainedMessage.unread };
+    else visibleMessages.splice(Math.min(retainedInboxRow.index, visibleMessages.length), 0, retainedMessage);
   }
 
   return (
@@ -871,14 +906,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         <>
           <ConnectedMailSidebar
             activeFolder={activeFolder}
-            onFolderChange={(folder) => { setSelectedMessageId(null); setSelectedMessage(null); setActiveFolder(folder); }}
+            onFolderChange={(folder) => { setRetainedInboxRow(null); setSelectedMessageId(null); setSelectedMessage(null); setActiveFolder(folder); }}
             onNewMessage={() => startCompose("new")}
             unreadOnly={unreadOnly}
-            onUnreadOnlyChange={setUnreadOnly}
+            onUnreadOnlyChange={(value) => { setRetainedInboxRow(null); setUnreadOnly(value); }}
             onReconnect={connectGmail}
             search={search}
-            onSearchChange={setSearch}
-            messages={inboxMessages(messages, activeFolder, unreadOnly)}
+            onSearchChange={(value) => { setRetainedInboxRow(null); setSearch(value); }}
+            messages={visibleMessages}
             loading={listLoading}
             error={listError}
             selectedMessageId={selectedMessageId}

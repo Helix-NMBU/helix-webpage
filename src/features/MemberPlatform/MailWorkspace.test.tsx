@@ -15,8 +15,9 @@ vi.mock("../MemberCV/session", () => ({ memberSessionToken: async () => "member-
 const member = { name: "Åse Example", email: "ase@helixnmbu.no", role: "Member" as const, helixRole: "Mechanical lead" };
 const original = { id: "unread-1", threadId: "thread-1", from: "Jordan <jordan@example.test>", replyTo: "jordan@example.test", subject: "Team update", date: "2026-10-26T10:00:00Z", snippet: "Meeting agenda", unread: true, starred: false, body: "Original plain text", htmlBody: '<table><tr><td style="color:#123456">Original <b>formatted email</b></td></tr></table><script>evil()</script>' };
 
-function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean } = {}) {
-  let unread = true;
+function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean; multipleUnread?: boolean; readBeforeOpening?: boolean } = {}) {
+  const unreadIds = new Set([original.id, ...(options.multipleUnread ? ["unread-2"] : [])]);
+  const source = [original, ...(options.multipleUnread ? [{ ...original, id: "unread-2", subject: "Design review" }] : []), { ...original, id: "read-1", subject: "Already read" }];
   const requests: URL[] = [];
   const actions: { action: string; id: string }[] = [];
   const settings = { ...defaultSignatureSettings, enabled: true };
@@ -28,17 +29,21 @@ function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean } = 
       case "signature": return Response.json({ settings, revision: 1, member: { ...member, role: member.helixRole, phone: "" }, signature: renderSignature(settings, { ...member, role: member.helixRole, phone: "" }) });
       case "messages": {
         if (options.emptyFirstPage && url.searchParams.get("unreadOnly") && !url.searchParams.has("pageToken")) return Response.json({ messages: [], nextPageToken: "next-unread" });
-        const messages = [{ ...original, unread }, { ...original, id: "read-1", subject: "Already read", unread: false }];
+        const messages = source.map((message) => ({ ...message, unread: unreadIds.has(message.id) }));
         return Response.json({ messages: url.searchParams.has("unreadOnly") ? messages.filter((m) => m.unread) : messages, nextPageToken: null });
       }
-      case "message": return Response.json({ ...original, unread });
+      case "message": {
+        const message = source.find((message) => message.id === url.searchParams.get("id"))!;
+        if (options.readBeforeOpening) unreadIds.delete(message.id);
+        return Response.json({ ...message, unread: unreadIds.has(message.id) });
+      }
       case "messageAction": {
         const body = JSON.parse(String(init?.body));
         actions.push(body);
         if (options.failRead && body.action === "markRead") return Response.json({ error: "Google denied access. Reconnect Gmail." }, { status: 401 });
-        if (body.action === "markRead") unread = false;
-        if (body.action === "markUnread") unread = true;
-        return Response.json({ id: "unread-1" });
+        if (body.action === "markRead") unreadIds.delete(body.id);
+        if (body.action === "markUnread") unreadIds.add(body.id);
+        return Response.json({ id: body.id });
       }
       default: return Response.json({}, { status: 404 });
     }
@@ -84,20 +89,60 @@ describe("mail workspace", () => {
     await until(() => server.requests.some((url) => url.searchParams.get("unreadOnly") === "true"));
     await until(() => !container.querySelector('[aria-label="Jordan <jordan@example.test>, Already read"]'));
     const row = container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]')!;
+    expect(row.querySelector('[aria-label="Unread"]')?.nextElementSibling?.tagName).toBe("TIME");
     await act(async () => { row.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
     await until(() => server.requests.some((url) => url.searchParams.get("action") === "message"));
     expect(server.actions).toEqual([]);
     await act(async () => row.click());
     await until(() => server.actions.some((action) => action.action === "markRead"));
-    await until(() => !container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"]'));
+    await until(() => !container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"] [aria-label="Unread"]'));
+    expect(container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"]')).not.toBeNull();
     expect(getCachedGmailMessage(member.email, "unread-1")?.unread).toBe(false);
     expect(container.querySelector('iframe[title="Email content"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Mark as unread"]')).not.toBeNull();
     await until(() => !container.querySelector<HTMLButtonElement>('[aria-label="Mark as unread"]')!.disabled);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Mark as unread"]')!.click());
-    await until(() => Boolean(container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"]')));
+    await until(() => Boolean(container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"] [aria-label="Unread"]')));
     expect(server.actions.map((action) => action.action)).toEqual(["markRead", "markUnread"]);
     expect(getCachedGmailMessage(member.email, "unread-1")?.unread).toBe(true);
+  });
+
+  it("clears a stale unread indicator when Gmail reports that an opened message is already read", async () => {
+    const server = mailServer({ readBeforeOpening: true });
+    await openLive();
+    const row = () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]');
+    expect(row()!.querySelector('[aria-label="Unread"]')).not.toBeNull();
+    await act(async () => row()!.click());
+    await until(() => Boolean(container.querySelector('[aria-label="Mark as unread"]')) && Boolean(row()) && !row()!.querySelector('[aria-label="Unread"]'));
+    expect(server.actions).toEqual([]);
+    expect(getCachedGmailMessage(member.email, original.id)?.unread).toBe(false);
+  });
+
+  it("keeps a read row until the next selection under the unread filter, including after revalidation", async () => {
+    const server = mailServer({ multipleUnread: true });
+    await openLive();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Show unread only"]')!.click());
+    await until(() => !container.querySelector('[aria-label="Jordan <jordan@example.test>, Already read"]'));
+    const first = () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]');
+    const second = () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Design review"]');
+    await until(() => Boolean(first()) && !first()!.disabled);
+    await act(async () => first()!.click());
+    await until(() => first()?.getAttribute("aria-current") === "true" && !first()?.querySelector('[aria-label="Unread"]') && Boolean(second()) && !second()!.disabled);
+    expect(second()!.querySelector('[aria-label="Unread"]')).not.toBeNull();
+    const requestsBeforeFocus = server.requests.length;
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await until(() => server.requests.length > requestsBeforeFocus && Boolean(second()) && !second()!.disabled);
+    expect(first()).not.toBeNull();
+    expect(first()!.querySelector('[aria-label="Unread"]')).toBeNull();
+    await act(async () => second()!.click());
+    await until(() => !first() && second()?.getAttribute("aria-current") === "true" && !second()?.querySelector('[aria-label="Unread"]'));
+    await until(() => Boolean(container.querySelector('[aria-label="Show all inbox messages"]')) && !second()!.disabled);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Show all inbox messages"]')!.click());
+    await until(() => Boolean(container.querySelector('[aria-label="Jordan <jordan@example.test>, Already read"]')));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Show unread only"]')!.click());
+    await until(() => !first() && !second());
+    expect(getCachedGmailMessage(member.email, original.id)?.unread).toBe(false);
+    expect(getCachedGmailMessage(member.email, "unread-2")?.unread).toBe(false);
   });
 
   it("integrates the original plain text in reply and forward with an empty writing area and one header close button", async () => {
@@ -137,6 +182,7 @@ describe("mail workspace", () => {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]')!.click());
     await until(() => notify.mock.calls.some(([title]) => title === "Could not update read state"));
     expect(getCachedGmailMessage(member.email, "unread-1")?.unread).toBe(true);
+    expect(container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"] [aria-label="Unread"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Mark as read"]')).not.toBeNull();
     expect(notify.mock.calls.find(([title]) => title === "Could not update read state")?.[2].action.label).toBe("Try again");
   });
