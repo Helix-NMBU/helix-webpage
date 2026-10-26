@@ -13,6 +13,8 @@ import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_STATUSES, type Pr
 import { formatDate, isOpen, osloDate, summarize, taskUrgency } from "./model";
 import { projectRepository, ProjectRequestError } from "./repository";
 import { Choice, ProjectEditor, TaskEditor } from "./TaskEditor";
+import { PersonalTasks } from "./PersonalTasks";
+import { TaskComposer } from "./TaskComposer";
 
 export const PROJECT_SECTIONS = [{ id: "overview", title: "Overview" }, ...TASK_CATEGORIES.map(id => ({ id, title: CATEGORY_LABELS[id] }))];
 
@@ -60,6 +62,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const [view, setView] = useState("tasks");
   const [taskEditor, setTaskEditor] = useState<{ task: Task | null } | null>(null);
   const [projectEditor, setProjectEditor] = useState<{ project: Project | null } | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
   const repository = useRef<Promise<ProjectRepository> | null>(null);
   const active = useRef(false);
   const generation = useRef(0);
@@ -81,24 +84,26 @@ export default function ProjectManagement({ personal = false, repository: suppli
     finally { if (active.current && request === generation.current) setLoading(false); }
   }, [getRepository, report]);
   useEffect(() => { active.current = true; void load(); return () => { active.current = false; generation.current++; }; }, [load]);
-  useEffect(() => { setSearch(""); setStatus(personal || section === "partnership-deliverables" ? "all" : "open"); setProjectId("all"); setView("tasks"); setTaskEditor(null); setProjectEditor(null); }, [section, personal]);
-  async function save(mutation: ProjectMutation) {
-    if (saving.current) return;
+  useEffect(() => { setSearch(""); setStatus(personal || section === "partnership-deliverables" ? "all" : "open"); setProjectId("all"); setView("tasks"); setTaskEditor(null); setProjectEditor(null); setComposerOpen(false); }, [section, personal]);
+  async function save(mutation: ProjectMutation): Promise<boolean> {
+    if (saving.current) return false;
     saving.current = true;
     setBusy(true);
     generation.current++;
     setLoading(false);
     try {
       const next = await (await getRepository()).mutate(mutation);
-      if (!active.current) return;
+      if (!active.current) return false;
       setWorkspace(next); setTaskEditor(null); setProjectEditor(null);
       notify(mutation.action === "save_project" ? "Project saved" : "Task saved", mutation.action === "save_project" ? "The project is ready to manage." : "Progress and assignments have been updated.", { variant: "success", href: null });
+      return true;
     } catch (error) {
-      if (!active.current) return;
+      if (!active.current) return false;
       const denied = error instanceof ProjectRequestError && [401, 403].includes(error.status);
       const expired = error instanceof ProjectRequestError && error.status === 401;
-      if (denied) { setWorkspace(null); setTaskEditor(null); setProjectEditor(null); }
+      if (denied) { setWorkspace(null); setTaskEditor(null); setProjectEditor(null); setComposerOpen(false); }
       notify(expired ? "Sign-in required" : "Could not save changes", `${error instanceof Error ? error.message : "Please try again."}${denied ? "" : " Your input has been kept."}`, { id: "project-management-save", variant: "error", href: null, action: expired ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Reload tasks", onClick: () => void load() } });
+      return false;
     } finally { saving.current = false; if (active.current) setBusy(false); }
   }
   if (!valid) return <Navigate to="/project-management/overview" replace />;
@@ -110,8 +115,12 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const descriptions: Record<string, string> = { overview: "A shared view of the season, its progress, and the work ahead.", production: "From design to assembly. Track production work and upcoming milestones.", "partnership-deliverables": "Track recorded commitments to this season's sponsors and partners.", marketing: "Plan campaigns, content, and the Helix story.", operations: "Competition deadlines and the work that keeps the team running." };
   const filtered = scope.filter(task => (status === "all" || (status === "open" ? isOpen(task) : task.status === status)) && (projectId === "all" || task.projectId === projectId) && (!search || [task.title, task.description, task.partnerName, workspace.members.find(member => member.id === task.assigneeId)?.name].join(" ").toLowerCase().includes(search.toLowerCase()))).sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.title.localeCompare(b.title));
   const departmentNames = [...new Set(projects.flatMap(project => project.departments))].sort();
+  if (personal) return <>
+    <PersonalTasks workspace={workspace} busy={busy} loading={loading} onRefresh={() => void load()} onOpen={task => setTaskEditor({ task })} onComplete={task => void save({ action: "set_status", id: task.id, expectedRevision: task.revision, status: task.status === "done" ? "todo" : "done", blockedReason: task.blockedReason })} />
+    {taskEditor?.task && <TaskEditor key={taskEditor.task.id} task={taskEditor.task} workspace={workspace} category={taskEditor.task.category} statusOnly busy={busy} onSave={save} onClose={() => setTaskEditor(null)} />}
+  </>;
   return <section className="mx-auto w-full max-w-7xl space-y-7 py-6" aria-labelledby="project-page-title" aria-busy={loading || busy}>
-    <div className="flex flex-wrap items-start justify-between gap-4"><div className="space-y-2"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{workspace.season} · Project management</p><h1 id="project-page-title" className="text-3xl font-medium tracking-tight">{title}</h1><p className="max-w-2xl text-sm text-muted-foreground">{personal ? "All work assigned to you, across projects and departments." : descriptions[section]}</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || busy} onClick={() => void load()}>Refresh</Button>{workspace.canManage && <><Button variant="outline" disabled={busy} onClick={() => setProjectEditor({ project: null })}>New project</Button><Button disabled={busy} onClick={() => setTaskEditor({ task: null })}>New task</Button></>}</div></div>
+    <div className="flex flex-wrap items-start justify-between gap-4"><div className="space-y-2"><p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{workspace.season} · Project management</p><h1 id="project-page-title" className="text-3xl font-medium tracking-tight">{title}</h1><p className="max-w-2xl text-sm text-muted-foreground">{descriptions[section]}</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={loading || busy} onClick={() => void load()}>Refresh</Button>{workspace.canManage && <Button variant="outline" disabled={busy} onClick={() => setProjectEditor({ project: null })}>New project</Button>}{category && workspace.taskLeadCategories.includes(category) && <Button disabled={busy || loading} onClick={() => setComposerOpen(true)}>New task</Button>}</div></div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: "Task completion", value: `${stats.percent}%`, detail: `${stats.done} of ${stats.total} tasks complete` }, { label: "Overdue", value: stats.overdue, detail: "Open tasks and milestones past deadline" }, { label: "Due within 7 days", value: stats.upcoming, detail: "Including today's deadlines" }, { label: "Blocked", value: stats.blocked, detail: "Work that needs a next step" }].map(item => <Card key={item.label} className="gap-3 py-5"><CardHeader className="px-5"><CardDescription>{item.label}</CardDescription><CardTitle className="text-3xl font-medium tabular-nums">{item.value}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{item.detail}</CardContent></Card>)}</div>
     <p className="text-sm text-muted-foreground">{scope.some(isOpen) ? <>Latest open task or milestone deadline: {formatDate(stats.lastDeadline)}. {stats.unscheduled > 0 ? `${stats.unscheduled} open item${stats.unscheduled === 1 ? " has" : "s have"} no deadline.` : "All open work has a deadline."}</> : "No open tasks or milestones."}</p>
     {category === "partnership-deliverables" && <PartnerDeliverables tasks={scope} onSelect={partner => { setSearch(partner); setStatus("all"); setProjectId("all"); }} />}
@@ -127,7 +136,8 @@ export default function ProjectManagement({ personal = false, repository: suppli
       {filtered.length ? <div className="overflow-hidden rounded-xl border">{view === "timeline" ? <div className="p-4"><Timeline tasks={filtered} onOpen={task => setTaskEditor({ task })} /></div> : <TaskTable tasks={filtered} workspace={workspace} deliveries={category === "partnership-deliverables"} onOpen={task => setTaskEditor({ task })} />}</div> : <Empty className="min-h-56 border border-solid"><EmptyHeader><EmptyTitle>{scope.length ? "No matching tasks" : personal ? "No tasks assigned to you" : "No tasks yet"}</EmptyTitle><EmptyDescription>{scope.length ? "Try another search or status filter." : personal ? "Tasks appear here when a project manager assigns them to you." : "Add tasks to start tracking work in this area."}</EmptyDescription></EmptyHeader></Empty>}
       <p className="text-xs leading-relaxed text-muted-foreground">Completion uses recorded task status and excludes cancelled work and milestones. Milestones are tracked by status and deadline. {category === "partnership-deliverables" ? "This list contains recorded obligations for S27." : "Scheduled deadlines do not account for effort, dependencies, or team capacity."}</p>
     </div>
-    {taskEditor && <TaskEditor key={taskEditor.task?.id ?? "new-task"} task={taskEditor.task} workspace={workspace} category={category ?? "production"} busy={busy} onSave={save} onClose={() => setTaskEditor(null)} />}
+    {taskEditor && <TaskEditor key={taskEditor.task?.id ?? "new-task"} task={taskEditor.task} workspace={workspace} category={category ?? "production"} statusOnly={!category} busy={busy} onSave={save} onClose={() => setTaskEditor(null)} />}
     {projectEditor && <ProjectEditor key={projectEditor.project?.id ?? "new-project"} project={projectEditor.project} category={category ?? "production"} busy={busy} onSave={save} onClose={() => setProjectEditor(null)} />}
+    {composerOpen && category && workspace.taskLeadCategories.includes(category) && <TaskComposer key={category} workspace={workspace} category={category} projectId={projects.some(project => project.id === projectId) ? projectId : null} busy={busy} onSave={save} onClose={() => setComposerOpen(false)} />}
   </section>;
 }

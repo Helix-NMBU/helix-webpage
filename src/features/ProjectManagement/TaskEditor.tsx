@@ -20,16 +20,17 @@ export function Choice({ id, value, onChange, options, disabled = false, ariaLab
 const categoryOptions = TASK_CATEGORIES.map(value => ({ value, label: CATEGORY_LABELS[value] }));
 const statusOptions = TASK_STATUSES.map(value => ({ value, label: STATUS_LABELS[value] }));
 
-export function TaskEditor({ task, workspace, category, busy, onSave, onClose }: {
+export function TaskEditor({ task, workspace, category, busy, onSave, onClose, statusOnly = false }: {
   task: Task | null; workspace: ProjectWorkspace; category: TaskCategory; busy: boolean;
-  onSave: (mutation: ProjectMutation) => Promise<void>; onClose: () => void;
+  statusOnly?: boolean;
+  onSave: (mutation: ProjectMutation) => Promise<unknown>; onClose: () => void;
 }) {
   const [id] = useState(() => task?.id ?? crypto.randomUUID());
   const [revision] = useState(task?.revision ?? 0);
   const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, assigneeId: null, deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
   const notify = useNotify();
-  const manager = workspace.canManage;
-  const canEdit = manager || (task?.assigneeId === workspace.viewerId);
+  const manager = !statusOnly && workspace.taskLeadCategories.includes(task?.category ?? category);
+  const canEdit = manager || workspace.canManage || (task?.assigneeId === workspace.viewerId);
   const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => ({ ...previous, [key]: value }));
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -46,7 +47,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose }:
         <Field id="task-title" label="Title"><Input id="task-title" autoFocus required maxLength={200} value={draft.title} onChange={event => change("title", event.target.value)} /></Field>
         <Field id="task-description" label="Description"><Textarea id="task-description" maxLength={2000} rows={3} value={draft.description} onChange={event => change("description", event.target.value)} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="task-category" label="Area"><Choice id="task-category" disabled={busy || !manager} value={draft.category} options={categoryOptions} onChange={value => setDraft(previous => ({ ...previous, category: value as TaskCategory, projectId: null }))} /></Field>
+          <Field id="task-category" label="Area"><Input id="task-category" readOnly value={CATEGORY_LABELS[draft.category]} /></Field>
           <Field id="task-project" label="Project"><Choice id="task-project" disabled={busy || !manager} value={draft.projectId ?? "season"} onChange={value => change("projectId", value === "season" ? null : value)} options={[{ value: "season", label: `${workspace.season} season` }, ...workspace.projects.filter(project => project.category === draft.category).map(project => ({ value: project.id, label: project.name }))]} /></Field>
           <Field id="task-assignee" label="Assignee"><Choice id="task-assignee" disabled={busy || !manager} value={draft.assigneeId ?? "unassigned"} onChange={value => change("assigneeId", value === "unassigned" ? null : value)} options={[{ value: "unassigned", label: "Unassigned" }, ...workspace.members.map(member => ({ value: member.id, label: member.name }))]} /></Field>
           <Field id="task-kind" label="Type"><Choice id="task-kind" disabled={busy || !manager} value={draft.kind} onChange={value => change("kind", value as TaskInput["kind"])} options={[{ value: "task", label: "Task" }, { value: "milestone", label: "Milestone" }]} /></Field>
@@ -66,7 +67,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose }:
   </DialogContent></Dialog>;
 }
 
-export function ProjectEditor({ project, category, busy, onSave, onClose }: { project: Project | null; category: TaskCategory; busy: boolean; onSave: (mutation: ProjectMutation) => Promise<void>; onClose: () => void }) {
+export function ProjectEditor({ project, category, busy, onSave, onClose }: { project: Project | null; category: TaskCategory; busy: boolean; onSave: (mutation: ProjectMutation) => Promise<unknown>; onClose: () => void }) {
   const [id] = useState(() => project?.id ?? crypto.randomUUID());
   const [revision] = useState(project?.revision ?? 0);
   const [draft, setDraft] = useState<ProjectInput>(() => project ? { ...project } : { name: "", description: "", category, departments: [], deadline: null });

@@ -1,7 +1,7 @@
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { addDays, osloDate, validateProject, validateTask } from "./model";
 import { ProjectRequestError } from "./repository";
-import type { ProjectRepository, ProjectWorkspace, Task, TaskCategory } from "./types";
+import { TASK_CATEGORIES, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
 
 const KEY = "helix-member-local-projects-v1";
 const id = (number: number) => `00000000-0000-4000-8000-${String(number).padStart(12, "0")}`;
@@ -11,7 +11,7 @@ export function initialLocalWorkspace(): ProjectWorkspace {
     id: id(number), season: "S27", title, category, description: "", projectId: category === "production" ? id(100) : null,
     assigneeId: id(1), deadline: addDays(today, offset), startDate: addDays(today, -7), status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "", revision: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), completedAt: null, ...extra,
   });
-  return { season: "S27", viewerId: id(1), canManage: true,
+  return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
     projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical", "Electrical"], deadline: addDays(today, 35), revision: 1 }],
     tasks: [
@@ -30,7 +30,9 @@ export function createLocalProjectRepository(): ProjectRepository {
   if (!isLocalMemberMode()) throw new Error("Local project data requires member-local development mode on loopback.");
   function read(): ProjectWorkspace {
     const saved = localStorage.getItem(KEY);
-    return saved ? JSON.parse(saved) as ProjectWorkspace : initialLocalWorkspace();
+    const workspace = saved ? JSON.parse(saved) as ProjectWorkspace : initialLocalWorkspace();
+    // Upgrade only the dedicated local fixture account's pre-permission data.
+    return { ...workspace, taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
   }
   return {
     async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return workspace; },
@@ -41,12 +43,15 @@ export function createLocalProjectRepository(): ProjectRepository {
       if ((current?.revision ?? 0) !== mutation.expectedRevision) throw new ProjectRequestError("This item changed in another session. Reload before saving again.", 409);
       const now = new Date().toISOString();
       if (mutation.action === "save_project") {
+        if (!workspace.canManage) throw new ProjectRequestError("Project management access is required.", 403);
         const project = validateProject(mutation.project);
         if (workspace.tasks.some(task => task.projectId === mutation.id && task.category !== project.category)) throw new Error("Move the project's tasks before changing its category.");
         workspace.projects = [...workspace.projects.filter(item => item.id !== mutation.id), { ...project, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
       } else {
         const previous = workspace.tasks.find(item => item.id === mutation.id);
+        if (mutation.action === "save_task" && (!workspace.taskLeadCategories.includes(mutation.task.category) || (previous && !workspace.taskLeadCategories.includes(previous.category)))) throw new ProjectRequestError("A Department Lead grant for this area is required to create, edit or assign tasks.", 403);
         if (mutation.action === "set_status" && !previous) throw new ProjectRequestError("Task not found.", 404);
+        if (mutation.action === "set_status" && previous && !workspace.canManage && previous.assigneeId !== workspace.viewerId && !workspace.taskLeadCategories.includes(previous.category)) throw new ProjectRequestError("You can update only your assigned tasks.", 403);
         const task = validateTask(mutation.action === "save_task" ? mutation.task : { ...previous!, status: mutation.status, blockedReason: mutation.blockedReason });
         if (task.assigneeId && !workspace.members.some(member => member.id === task.assigneeId)) throw new Error("Choose an active member.");
         if (task.projectId && !workspace.projects.some(project => project.id === task.projectId && project.category === task.category)) throw new Error("Choose a project in the same area.");
