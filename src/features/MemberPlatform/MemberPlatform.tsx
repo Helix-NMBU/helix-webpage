@@ -27,6 +27,7 @@ import { clearGmailSessionCache } from "./gmail-session-cache";
 import { MailWorkspace } from "./MailWorkspace";
 import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
+import ProjectManagement from "../ProjectManagement/ProjectManagement";
 import {
   MemberSettingsPreview,
   TeamWorkspacePreview,
@@ -145,6 +146,10 @@ export default function MemberPlatform() {
                 <Route path="notifications" element={<MemberNotificationsPage />} />
                 <Route path="recruiting" element={<RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess>} />
                 <Route path="mail" element={<MailWorkspace />} />
+                <Route path="tasks" element={<ProjectManagement personal />} />
+                <Route path="project-management" element={<Navigate to="/project-management/overview" replace />} />
+                <Route path="project-management/:section" element={<ProjectManagement />} />
+                <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/project-management/production" />} />
                 <Route path="settings" element={<MemberSettingsPreview />} />
                 <Route path="teams/:teamId/:sectionId" element={<TeamWorkspacePreview />} />
               </Route>

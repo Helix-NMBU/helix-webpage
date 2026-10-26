@@ -92,7 +92,7 @@ describe("internal member platform", () => {
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/tasks", "/project-management/overview", "/recruiting", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
@@ -239,7 +239,11 @@ describe("internal member platform", () => {
     await open("/");
     expect(container.textContent).toContain("Business & Marketing");
     expect(container.textContent).toContain("Finance");
-    expect(container.textContent).toContain("Mechanical & Production");
+    expect(container.textContent).toContain("Project Management");
+    const mail = container.querySelector('[aria-label="Mail"]')!;
+    const tasks = container.querySelector('[aria-label="Tasks"]')!;
+    expect(mail.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.textContent).not.toContain("Mechanical & Production");
     expect(container.querySelector('a[href^="/profile"]')).toBeNull();
     expect(container.querySelector('[aria-label="Profile"]')).toBeNull();
     await profileMenu();

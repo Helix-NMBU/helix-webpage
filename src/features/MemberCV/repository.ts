@@ -142,6 +142,7 @@ export function memberLoginDestination(state: unknown): string {
         : null;
   if (isMemberPlatform()) {
     if (pathname === "/recruiting") return pathname;
+    if (typeof pathname === "string" && /^\/(?:tasks|project-management(?:\/(?:overview|production|partnership-deliverables|marketing|operations))?)$/.test(pathname)) return pathname;
     return pathname === paths.profile || pathname === "/member/profile" ? paths.profile : paths.home;
   }
   return pathname === paths.profile ? pathname : paths.home;

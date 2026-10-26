@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, Home, Mail, UsersRound } from "lucide-react";
+import { Bell, FolderKanban, Home, ListTodo, Mail, UsersRound } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -14,6 +14,7 @@ import {
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
 import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
+import { CATEGORY_LABELS, TASK_CATEGORIES } from "@/features/ProjectManagement/types";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -33,6 +34,7 @@ export function AppSidebar({
   const activeTeam = previewTeams.find((team) =>
     location.pathname.startsWith(`/teams/${team.id}/`),
   );
+  const projectManagement = location.pathname.startsWith("/project-management");
   const teamItems = [
     ...previewTeams.map((team) => ({
       title: team.title,
@@ -44,6 +46,13 @@ export function AppSidebar({
         url: `/teams/${team.id}/${section.id}`,
       })),
     })),
+    {
+      title: "Project Management",
+      url: "/project-management/overview",
+      icon: FolderKanban,
+      isActive: projectManagement,
+      items: [{ title: "Overview", url: "/project-management/overview" }, ...TASK_CATEGORIES.map(category => ({ title: CATEGORY_LABELS[category], url: `/project-management/${category}` }))],
+    },
     ...(recruitment.access === "allowed" ? [{
       title: "Recruiting",
       url: "/recruiting",
@@ -67,13 +76,14 @@ export function AppSidebar({
             },
             { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
             { title: "Mail", url: "/mail", icon: Mail, isActive: location.pathname.startsWith("/mail") },
+            { title: "Tasks", url: "/tasks", icon: ListTodo, isActive: location.pathname === "/tasks" },
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
           disabled={disabled}
         />
         <NavMain
-          key={activeTeam?.id ?? "teams"}
+          key={projectManagement ? "project-management" : activeTeam?.id ?? "teams"}
           title="Teams"
           items={teamItems}
           activeUrl={location.pathname}
