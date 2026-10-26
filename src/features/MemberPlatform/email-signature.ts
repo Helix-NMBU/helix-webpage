@@ -89,10 +89,14 @@ export function parseSignatureSettings(value: unknown): SignatureSettings {
   };
 }
 
+export function resolveSignatureLines(settings: SignatureSettings, member: SignatureMember): SignatureSettings["lines"] {
+  return settings.lines.filter((line) => !["role", "phone"].some((field) => line.text.includes(`{member.${field}}`) && !member[field as keyof SignatureMember]?.trim()))
+    .map((line) => ({ ...line, text: line.text.replace(/\{member\.(name|role|email|phone)\}/g, (_, field: keyof SignatureMember) => member[field] ?? "").trim() })).filter((line) => line.text);
+}
+
 export function renderSignature(settings: SignatureSettings, member: SignatureMember): RenderedSignature {
   if (!settings.enabled) return { html: "", text: "" };
-  const lines = settings.lines.filter((line) => !["role", "phone"].some((field) => line.text.includes(`{member.${field}}`) && !member[field as keyof SignatureMember]?.trim()))
-    .map((line) => ({ ...line, text: line.text.replace(/\{member\.(name|role|email|phone)\}/g, (_, field: keyof SignatureMember) => member[field] ?? "").trim() })).filter((line) => line.text);
+  const lines = resolveSignatureLines(settings, member);
   const logo = settings.logoUrl ? `<td style="padding:0 16px 0 0;vertical-align:top"><img src="${escapeEmailHtml(settings.logoUrl)}" alt="${escapeEmailHtml(settings.logoAlt)}" width="88" style="display:block;width:88px;max-width:88px;height:auto;border:0"></td>` : "";
   const content = lines.map((line) => `<div style="margin:0 0 ${settings.lineSpacing ?? 0}px;color:${line.color};font-size:${line.fontSize ?? 14}px;font-weight:${line.fontWeight ?? 400};line-height:1.25">${escapeEmailHtml(line.text)}</div>`).join("");
   const links = settings.links.map((link) => `<a href="${escapeEmailHtml(link.url)}" style="color:${settings.linkColor};text-decoration:underline">${escapeEmailHtml(link.label)}</a>`).join(" | ");

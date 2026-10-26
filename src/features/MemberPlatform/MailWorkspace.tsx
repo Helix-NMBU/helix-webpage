@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   Archive,
   ArchiveX,
@@ -57,7 +57,7 @@ import { useMemberAccount } from "./MemberAccountContext";
 import { useNotify } from "./MemberNotifications";
 import { EmailHtmlFrame } from "./EmailHtmlFrame";
 import { emailSignatureRequest } from "./email-signature-api";
-import type { SignatureSnapshot } from "./email-signature";
+import { resolveSignatureLines, type SignatureSnapshot } from "./email-signature";
 import {
   getCachedGmailConnection,
   getCachedGmailList,
@@ -436,6 +436,21 @@ const emptyFolderMessage: Record<string, string> = {
   trash: "Your trash is empty.",
 };
 
+function DraftSignature({ snapshot }: { snapshot: SignatureSnapshot }) {
+  const { settings, member } = snapshot;
+  if (!settings.enabled) return null;
+  const lines = resolveSignatureLines(settings, member);
+  return <div aria-label="Your email signature" className="flex items-start gap-4 px-5 pb-5" style={{ fontFamily: "Arial,sans-serif" }}>
+    {settings.logoUrl && <img src={settings.logoUrl} alt={settings.logoAlt} width={88} referrerPolicy="no-referrer" className="h-auto w-[88px] shrink-0" />}
+    <div className="min-w-0 break-words">
+      {lines.map((line, index) => <p key={index} className="dark:!text-foreground" style={{ margin: `0 0 ${settings.lineSpacing ?? 0}px`, color: line.color, fontSize: line.fontSize ?? 14, fontWeight: line.fontWeight ?? 400, lineHeight: 1.25 }}>{line.text}</p>)}
+      {settings.links.length > 0 && <div className="pt-1" style={{ fontSize: settings.linkFontSize ?? 14, lineHeight: 1.35 }}>
+        {settings.links.map((link, index) => <Fragment key={index}>{index > 0 && " | "}<a href={link.url} target="_blank" rel="noopener noreferrer" className="underline dark:!text-blue-400" style={{ color: settings.linkColor }}>{link.label}</a></Fragment>)}
+      </div>}
+    </div>
+  </div>;
+}
+
 function MessageComposer({
   mode,
   from,
@@ -499,7 +514,7 @@ function MessageComposer({
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Label htmlFor="compose-body" className="sr-only">Message</Label>
           <Textarea id="compose-body" className="min-h-40 w-full resize-y rounded-none border-0 bg-transparent px-5 py-5 leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
-          {signature?.signature.html ? <div className="pb-4" aria-label="Your email signature"><EmailHtmlFrame html={signature.signature.html} plainText={signature.signature.text} fitContent /></div> : signatureLoading ? <div className="px-5 py-3" role="status" aria-label="Loading signature"><Skeleton className="h-20 w-52" /></div> : null}
+          {signature?.signature.html ? <DraftSignature snapshot={signature} /> : signatureLoading ? <div className="px-5 py-3" role="status" aria-label="Loading signature"><Skeleton className="h-20 w-52" /></div> : null}
           {quotedMessage && <section aria-label="Original message" className="space-y-3 px-5 pb-5 text-muted-foreground">
             <div className="space-y-1 text-xs"><p className="font-medium">{mode === "reply" ? `On ${formatMessageDetailDate(quotedMessage.date)}, ${quotedMessage.from} wrote:` : "Forwarded message"}</p>{mode === "forward" && <><p>From: {quotedMessage.from}</p><p>Date: {formatMessageDetailDate(quotedMessage.date)}</p><p>Subject: {quotedMessage.subject}</p></>}</div>
             <blockquote className="whitespace-pre-wrap break-words border-l-2 border-border pl-4 text-sm leading-6">{quotedMessage.body || quotedMessage.snippet}</blockquote>
