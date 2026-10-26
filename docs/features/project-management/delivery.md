@@ -106,3 +106,10 @@ Independent reviewer `hierarchy_spec_review` inspected the same full feature and
 After these repairs, all 60 focused project-management tests and the client TypeScript check passed. Both independent reviewers rechecked `b79657ac8c08c78e71af787dfe8e32d72dbaab29` and cleared every reported finding. Standards/React/accessibility: no remaining actionable findings. Spec/correctness/security: no remaining findings. No live database migration or deployment performed.
 
 - Final implementation location remains `/Users/henrik.noteless/Documents/Github/helix-webpage` on `codex/project-management`. Temporary milestone-data and icon worker worktrees were queued for archival after returning the chat to its original managed attachment; the older attached API checkout is not the integration checkout. Continue feature work explicitly in the canonical path.
+
+
+## Department Areas layout refinement, 26 October 2026
+
+The user requested a single Areas breakdown by department, removal of the Assignees view, full-width Progress and Milestones underneath it. The Overview now uses a one-column layout and a fixed Areas section. Department membership comes from project department assignments; shared-project tasks contribute to each participating department, and work without an allocated department remains in No department. Known departments with no tasks show zero progress. Assignment avatars elsewhere are unchanged.
+
+Client TypeScript and all 33 ProjectManagement UI tests passed. Regression coverage checks both participating departments in a shared project, absence of the old switch/assignee breakdown, and unallocated work. Browser verification confirmed the full-width graph, department rows and Milestones below. Screenshot: `overview-department-areas.png` in this chat's visualization directory. No live migration, push or deployment was performed.

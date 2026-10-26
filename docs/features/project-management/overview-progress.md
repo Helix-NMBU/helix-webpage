@@ -4,10 +4,10 @@ User request, 26 October 2026: replace Overview's four summary cards with a Line
 
 ## Behavior
 
-- Overview has a progress graph and milestone list in place of its four summary cards. Area pages retain their summary cards. My tasks stays a personal list.
+- Overview has a full-width progress graph in place of its four summary cards, followed by the milestone widget beneath it. Area pages retain their summary cards. My tasks stays a personal list.
 - Scope is the number of non-cancelled task-kind records. Started includes In progress, Blocked and Done. Completed is Done. Milestones are excluded from these counts. Every task has equal weight.
 - Lines show end-of-day recorded states in Europe/Oslo, carried forward after the first observation. There is no inferred earlier history and no forecast. Future space is shaded. Accessible progress data exposes each recorded day's values.
-- Current completion can be broken down by assignee or work area. A shared task appears in each assigned person's denominator; it counts once in overall scope.
+- The fixed Areas section shows completion by the departments assigned to projects. Shared-project tasks count toward each participating department and once in overall scope. Known departments with no tasks show zero progress; work without an allocated department appears under No department. There is no Assignees view or breakdown switch.
 - A milestone is a dated goal, using the existing milestone task kind. The confirmed hierarchy is Season → Project → Milestone → Task, currently S27. Every new milestone requires a department-level project; every new task requires a milestone and inherits that goal's project. Parent and child must match season, project and work area. Milestones cannot nest.
 - A milestone's percentage is completed linked tasks divided by non-cancelled linked tasks. An empty goal shows 0% of 0. Its status and deadline remain separate from its child-task completion; finishing tasks does not silently close the goal.
 - Selecting a milestone shows its linked tasks, including completed work. Needs organization shows pre-existing work without a valid project/milestone chain. The user explicitly chose to preserve that work until a Department Lead places it; no placeholder projects or milestones are generated. A separate details button opens the goal itself. Project cards expose expandable milestones and their child tasks, preserving the season/project/milestone/task structure.

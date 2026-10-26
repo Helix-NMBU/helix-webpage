@@ -259,7 +259,7 @@ describe("project management interface", () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], taskLeadCategories: [] });
     await open();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope0Started0Completed0");
-    expect(container.textContent).toContain("No tasks yet.");
+    expect(container.textContent).toContain("No departments yet.");
     expect(container.textContent).toContain("A project and milestone are needed before adding tasks.");
     expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
   });
@@ -310,17 +310,22 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
   });
-  it("connects each active progress breakdown tab to its content panel", async () => {
+  it("shows a single Areas section with department progress instead of assignees or task categories", async () => {
     await open();
-    const tabs = container.querySelector('[role="tablist"][aria-label="Progress breakdown"]')!;
-    const assignees = [...tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(item => item.textContent === "Assignees")!;
-    const areas = [...tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(item => item.textContent === "Areas")!;
-    expect(document.getElementById(assignees.getAttribute("aria-controls")!)?.getAttribute("role")).toBe("tabpanel");
-    expect(document.getElementById(assignees.getAttribute("aria-controls")!)?.textContent).toContain("Alex Example");
-    await act(async () => areas.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
-    expect(areas.getAttribute("aria-selected")).toBe("true");
-    expect(document.getElementById(areas.getAttribute("aria-controls")!)?.getAttribute("role")).toBe("tabpanel");
-    expect(document.getElementById(areas.getAttribute("aria-controls")!)?.textContent).toContain("Production");
+    const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
+    expect(areas.querySelector("h3")?.textContent).toBe("Areas");
+    expect(areas.querySelector('[aria-label="Mechanical: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
+    expect(areas.querySelector('[aria-label="Electrical: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
+    expect(areas.textContent).not.toContain("Production");
+    expect(areas.textContent).not.toContain("Alex Example");
+    expect(container.querySelector('[role="tablist"][aria-label="Progress breakdown"]')).toBeNull();
+  });
+  it("retains unallocated work in the department breakdown", async () => {
+    const workspace = initialLocalWorkspace();
+    load.mockResolvedValue({ ...workspace, projects: workspace.projects.map(project => ({ ...project, departments: [] })) });
+    await open();
+    const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
+    expect(areas.querySelector('[aria-label="No department: 1 of 5 tasks complete, 20%"]')).not.toBeNull();
   });
 
 });
