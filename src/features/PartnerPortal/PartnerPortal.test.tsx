@@ -36,6 +36,7 @@ describe("partner portal recovery and identity isolation", () => {
     vi.mocked(partnerRepository.session).mockResolvedValue(session);
     vi.mocked(partnerRepository.directory).mockResolvedValue({ members: [member] });
     vi.mocked(partnerRepository.requests).mockResolvedValue({ requests: [], administrators: [] });
+    vi.spyOn(toast, "warning");
     vi.spyOn(toast, "error");
     container = document.createElement("div");
     document.body.append(container);
@@ -87,6 +88,26 @@ describe("partner portal recovery and identity isolation", () => {
     expect(container.textContent).toContain("Engagement Requests");
     expect(container.textContent).toContain("You have no requests yet.");
     expect(partnerRepository.requests).toHaveBeenCalledWith("organization");
+  });
+
+  it("shows an access recovery path when no active agreement includes a portal page", async () => {
+    vi.mocked(partnerRepository.session).mockResolvedValue({ ...session, organizations: [{
+      id: "organization", name: "Partner company", entitlements: { directory: false, requests: false },
+    }] });
+    await open();
+    expect(container.textContent).toContain("Partner portal access unavailable");
+    expect(container.querySelector('a[href="/requests"]')).toBeNull();
+    expect(container.querySelector('a[href="/directory"]')).toBeNull();
+    expect(toast.warning).toHaveBeenCalledWith("No current portal access", expect.any(Object));
+  });
+
+  it("does not offer organizations that have no portal entitlement", async () => {
+    vi.mocked(partnerRepository.session).mockResolvedValue({ ...session, organizations: [
+      session.organizations[0], { id: "no-access", name: "Other company", entitlements: { directory: false, requests: false } },
+    ] });
+    await open();
+    expect(container.querySelector("#partner-organization")).toBeNull();
+    expect(container.textContent).toContain("Talent Directory");
   });
 
   it("shows a return-to-webpage link on the invitation sign-in page", async () => {

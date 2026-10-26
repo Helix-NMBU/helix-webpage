@@ -65,6 +65,15 @@ export default function RequestsPanel({ context, request, heading = "Collaborati
     const result = await request<RequestList>("requests");
     if (sequence.current === version) { setRequests(result.requests); setAdministrators(result.administrators); }
   }
+  async function refreshAfterMutation(version: number) {
+    try { await refresh(version); }
+    catch (cause) {
+      if (sequence.current === version) notify("Request saved, but the list could not refresh", message(cause), {
+        variant: "warning", href: null,
+        action: { label: "Refresh requests", onClick: () => { void refresh().catch(error => notify("Could not refresh requests", message(error), { variant: "error", href: null })); } },
+      });
+    }
+  }
   async function open(id: string) {
     const version = ++sequence.current;
     setOpening(true); if (detail?.id !== id) setReply("");
@@ -77,19 +86,22 @@ export default function RequestsPanel({ context, request, heading = "Collaborati
   async function create(event: FormEvent) {
     const version = sequence.current;
     event.preventDefault(); setBusy(true);
+    let committed = false;
     try {
       const draft = validateRequestDraft({ type, title, body });
       const result = await request<{ request: RequestDetail }>("requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
       if (sequence.current !== version) return;
       setDetail(result.request); setNewOpen(false); setCancelOpen(false); setTitle(""); setBody(""); setReply(""); setFilter("all");
       notify("Request submitted", "Helix will follow up in this shared conversation.", { variant: "success", href: null });
-      await refresh(version);
+      committed = true;
     } catch (cause) { if (sequence.current === version) notify("Could not submit request", message(cause), { variant: "error", href: null }); } finally { if (sequence.current === version) setBusy(false); }
+    if (committed) await refreshAfterMutation(version);
   }
   async function mutate(operation: "reply" | "status" | "assign", extra: Record<string, unknown>) {
     if (!detail) return;
     const version = sequence.current;
     setBusy(true);
+    let committed = false;
     try {
       if (operation === "reply") extra = { body: validateRequestReply(extra.body) };
       const result = await request<{ request: RequestDetail }>("request", {
@@ -100,8 +112,9 @@ export default function RequestsPanel({ context, request, heading = "Collaborati
       setDetail(result.request); if (operation === "reply") setReply("");
       setCancelOpen(false);
       notify(operation === "reply" ? "Reply added" : "Request updated", "The shared request history has been updated.", { variant: "success", href: null });
-      await refresh(version);
+      committed = true;
     } catch (cause) { if (sequence.current === version) notify("Could not update request", message(cause), { variant: "error", href: null, action: { label: "Reload request", onClick: () => { void open(detail.id); } } }); } finally { if (sequence.current === version) setBusy(false); }
+    if (committed) await refreshAfterMutation(version);
   }
   const visible = requests.filter(item => filter === "all" || item.status === filter);
 
