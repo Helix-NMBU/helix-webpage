@@ -13,6 +13,7 @@ const handlers = new Map([
   ['/api/member-login', '/api/member-login.ts'],
   ['/api/member-cv', '/api/member-cv.ts'],
   ['/api/member-cv-file', '/api/member-cv-file.ts'],
+  ['/api/member-access', '/api/member-access.ts'],
   ['/api/partner', '/api/partner.ts'],
   ['/api/website', '/api/website.ts'],
   ['/api/contact', '/api/contact.ts'],
