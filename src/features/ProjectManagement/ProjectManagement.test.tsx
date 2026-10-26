@@ -142,6 +142,15 @@ describe("project management interface", () => {
     await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
   });
+  it("lets a scoped Lead without project-management permission update another member's status in Overview", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: ["production"] });
+    await open("overview");
+    await click("Assemble suspension mounts");
+    expect(document.getElementById("task-assignee")?.hasAttribute("disabled")).toBe(true);
+    expect(document.getElementById("task-status")?.hasAttribute("disabled")).toBe(false);
+    await click("Save task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "in_progress" }));
+  });
   it("can hide completed work through the personal view settings", async () => {
     await open("overview", true);
     await click("View settings");
