@@ -30,7 +30,7 @@ export function applicationId(value: unknown): string {
 function text(body: Record<string, unknown>, key: string, max: number): string {
   const value = body[key];
   if (typeof value !== "string" || !value.trim() || value.length > max || /[\u0000]/.test(value)) {
-    throw new MemberCvError(400, `Check the ${key.replaceAll("_", " ")} field.`);
+    throw new MemberCvError(400, `Check the ${key.replace(/_/g, " ")} field.`);
   }
   return value.trim();
 }
