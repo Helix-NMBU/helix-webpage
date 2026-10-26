@@ -1,16 +1,19 @@
-import { isLocalMemberMode } from "./local-mode";
+import { resolveAppHost } from "../../libs/lib/app-hosts";
 
 export function isMemberPlatformHost(hostname: string): boolean {
-  return hostname.toLowerCase() === "internal.helixnmbu.no";
+  return resolveAppHost(hostname).application === "member";
 }
 
 export function isMemberPlatform(origin = typeof window === "undefined" ? "https://helixnmbu.no" : window.location.origin): boolean {
-  const hostname = new URL(origin).hostname;
-  const memberPlatformPreview = import.meta.env.VITE_MEMBER_PLATFORM === "true" && (
-    hostname.endsWith(".vercel.app")
-    || (import.meta.env.DEV && ["localhost", "127.0.0.1"].includes(hostname))
-  );
-  return isMemberPlatformHost(hostname) || isLocalMemberMode(origin) || memberPlatformPreview;
+  try {
+    return resolveAppHost(new URL(origin).hostname, {
+      development: import.meta.env.DEV,
+      mode: import.meta.env.MODE,
+      memberPlatformPreview: import.meta.env.VITE_MEMBER_PLATFORM === "true",
+    }).application === "member";
+  } catch {
+    return false;
+  }
 }
 
 export function memberPaths(origin?: string) {

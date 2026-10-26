@@ -1,0 +1,3 @@
+.partner-portal { font-family: var(--font-sans); }
+.partner-portal h1, .partner-portal h2 { font-family: inherit; }
+.partner-portal [data-sonner-toast] { font-family: inherit; }

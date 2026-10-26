@@ -1,5 +1,7 @@
 # Member CV portal setup
 
+For the current shared website, member, recruitment, and partner configuration, use [Neon application setup](../../neon-setup.md). That guide includes local APIs, schema setup, partner OTP, and recruiter grants.
+
 The member CV portal signs in with Neon Managed Better Auth, stores data in Neon Postgres, and stores generated PDFs in Neon Object Storage. It does not use Supabase. Do not commit secrets. Put real values in the local `.env` (gitignored) and in the Vercel project environment.
 
 The provisioned Helix project is `helix-nmbu` (`cool-lake-32274277`, `aws-eu-central-1`, branch `main`). CV tables live in schema `cv`. Shared member identity lives in schema `identity` and points at `neon_auth."user"`. Managed Better Auth already owns `neon_auth`; the migration does not create that schema. This database does not have the older Stack Auth table `neon_auth.users_sync`.
