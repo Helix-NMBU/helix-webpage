@@ -91,6 +91,18 @@ export function removeCachedGmailMessage(accountEmail: string, messageId: string
   }
 }
 
+export function updateCachedGmailUnread(accountEmail: string, messageId: string, unread: boolean): void {
+  const prefix = `${accountKey(accountEmail)}:`;
+  const detail = messageDetails.get(`${prefix}${messageId}`);
+  if (detail) messageDetails.set(`${prefix}${messageId}`, { ...detail, unread });
+  for (const [key, snapshot] of messageLists) {
+    if (!key.startsWith(prefix)) continue;
+    // Unread-only lists may not contain a newly unread message. Reload them.
+    if (key.endsWith(":true")) messageLists.delete(key);
+    else messageLists.set(key, { ...snapshot, messages: snapshot.messages.map((message) => message.id === messageId ? { ...message, unread } : message) });
+  }
+}
+
 export function clearGmailSessionCache(accountEmail?: string): void {
   if (!accountEmail) {
     const accounts = new Set([...messageDetailRequests.keys()].map((key) => key.split(":", 1)[0]));

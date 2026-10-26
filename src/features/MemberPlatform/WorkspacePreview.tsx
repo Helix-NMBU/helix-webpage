@@ -36,7 +36,8 @@ import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
 import { useMemberFeatureAccess } from "./MemberFeatureAccess";
 import { GmailLogo } from "./MailWorkspace";
-import { memberSessionToken } from "../MemberCV/session";
+import { EmailSignatureSettings } from "./EmailSignatureSettings";
+import { memberGmailRequest } from "./gmail-api";
 import {
   clearGmailSessionCache,
   getCachedGmailConnection,
@@ -304,11 +305,7 @@ export function MemberSettingsPreview() {
     let active = true;
     void (async () => {
       try {
-        const token = await memberSessionToken(boundUserId);
-        const response = await fetch("/api/gmail-status", {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await memberGmailRequest("/api/gmail-status", boundUserId);
         const body = await response.json().catch(() => null) as { connected?: unknown } | null;
         if (active && response.ok && typeof body?.connected === "boolean") {
           setCachedGmailConnection(accountEmail, body.connected);
@@ -325,11 +322,9 @@ export function MemberSettingsPreview() {
     setDisconnecting(true);
     setDisconnectError(null);
     try {
-      const token = await memberSessionToken(boundUserId);
-      const response = await fetch("/api/gmail-disconnect", {
+      const response = await memberGmailRequest("/api/gmail-disconnect", boundUserId, {
         method: "POST",
         credentials: "include",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const body = await response.json().catch(() => null) as { error?: unknown } | null;
       if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : "Could not disconnect Gmail.");
@@ -427,6 +422,7 @@ export function MemberSettingsPreview() {
           </p>
         </CardContent>
       </Card>
+      <EmailSignatureSettings />
       <Card className="shadow-none">
         <CardHeader>
           <CardTitle className="text-base">

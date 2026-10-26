@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Archive,
   ArchiveX,
@@ -10,11 +10,15 @@ import {
   MoreHorizontal,
   PenSquare,
   Reply,
+  RefreshCw,
+  Mail,
+  MailOpen,
   Search,
   Send,
   ShieldAlert,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
@@ -23,6 +27,7 @@ import { Textarea } from "@libs/components/ui/textarea";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -47,9 +52,12 @@ import {
   SidebarMenuButton,
   SidebarProvider,
 } from "@libs/components/ui/sidebar";
-import { memberSessionToken } from "../MemberCV/session";
+import { memberGmailRequest } from "./gmail-api";
 import { useMemberAccount } from "./MemberAccountContext";
 import { useNotify } from "./MemberNotifications";
+import { EmailHtmlFrame } from "./EmailHtmlFrame";
+import { emailSignatureRequest } from "./email-signature-api";
+import type { SignatureSnapshot } from "./email-signature";
 import {
   getCachedGmailConnection,
   getCachedGmailList,
@@ -58,6 +66,8 @@ import {
   removeCachedGmailMessage,
   setCachedGmailConnection,
   setCachedGmailList,
+  setCachedGmailMessage,
+  updateCachedGmailUnread,
 } from "./gmail-session-cache";
 
 type MailFolder = {
@@ -99,129 +109,6 @@ const mailFolders: MailFolder[] = [
   { id: "spam", label: "Spam", icon: ShieldAlert },
   { id: "trash", label: "Trash", icon: Trash2 },
 ];
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character);
-}
-
-function safeDocumentAttributes(element: Element, names: string[]): string {
-  return names.flatMap((name) => {
-    const value = element.getAttribute(name);
-    return value === null ? [] : [`${name}="${escapeHtml(value)}"`];
-  }).join(" ");
-}
-
-function sanitizeCss(css: string): string {
-  return css
-    .replace(/@import\s+(?:url\([^)]*\)|["'][^"']*["'])[^;]*;?/gi, "")
-    .replace(/expression\s*\([^)]*\)/gi, "")
-    .replace(/url\(\s*(['"]?)\s*(?:javascript|vbscript):[^)]*\)/gi, "url()")
-    .replace(/(?:^|[;{])\s*(?:behavior|-moz-binding)\s*:[^;}]+;?/gi, "");
-}
-
-function emailDocument(html: string, plainText: string): string {
-  const source = html.trim() || `<pre>${escapeHtml(plainText)}</pre>`;
-  const parsed = new DOMParser().parseFromString(source, "text/html");
-  parsed.querySelectorAll("script, iframe, frame, frameset, object, embed, form, input, button, textarea, select, option, link, meta, base, svg, math, video, audio, source, track, canvas, portal").forEach((element) => element.remove());
-  parsed.querySelectorAll("*").forEach((element) => {
-    for (const attribute of [...element.attributes]) {
-      const name = attribute.name.toLowerCase();
-      const value = attribute.value.trim();
-      if (name.startsWith("on") || ["srcdoc", "formaction", "xlink:href"].includes(name)) {
-        element.removeAttribute(attribute.name);
-      } else if (name === "style") {
-        element.setAttribute(attribute.name, sanitizeCss(value));
-      } else if (name === "href") {
-        try {
-          const url = new URL(value, window.location.origin);
-          if (!["https:", "http:", "mailto:"].includes(url.protocol)) element.removeAttribute(attribute.name);
-          else if (url.protocol === "http:" || url.protocol === "https:") {
-            element.setAttribute("target", "_blank");
-            element.setAttribute("rel", "noopener noreferrer");
-          }
-        } catch {
-          element.removeAttribute(attribute.name);
-        }
-      } else if (name === "src" && element.tagName.toLowerCase() === "img") {
-        try {
-          const url = new URL(value, window.location.origin);
-          if (url.protocol === "http:" || url.protocol === "https:") {
-            element.setAttribute("src", url.href);
-            element.setAttribute("referrerpolicy", "no-referrer");
-            element.setAttribute("loading", "eager");
-          } else if (url.protocol !== "data:" || !/^data:image\//i.test(value)) {
-            element.removeAttribute("src");
-          }
-        } catch {
-          element.removeAttribute("src");
-        }
-      } else if (["srcset", "background", "poster"].includes(name)) {
-        element.removeAttribute(attribute.name);
-      }
-    }
-  });
-
-  const styles = [...parsed.querySelectorAll("style")].map((style) => {
-    const css = sanitizeCss(style.textContent ?? "");
-    return `<style>${css.replace(/<\/style/gi, "<\\/style")}</style>`;
-  }).join("");
-  const htmlAttributes = safeDocumentAttributes(parsed.documentElement, ["lang", "dir", "class"]);
-  const bodyAttributes = safeDocumentAttributes(parsed.body, ["id", "lang", "dir", "class"]);
-  const htmlStyle = `${sanitizeCss(parsed.documentElement.getAttribute("style") ?? "")};height:100%!important;overflow:hidden!important`;
-  const bodyStyle = `${sanitizeCss(parsed.body.getAttribute("style") ?? "")};box-sizing:border-box;height:100%!important;max-height:100%;overflow-x:auto!important;overflow-y:auto!important;overscroll-behavior-y:contain!important`;
-  const shellStyles = "html{height:100%;overflow:hidden}body{box-sizing:border-box;margin:0;padding:24px;color:#202124;font:14px/1.6 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;font:inherit}a{color:#1a73e8}";
-  const scrollbarStyles = "body{scrollbar-width:thin;scrollbar-color:transparent transparent;transition:scrollbar-color .45s ease-out}body[data-scrolling='true']{scrollbar-color:color-mix(in srgb,#5f6368 65%,transparent) transparent}body::-webkit-scrollbar{width:8px;height:8px}body::-webkit-scrollbar-track{background:transparent}body::-webkit-scrollbar-thumb{background:transparent;border-radius:8px;transition:background-color .45s ease-out}body[data-scrolling='true']::-webkit-scrollbar-thumb{background:color-mix(in srgb,#5f6368 65%,transparent);transition-duration:120ms}";
-  return `<!doctype html><html ${htmlAttributes} style="${escapeHtml(htmlStyle)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline';"><style>${shellStyles}</style>${styles}<style>${scrollbarStyles}</style></head><body ${bodyAttributes} style="${escapeHtml(bodyStyle)}">${parsed.body.innerHTML}</body></html>`;
-}
-
-function EmailHtmlFrame({ html, plainText }: { html: string; plainText: string }) {
-  const srcDoc = useMemo(() => emailDocument(html, plainText), [html, plainText]);
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const scrollIdleTimeout = useRef<number | null>(null);
-
-  useEffect(() => {
-    const frame = frameRef.current;
-    if (!frame) return;
-    let scrollBody: HTMLElement | null = null;
-    const attachScrollListener = () => {
-      scrollBody?.removeEventListener("scroll", handleScroll);
-      scrollBody = frame.contentDocument?.body ?? null;
-      scrollBody?.addEventListener("scroll", handleScroll, { passive: true });
-    };
-    const handleScroll = () => {
-      if (!scrollBody) return;
-      scrollBody.dataset.scrolling = "true";
-      if (scrollIdleTimeout.current !== null) window.clearTimeout(scrollIdleTimeout.current);
-      scrollIdleTimeout.current = window.setTimeout(() => {
-        if (scrollBody) scrollBody.dataset.scrolling = "false";
-        scrollIdleTimeout.current = null;
-      }, 650);
-    };
-    frame.addEventListener("load", attachScrollListener);
-    attachScrollListener();
-    return () => {
-      frame.removeEventListener("load", attachScrollListener);
-      scrollBody?.removeEventListener("scroll", handleScroll);
-      if (scrollIdleTimeout.current !== null) {
-        window.clearTimeout(scrollIdleTimeout.current);
-        scrollIdleTimeout.current = null;
-      }
-    };
-  }, [srcDoc]);
-
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <iframe
-        title="Email content"
-        sandbox="allow-same-origin"
-        referrerPolicy="no-referrer"
-        ref={frameRef}
-        srcDoc={srcDoc}
-        className="h-full min-h-0 w-full flex-1 border-0 bg-white"
-      />
-    </div>
-  );
-}
 
 export function GmailLogo({ className }: { className?: string }) {
   return (
@@ -329,6 +216,7 @@ function ConnectedMailSidebar({
   onMessagePrefetch,
   nextPageToken,
   onLoadMore,
+  onRefresh,
 }: {
   activeFolder: string;
   onFolderChange: (folder: string) => void;
@@ -346,6 +234,7 @@ function ConnectedMailSidebar({
   onMessagePrefetch: (messageId: string) => void;
   nextPageToken: string | null;
   onLoadMore: () => void;
+  onRefresh: () => void;
 }) {
   const folder = mailFolders.find((item) => item.id === activeFolder) ?? mailFolders[0];
   const [listScrolling, setListScrolling] = useState(false);
@@ -372,6 +261,7 @@ function ConnectedMailSidebar({
           <div className="flex items-center justify-between gap-3">
             <div className="text-base font-medium text-foreground">{folder.label}</div>
             <div className="flex items-center gap-1">
+              <SidebarMenuButton type="button" size="sm" aria-label="Refresh mail" tooltip={{ children: "Refresh mail", hidden: false }} className="size-8 justify-center p-0" disabled={loading} onClick={onRefresh}><RefreshCw className={loading ? "animate-spin" : ""} /></SidebarMenuButton>
               <SidebarMenuButton
                 type="button"
                 size="sm"
@@ -462,14 +352,8 @@ function ConnectedMailSidebar({
         >
           <SidebarGroup className="px-0">
             <SidebarGroupContent>
-              {loading && messages.length > 0 && (
-                <p className="px-4 py-2 text-xs text-muted-foreground" role="status">Updating messages…</p>
-              )}
-              {error && messages.length > 0 && (
-                <p className="px-4 py-2 text-xs text-destructive" role="alert">{error}</p>
-              )}
               {error && messages.length === 0 ? (
-                <p className="px-4 py-3 text-sm text-destructive" role="alert">{error}</p>
+                <div className="p-4"><Button variant="outline" size="sm" onClick={onRefresh}>Reload messages</Button></div>
               ) : loading && messages.length === 0 ? (
                 <MailListSkeleton />
               ) : messages.length === 0 ? (
@@ -496,15 +380,9 @@ function ConnectedMailSidebar({
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{message.snippet}</p>
                     </button>
                   ))}
-                  {nextPageToken && (
-                    <div className="p-3">
-                      <Button variant="outline" size="sm" className="w-full" disabled={loading} onClick={onLoadMore}>
-                        {loading ? "Loading…" : "Load more"}
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )}
+              {nextPageToken && <div className="p-3"><Button variant="outline" size="sm" className="w-full" disabled={loading} onClick={onLoadMore}>{loading ? "Loading…" : "Load more"}</Button></div>}
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
@@ -563,7 +441,9 @@ function MessageComposer({
   onSubjectChange,
   body,
   onBodyChange,
-  error,
+  quotedMessage,
+  signature,
+  signatureLoading,
   sending,
   onSend,
 }: {
@@ -577,16 +457,19 @@ function MessageComposer({
   onSubjectChange: (value: string) => void;
   body: string;
   onBodyChange: (value: string) => void;
-  error: string | null;
+  quotedMessage: GmailMessage | null;
+  signature: SignatureSnapshot | null;
+  signatureLoading: boolean;
   sending: boolean;
   onSend: () => void;
 }) {
   const label = mode === "new" ? "New message" : mode === "reply" ? "Reply" : "Forward";
   return (
     <form className="flex h-full min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
-      <DialogHeader className="shrink-0 border-b px-5 py-3 pr-14">
+      <DialogHeader className="relative flex h-12 shrink-0 justify-center border-b px-5 pr-14">
         <DialogTitle className="text-sm font-medium">{label}</DialogTitle>
         <DialogDescription className="sr-only">{mode === "reply" ? "Write your reply." : mode === "forward" ? "Forward this message to someone." : "Compose and send an email from your Gmail account."}</DialogDescription>
+        <DialogClose asChild><Button type="button" variant="ghost" size="icon-sm" aria-label="Close" disabled={sending} className="absolute right-3 top-1/2 -translate-y-1/2"><X /></Button></DialogClose>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 divide-y divide-border">
@@ -607,14 +490,18 @@ function MessageComposer({
             <Input id="compose-from" value={from} readOnly disabled aria-label="From" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
           </div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Label htmlFor="compose-body" className="sr-only">Message</Label>
-          <Textarea id="compose-body" className="min-h-0 flex-1 resize-none rounded-none border-0 px-5 py-5 leading-6 shadow-none focus-visible:ring-0" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
+          <Textarea id="compose-body" className="min-h-40 w-full resize-y rounded-none border-0 px-5 py-5 leading-6 shadow-none focus-visible:ring-0" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
+          {signatureLoading ? <div className="px-5 py-3" role="status" aria-label="Loading signature"><Skeleton className="h-20 w-52" /></div> : signature?.signature.html ? <div className="flex h-48 min-h-0" aria-label="Your email signature"><EmailHtmlFrame html={signature.signature.html} plainText={signature.signature.text} /></div> : null}
+          {quotedMessage && <section aria-label="Original message" className="border-t">
+            <div className="space-y-1 px-5 py-3 text-xs text-muted-foreground"><p className="font-medium text-foreground">{mode === "reply" ? `On ${formatMessageDetailDate(quotedMessage.date)}, ${quotedMessage.from} wrote:` : "Forwarded message"}</p>{mode === "forward" && <><p>From: {quotedMessage.from}</p><p>Date: {formatMessageDetailDate(quotedMessage.date)}</p><p>Subject: {quotedMessage.subject}</p></>}</div>
+            <div className="flex h-96 min-h-0 border-l-2 border-border ml-5"><EmailHtmlFrame html={quotedMessage.htmlBody} plainText={quotedMessage.body} /></div>
+          </section>}
         </div>
-        {error && <p className="shrink-0 px-5 pb-3 text-sm text-destructive" role="alert">{error}</p>}
       </div>
       <DialogFooter className="shrink-0 border-t px-5 py-3">
-        <Button type="submit" size="icon" aria-label="Send" title="Send" disabled={sending || !to.trim() || !subject.trim()}>
+        <Button type="submit" size="icon" aria-label="Send" title="Send" disabled={sending || signatureLoading || !signature || !to.trim() || !subject.trim()}>
           {sending ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
         </Button>
       </DialogFooter>
@@ -632,7 +519,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [nextPageToken, setNextPageToken] = useState<string | null>(() => getCachedGmailList(accountEmail, mailListCacheKey("inbox", "", false))?.nextPageToken ?? null);
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(() => getCachedGmailList(accountEmail, mailListCacheKey("inbox", "", false))?.messages[0]?.id ?? null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<GmailMessage | null>(null);
   const [messageLoading, setMessageLoading] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
@@ -644,31 +531,46 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     return justConnected ? "connected" : cachedConnection === null ? "checking" : cachedConnection ? "connected" : "disconnected";
   });
   const [connecting, setConnecting] = useState(false);
-  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
   const [composeTo, setComposeTo] = useState("");
   const [composeCc, setComposeCc] = useState("");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
-  const [composeError, setComposeError] = useState<string | null>(null);
+  const [quotedMessage, setQuotedMessage] = useState<GmailMessage | null>(null);
+  const [signature, setSignature] = useState<SignatureSnapshot | null>(null);
+  const [signatureLoading, setSignatureLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [confirmAction, setConfirmAction] = useState<MessageAction | null>(null);
   const [actionPending, setActionPending] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
   const boundUserId = useRef<string | null>(null);
   const listRequestId = useRef(0);
   const detailRequestId = useRef(0);
+  const readRequests = useRef(new Set<string>());
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [readPending, setReadPending] = useState(false);
+  const [detailRetry, setDetailRetry] = useState(0);
+  const refreshMail = useCallback(() => setRefreshVersion((value) => value + 1), []);
+
+  useEffect(() => {
+    window.addEventListener("focus", refreshMail);
+    return () => window.removeEventListener("focus", refreshMail);
+  }, [refreshMail]);
+
+  const loadSignature = useCallback(async () => {
+    setSignatureLoading(true);
+    setSignature(null);
+    try { setSignature(await emailSignatureRequest(boundUserId)); }
+    catch (error) {
+      notify("Could not load signature", error instanceof Error ? error.message : "Please try again.", { id: "composer-signature", variant: "error", href: null, action: { label: "Try again", onClick: () => void loadSignature() } });
+    } finally { setSignatureLoading(false); }
+  }, [notify]);
 
   useEffect(() => {
     if (connectedOverride !== undefined) return;
     let active = true;
     void (async () => {
       try {
-        const token = await memberSessionToken(boundUserId);
-        const response = await fetch("/api/gmail-status", {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await memberGmailRequest("/api/gmail-status", boundUserId);
         const body = await response.json().catch(() => null) as { connected?: unknown } | null;
         if (active) {
           if (response.ok && typeof body?.connected === "boolean") {
@@ -687,13 +589,10 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
 
   async function connectGmail() {
     setConnecting(true);
-    setConnectionError(null);
     try {
-      const token = await memberSessionToken(boundUserId);
-      const response = await fetch("/api/gmail-connect", {
+      const response = await memberGmailRequest("/api/gmail-connect", boundUserId, {
         method: "POST",
         credentials: "include",
-        headers: { Authorization: `Bearer ${token}` },
       });
       const body = await response.json().catch(() => null) as { error?: unknown; url?: unknown } | null;
       if (!response.ok || typeof body?.url !== "string") {
@@ -702,7 +601,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       window.location.assign(body.url);
     } catch (error) {
       setConnecting(false);
-      setConnectionError(error instanceof Error ? error.message : "Gmail connection is temporarily unavailable. Try again.");
+      notify("Could not connect Gmail", error instanceof Error ? error.message : "Gmail connection is temporarily unavailable. Try again.", { variant: "error", href: null });
     }
   }
 
@@ -717,35 +616,35 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     const cachedMessages = inboxMessages(cachedList?.messages ?? [], activeFolder, unreadOnly);
     setMessages(cachedMessages);
     setNextPageToken(cachedList?.nextPageToken ?? null);
-    setSelectedMessageId((current) => cachedMessages.some((message) => message.id === current)
-      ? current
-      : cachedMessages[0]?.id ?? null);
     setListError(null);
     setListLoading(true);
     const timer = window.setTimeout(() => {
       void (async () => {
         try {
-          const token = await memberSessionToken(boundUserId);
           const params = new URLSearchParams({ action: "messages", folder: activeFolder });
           if (search.trim()) params.set("q", search.trim());
           if (activeFolder === "inbox" && unreadOnly) params.set("unreadOnly", "true");
-          const response = await fetch(`/api/gmail?${params}`, {
-            credentials: "include",
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const response = await memberGmailRequest(`/api/gmail?${params}`, boundUserId);
           const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
           if (requestId !== listRequestId.current) return;
           if (!response.ok) throw new Error(body?.error || "Could not load Gmail messages.");
           const loadedMessages = inboxMessages(Array.isArray(body?.messages) ? body.messages : [], activeFolder, unreadOnly);
+          for (const message of loadedMessages) {
+            const detail = getCachedGmailMessage(accountEmail, message.id);
+            if (detail) setCachedGmailMessage(accountEmail, { ...detail, ...message });
+          }
+          setSelectedMessage((current) => {
+            const summary = loadedMessages.find((message) => message.id === current?.id);
+            return current && summary ? { ...current, ...summary } : current;
+          });
           setCachedGmailList(accountEmail, queryKey, { messages: loadedMessages, nextPageToken: body?.nextPageToken ?? null });
           setMessages(loadedMessages);
           setNextPageToken(body?.nextPageToken ?? null);
-          setSelectedMessageId((current) => loadedMessages.some((message) => message.id === current)
-            ? current
-            : loadedMessages[0]?.id ?? null);
         } catch (error) {
           if (requestId === listRequestId.current) {
-            setListError(error instanceof Error ? error.message : "Could not load Gmail messages.");
+            const message = error instanceof Error ? error.message : "Could not load Gmail messages.";
+            setListError(message);
+            notify("Could not load mail", message, { id: "mail-list", variant: "error", href: null, action: { label: "Try again", onClick: refreshMail } });
             if (!cachedList) {
               setMessages([]);
               setNextPageToken(null);
@@ -762,7 +661,33 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       window.clearTimeout(timer);
       if (requestId === listRequestId.current) listRequestId.current += 1;
     };
-  }, [accountEmail, activeFolder, connected, connectedOverride, search, unreadOnly]);
+  }, [accountEmail, activeFolder, connected, connectedOverride, search, unreadOnly, refreshVersion, refreshMail, notify]);
+
+  const updateReadState = useCallback(async (messageId: string, unread: boolean) => {
+    if (readRequests.current.has(messageId)) return;
+    readRequests.current.add(messageId);
+    setReadPending(true);
+    try {
+      const response = await memberGmailRequest("/api/gmail?action=messageAction", boundUserId, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: unread ? "markUnread" : "markRead", id: messageId }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error || "Could not update the message's read state.");
+      updateCachedGmailUnread(accountEmail, messageId, unread);
+      // Invalidate lists started before Gmail acknowledged the label change.
+      listRequestId.current += 1;
+      setListLoading(false);
+      setMessages((current) => current.map((message) => message.id === messageId ? { ...message, unread } : message));
+      setSelectedMessage((current) => current?.id === messageId ? { ...current, unread } : current);
+      refreshMail();
+    } catch (error) {
+      notify("Could not update read state", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null, action: { label: "Try again", onClick: () => void updateReadState(messageId, unread) } });
+    } finally {
+      readRequests.current.delete(messageId);
+      setReadPending(readRequests.current.size > 0);
+    }
+  }, [accountEmail, notify, refreshMail]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined || !selectedMessageId) return;
@@ -774,37 +699,35 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     void (async () => {
       try {
         const body = await loadCachedGmailMessage(accountEmail, selectedMessageId, async () => {
-          const token = await memberSessionToken(boundUserId);
           const params = new URLSearchParams({ action: "message", id: selectedMessageId });
-          const response = await fetch(`/api/gmail?${params}`, {
-            credentials: "include",
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const response = await memberGmailRequest(`/api/gmail?${params}`, boundUserId);
           const result = await response.json().catch(() => null) as (GmailMessage & { error?: string }) | null;
           if (!response.ok) throw new Error(result?.error || "Could not open this message.");
           return result as GmailMessage;
         });
         if (requestId !== detailRequestId.current) return;
         setSelectedMessage(body);
+        // Only opening a selected message marks it read. Hover/focus prefetch is read-only.
+        if (body.unread) void updateReadState(body.id, false);
       } catch (error) {
-        if (requestId === detailRequestId.current) setMessageError(error instanceof Error ? error.message : "Could not open this message.");
+        if (requestId === detailRequestId.current) {
+          const message = error instanceof Error ? error.message : "Could not open this message.";
+          setMessageError(message);
+          notify("Could not open message", message, { variant: "error", href: null, action: { label: "Try again", onClick: () => setDetailRetry((value) => value + 1) } });
+        }
       } finally {
         if (requestId === detailRequestId.current) setMessageLoading(false);
       }
     })();
     return () => { detailRequestId.current += 1; };
-  }, [accountEmail, connected, connectedOverride, selectedMessageId]);
+  }, [accountEmail, connected, connectedOverride, selectedMessageId, updateReadState, detailRetry, notify]);
 
   async function prefetchMessage(messageId: string) {
     if (getCachedGmailMessage(accountEmail, messageId)) return;
     try {
       await loadCachedGmailMessage(accountEmail, messageId, async () => {
-        const token = await memberSessionToken(boundUserId);
         const params = new URLSearchParams({ action: "message", id: messageId });
-        const response = await fetch(`/api/gmail?${params}`, {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await memberGmailRequest(`/api/gmail?${params}`, boundUserId);
         const body = await response.json().catch(() => null) as (GmailMessage & { error?: string }) | null;
         if (!response.ok) throw new Error(body?.error || "Could not open this message.");
         return body as GmailMessage;
@@ -815,6 +738,10 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   }
 
   function selectMessage(messageId: string) {
+    if (messageId === selectedMessageId) {
+      if (selectedMessage?.unread) void updateReadState(messageId, false);
+      return;
+    }
     setSelectedMessageId(messageId);
     const cachedMessage = getCachedGmailMessage(accountEmail, messageId);
     setSelectedMessage(cachedMessage);
@@ -822,31 +749,28 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     setMessageLoading(!cachedMessage);
   }
 
+
   async function loadMoreMessages() {
     if (!nextPageToken || listLoading) return;
     setListLoading(true);
     setListError(null);
     const requestId = ++listRequestId.current;
     try {
-      const token = await memberSessionToken(boundUserId);
       const params = new URLSearchParams({ action: "messages", folder: activeFolder, pageToken: nextPageToken });
       if (search.trim()) params.set("q", search.trim());
       if (activeFolder === "inbox" && unreadOnly) params.set("unreadOnly", "true");
-      const response = await fetch(`/api/gmail?${params}`, {
-        credentials: "include",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await memberGmailRequest(`/api/gmail?${params}`, boundUserId);
       const body = await response.json().catch(() => null) as { messages?: GmailMessageSummary[]; nextPageToken?: string | null; error?: string } | null;
       if (requestId !== listRequestId.current) return;
       if (!response.ok) throw new Error(body?.error || "Could not load more messages.");
       const loadedMessages = inboxMessages(Array.isArray(body?.messages) ? body.messages : [], activeFolder, unreadOnly);
-      const allMessages = [...messages, ...loadedMessages];
+      const allMessages = [...new Map([...messages, ...loadedMessages].map((message) => [message.id, message])).values()];
       const queryKey = mailListCacheKey(activeFolder, search, unreadOnly);
       setCachedGmailList(accountEmail, queryKey, { messages: allMessages, nextPageToken: body?.nextPageToken ?? null });
       setMessages(allMessages);
       setNextPageToken(body?.nextPageToken ?? null);
     } catch (error) {
-      if (requestId === listRequestId.current) setListError(error instanceof Error ? error.message : "Could not load more messages.");
+      if (requestId === listRequestId.current) notify("Could not load more messages", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null });
     } finally {
       if (requestId === listRequestId.current) setListLoading(false);
     }
@@ -854,32 +778,29 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
 
   function startCompose(mode: ComposeMode) {
     setComposeMode(mode);
-    setComposeError(null);
+    setQuotedMessage(mode === "new" ? null : selectedMessage);
+    void loadSignature();
     setComposeSubject(mode === "new" ? "" : selectedMessage?.subject ?? "");
     setComposeCc("");
-    setComposeBody(!selectedMessage ? "" : mode === "forward"
-      ? `\n\n---------- Forwarded message ----------\nFrom: ${selectedMessage.from}\nDate: ${formatMessageDetailDate(selectedMessage.date)}\nSubject: ${selectedMessage.subject}\n\n${selectedMessage.body}`
-      : mode === "reply" ? `\n\nOn ${formatMessageDetailDate(selectedMessage.date)}, ${selectedMessage.from} wrote:\n${selectedMessage.body.split("\n").map((line) => `> ${line}`).join("\n")}` : "");
+    setComposeBody("");
     const emailAddress = selectedMessage?.replyTo.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? "";
     setComposeTo(mode === "reply" ? emailAddress : "");
   }
 
   async function sendMessage() {
-    if (!composeMode) return;
-    if (composeMode === "reply" && !selectedMessage) return;
+    if (!composeMode || sending || !signature || signatureLoading) return;
+    if (composeMode !== "new" && !quotedMessage) return;
     setSending(true);
-    setComposeError(null);
     try {
-      const token = await memberSessionToken(boundUserId);
-      const response = await fetch("/api/gmail?action=messageAction", {
+      const response = await memberGmailRequest("/api/gmail?action=messageAction", boundUserId, {
         method: "POST",
         credentials: "include",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "send", mode: composeMode, to: composeTo, subject: composeSubject,
           cc: composeCc,
           body: composeBody,
-          ...(composeMode === "reply" && selectedMessage ? { replyToMessageId: selectedMessage.id } : {}),
+          ...(quotedMessage ? { quotedMessageId: quotedMessage.id, replyToMessageId: quotedMessage.id } : {}),
         }),
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
@@ -892,7 +813,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       notify("Message sent", `Your ${composeMode === "reply" ? "reply" : composeMode === "forward" ? "forwarded message" : "message"} was sent.`, { href: null });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not send this message.";
-      setComposeError(message);
       notify("Could not send message", message, { variant: "error", href: null });
     } finally {
       setSending(false);
@@ -902,13 +822,11 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
   async function performMessageAction(action: MessageAction) {
     if (!selectedMessageId) return;
     setActionPending(true);
-    setActionError(null);
     try {
-      const token = await memberSessionToken(boundUserId);
-      const response = await fetch("/api/gmail?action=messageAction", {
+      const response = await memberGmailRequest("/api/gmail?action=messageAction", boundUserId, {
         method: "POST",
         credentials: "include",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, id: selectedMessageId }),
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
@@ -930,7 +848,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       setMessageLoading(Boolean(nextMessage));
       setConfirmAction(null);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Could not update this message.");
+      notify("Could not update message", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null });
     } finally {
       setActionPending(false);
     }
@@ -953,14 +871,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         <>
           <ConnectedMailSidebar
             activeFolder={activeFolder}
-            onFolderChange={setActiveFolder}
+            onFolderChange={(folder) => { setSelectedMessageId(null); setSelectedMessage(null); setActiveFolder(folder); }}
             onNewMessage={() => startCompose("new")}
             unreadOnly={unreadOnly}
             onUnreadOnlyChange={setUnreadOnly}
             onReconnect={connectGmail}
             search={search}
             onSearchChange={setSearch}
-            messages={messages}
+            messages={inboxMessages(messages, activeFolder, unreadOnly)}
             loading={listLoading}
             error={listError}
             selectedMessageId={selectedMessageId}
@@ -968,24 +886,23 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             onMessagePrefetch={(messageId) => void prefetchMessage(messageId)}
             nextPageToken={nextPageToken}
             onLoadMore={loadMoreMessages}
+            onRefresh={refreshMail}
           />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-live="polite" aria-busy={messageLoading}>
             {selectedMessageId ? (
               messageLoading && !selectedMessage ? (
                 <MailContentSkeleton />
               ) : messageError ? (
-                <div className="flex h-full items-center justify-center p-6 text-sm text-destructive" role="alert">{messageError}</div>
+                <div className="flex h-full items-center justify-center p-6"><Button variant="outline" onClick={() => setDetailRetry((value) => value + 1)}>Reload message</Button></div>
               ) : selectedMessage ? (
                 <>
-                  {(messageLoading || listLoading) && (
-                    <div className="shrink-0 border-b px-5 py-2 text-xs text-muted-foreground" role="status">{messageLoading ? "Opening message…" : "Updating messages…"}</div>
-                  )}
                   <div className="shrink-0 border-b px-5 py-4 md:px-8">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h1 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button variant="ghost" size="icon" aria-label="Reply" title="Reply" onClick={() => startCompose("reply")} disabled={messageLoading || listLoading}><Reply aria-hidden="true" /></Button>
                         <Button variant="ghost" size="icon" aria-label="Forward" title="Forward" onClick={() => startCompose("forward")} disabled={messageLoading || listLoading}><Forward aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label={selectedMessage.unread ? "Mark as read" : "Mark as unread"} title={selectedMessage.unread ? "Mark as read" : "Mark as unread"} onClick={() => void updateReadState(selectedMessage.id, !selectedMessage.unread)} disabled={readPending || messageLoading || listLoading}>{selectedMessage.unread ? <MailOpen /> : <Mail />}</Button>
                         <Button variant="ghost" size="icon" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending || messageLoading || listLoading}><Archive aria-hidden="true" /></Button>
                         <Button variant="ghost" size="icon" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending || messageLoading || listLoading}><ShieldAlert aria-hidden="true" /></Button>
                         <Button variant="ghost" size="icon" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending || messageLoading || listLoading}><Trash2 aria-hidden="true" /></Button>
@@ -995,7 +912,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                       <p className="min-w-0 break-words font-medium">{selectedMessage.from}</p>
                       <time className="text-xs text-muted-foreground" dateTime={selectedMessage.date}>{formatMessageDetailDate(selectedMessage.date)}</time>
                     </div>
-                    {actionError && <p className="mt-2 text-sm text-destructive" role="alert">{actionError}</p>}
                   </div>
                   <EmailHtmlFrame html={selectedMessage.htmlBody} plainText={selectedMessage.body || selectedMessage.snippet} />
                 </>
@@ -1003,7 +919,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             ) : listLoading && messages.length === 0 ? (
               <MailContentSkeleton />
             ) : listError && messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-destructive" role="alert">{listError}</div>
+              <div className="flex h-full items-center justify-center p-6"><Button variant="outline" onClick={refreshMail}>Reload messages</Button></div>
             ) : messages.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center p-6 text-center">
                 <folder.icon className="size-8 text-muted-foreground/60" aria-hidden="true" />
@@ -1016,7 +932,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
           </main>
           <Dialog open={composeMode !== null} onOpenChange={(open) => { if (!open && !sending) setComposeMode(null); }}>
             {composeMode && (
-              <DialogContent className="h-[min(760px,calc(100vh-2rem))] max-h-[calc(100vh-2rem)] max-w-3xl overflow-hidden p-0 sm:max-w-3xl">
+              <DialogContent showCloseButton={false} className="block h-[min(760px,calc(100dvh-2rem))] max-h-[calc(100dvh-2rem)] max-w-3xl overflow-hidden p-0 sm:max-w-3xl">
                 <MessageComposer
                   mode={composeMode}
                   from={accountEmail}
@@ -1028,7 +944,9 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                   onSubjectChange={setComposeSubject}
                   body={composeBody}
                   onBodyChange={setComposeBody}
-                  error={composeError}
+                  quotedMessage={quotedMessage}
+                  signature={signature}
+                  signatureLoading={signatureLoading}
                   sending={sending}
                   onSend={() => void sendMessage()}
                 />
@@ -1041,7 +959,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                 <DialogTitle>{confirmAction === "junk" ? "Move this message to Spam?" : "Move this message to Trash?"}</DialogTitle>
                 <DialogDescription>{confirmAction === "junk" ? "Gmail will mark this message as spam. You can find it in the Spam folder." : "The message will move to Gmail Trash, where it can be restored until Gmail permanently deletes it."}</DialogDescription>
               </DialogHeader>
-              {actionError && <p className="text-sm text-destructive" role="alert">{actionError}</p>}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setConfirmAction(null)} disabled={actionPending}>Cancel</Button>
                 <Button variant="destructive" onClick={() => confirmAction && void performMessageAction(confirmAction)} disabled={actionPending}>
@@ -1076,11 +993,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
               >
                 {connecting ? "Connecting…" : "Connect Gmail account"}
               </Button>
-              {connectionError && (
-                <p role="alert" className="mx-auto mt-4 max-w-sm rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-                  {connectionError}
-                </p>
-              )}
               <p className="mt-4 text-xs leading-5 text-muted-foreground">
                 You will approve access through Google. Helix will not ask for your Google password.
               </p>

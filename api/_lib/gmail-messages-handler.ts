@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { bearer, neonCvServices, type WorkspaceIdentity } from "./member-cv-service.js";
 import { createGmailConnectionStore, type GmailConnectionStore } from "./gmail-connection.js";
 import { MemberCvError } from "./member-cv-error.js";
+import { randomUUID } from "node:crypto";
+import { escapeEmailHtml } from "../../src/features/MemberPlatform/email-signature.js";
+import { neonEmailSignatureServices, type EmailSignatureServices } from "./email-signature-service.js";
+import { sanitizeQuotedEmail } from "./email-html.js";
 
 type GmailApiMessage = {
   id?: string;
@@ -37,6 +41,7 @@ type GmailMessageAction = {
   subject?: unknown;
   body?: unknown;
   replyToMessageId?: unknown;
+  quotedMessageId?: unknown;
 };
 
 type GmailEnv = NodeJS.ProcessEnv;
@@ -206,13 +211,13 @@ async function withGmail<T>(
   authenticate: (token: string) => Promise<WorkspaceIdentity>,
   env: GmailEnv,
   fetchImpl: Fetch,
-  run: (token: string) => Promise<T>,
+  run: (token: string, identity: WorkspaceIdentity) => Promise<T>,
 ): Promise<T> {
   const identity = await authenticate(bearer(req.headers.authorization));
   const connection = await getStore().readCredentials(identity.userId);
   if (!connection) throw new MemberCvError(409, "Connect Gmail in Settings to view your messages.");
   const token = await accessToken(connection.refreshToken, env, fetchImpl);
-  return run(token);
+  return run(token, identity);
 }
 
 export function createGmailMessagesHandler(
@@ -245,7 +250,8 @@ export function createGmailMessagesHandler(
           const full = await gmailRequest<GmailApiMessage>(`messages/${encodeURIComponent(id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`, token, fetchImpl);
           return summary(full);
         }));
-        return { messages, nextPageToken: listing.nextPageToken ?? null };
+        // A message can change labels between listing and metadata retrieval.
+        return { messages: unreadOnly ? messages.filter((message) => message.unread) : messages, nextPageToken: listing.nextPageToken ?? null };
       });
       return res.status(200).json(result);
     } catch (error) {
@@ -289,6 +295,7 @@ export function createGmailMessageActionHandler(
   authenticate: (token: string) => Promise<WorkspaceIdentity> = (token) => neonCvServices().authenticate(token),
   env: GmailEnv = process.env,
   fetchImpl: Fetch = fetch,
+  getSignatures: () => EmailSignatureServices = neonEmailSignatureServices,
 ) {
   return async (req: VercelRequest, res: VercelResponse) => {
     res.setHeader("Cache-Control", "no-store");
@@ -296,7 +303,15 @@ export function createGmailMessageActionHandler(
     try {
       const input = requestBody(req.body);
       const action = typeof input.action === "string" ? input.action : "";
-      const result = await withGmail(req, getStore, authenticate, env, fetchImpl, async (token) => {
+      const result = await withGmail(req, getStore, authenticate, env, fetchImpl, async (token, identity) => {
+        if (action === "markRead" || action === "markUnread") {
+          if (!validMessageId(input.id)) throw new MemberCvError(400, "A valid Gmail message ID is required.");
+          await gmailRequest(`messages/${encodeURIComponent(input.id)}/modify`, token, fetchImpl, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(action === "markRead" ? { removeLabelIds: ["UNREAD"] } : { addLabelIds: ["UNREAD"] }),
+          });
+          return { action, id: input.id, unread: action === "markUnread" };
+        }
         if (action === "archive" || action === "junk") {
           if (!validMessageId(input.id)) throw new MemberCvError(400, "A valid Gmail message ID is required.");
           const labels = action === "archive"
@@ -322,31 +337,51 @@ export function createGmailMessageActionHandler(
         let subject = typeof input.subject === "string" ? input.subject : "";
         if (subject.length > 998) throw new MemberCvError(400, "The subject is too long.");
         let threadId: string | undefined;
-        let replyHeaders: string[] = [];
-        if (input.mode === "reply") {
-          if (!validMessageId(input.replyToMessageId)) throw new MemberCvError(400, "Select a message to reply to.");
-          const original = await gmailRequest<GmailApiMessage>(`messages/${encodeURIComponent(input.replyToMessageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References`, token, fetchImpl);
-          threadId = original.threadId;
-          subject = header(original, "Subject");
-          const messageId = header(original, "Message-ID");
-          const references = [...safeReferences(header(original, "References")), ...safeReferences(messageId)];
-          if (messageId) replyHeaders.push(`In-Reply-To: ${messageId}`);
-          if (references.length) replyHeaders.push(`References: ${[...new Set(references)].join(" ")}`);
-          if (!threadId || !messageId) throw new MemberCvError(502, "Google could not identify the conversation to reply to.");
-        } else if (input.mode === "forward" && subject && !/^fwd?:/i.test(subject)) {
+        const replyHeaders: string[] = [];
+        let quotedText = "";
+        let quotedHtml = "";
+        if (input.mode === "reply" || input.mode === "forward") {
+          const originalId = input.mode === "reply" ? input.replyToMessageId : input.quotedMessageId;
+          if (!validMessageId(originalId)) throw new MemberCvError(400, "Select the original message to reply or forward.");
+          const original = await gmailRequest<GmailApiMessage>(`messages/${encodeURIComponent(originalId)}?format=full`, token, fetchImpl);
+          const attribution = input.mode === "reply"
+            ? `On ${header(original, "Date")}, ${header(original, "From")} wrote:`
+            : `---------- Forwarded message ----------\nFrom: ${header(original, "From")}\nDate: ${header(original, "Date")}\nSubject: ${header(original, "Subject")}\nTo: ${header(original, "To")}`;
+          quotedText = `\n\n${attribution}\n${messageBody(original).split("\n").map((line) => input.mode === "reply" ? `> ${line}` : line).join("\n")}`;
+          const content = messageHtml(original);
+          quotedHtml = `<br><br><div>${escapeEmailHtml(attribution).replace(/\n/g, "<br>")}</div><blockquote style="margin:8px 0 0 12px;padding-left:12px;border-left:1px solid #dadce0">${content ? sanitizeQuotedEmail(content) : `<div style="white-space:pre-wrap">${escapeEmailHtml(messageBody(original))}</div>`}</blockquote>`;
+          if (input.mode === "reply") {
+            threadId = original.threadId;
+            subject = header(original, "Subject");
+            const messageId = safeReferences(header(original, "Message-ID"))[0] ?? "";
+            const references = [...safeReferences(header(original, "References")), ...safeReferences(messageId)];
+            if (messageId) replyHeaders.push(`In-Reply-To: ${messageId}`);
+            if (references.length) replyHeaders.push(`References: ${[...new Set(references)].join(" ")}`);
+            if (!threadId || !messageId) throw new MemberCvError(502, "Google could not identify the conversation to reply to.");
+          }
+        }
+        if (input.mode === "forward" && subject && !/^fwd?:/i.test(subject)) {
           subject = `Fwd: ${subject}`;
         }
         const encodedSubject = mimeSubject(subject);
+        const { signature } = await getSignatures().forMember(identity);
+        const plainText = input.body + (signature.text ? `\n\n${signature.text}` : "") + quotedText;
+        const html = `<div style="white-space:pre-wrap;font:14px/1.6 Arial,sans-serif">${escapeEmailHtml(input.body)}</div>${signature.html ? `<br>${signature.html}` : ""}${quotedHtml}`;
+        const boundary = `helix-${randomUUID()}`;
         const headers = [
           `To: ${to.join(", ")}`,
           ...(cc.length ? [`Cc: ${cc.join(", ")}`] : []),
           `Subject: ${encodedSubject}`,
           "MIME-Version: 1.0",
-          "Content-Type: text/plain; charset=UTF-8",
-          "Content-Transfer-Encoding: base64",
+          `Content-Type: multipart/alternative; boundary="${boundary}"`,
           ...replyHeaders,
         ];
-        const raw = Buffer.from(`${headers.join("\r\n")}\r\n\r\n${base64Lines(input.body)}`, "utf8").toString("base64url");
+        const alternatives = [
+          `--${boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(plainText)}`,
+          `--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64Lines(html)}`,
+          `--${boundary}--`,
+        ].join("\r\n");
+        const raw = Buffer.from(`${headers.join("\r\n")}\r\n\r\n${alternatives}\r\n`, "utf8").toString("base64url");
         const sent = await gmailRequest<{ id?: string; threadId?: string }>("messages/send", token, fetchImpl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
