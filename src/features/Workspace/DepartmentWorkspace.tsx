@@ -9,7 +9,6 @@ import {
   IconBrandGoogleDrive,
   IconCube,
   IconExternalLink,
-  IconLink,
   IconSettings,
   IconUserSquare,
 } from "@tabler/icons-react";
@@ -56,7 +55,7 @@ import {
   type DepartmentHomeChange,
 } from "./department-home";
 import { WorkspaceRequestError } from "./repository";
-import { departmentPath, type WorkspaceDirectory } from "./types";
+import type { WorkspaceDirectory } from "./types";
 import { monthDate } from "./DirectoryComponents";
 
 function DepartmentSettings({
@@ -325,47 +324,11 @@ export function DepartmentWorkspace({
       }
     }
   }
-  async function copyLink() {
-    try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}${departmentPath(department.name)}`,
-      );
-      notify(
-        "Department link copied",
-        "Share it with members of this department.",
-        { variant: "success", href: null },
-      );
-    } catch {
-      notify(
-        "Could not copy link",
-        "Copy the department URL from your browser’s address bar.",
-        { variant: "error", href: null },
-      );
-    }
-  }
   return (
     <section
       aria-label={`${department.name} workspace`}
       className="space-y-4 pb-8"
     >
-      <header className="flex items-center justify-between border-b pb-3">
-        <span className="inline-flex items-center gap-2 text-sm font-medium">
-          <DepartmentIcon
-            aria-hidden="true"
-            className="size-4 text-muted-foreground"
-          />
-          {department.name}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Copy department link"
-          onClick={() => void copyLink()}
-        >
-          <IconLink aria-hidden="true" className="size-4" />
-        </Button>
-      </header>
       <Tabs className="flex-col" value={tab} onValueChange={selectTab}>
         <TabsList
           aria-label="Department workspace"
