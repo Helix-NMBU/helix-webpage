@@ -43,7 +43,8 @@ function projectError(error: unknown): never {
   if (message.includes("project_forbidden")) throw new MemberCvError(403, "Project management access is required. Contact your project manager.");
   if (message.includes("project_not_found")) throw new MemberCvError(404, "This task or project is no longer available.");
   if (message.includes("project_conflict") || code === "23505") throw new MemberCvError(409, "This task or project changed. Reload the workspace before saving again.");
-  if (message.includes("project_invalid_reference") || code === "23503") throw new MemberCvError(400, "Choose an eligible assignee, project and milestone in the same area. A milestone must match the task project or have no project. Linked milestones cannot be moved or converted while their tasks would become invalid.");
+  if (message.includes("project_invalid_reference") || code === "23503") throw new MemberCvError(400, "Choose an eligible assignee and a milestone in the same project and area. Place milestones in a project before assigning tasks. Linked milestones cannot be moved or converted while their tasks would become invalid.");
+  if (message.includes("project_invalid_hierarchy")) throw new MemberCvError(400, "Place milestones in a project and tasks in a milestone before saving.");
   if (message.includes("project_invalid") || ["23514", "22007", "22008", "22P02", "23502"].includes(code)) throw new MemberCvError(400, "Check the task or project fields and try again.");
   throw new MemberCvError(503, "Could not complete the project management request. Your input has been kept. Try again.");
 }

@@ -20,22 +20,26 @@ describe("project management HTTP boundaries", () => {
   it("validates and deduplicates co-assignees without accepting the old single-assignee payload", () => {
     const first = "10000000-0000-4000-8000-000000000001";
     const second = "10000000-0000-4000-8000-000000000002";
-    const input = { action: "save_task", id: first, expectedRevision: 0, task: { title: "Shared work", description: "", category: "production", projectId: null, milestoneId: null, assigneeIds: [first, second, first], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" } };
+    const input = { action: "save_task", id: first, expectedRevision: 0, task: { title: "Shared work", description: "", category: "production", projectId: first, milestoneId: second, assigneeIds: [first, second, first], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" } };
     expect(parseProjectMutation(input)).toMatchObject({ task: { assigneeIds: [first, second] } });
     for (const value of [null, first, [null], ["invalid"], Array(21).fill(first)]) expect(() => parseProjectMutation({ ...input, task: { ...input.task, assigneeIds: value } })).toThrow();
     const { assigneeIds: _old, ...withoutIds } = input.task;
     expect(() => parseProjectMutation({ ...input, task: { ...withoutIds, assigneeId: first } })).toThrow();
   });
-  it("requires an explicit nullable milestone and disallows milestone nesting", () => {
-    const task = { title: "Linked task", description: "", category: "production", projectId: null, milestoneId: null,
+  it("requires project and milestone placement on saves while keeping status-only updates separate", () => {
+    const projectId = "10000000-0000-4000-8000-000000000010";
+    const milestoneId = "10000000-0000-4000-8000-000000000002";
+    const task = { title: "Linked task", description: "", category: "production", projectId, milestoneId,
       assigneeIds: [], deadline: "2026-12-01", startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" };
     const input = { action: "save_task", id: "10000000-0000-4000-8000-000000000001", expectedRevision: 1, task };
-    expect(parseProjectMutation(input)).toMatchObject({ task: { milestoneId: null } });
-    const milestoneId = "10000000-0000-4000-8000-000000000002";
-    expect(parseProjectMutation({ ...input, task: { ...task, milestoneId } })).toMatchObject({ task: { milestoneId } });
-    for (const milestoneId of [undefined, "invalid", 5, [], {}]) expect(() => parseProjectMutation({ ...input, task: { ...task, milestoneId } })).toThrow();
+    expect(parseProjectMutation(input)).toMatchObject({ task: { projectId, milestoneId } });
+    for (const milestoneId of [null, undefined, "invalid", 5, [], {}]) expect(() => parseProjectMutation({ ...input, task: { ...task, milestoneId } })).toThrow();
+    expect(() => parseProjectMutation({ ...input, task: { ...task, projectId: null } })).toThrow();
     expect(() => parseProjectMutation({ ...input, task: { ...task, kind: "milestone", milestoneId } })).toThrow();
-    expect(parseProjectMutation({ ...input, task: { ...task, kind: "milestone" } })).toMatchObject({ task: { milestoneId: null } });
+    expect(() => parseProjectMutation({ ...input, task: { ...task, kind: "milestone", milestoneId: null, projectId: null } })).toThrow();
+    expect(parseProjectMutation({ ...input, task: { ...task, kind: "milestone", milestoneId: null } })).toMatchObject({ task: { projectId, milestoneId: null } });
+    const status = { action: "set_status", id: input.id, expectedRevision: 1, status: "done", blockedReason: "" };
+    expect(parseProjectMutation(status)).toEqual(status);
   });
   it("preserves authentication and method handling through the shared member API", async () => {
     let status = 0;

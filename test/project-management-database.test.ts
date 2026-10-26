@@ -11,8 +11,14 @@ const member: WorkspaceIdentity = { userId: id(2), googleSub: "google-member", e
 const outsider: WorkspaceIdentity = { userId: id(3), googleSub: "google-outsider", email: "outsider@helixnmbu.no", name: "Outsider" };
 let db: PGlite;
 const service = (identity = manager) => createProjectServices({ db, authenticate: async () => identity });
-const task = (overrides: Partial<TaskInput> = {}): TaskInput => ({ title: "Manufacture brackets", description: "Cut and inspect", category: "production", projectId: null, milestoneId: null,
-  assigneeIds: [member.userId], deadline: "2026-12-01", startDate: "2026-11-01", status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "", ...overrides });
+const task = (overrides: Partial<TaskInput> = {}): TaskInput => {
+  const category = overrides.category ?? "production";
+  const projectId = category === "partnership-deliverables" ? id(952) : category === "marketing" ? id(954) : id(950);
+  const milestoneId = category === "partnership-deliverables" ? id(953) : category === "marketing" ? id(955) : id(951);
+  return { title: "Manufacture brackets", description: "Cut and inspect", category, projectId,
+    milestoneId: overrides.kind === "milestone" ? null : milestoneId,
+    assigneeIds: [member.userId], deadline: "2026-12-01", startDate: "2026-11-01", status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "", ...overrides };
+};
 const save = (taskId: number, input = task(), revision = 0, identity = manager) => service(identity).mutate("verified", { action: "save_task", id: id(taskId), expectedRevision: revision, task: input });
 
 describe("project management database and authorization", () => {
@@ -37,6 +43,18 @@ describe("project management database and authorization", () => {
     await db.query("insert into project_management.tasks(id,season,title,category,assignee_id,status,priority,kind,created_at) values($1,'S27','Existing assigned task','production',$2,'todo','normal','task','2020-01-01')", [id(800), member.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/011_task_assignees.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/012_project_milestones.sql", import.meta.url), "utf8"));
+    for (const [projectId, milestoneId, category] of [[950, 951, "production"], [952, 953, "partnership-deliverables"], [954, 955, "marketing"]] as const) {
+      await db.query("insert into project_management.projects(id,season,name,category) values($1,'S27',$2,$3)", [id(projectId), `${category} project`, category]);
+      await db.query("insert into project_management.tasks(id,season,title,category,project_id,deadline,status,priority,kind,partner_name) values($1,'S27','Existing milestone',$2,$3,'2026-12-01','todo','normal','milestone',$4)", [id(milestoneId), category, id(projectId), category === "partnership-deliverables" ? "Sponsor" : ""]);
+    }
+    // All legacy shapes are inserted before the strict hierarchy migration.
+    await db.query("insert into project_management.tasks(id,season,title,category,deadline,status,priority,kind) values($1,'S27','Ungrouped milestone','production','2026-12-01','todo','normal','milestone')", [id(801)]);
+    for (const [taskId, projectId, milestoneId] of [[202, null, null], [802, null, 801], [803, 950, 801], [804, 950, null]] as const) {
+      await db.query("insert into project_management.tasks(id,season,title,category,project_id,milestone_id,status,priority,kind) values($1,'S27','Ungrouped task','production',$2,$3,'todo','normal','task')", [id(taskId), projectId === null ? null : id(projectId), milestoneId === null ? null : id(milestoneId)]);
+      await db.query("insert into project_management.task_assignees values($1,$2)", [id(taskId), member.userId]);
+    }
+    await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
+
   }, 60000);
   afterAll(async () => { await db?.close(); });
 
@@ -50,6 +68,7 @@ describe("project management database and authorization", () => {
     await db.query("delete from project_management.task_assignees where task_id=$1 and member_id=$2", [id(800), member.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/011_task_assignees.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/012_project_milestones.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     expect((await service().load("verified")).tasks.find(item => item.id === id(800))?.assigneeIds).toEqual([manager.userId]);
     expect((await service().load("verified")).progressEvents.filter(event => event.taskId === id(800))).toHaveLength(1);
     await db.query("delete from project_management.tasks where id=$1", [id(800)]);
@@ -61,20 +80,21 @@ describe("project management database and authorization", () => {
     await expect(service(outsider).load("verified")).rejects.toMatchObject({ status: 403 });
     await expect(save(10, task(), 0, outsider)).rejects.toMatchObject({ status: 403 });
     const workspace = await service().load("verified");
-    expect(workspace).toMatchObject({ season: "S27", viewerId: manager.userId, canManage: true, taskLeadCategories: ["production", "partnership-deliverables", "marketing", "operations"], projects: [], tasks: [] });
+    expect(workspace).toMatchObject({ season: "S27", viewerId: manager.userId, canManage: true, taskLeadCategories: ["production", "partnership-deliverables", "marketing", "operations"] });
     expect(workspace.members).toEqual([{ id: manager.userId, name: "Manager", avatarUrl: null }, { id: member.userId, name: "Member", avatarUrl: null }]);
     expect(JSON.stringify(workspace)).not.toContain("@helixnmbu.no");
   });
   it("persists department-spanning subprojects and complete tasks in the shared season", async () => {
     await service().mutate("verified", { action: "save_project", id: id(20), expectedRevision: 0,
       project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical", "Electrical"], deadline: "2026-12-10" } });
-    const workspace = await save(10, task({ projectId: id(20) }));
-    expect(workspace.projects[0]).toMatchObject({ id: id(20), departments: ["Mechanical", "Electrical"], deadline: "2026-12-10", revision: 1 });
-    expect(workspace.tasks[0]).toMatchObject({ id: id(10), projectId: id(20), title: "Manufacture brackets", assigneeIds: [member.userId], revision: 1, completedAt: null });
+    await save(960, task({ kind: "milestone", projectId: id(20) }));
+    const workspace = await save(10, task({ projectId: id(20), milestoneId: id(960) }));
+    expect(workspace.projects.find(item => item.id === id(20))).toMatchObject({ id: id(20), departments: ["Mechanical", "Electrical"], deadline: "2026-12-10", revision: 1 });
+    expect(workspace.tasks.find(item => item.id === id(10))).toMatchObject({ id: id(10), projectId: id(20), title: "Manufacture brackets", assigneeIds: [member.userId], revision: 1, completedAt: null });
   });
   it("rejects duplicate creates and stale edits without overwriting saved work", async () => {
     await expect(save(10)).rejects.toMatchObject({ status: 409 });
-    await save(10, task({ title: "Inspect brackets", projectId: id(20) }), 1);
+    await save(10, task({ title: "Inspect brackets", projectId: id(20), milestoneId: id(960) }), 1);
     await expect(save(10, task({ title: "Stale replacement" }), 1)).rejects.toMatchObject({ status: 409 });
     expect((await service().load("verified")).tasks.find(t => t.id === id(10))).toMatchObject({ title: "Inspect brackets", revision: 2 });
   });
@@ -173,24 +193,23 @@ describe("project management database and authorization", () => {
   it("links ordinary tasks to milestones and returns child completion and unlinked tasks", async () => {
     await save(200, task({ kind: "milestone", projectId: id(20), title: "Suspension ready" }));
     await save(201, task({ projectId: id(20), milestoneId: id(200) }));
-    await save(202, task({ milestoneId: null }));
     const workspace = await service(member).mutate("verified", { action: "set_status", id: id(201), expectedRevision: 1, status: "done", blockedReason: "" });
     expect(workspace.tasks.find(item => item.id === id(201))).toMatchObject({ milestoneId: id(200), status: "done" });
     expect(workspace.tasks.find(item => item.id === id(202))).toMatchObject({ milestoneId: null });
     expect(workspace.progressEvents.filter(event => event.taskId === id(201)).map(event => event.status)).toEqual(["todo", "done"]);
-    await expect(save(201, task({ projectId: id(20), milestoneId: null }), 2, member)).rejects.toMatchObject({ status: 403 });
+    await expect(save(201, task({ projectId: id(20), milestoneId: id(960) }), 2, member)).rejects.toMatchObject({ status: 403 });
     expect((await service().load("verified")).tasks.find(item => item.id === id(201))?.milestoneId).toBe(id(200));
   });
-  it("allows area-wide milestones across projects and rejects invalid milestone references atomically", async () => {
+  it("requires complete placement for new items and rejects invalid links atomically", async () => {
     await save(210, task({ kind: "milestone" }));
-    await save(211, task({ projectId: id(20), milestoneId: id(210) }));
+    await save(211, task({ milestoneId: id(210) }));
     await service().mutate("verified", { action: "save_project", id: id(21), expectedRevision: 0,
       project: { name: "Second project", description: "", category: "production", departments: [], deadline: null } });
     for (const patch of [
-      { milestoneId: id(9999) }, { milestoneId: id(202) }, { milestoneId: id(212) },
+      { projectId: null }, { milestoneId: null }, { milestoneId: id(9999) }, { milestoneId: id(202) }, { milestoneId: id(212) },
       { milestoneId: id(200), projectId: id(21) }, { milestoneId: id(200), projectId: null },
-      { milestoneId: id(210), category: "marketing" as const },
-      { milestoneId: id(210), kind: "milestone" as const },
+      { milestoneId: id(210), category: "marketing" as const }, { milestoneId: id(801) },
+      { milestoneId: id(210), kind: "milestone" as const }, { kind: "milestone" as const, projectId: null },
     ]) await expect(save(212, task(patch))).rejects.toMatchObject({ status: 400 });
     await expect(save(211, task({ milestoneId: id(9999), assigneeIds: [manager.userId], title: "Invalid replacement" }), 1)).rejects.toMatchObject({ status: 400 });
     const workspace = await service().load("verified");
@@ -198,21 +217,21 @@ describe("project management database and authorization", () => {
     expect(workspace.tasks.some(item => item.id === id(212))).toBe(false);
     expect(workspace.progressEvents.filter(event => event.taskId === id(212))).toEqual([]);
   });
-  it("guards linked milestones against incompatible edits and allows compatible moves", async () => {
-    for (const patch of [{ kind: "task" as const }, { category: "marketing" as const }, { projectId: id(21) }]) {
+  it("guards linked milestones against incompatible edits", async () => {
+    for (const patch of [{ kind: "task" as const, milestoneId: id(951) }, { category: "marketing" as const }, { projectId: id(21) }, { projectId: null }]) {
       await expect(save(210, task({ kind: "milestone", ...patch }), 1)).rejects.toMatchObject({ status: 400 });
     }
-    await save(210, task({ kind: "milestone", projectId: id(20) }), 1);
-    await expect(save(211, task({ milestoneId: id(210), projectId: null }), 1)).rejects.toMatchObject({ status: 400 });
-    await expect(save(211, task({ milestoneId: id(210), kind: "milestone", projectId: id(20) }), 1)).rejects.toMatchObject({ status: 400 });
+    await save(210, task({ kind: "milestone", title: "Updated milestone" }), 1);
+    await expect(save(211, task({ milestoneId: id(210), projectId: id(21) }), 1)).rejects.toMatchObject({ status: 400 });
+    await expect(save(211, task({ milestoneId: id(210), kind: "milestone" }), 1)).rejects.toMatchObject({ status: 400 });
     await expect(db.query("delete from project_management.tasks where id=$1", [id(210)])).rejects.toThrow();
   });
   it("preserves existing links when a milestone is cancelled but rejects new links", async () => {
     await service().mutate("verified", { action: "set_status", id: id(210), expectedRevision: 2, status: "cancelled", blockedReason: "" });
-    await save(211, task({ milestoneId: id(210), projectId: id(20), title: "Existing linked task" }), 1);
-    await expect(save(213, task({ milestoneId: id(210), projectId: id(20) }))).rejects.toMatchObject({ status: 400 });
-    await save(211, task({ milestoneId: null, projectId: id(20) }), 2);
-    await expect(save(211, task({ milestoneId: id(210), projectId: id(20) }), 3)).rejects.toMatchObject({ status: 400 });
+    await save(211, task({ milestoneId: id(210), title: "Existing linked task" }), 1);
+    await expect(save(213, task({ milestoneId: id(210) }))).rejects.toMatchObject({ status: 400 });
+    await save(211, task({ milestoneId: id(951) }), 2);
+    await expect(save(211, task({ milestoneId: id(210) }), 3)).rejects.toMatchObject({ status: 400 });
   });
   it("enforces link invariants for direct database writes and rejects missing relation payloads", async () => {
     await expect(db.query("update project_management.tasks set milestone_id=id where id=$1", [id(202)])).rejects.toThrow();
@@ -239,6 +258,7 @@ describe("project management database and authorization", () => {
     expect(JSON.stringify(events)).not.toMatch(/Member|Manager|helixnmbu|Different title/);
     const count = events.length;
     await db.exec(readFileSync(new URL("../db/migrations/012_project_milestones.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     expect((await service().load("verified")).progressEvents.filter(event => event.taskId === id(220))).toHaveLength(count);
   });
   it("rolls history back with failed writes and protects events from public access and mutation", async () => {
@@ -254,6 +274,53 @@ describe("project management database and authorization", () => {
     await expect(db.exec("truncate project_management.task_progress_events")).rejects.toThrow();
     expect((await db.query("select has_table_privilege('public','project_management.task_progress_events','SELECT') as allowed")).rows[0]).toEqual({ allowed: false });
     expect((await db.query("select relrowsecurity from pg_class where oid='project_management.task_progress_events'::regclass")).rows[0]).toEqual({ relrowsecurity: true });
+  });
+
+  it("preserves every legacy shape and history when strict migration is repeated", async () => {
+    const before = await service().load("verified");
+    expect(before.tasks.find(item => item.id === id(801))).toMatchObject({ kind: "milestone", projectId: null });
+    expect(before.tasks.find(item => item.id === id(802))).toMatchObject({ projectId: null, milestoneId: id(801) });
+    expect(before.tasks.find(item => item.id === id(803))).toMatchObject({ projectId: id(950), milestoneId: id(801) });
+    expect(before.tasks.find(item => item.id === id(804))).toMatchObject({ projectId: id(950), milestoneId: null });
+    await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
+    const after = await service().load("verified");
+    expect(after.tasks).toEqual(before.tasks);
+    expect(after.progressEvents).toEqual(before.progressEvents);
+  });
+  it("lets legacy assignees update status but requires Lead placement before full saves", async () => {
+    for (const taskId of [202, 802, 803, 804]) {
+      await service(member).mutate("verified", { action: "set_status", id: id(taskId), expectedRevision: 1, status: "done", blockedReason: "" });
+      const row = (await service().load("verified")).tasks.find(item => item.id === id(taskId))!;
+      await expect(save(taskId, { ...row, title: "Unplaced details" }, 2)).rejects.toMatchObject({ status: 400 });
+      expect((await service().load("verified")).tasks.find(item => item.id === id(taskId))).toMatchObject({ title: "Ungrouped task", revision: 2, status: "done" });
+    }
+    await service().mutate("verified", { action: "set_status", id: id(801), expectedRevision: 1, status: "in_progress", blockedReason: "" });
+    const milestone = (await service().load("verified")).tasks.find(item => item.id === id(801))!;
+    await expect(save(801, { ...milestone, title: "Unplaced milestone" }, 2)).rejects.toMatchObject({ status: 400 });
+    await db.query("update project_management.tasks set title='Legacy detail edit' where id=$1", [id(802)]);
+    expect((await service().load("verified")).tasks.find(item => item.id === id(802))).toMatchObject({ projectId: null, milestoneId: id(801), status: "done", title: "Legacy detail edit" });
+    await expect(save(802, task(), 2, member)).rejects.toMatchObject({ status: 403 });
+    await save(202, task({ status: "done" }), 2);
+    expect((await service().load("verified")).tasks.find(item => item.id === id(202))).toMatchObject({ projectId: id(950), milestoneId: id(951), revision: 3 });
+  });
+  it("rejects incomplete direct writes and prevents hierarchy changes that invalidate legacy links", async () => {
+    const before = (await service().load("verified")).progressEvents;
+    for (const [kind, projectId, milestoneId] of [["task", null, null], ["task", 950, null], ["task", 950, 801], ["milestone", null, null]] as const) {
+      await expect(db.query("insert into project_management.tasks(id,season,title,category,project_id,milestone_id,deadline,status,priority,kind) values($1,'S27','Invalid new item','production',$2,$3,'2026-12-01','todo','normal',$4)",
+        [id(880), projectId === null ? null : id(projectId), milestoneId === null ? null : id(milestoneId), kind])).rejects.toThrow();
+    }
+    await expect(db.query("update project_management.tasks set project_id=$1 where id=$2", [id(950), id(801)])).rejects.toThrow();
+    await expect(db.query("update project_management.tasks set project_id=$1 where id=$2", [id(21), id(803)])).rejects.toThrow();
+    await expect(db.query("update project_management.tasks set milestone_id=null where id=$1", [id(803)])).rejects.toThrow();
+    const legacy = (await service().load("verified")).tasks.find(item => item.id === id(803))!;
+    await expect(db.query("select project_management.mutate($1,$2,$3,$4::jsonb)", [manager.userId, manager.googleSub, manager.email,
+      JSON.stringify({ action: "save_task", id: legacy.id, expectedRevision: legacy.revision, task: { ...legacy, title: "SQL bypass" } })])).rejects.toThrow();
+    expect((await service().load("verified")).progressEvents).toEqual(before);
+    // Reassign legacy children to an organized milestone before placing their old parent.
+    await save(802, task(), 2);
+    await save(803, task(), 2);
+    await save(801, task({ kind: "milestone" }), 2);
+    expect((await service().load("verified")).tasks.find(item => item.id === id(801))).toMatchObject({ projectId: id(950), milestoneId: null, revision: 3 });
   });
 
 });

@@ -37,6 +37,8 @@ function task(value: unknown): TaskInput {
     partnerName: text(body.partnerName, "partner name", 200), blockedReason: text(body.blockedReason, "blocked reason", 500),
   };
   if (input.startDate && input.deadline && input.startDate > input.deadline) return invalid("The start date must be on or before the deadline.");
+  if (!input.projectId) return invalid("Choose a project before saving this item.");
+  if (input.kind === "task" && !input.milestoneId) return invalid("Choose a milestone before saving this task.");
   if (input.kind === "milestone" && input.milestoneId) return invalid("A milestone cannot belong to another milestone.");
   if (input.kind === "milestone" && !input.deadline) return invalid("A milestone needs a deadline.");
   if (input.category === "partnership-deliverables" && !input.partnerName) return invalid("Enter the partner this deliverable belongs to.");
