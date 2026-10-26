@@ -15,13 +15,13 @@ function fixture() {
   };
   return { services, get: vi.fn(() => services) };
 }
-async function call(handler: ReturnType<typeof createWebsiteHandler>, args: { method?: string; query?: object; body?: unknown; token?: string; length?: string; ip?: string }) {
+async function call(handler: ReturnType<typeof createWebsiteHandler>, args: { method?: string; query?: object; body?: unknown; token?: string; length?: string; ip?: string; headers?: Record<string, string> }) {
   let status = 0; let result: unknown;
   const headers: Record<string, unknown> = {};
   const res = { setHeader: vi.fn((key: string, value: unknown) => { headers[key] = value; }),
     status: vi.fn((code: number) => { status = code; return res; }), json: vi.fn((body: unknown) => { result = body; return res; }) };
   const req = { method: args.method ?? "GET", query: args.query ?? {}, body: args.body,
-    headers: { ...(args.token ? { authorization: `Bearer ${args.token}` } : {}), ...(args.length ? { "content-length": args.length } : {}), ...(args.ip ? { "x-forwarded-for": args.ip } : {}) } };
+    headers: { ...args.headers, ...(args.token ? { authorization: `Bearer ${args.token}` } : {}), ...(args.length ? { "content-length": args.length } : {}), ...(args.ip ? { "x-forwarded-for": args.ip } : {}) } };
   await handler(req as VercelRequest, res as unknown as VercelResponse);
   return { status, result, headers };
 }
@@ -115,5 +115,32 @@ describe("website HTTP boundaries", () => {
     expect((await call(handler, { token: "jwt", query: { action: "file", id: "invalid", kind: "cv" } })).status).toBe(400);
     expect((await call(handler, { method: "DELETE" })).status).toBe(405);
     expect(f.services.submit).not.toHaveBeenCalled(); expect(f.services.file).not.toHaveBeenCalled(); expect(f.services.list).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("public website cross-origin access", () => {
+  it("permits only the two public Helix origins to preflight JSON submissions", async () => {
+    const f = fixture(); const handler = createWebsiteHandler(f.get);
+    for (const origin of ["https://helixnmbu.no", "https://www.helixnmbu.no"]) {
+      const r = await call(handler, { method: "OPTIONS", headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "content-type" } });
+      expect(r.status).toBe(200); expect(r.headers["Access-Control-Allow-Origin"]).toBe(origin);
+      expect(r.headers["Access-Control-Allow-Credentials"]).toBeUndefined();
+    }
+    for (const origin of ["https://attacker.test", "https://www.helixnmbu.no.attacker.test", "http://www.helixnmbu.no"]) {
+      const r = await call(handler, { method: "OPTIONS", headers: { origin, "access-control-request-method": "POST" } });
+      expect(r.status).toBe(403); expect(r.headers["Access-Control-Allow-Origin"]).toBeUndefined();
+    }
+    expect(f.get).not.toHaveBeenCalled();
+  });
+  it("does not enable cross-origin authorization or protected member actions", async () => {
+    const f = fixture(); const handler = createWebsiteHandler(f.get);
+    const headers = { origin: "https://www.helixnmbu.no" };
+    expect((await call(handler, { method: "OPTIONS", headers: { ...headers, "access-control-request-method": "POST", "access-control-request-headers": "authorization,content-type" } })).status).toBe(403);
+    expect((await call(handler, { headers, token: "jwt", query: { action: "applications" } })).status).toBe(403);
+    expect((await call(handler, { headers, token: "jwt", method: "POST", body: { action: "delete", application_id: id } })).status).toBe(403);
+    expect(f.get).not.toHaveBeenCalled();
+    const catalog = await call(handler, { headers, query: { action: "positions" } });
+    expect(catalog.status).toBe(200); expect(catalog.headers["Access-Control-Allow-Origin"]).toBe(headers.origin);
   });
 });

@@ -37,11 +37,13 @@ The branch includes pending deployment stabilization: Node 24/npm 11.17 toolchai
 - Temporary Neon branch br-round-waterfall-bas93pob verified actual catalog CRUD, visibility filtering, public-service application persistence, authorized list/read, title selection from the catalog, application retention after posting deletion, denied access without the role grant, and actual private PDF upload/download. The service harness bound its test identity to the existing member row; real browser authentication was verified separately. Synthetic data is restricted to this temporary branch and dedicated local UI mode. The branch expires on 2026-10-27 at 20:00 UTC.
 - Runtime private storage acceptance used the temporary branch's private applications bucket and short-lived signed URLs. It does not establish the production runtime credential's bucket permissions.
 
-## Public-domain release gap
+## Public-domain backend connection
 
-Before this release, internal.helixnmbu.no/api/website?action=positions returned 200 with three postings, while www.helixnmbu.no returned 503 with the missing application-service configuration message. Vercel confirmed that www.helixnmbu.no belongs to a different project and requires ownership verification before attachment to the current project. The current Vercel credentials cannot inspect that other project's alias/deployment. External DNS is managed at Datacenter. No DNS changes were made.
+The public website still deploys from this repository under the older Vercel team, whose application API lacks database configuration. Public HTTPS hosts helixnmbu.no and www.helixnmbu.no now call the configured internal.helixnmbu.no recruitment API directly for public catalog reads and submissions. Local and preview hosts retain relative API requests. No DNS or domain ownership changes are needed.
 
-Main/current-project deployment can proceed independently, but public-domain application acceptance cannot be marked complete until the existing public project's configuration is repaired or the domain is verified onto the current project. Preserve this distinction in HELIX-33 and the milestone status.
+The backend permits browser CORS only for those exact two HTTPS public origins, supports JSON submission preflight without credentials or Authorization headers, and rejects protected member actions from those origins. Protected internal requests retain real authorization. Direct browser requests preserve the normal Vercel client-IP rate-limit path rather than funneling applicants through a shared proxy address. Responses remain uncached. Production browser acceptance follows deployment of both GitHub-connected projects.
+
+Final integrated verification after the public-backend connection: 81 Vitest files / 991 tests and 3 deployment guards passed; frontend/API/runtime typechecks, lint and build passed. Public connection delta independently reviewed with no actionable findings.
 
 ## Publication
 

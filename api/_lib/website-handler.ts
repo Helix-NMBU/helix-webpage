@@ -10,6 +10,19 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
   return async (req: VercelRequest, res: VercelResponse) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    const origin = req.headers.origin;
+    const publicOrigin = origin === "https://helixnmbu.no" || origin === "https://www.helixnmbu.no";
+    res.setHeader("Vary", "Origin");
+    if (publicOrigin) res.setHeader("Access-Control-Allow-Origin", origin);
+    if (req.method === "OPTIONS") {
+      const requestedHeaders = String(req.headers["access-control-request-headers"] ?? "").toLowerCase().split(",").map(value => value.trim()).filter(Boolean);
+      if (!publicOrigin || fixedAction || !["GET", "POST"].includes(String(req.headers["access-control-request-method"])) || requestedHeaders.some(header => header !== "content-type")) {
+        return res.status(403).json({ error: "Cross-origin request not allowed." });
+      }
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      return res.status(200).json({});
+    }
     const routeAction = fixedAction ?? (req.query.action === "reject" || req.query.action === "confirmation" ? req.query.action : undefined);
     if ((req.method !== "GET" && req.method !== "POST") || (routeAction && req.method !== "POST")) {
       res.setHeader("Allow", routeAction ? "POST" : "GET, POST");
@@ -20,6 +33,7 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
       if (req.method === "GET") {
         const action = req.query.action;
         if (action === "positions") return res.status(200).json({ positions: await getServices().positions() });
+        if (publicOrigin) throw new MemberCvError(403, "Use the member platform for this request.");
         const token = bearer(req.headers.authorization);
         const services = getServices();
         if (action === "managed-positions" || action === "manage-positions") return res.status(200).json({ positions: await services.managedPositions(token) });
@@ -37,6 +51,7 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
       const body = websiteBody(req.body);
       const action = routeAction ?? body.action;
       if (action === "submit") return res.status(201).json(await getServices().submit(body, submissionRateKey(req)));
+      if (publicOrigin) throw new MemberCvError(403, "Use the member platform for this request.");
       const token = bearer(req.headers.authorization);
       const services = getServices();
       if (action === "save-position") return res.status(200).json({ position: await services.savePosition(token, body.position) });
