@@ -60,10 +60,20 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label="Chassis ready for assembly: 1 of 3 tasks complete, 33%"]')?.getAttribute("aria-valuenow")).toBe("33");
   });
   it("creates a task through the repository and closes the editor on success", async () => {
-    await open("marketing"); await click("New task"); await fill("new-task-title", "Publish sponsor interview");
-    await click("Save");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", expectedRevision: 0, task: expect.objectContaining({ title: "Publish sponsor interview", category: "marketing" }) }));
+    await open("marketing"); await click("New task"); await fill("new-task-title", "Publish sponsor interview"); await fill("new-task-description", "Share the approved partner interview with the team.");
+    await click("Create task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", expectedRevision: 0, task: expect.objectContaining({ title: "Publish sponsor interview", description: "Share the approved partner interview with the team.", category: "marketing" }) }));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("creates a task with its visible description, status, priority and blocked reason",async()=>{
+    await open("marketing");await click("New task");await fill("new-task-title","Prepare launch assets");await fill("new-task-description","Use the approved partner photographs.");
+    await act(async()=>document.getElementById("new-task-status")!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==="Blocked")!.click());
+    await fill("new-task-blocked","Waiting for partner approval.");
+    await act(async()=>document.getElementById("new-task-priority")!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==="High")!.click());
+    await click("Create task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({action:"save_task",task:expect.objectContaining({title:"Prepare launch assets",description:"Use the approved partner photographs.",status:"blocked",priority:"high",blockedReason:"Waiting for partner approval."})}));
   });
   it("creates a task with several assignees through the avatar picker", async () => {
     await open("marketing"); await click("New task"); await fill("new-task-title", "Shared campaign");
@@ -71,7 +81,7 @@ describe("project management interface", () => {
     for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${name}"]`)!.click());
     expect(document.querySelector('[aria-label="Assign Alex Example"]')?.getAttribute("aria-checked")).toBe("true");
     expect(document.querySelector('[aria-label="Assign Sam Example"]')?.getAttribute("aria-checked")).toBe("true");
-    await click("Done"); await click("Save");
+    await click("Done"); await click("Create task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ assigneeIds: initialLocalWorkspace().members.map(member => member.id) }) }));
   });
   it("includes a shared task when the viewer is its second assignee and shows all assignment avatars", async () => {
@@ -200,18 +210,18 @@ describe("project management interface", () => {
     expect(container.querySelector('tbody[aria-label="Completed"]')).toBeNull();
     expect(container.querySelector('tbody[aria-label="Upcoming"]')).not.toBeNull();
   });
-  it("keeps compact composer input on failure and can create several tasks in the same folder", async () => {
+  it("keeps task modal input on failure and can create several tasks in the same folder", async () => {
     await open("marketing"); await click("New task");
     await act(async () => document.getElementById("create-another-task")!.click());
-    await fill("new-task-title", "First update"); await click("Save");
+    await fill("new-task-title", "First update"); await click("Create task");
     expect((document.getElementById("new-task-title") as HTMLTextAreaElement).value).toBe("");
     const first = mutate.mock.calls[0][0];
     await fill("new-task-title", "Second update");
     mutate.mockRejectedValueOnce(new ProjectRequestError("Try again later.", 503));
-    await click("Save");
+    await click("Create task");
     expect((document.getElementById("new-task-title") as HTMLTextAreaElement).value).toBe("Second update");
     const failedId = mutate.mock.calls[1][0].id;
-    await click("Save");
+    await click("Create task");
     expect(mutate.mock.calls[2][0]).toMatchObject({ id: failedId, task: { category: "marketing", title: "Second update" } });
     expect(first.id).not.toBe(failedId);
   });
@@ -438,7 +448,7 @@ describe("project management interface", () => {
     for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${name} as lead"]`)!.click());
     await click("Done");
     expect(picker.textContent).toContain("2 leads");
-    await click("Save");
+    await click("Create milestone");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ kind: "milestone", assigneeIds: initialLocalWorkspace().members.map(member => member.id) }) }));
   });
   it("edits milestone leads without dropping the remaining lead", async () => {
@@ -463,7 +473,7 @@ describe("project management interface", () => {
     await fill("new-task-title", "Campaign launch"); await click("Due date");
     await fill("new-task-deadline", "2026-12-15");
     // Dismiss the date popover before submitting the composer.
-    await click("15 Dec 2026"); await click("Save");
+    await click("15 Dec 2026"); await click("Create milestone");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ title: "Campaign launch", kind: "milestone", milestoneId: null, category: "marketing", deadline: "2026-12-15" }) }));
   });
   it("shows the milestone link read-only in personal task details", async () => {

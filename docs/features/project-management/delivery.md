@@ -212,3 +212,13 @@ Project entries now open a dedicated Overview/Activity/Issues workspace with gro
 Project and milestone progress update directly from mutation responses, while the directory refreshes aggregate counts. Whole-project progress remains independent of list filters. The chart shares the existing observed-state model and compact palette; global Overview keeps its compact chart. Activity displays recorded status observations for current project issues. It does not invent actors, pre-baseline history, forecasts or former project membership.
 
 Validation: all 1,130 regression tests, client/API/Node-runtime TypeScript checks, repository lint, deployment guards and production build passed. Static size is 9.29 MB; the source API function count remains 9. Browser checks covered project navigation, milestone toggling and clear behavior, completion/reopen updates, Properties save, tab navigation and narrow-layout overflow. Screenshots: `project-detail-issues.png` and `project-detail-milestone-filter.png` in this chat's visualization folder. No migration, push or deployment performed.
+
+## Task creation modal and terminology — 26 October 2026
+
+Replaced project-view Issue terminology with Task in visible and accessible controls, notifications, status groups, filters and progress text. Renamed the project task-list component accordingly, while preserving existing project routes and default handling for old tab links.
+
+The shared New task modal now follows the reference layout: prominent title and description, status/priority/assignee/project/milestone/date controls, optional extra fields, expand/restore, Create more and an explicit Create task action. Milestones use New milestone/Create milestone with the same underlying hierarchy checks. Blocked work exposes the required blocked reason; partner work retains partner selection. The normal task description is visible immediately. New tasks continue to inherit the selected milestone context. The project detail parent now lets the composer decide whether to close, so Create more works there as well as in work-area pages.
+
+Local browser checks covered the new modal, pill layout, expansion, Create more switch and task wording. Automated checks cover full creation fields, blocked status, priority, multiple assignees, milestone creation, repeated creation, failure recovery and keeping the modal open from a project. No schema or API change, migration, push or deployment was performed.
+
+Validation: all 1,132 regression tests passed, along with client TypeScript and the production build (9.30 MB static output; 9 API functions). API and Node-runtime TypeScript, repository lint and both deployment guards also passed during this change.

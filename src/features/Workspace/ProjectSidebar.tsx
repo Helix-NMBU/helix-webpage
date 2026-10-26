@@ -65,7 +65,7 @@ export function ProjectSidebar({
   project,
   directory,
   workspace,
-  issues,
+  tasks,
   milestones,
   selectedMilestone,
   onSelect,
@@ -78,7 +78,7 @@ export function ProjectSidebar({
   project: WorkspaceProject;
   directory: WorkspaceDirectory;
   workspace: ProjectWorkspace | null;
-  issues: Task[];
+  tasks: Task[];
   milestones: Task[];
   selectedMilestone: string | null;
   onSelect: (id: string) => void;
@@ -88,9 +88,9 @@ export function ProjectSidebar({
   busy: boolean;
   onCreateMilestone: () => void;
 }) {
-  const counts = progressCounts(issues);
+  const counts = progressCounts(tasks);
   const progress = workspace
-    ? summarize(issues)
+    ? summarize(tasks)
     : {
         done: project.done,
         total: project.total,
@@ -100,29 +100,29 @@ export function ProjectSidebar({
       };
   const status = !workspace
     ? "—"
-    : !issues.length
-      ? "No issues"
-      : issues.every((task) => task.status === "cancelled")
+    : !tasks.length
+      ? "No tasks"
+      : tasks.every((task) => task.status === "cancelled")
         ? "Cancelled"
         : progress.total > 0 && progress.done === progress.total
           ? "Completed"
-          : issues.some((task) => task.status === "blocked")
+          : tasks.some((task) => task.status === "blocked")
             ? "Blocked"
             : counts.started > 0
               ? "In progress"
               : "To do";
-  const assignees = [...new Set(issues.flatMap((task) => task.assigneeIds))];
-  const ids = new Set(issues.map((task) => task.id));
+  const assignees = [...new Set(tasks.flatMap((task) => task.assigneeIds))];
+  const ids = new Set(tasks.map((task) => task.id));
   const chart = workspace
     ? {
         ...workspace,
-        tasks: issues,
+        tasks: tasks,
         progressEvents: workspace.progressEvents.filter((event) =>
           ids.has(event.taskId),
         ),
       }
     : null;
-  const loose = issues.filter((task) => !task.milestoneId).length;
+  const loose = tasks.filter((task) => !task.milestoneId).length;
   const milestoneRows = workspace ? milestones : project.milestones;
   return (
     <aside aria-label="Project details" className="min-w-0 space-y-3">
@@ -144,7 +144,7 @@ export function ProjectSidebar({
       >
         <dl className="space-y-5">
           <Property label="Status">
-            <span title="Based on project issue status">{status}</span>
+            <span title="Based on project task status">{status}</span>
           </Property>
           <Property label="Priority">
             <span className="inline-flex items-center gap-2">
@@ -238,7 +238,7 @@ export function ProjectSidebar({
                 {result && (
                   <span
                     className="text-xs tabular-nums text-muted-foreground"
-                    title={`${result.done} of ${result.total} issues complete`}
+                    title={`${result.done} of ${result.total} tasks complete`}
                   >
                     {result.percent}%
                     <span className="ml-1 text-[10px]">of {result.total}</span>
@@ -251,7 +251,7 @@ export function ProjectSidebar({
                 key={milestone.id}
                 type="button"
                 aria-pressed={active}
-                aria-label={`Filter issues by milestone ${milestone.title}`}
+                aria-label={`Filter tasks by milestone ${milestone.title}`}
                 className={`flex w-full items-center gap-2 rounded-lg px-2 py-2.5 text-left text-sm transition-colors hover:bg-muted ${active ? "bg-muted ring-1 ring-border" : ""}`}
                 onClick={() => onSelect(milestone.id)}
               >
@@ -287,7 +287,7 @@ export function ProjectSidebar({
       <Widget title="Progress">
         <div className="mb-4 flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <span>
-            {progress.done} of {progress.total} issues complete
+            {progress.done} of {progress.total} tasks complete
           </span>
           <ProgressRing
             label={`${project.name} progress`}
@@ -299,7 +299,7 @@ export function ProjectSidebar({
           <ProgressChart workspace={chart} compact={false} />
         ) : (
           <p className="text-xs text-muted-foreground">
-            Recorded history requires project issue access.
+            Recorded history requires project task access.
           </p>
         )}
       </Widget>

@@ -33,7 +33,7 @@ import { TaskComposer } from "../ProjectManagement/TaskComposer";
 import { summarize } from "../ProjectManagement/model";
 import { useWorkspace } from "./WorkspaceContext";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
-import { ProjectIssueList } from "./ProjectIssueList";
+import { ProjectTaskList } from "./ProjectTaskList";
 import { ProjectSidebar } from "./ProjectSidebar";
 
 export function ProjectDetail({
@@ -59,7 +59,7 @@ export function ProjectDetail({
   const tab =
     selectedTab === "overview" || selectedTab === "activity"
       ? selectedTab
-      : "issues";
+      : "tasks";
   const directorySession = useWorkspace();
   const notify = useNotify();
   const navigate = useNavigate();
@@ -91,7 +91,7 @@ export function ProjectDetail({
         [401, 403].includes(error.status);
       setDenied(forbidden);
       notify(
-        "Could not load project issues",
+        "Could not load project tasks",
         error instanceof Error ? error.message : "Try again.",
         {
           variant: "error",
@@ -115,7 +115,7 @@ export function ProjectDetail({
       generation.current++;
     };
   }, [load, project.id]);
-  const issues = (workspace?.tasks ?? [])
+  const tasks = (workspace?.tasks ?? [])
     .filter((item) => item.projectId === project.id && item.kind === "task")
     .sort(
       (a, b) =>
@@ -138,7 +138,7 @@ export function ProjectDetail({
       ? requestedMilestone
       : null;
   const selected = milestones.find((item) => item.id === selectedMilestone);
-  const filtered = issues.filter(
+  const filtered = tasks.filter(
     (item) =>
       !selectedMilestone ||
       (selectedMilestone === "none"
@@ -154,7 +154,7 @@ export function ProjectDetail({
         project.departments.includes(department.name),
     );
   const counts = workspace
-    ? summarize(issues)
+    ? summarize(tasks)
     : {
         done: project.done,
         total: project.total,
@@ -164,7 +164,7 @@ export function ProjectDetail({
       };
   function selectTab(value: string) {
     const next = new URLSearchParams(params);
-    if (value === "issues") next.delete("tab");
+    if (value === "tasks") next.delete("tab");
     else next.set("tab", value);
     setParams(next);
   }
@@ -199,14 +199,13 @@ export function ProjectDetail({
         if (!alive.current || generation.current !== current) return false;
         setWorkspace(next);
         setTask(null);
-        setComposer(null);
         void directorySession?.refresh();
       }
       notify(
-        change.action === "save_project" ? "Project saved" : "Issue saved",
+        change.action === "save_project" ? "Project saved" : "Task saved",
         change.action === "save_project"
           ? "Project properties have been updated."
-          : "Issues, milestones and project progress have been updated.",
+          : "Tasks, milestones and project progress have been updated.",
         { variant: "success", href: null },
       );
       return true;
@@ -215,7 +214,7 @@ export function ProjectDetail({
         notify(
           change.action === "save_project"
             ? "Could not save project"
-            : "Could not save issue",
+            : "Could not save task",
           error instanceof Error
             ? error.message
             : "Your input has been kept. Try again.",
@@ -241,18 +240,18 @@ export function ProjectDetail({
       }
     }
   }
-  function complete(issue: Task) {
+  function complete(task: Task) {
     void save({
       action: "set_status",
-      id: issue.id,
-      expectedRevision: issue.revision,
-      status: issue.status === "done" ? "todo" : "done",
+      id: task.id,
+      expectedRevision: task.revision,
+      status: task.status === "done" ? "todo" : "done",
       blockedReason: "",
     });
   }
-  const issueIds = new Set(issues.map((issue) => issue.id));
+  const taskIds = new Set(tasks.map((task) => task.id));
   const events = (workspace?.progressEvents ?? [])
-    .filter((event) => issueIds.has(event.taskId))
+    .filter((event) => taskIds.has(event.taskId))
     .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))
     .slice(0, 50);
   const accessState = (
@@ -260,8 +259,8 @@ export function ProjectDetail({
       <EmptyHeader>
         <EmptyTitle>
           {denied
-            ? "Project issue access required"
-            : "Could not load project issues"}
+            ? "Project task access required"
+            : "Could not load project tasks"}
         </EmptyTitle>
         <EmptyDescription>
           {denied
@@ -292,7 +291,7 @@ export function ProjectDetail({
           {[
             ["overview", "Overview"],
             ["activity", "Activity"],
-            ["issues", "Issues"],
+            ["tasks", "Tasks"],
           ].map(([value, label]) => (
             <TabsTrigger
               key={value}
@@ -319,7 +318,7 @@ export function ProjectDetail({
                   </p>
                   <dl className="grid max-w-2xl grid-cols-3 gap-5 border-y py-5">
                     <div>
-                      <dt className="text-xs text-muted-foreground">Issues</dt>
+                      <dt className="text-xs text-muted-foreground">Tasks</dt>
                       <dd className="mt-2 text-xl font-medium tabular-nums">
                         {counts.total}
                       </dd>
@@ -343,13 +342,13 @@ export function ProjectDetail({
                       </dd>
                     </div>
                   </dl>
-                  <Button variant="outline" onClick={() => selectTab("issues")}>
-                    View issues
+                  <Button variant="outline" onClick={() => selectTab("tasks")}>
+                    View tasks
                   </Button>
                 </section>
               ) : loading && !workspace ? (
                 <Skeleton
-                  aria-label="Loading project issues"
+                  aria-label="Loading project tasks"
                   className="h-80 w-full"
                 />
               ) : !workspace ? (
@@ -358,7 +357,7 @@ export function ProjectDetail({
                 <section aria-label="Project activity" className="space-y-4">
                   <h2 className="text-xl font-medium">Activity</h2>
                   <p className="text-xs text-muted-foreground">
-                    Recorded status history for the project’s current issues.
+                    Recorded status history for the project’s current tasks.
                   </p>
                   {events.length ? (
                     <ul className="divide-y rounded-xl border px-4">
@@ -369,7 +368,7 @@ export function ProjectDetail({
                         >
                           <span className="min-w-0 flex-1">
                             {
-                              issues.find((issue) => issue.id === event.taskId)
+                              tasks.find((task) => task.id === event.taskId)
                                 ?.title
                             }
                             <span className="ml-2 text-muted-foreground">
@@ -403,10 +402,10 @@ export function ProjectDetail({
                   )}
                 </section>
               ) : (
-                <ProjectIssueList
+                <ProjectTaskList
                   key={project.id}
                   tasks={filtered}
-                  allTasks={issues}
+                  allTasks={tasks}
                   workspace={workspace}
                   busy={busy}
                   canCreate={canCreate}
@@ -426,7 +425,7 @@ export function ProjectDetail({
               project={project}
               directory={directory}
               workspace={workspace}
-              issues={issues}
+              tasks={tasks}
               milestones={milestones}
               selectedMilestone={selectedMilestone}
               onSelect={selectMilestone}

@@ -20,7 +20,7 @@ import {
   type ProjectWorkspace,
   type Task,
 } from "../ProjectManagement/types";
-export function ProjectIssueList({
+export function ProjectTaskList({
   tasks,
   allTasks,
   workspace,
@@ -52,10 +52,10 @@ export function ProjectIssueList({
   );
   const hidden = allTasks.length - visible.length;
   return (
-    <section aria-label="Project issues" className="min-w-0 space-y-4">
+    <section aria-label="Project tasks" className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-medium">
-          Issues{" "}
+          Tasks{" "}
           <span className="ml-1 text-sm text-muted-foreground">
             {allTasks.length}
           </span>
@@ -67,13 +67,13 @@ export function ProjectIssueList({
             disabled={busy}
             onClick={onCreate}
           >
-            New issue
+            New task
           </Button>
         )}
       </div>
       <Input
-        aria-label="Search project issues"
-        placeholder="Search issues…"
+        aria-label="Search project tasks"
+        placeholder="Search tasks…"
         className="h-8 max-w-sm"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
@@ -96,10 +96,7 @@ export function ProjectIssueList({
             (task) => task.status === status,
           ).length;
           return (
-            <section
-              key={status}
-              aria-label={`${STATUS_LABELS[status]} issues`}
-            >
+            <section key={status} aria-label={`${STATUS_LABELS[status]} tasks`}>
               <button
                 type="button"
                 aria-expanded={open}
@@ -179,12 +176,12 @@ export function ProjectIssueList({
         <Empty className="min-h-48 border">
           <EmptyHeader>
             <EmptyTitle>
-              {allTasks.length ? "No matching issues" : "No issues yet"}
+              {allTasks.length ? "No matching tasks" : "No tasks yet"}
             </EmptyTitle>
             <EmptyDescription>
               {allTasks.length
                 ? "Choose another milestone or clear the filters."
-                : "Issues added to this project’s milestones will appear here."}
+                : "Tasks added to this project’s milestones will appear here."}
             </EmptyDescription>
           </EmptyHeader>
           {(filterLabel || search) && (
@@ -204,7 +201,7 @@ export function ProjectIssueList({
       {hidden > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-3 py-4 text-xs text-muted-foreground">
           <span>
-            {hidden} issue{hidden === 1 ? "" : "s"} hidden by filters
+            {hidden} task{hidden === 1 ? "" : "s"} hidden by filters
           </span>
           <Button
             variant="ghost"
