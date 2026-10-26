@@ -1013,7 +1013,7 @@ begin
   select code, active into system_code, system_active
   from finance.systems
   where id = p_system_id
-  for update;
+  for share;
   if not found or system_active is not true then
     raise exception 'FINANCE|invalid|Choose an active system.|systemId';
   end if;

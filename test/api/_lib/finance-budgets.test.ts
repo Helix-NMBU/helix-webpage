@@ -454,6 +454,11 @@ describe("season budgets", () => {
     const itemRead = ensure.indexOf("from finance.budget_items");
     expect(itemRead).toBeGreaterThan(-1);
     expect(ensure.slice(itemRead)).not.toContain("for update");
+    const systemRead = ensure.indexOf("from finance.systems");
+    expect(systemRead).toBeGreaterThan(-1);
+    const systemLock = ensure.slice(systemRead, itemRead);
+    expect(systemLock).toContain("for share");
+    expect(systemLock).not.toContain("for update");
     await season();
     await grant(headId, "head_of_finance");
     await grant(financeId, "finance");
