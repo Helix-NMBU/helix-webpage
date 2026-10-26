@@ -21,14 +21,16 @@ beforeAll(async () => {
   pg = new PGlite();
   await pg.exec("create schema identity; create table identity.members (id uuid primary key, google_sub text, email text);");
   const migration = readFileSync(new URL("../../db/migrations/005_website_applications.sql", import.meta.url), "utf8");
+  await pg.exec(readFileSync(new URL("../../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
   await pg.exec(migration);
   await pg.exec(migration); // idempotent without broadening permissions
   await pg.exec(readFileSync(new URL("../../db/migrations/007_application_submission_limits.sql", import.meta.url), "utf8"));
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
 }, 30000);
 beforeEach(async () => {
-  await pg.exec("truncate website.applications, website.recruiters, website.application_uploads, website.email_events, website.file_cleanup, website.application_submission_limits, identity.members");
+  await pg.exec("truncate website.applications, website.recruiters, website.application_uploads, website.email_events, website.file_cleanup, website.application_submission_limits, website.positions, identity.members cascade");
   await db.query("insert into identity.members values ($1, 'google-member', 'recruiter@helixnmbu.no')", [member]);
+  for (const position of positions) await db.query("insert into website.positions (id, document, visible) values ($1, $2::jsonb, true)", [position.id, JSON.stringify(position)]);
 });
 afterAll(async () => { await pg.close(); });
 function fixture(options: { uncertain?: boolean; uploadFails?: boolean; deleteFails?: boolean; mailFails?: boolean } = {}) {
@@ -48,32 +50,60 @@ function fixture(options: { uncertain?: boolean; uploadFails?: boolean; deleteFa
     return { userId: member, googleSub: "google-member", email: "recruiter@helixnmbu.no", name: "Test Recruiter" };
   });
   const mail = vi.fn(async () => { if (options.mailFails) throw new Error("unavailable"); return "skipped" as const; });
-  const service = createWebsiteServices({ db: traced, authenticate, storage: () => storage, positions: async () => positions,
+  const service = createWebsiteServices({ db: traced, authenticate, storage: () => storage,
     mail, now: () => new Date("2026-10-26T12:00:00Z") });
   return { service, storage, mail, calls, authenticate };
 }
-async function allow() { await db.query("insert into website.recruiters values ($1, 'recruiter@helixnmbu.no', true)", [recruiterId]); }
+async function allow() { await db.query("insert into identity.member_roles (member_id, role_key) values ($1, 'project_manager')", [member]); }
 const rateLimitKey = "a".repeat(64);
 function submit(f: ReturnType<typeof fixture>, body: Record<string, unknown> = input, key = rateLimitKey) {
   return f.service.submit(body, key);
 }
 
 describe("website access and submission against PostgreSQL", () => {
-  it("seeds no recruiter permissions and denies every protected operation to an ordinary member", async () => {
+  it("denies every protected operation to a member without recruitment access", async () => {
     const f = fixture();
     const id = "30000000-0000-4000-8000-000000000001";
     const operations = [() => f.service.session("member"), () => f.service.list("member", 0), () => f.service.read("member", id),
       () => f.service.file("member", id, "cv"), () => f.service.remove("member", id, false), () => f.service.remove("member", id, true), () => f.service.confirmation("member", id)];
     for (const run of operations) await expect(run()).rejects.toMatchObject({ status: 403 });
-    expect(f.calls.every(sql => sql.includes("website.recruiters"))).toBe(true);
+    expect(f.calls.every(sql => sql.includes("member_has_feature"))).toBe(true);
     expect(f.storage.download).not.toHaveBeenCalled();
     expect(f.storage.remove).not.toHaveBeenCalled(); expect(f.mail).not.toHaveBeenCalled();
   });
-  it("allows an existing server-verified administrator without creating recruiter grants", async () => {
+  it("does not grant recruitment access based on an email address alone", async () => {
     const f = fixture();
     f.authenticate.mockResolvedValueOnce({ userId: member, googleSub: "admin-google", email: "henrik.engdal@helixnmbu.no", name: "Admin" });
-    await expect(f.service.session("member")).resolves.toMatchObject({ email: "henrik.engdal@helixnmbu.no" });
+    await expect(f.service.session("member")).rejects.toMatchObject({ status: 403 });
     expect((await db.query("select * from website.recruiters")).rows).toEqual([]);
+  });
+  it("creates positions hidden, then publishes and permanently deletes them", async () => {
+    const f = fixture();
+    const inputPosition = {
+      title: "Finance Lead", department: "Finance", applyUrl: "https://apply.example.test/finance",
+      contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build the finance function.",
+      tasks: ["Plan the budget"], achieve: ["Lead finance"],
+    };
+    await expect(f.service.createPosition("member", { position: inputPosition })).rejects.toMatchObject({ status: 403 });
+    await allow();
+    const created = await f.service.createPosition("member", { position: inputPosition });
+    expect(created).toMatchObject({ id: "finance-lead", visible: false, title: "Finance Lead" });
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(false);
+    await expect(f.service.createPosition("member", { position: inputPosition })).rejects.toMatchObject({ status: 409 });
+    await f.service.updatePosition("member", created.id, { position: { ...inputPosition, title: "Finance Director" } });
+    await f.service.setPositionVisibility("member", created.id, true);
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(true);
+    await f.service.deletePosition("member", created.id);
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(false);
+  });
+  it("keeps application position snapshots after the posting is deleted", async () => {
+    await allow();
+    const f = fixture();
+    const submitted = await submit(f);
+    await f.service.deletePosition("member", "software");
+    const row = (await db.query<ApplicationRow>("select * from website.applications where id = $1", [submitted.id])).rows[0];
+    expect(row).toMatchObject({ position_id: "software", position_title: "Software Engineer" });
+    expect((await f.service.positions()).some((position) => position.id === "software")).toBe(false);
   });
   it("requires member authentication even when the recruiter allowlist is populated", async () => {
     await allow(); const f = fixture();
@@ -99,7 +129,9 @@ describe("website access and submission against PostgreSQL", () => {
       { cv_base64: "a".repeat(4 * Math.ceil(MAX_CV_BYTES / 3) + 4) }, { email: "invalid" }, { website: "bot" }]) {
       await expect(submit(f, { ...input, ...change })).rejects.toMatchObject({ status: 400 });
     }
-    expect(f.calls).toEqual([]); expect(f.storage.put).not.toHaveBeenCalled();
+    expect(f.calls).toHaveLength(10);
+    expect(f.calls.every(sql => sql.startsWith("select document from website.positions where visible = true"))).toBe(true);
+    expect(f.storage.put).not.toHaveBeenCalled();
   });
   it("enforces case-insensitive email/season uniqueness and only removes the new conflicting file", async () => {
     const f = fixture(); await submit(f);
@@ -131,10 +163,10 @@ describe("website access and submission against PostgreSQL", () => {
     expect(f.storage.put).toHaveBeenCalledTimes(10);
     expect((await db.query("select * from website.applications")).rows).toHaveLength(10);
   });
-  it("rechecks recruiter revocation for listing, file access and rejection", async () => {
+  it("rechecks platform role revocation for listing, file access and rejection", async () => {
     await allow(); const f = fixture(); const { id } = await submit(f);
     await expect(f.service.file("member", id, "cv")).resolves.toMatchObject({ expiresIn: 120 });
-    await db.query("update website.recruiters set active = false");
+    await db.query("delete from identity.member_roles where member_id = $1 and role_key = 'project_manager'", [member]);
     await expect(f.service.list("member", 0)).rejects.toMatchObject({ status: 403 });
     await expect(f.service.file("member", id, "cv")).rejects.toMatchObject({ status: 403 });
     await expect(f.service.remove("member", id, true)).rejects.toMatchObject({ status: 403 });

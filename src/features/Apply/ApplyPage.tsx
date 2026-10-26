@@ -3,31 +3,25 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { fetchPublicPositions, type PublicPosition } from "./positions-api";
 
 gsap.registerPlugin(useGSAP);
 
-type Position = {
-  id: string;
-  title: string;
-  department: string;
-  applyUrl: string;
-  contact: { name: string; email: string; linkedin?: string };
-  about: string;
-  tasks: string[];
-  achieve: string[];
-};
+type Position = PublicPosition;
 
 const DEPARTMENTS = [
   "All",
+  "Finance",
   "Mechanical & Production",
   "Electrical",
+  "Software & Autonomous",
   "Business & Marketing",
-  "Finance",
-  "Software",
   "Logistics",
 ];
 
 export default function ApplyPage() {
+  const notify = useNotify();
   const [positions, setPositions] = useState<Position[]>([]);
   const [activeDept, setActiveDept] = useState("All");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -37,12 +31,18 @@ export default function ApplyPage() {
   const firstDataLoad = useRef(true);
 
   useEffect(() => {
-    fetch("/positions.json")
-      .then((r) => r.json())
-      .then(setPositions);
-  }, []);
+    let active = true;
+    void fetchPublicPositions().then((available) => {
+      if (active) setPositions(available);
+    }).catch((error: unknown) => {
+      if (active) notify("Could not load open positions", error instanceof Error ? error.message : "Please try again.", {
+        variant: "error", href: null, action: { label: "Reload", onClick: () => window.location.reload() },
+      });
+    });
+    return () => { active = false; };
+  }, [notify]);
 
-  const openApplication = useMemo(() => positions.find((p) => p.department === "Open") ?? null, [positions]);
+  const openApplications = useMemo(() => positions.filter((p) => p.department === "Open"), [positions]);
 
   const filtered = useMemo(() => {
     const regular = positions.filter((p) => p.department !== "Open");
@@ -437,14 +437,13 @@ export default function ApplyPage() {
         </div>
 
         {/* Open application — always visible */}
-        {openApplication && (() => {
-          const pos = openApplication;
+        {openApplications.length > 0 && <div style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
+          <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
+            Don't see the right fit?
+          </p>
+          {openApplications.map((pos) => {
           const isOpen = openId === pos.id;
           return (
-            <div style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
-              <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
-                Don't see the right fit?
-              </p>
               <div
                 key={pos.id}
                 data-pos-id={pos.id}
@@ -546,9 +545,9 @@ export default function ApplyPage() {
                   )}
                 </AnimatePresence>
               </div>
-            </div>
           );
-        })()}
+          })}
+        </div>}
       </div>
     </div>
   );

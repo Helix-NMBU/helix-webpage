@@ -6,6 +6,7 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { TooltipProvider } from "@libs/components/ui/tooltip";
@@ -22,6 +23,8 @@ import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
 import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
+import { MemberFeatureAccessProvider, RequireMemberFeature } from "./MemberFeatureAccess";
+import { MemberAccessPage } from "./MemberAccessPage";
 import { clearGmailSessionCache } from "./gmail-session-cache";
 import { MailWorkspace } from "./MailWorkspace";
 import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
@@ -112,7 +115,7 @@ export function MemberAccess({ children }: { children: ReactNode }) {
     );
   return (
     <MemberAccountProvider account={landing.account ?? null}>
-      <MemberNotificationsProvider key={landing.userId} renderToaster={false}><RecruitmentAccessProvider>{children}</RecruitmentAccessProvider></MemberNotificationsProvider>
+      <MemberNotificationsProvider key={landing.userId} renderToaster={false}><MemberFeatureAccessProvider userId={landing.userId}><RecruitmentAccessProvider>{children}</RecruitmentAccessProvider></MemberFeatureAccessProvider></MemberNotificationsProvider>
     </MemberAccountProvider>
   );
 }
@@ -125,6 +128,19 @@ function LegacyMemberRedirect({ to }: { to: string }) {
       replace
     />
   );
+}
+
+function TeamFeatureRoute() {
+  const { teamId = "" } = useParams();
+  return <RequireMemberFeature feature={`team.${teamId}`}><TeamWorkspacePreview /></RequireMemberFeature>;
+}
+
+function RecruitmentFeatureRoute() {
+  return <RequireMemberFeature feature="recruitment.manage"><RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess></RequireMemberFeature>;
+}
+
+function MemberAccessFeatureRoute() {
+  return <RequireMemberFeature feature="member_access.manage"><MemberAccessPage /></RequireMemberFeature>;
 }
 
 export default function MemberPlatform() {
@@ -156,7 +172,8 @@ export default function MemberPlatform() {
               }
             />
             <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
-            <Route path="/recruiting" element={<MemberAccess><MemberShell><RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess></MemberShell></MemberAccess>} />
+            <Route path="/recruiting" element={<MemberAccess><MemberShell><RecruitmentFeatureRoute /></MemberShell></MemberAccess>} />
+            <Route path="/admin/access" element={<MemberAccess><MemberShell><MemberAccessFeatureRoute /></MemberShell></MemberAccess>} />
             <Route path="/recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
             <Route path="/recruitment" element={<LegacyMemberRedirect to="/recruiting" />} />
             <Route path="/recruitment/*" element={<LegacyMemberRedirect to="/recruiting" />} />
@@ -185,7 +202,7 @@ export default function MemberPlatform() {
               element={
                 <MemberAccess>
                   <MemberShell>
-                    <TeamWorkspacePreview />
+                    <TeamFeatureRoute />
                   </MemberShell>
                 </MemberAccess>
               }

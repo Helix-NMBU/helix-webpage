@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, Home, Mail, UsersRound } from "lucide-react";
+import { Bell, Home, Mail, Shield, UsersRound } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -14,6 +14,7 @@ import {
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
 import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
+import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -30,11 +31,13 @@ export function AppSidebar({
   const location = useLocation();
   const notifications = useMemberNotifications();
   const recruitment = useRecruitmentAccess();
-  const activeTeam = previewTeams.find((team) =>
+  const featureAccess = useMemberFeatureAccess();
+  const visibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team.${team.id}`));
+  const activeTeam = visibleTeams.find((team) =>
     location.pathname.startsWith(`/teams/${team.id}/`),
   );
   const teamItems = [
-    ...previewTeams.map((team) => ({
+    ...visibleTeams.map((team) => ({
       title: team.title,
       url: `/teams/${team.id}`,
       icon: team.icon,
@@ -44,11 +47,15 @@ export function AppSidebar({
         url: `/teams/${team.id}/${section.id}`,
       })),
     })),
-    ...(recruitment.access === "allowed" ? [{
+    ...(featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed" ? [{
       title: "Recruiting",
       url: "/recruiting",
       icon: UsersRound,
       isActive: location.pathname === "/recruiting",
+    }] : []),
+    ...(featureAccess.canAccess("member_access.manage") ? [{
+      title: "Member access", url: "/admin/access", icon: Shield,
+      isActive: location.pathname === "/admin/access",
     }] : []),
   ];
   return (

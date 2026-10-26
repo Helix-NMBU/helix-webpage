@@ -10,9 +10,11 @@ import { Label } from "../../libs/components/ui/label";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../libs/components/ui/empty";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../libs/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../libs/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../libs/components/ui/tabs";
 import { currentSeason } from "../../libs/lib/season";
 import { watchMemberSession } from "../MemberCV/session";
 import { createRecruitmentApi, type ApplicationRow } from "./website-api";
+import PositionManagement from "./PositionManagement";
 
 
 export default function RecruitmentPortal() {
@@ -103,9 +105,15 @@ export default function RecruitmentPortal() {
     <main className="text-foreground">
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
-          <div><h1 className="text-3xl font-medium">Applications</h1></div>
+          <div><h1 className="text-3xl font-medium">Recruitment</h1></div>
           <Button variant="outline" size="icon" aria-label="Refresh applications" title="Refresh applications" disabled={loading || busy} onClick={() => void load()}><RefreshCw aria-hidden="true" /></Button>
         </header>
+        <Tabs defaultValue="applications" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="applications">Applications</TabsTrigger>
+            <TabsTrigger value="positions">Positions</TabsTrigger>
+          </TabsList>
+          <TabsContent value="applications" className="space-y-6">
         {loading && <div role="status" aria-label="Loading applications" className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-20 w-full" />)}</div>}
         {ready && !loading && <>
           <div className="flex flex-wrap items-end gap-4">
@@ -144,6 +152,9 @@ export default function RecruitmentPortal() {
             </EmptyHeader>
           </Empty>}
         </>}
+          </TabsContent>
+          <TabsContent value="positions"><PositionManagement /></TabsContent>
+        </Tabs>
         <Dialog open={target !== null} onOpenChange={open => { if (!open && !busy) setTarget(null); }}>
           <DialogContent showCloseButton={!busy} onEscapeKeyDown={e => { if (busy) e.preventDefault(); }} onPointerDownOutside={e => { if (busy) e.preventDefault(); }}>
             <DialogHeader><DialogTitle>{target?.reject ? "Reject" : "Delete"} {target?.row.full_name}?</DialogTitle>

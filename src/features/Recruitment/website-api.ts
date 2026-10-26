@@ -7,6 +7,18 @@ export type ApplicationRow = {
   position_id: string; position_title: string; interested_departments: string[];
   cv_path: string; photo_path: string | null; consent: boolean;
 };
+export type WebsitePosition = {
+  id: string;
+  title: string;
+  department: string;
+  applyUrl: string;
+  contact: { name: string; email: string; linkedin?: string };
+  about: string;
+  tasks: string[];
+  achieve: string[];
+  visible: boolean;
+};
+export type WebsitePositionInput = Omit<WebsitePosition, "id">;
 export class RecruitmentRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
@@ -39,6 +51,14 @@ export function createRecruitmentApi(owner: { current: string | null }) {
       }
       return applications;
     },
+    async managedPositions() {
+      const result = await request<{ positions: WebsitePosition[] }>("?action=managed-positions");
+      return result.positions;
+    },
+    createPosition: (position: WebsitePositionInput) => request<{ position: WebsitePosition }>("", { action: "create-position", position }),
+    updatePosition: (position: WebsitePosition) => request<{ position: WebsitePosition }>("", { action: "update-position", position }),
+    setPositionVisibility: (id: string, visible: boolean) => request<{ position: WebsitePosition }>("", { action: "set-position-visibility", id, visible }),
+    deletePosition: (id: string) => request<{ deleted: boolean }>("", { action: "delete-position", id }),
     file: (id: string, kind: "cv" | "photo") => request<{ url: string; expiresIn: number }>(`?action=file&id=${encodeURIComponent(id)}&kind=${kind}`),
     reject: (id: string) => request<{ emailStatus: "sent" | "skipped"; cleanupPending: boolean }>("", { action: "reject", application_id: id }),
     remove: (id: string) => request<{ emailStatus: "skipped"; cleanupPending: boolean }>("", { action: "delete", application_id: id }),

@@ -9,6 +9,7 @@ const id = "10000000-0000-4000-8000-000000000001";
 function fixture() {
   const services: WebsiteServices = {
     positions: vi.fn(async () => [{ id: "software", title: "Software Engineer", department: "Software", tasks: ["Build"], contact: { email: "test@example.test" } }]),
+    managedPositions: vi.fn(async () => []), createPosition: vi.fn(), updatePosition: vi.fn(), setPositionVisibility: vi.fn(), deletePosition: vi.fn(),
     submit: vi.fn(async () => ({ id, emailStatus: "skipped" as const })),
     session: vi.fn(), list: vi.fn(), read: vi.fn(), file: vi.fn(), remove: vi.fn(), confirmation: vi.fn(),
   };

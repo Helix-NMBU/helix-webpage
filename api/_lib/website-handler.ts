@@ -21,6 +21,7 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
         if (action === "positions") return res.status(200).json({ positions: await getServices().positions() });
         const token = bearer(req.headers.authorization);
         const services = getServices();
+        if (action === "managed-positions") return res.status(200).json({ positions: await services.managedPositions(token) });
         if (action === "session") return res.status(200).json(await services.session(token));
         if (action === "applications") {
           const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
@@ -36,8 +37,21 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
       const action = fixedAction ?? body.action;
       if (action === "submit") return res.status(201).json(await getServices().submit(body, submissionRateKey(req)));
       const token = bearer(req.headers.authorization);
-      const id = applicationId(body.application_id);
       const services = getServices();
+      if (action === "create-position") return res.status(201).json({ position: await services.createPosition(token, body) });
+      if (action === "update-position") {
+        if (typeof body.id !== "string") throw new MemberCvError(400, "A valid position ID is required.");
+        return res.status(200).json({ position: await services.updatePosition(token, body.id, body) });
+      }
+      if (action === "set-position-visibility") {
+        if (typeof body.id !== "string") throw new MemberCvError(400, "A valid position ID is required.");
+        return res.status(200).json({ position: await services.setPositionVisibility(token, body.id, body.visible as boolean) });
+      }
+      if (action === "delete-position") {
+        if (typeof body.id !== "string") throw new MemberCvError(400, "A valid position ID is required.");
+        return res.status(200).json(await services.deletePosition(token, body.id));
+      }
+      const id = applicationId(body.application_id);
       if (action === "reject" || action === "delete") return res.status(200).json(await services.remove(token, id, action === "reject"));
       if (action === "confirmation") return res.status(200).json(await services.confirmation(token, id));
       throw new MemberCvError(400, "Unknown request.");
