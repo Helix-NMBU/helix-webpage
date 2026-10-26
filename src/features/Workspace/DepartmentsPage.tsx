@@ -116,7 +116,7 @@ export function DepartmentsPage() {
   ).filter(
     (d) =>
       !!d &&
-      `${d.name} ${descriptions[d.name]}`
+      `${d.name} ${data.members.find(member => member.id === d.leadId)?.name ?? ""}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
@@ -127,7 +127,7 @@ export function DepartmentsPage() {
         <TableHeader>
           <TableRow>
             <TableHead className="pl-4">Name</TableHead>
-            <TableHead>Description</TableHead>
+            <TableHead>Leads</TableHead>
             <TableHead>Membership</TableHead>
             <TableHead>Members</TableHead>
             <TableHead>Active projects</TableHead>
@@ -162,8 +162,13 @@ export function DepartmentsPage() {
                     )}
                   </span>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {descriptions[d.name]}
+                <TableCell>
+                  <AssigneeAvatars
+                    assigneeIds={d.leadId ? [d.leadId] : []}
+                    members={data.members}
+                    assignmentRole="lead"
+                    showNames
+                  />
                 </TableCell>
                 <TableCell>
                   {joined ? (
