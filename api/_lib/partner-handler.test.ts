@@ -13,13 +13,17 @@ const issuer = "https://partner-auth.example.test";
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;
 let wrongKeys: Awaited<ReturnType<typeof generateKeyPair>>;
 let jwt: string;
-const session = { user: { name: "Partner", email: "partner@example.test" }, organizations: [{ id: orgId, name: "Partner company" }] };
+const session = { user: { name: "Partner", email: "partner@example.test" }, organizations: [{ id: orgId, name: "Partner company", entitlements: { directory: true, requests: true } }] };
 const services: PartnerServices = {
   requestOtp: vi.fn(async () => undefined),
   authenticate: (token) => verifyNeonSession(token),
   session: vi.fn(async () => session),
   directory: vi.fn(async () => ({ members: [] })),
   download: vi.fn(async () => ({ url: "https://storage.example.test/signed", expiresIn: 120 })),
+  requests: vi.fn(async () => ({ requests: [], administrators: [] })),
+  request: vi.fn(async () => ({ request: {} as never })),
+  createRequest: vi.fn(async () => ({ request: {} as never })),
+  mutateRequest: vi.fn(async () => ({ request: {} as never })),
 };
 const getServices = vi.fn(() => services);
 const handler = createPartnerHandler(getServices);
@@ -90,6 +94,25 @@ describe("partner endpoint with real signed Neon token verification", () => {
     expect(services.directory).toHaveBeenCalledWith(userId, orgId);
     expect((await request({ action: "download", organizationId: orgId, memberId, path: "forged.pdf" })).status).toBe(200);
     expect(services.download).toHaveBeenCalledWith(userId, orgId, memberId);
+  });
+  it("routes partner request reads and writes through the verified user and explicit organization", async () => {
+    const requestId = "40000000-0000-4000-8000-000000000001";
+    expect((await request({ action: "requests", organizationId: orgId })).status).toBe(200);
+    expect(services.requests).toHaveBeenCalledWith(userId, orgId);
+    expect((await request({ action: "request", organizationId: orgId, id: requestId })).status).toBe(200);
+    expect(services.request).toHaveBeenCalledWith(userId, orgId, requestId);
+    expect((await request({ action: "requests" }, `Bearer ${jwt}`, "POST", { organizationId: orgId, type: "recruitment", title: "Hiring", body: "We are hiring." })).status).toBe(201);
+    expect(services.createRequest).toHaveBeenCalledWith(userId, orgId, { type: "recruitment", title: "Hiring", body: "We are hiring." });
+    expect((await request({ action: "request" }, `Bearer ${jwt}`, "POST", { organizationId: orgId, id: requestId, expectedRevision: 0, operation: "reply", body: "Thanks" })).status).toBe(200);
+    expect(services.mutateRequest).toHaveBeenCalledWith(userId, orgId, requestId, { organizationId: orgId, id: requestId, expectedRevision: 0, operation: "reply", body: "Thanks" });
+  });
+  it.each([
+    { action: "requests" }, { action: "requests", organizationId: "bad" },
+    { action: "request", organizationId: orgId }, { action: "request", organizationId: orgId, id: "bad" },
+  ])("rejects request reads without valid organization and request identifiers: %j", async (query) => {
+    expect((await request(query)).status).toBe(400);
+    expect(services.requests).not.toHaveBeenCalled();
+    expect(services.request).not.toHaveBeenCalled();
   });
   it.each([
     { action: "directory" }, { action: "directory", organizationId: "bad" },

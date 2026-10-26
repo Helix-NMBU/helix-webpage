@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createSponsorAccess, type SponsorDatabase } from "./sponsor-access.js";
 import { createSponsorRequestsHandler } from "./sponsor-requests.js";
+import { createPartnerServices } from "./partner-service.js";
 import type { RequestDetail, RequestList } from "../../src/features/SponsorWorkspace/request-types.js";
 
 const USER = "00000000-0000-4000-8000-000000000001";
@@ -14,21 +15,31 @@ const ORG = "00000000-0000-4000-8000-000000000005";
 const OTHER_ORG = "00000000-0000-4000-8000-000000000006";
 const STAFF = "00000000-0000-4000-8000-000000000007";
 const STAFF2 = "00000000-0000-4000-8000-000000000008";
+const PARTNER_USER = "00000000-0000-4000-8000-000000000009";
+const PARTNER_ORG = "00000000-0000-4000-8000-00000000000a";
+const OTHER_PARTNER_USER = "00000000-0000-4000-8000-00000000000b";
+const OTHER_PARTNER_ORG = "00000000-0000-4000-8000-00000000000c";
 const databases: PGlite[] = [];
 afterEach(async () => { await Promise.all(databases.splice(0).map(db => db.close())); });
 
 async function fixture() {
   const db = new PGlite(); databases.push(db);
-  await db.exec(`create schema neon_auth; create table neon_auth."user" (id uuid primary key, email text, "emailVerified" boolean, banned boolean);
-    insert into neon_auth."user" values ('${USER}','contact@example.com',true,false),('${OTHER}','other@example.com',true,false),
-    ('${ADMIN}','admin@helixnmbu.no',true,false),('${ADMIN2}','other-admin@helixnmbu.no',true,false);`);
-  for (const name of ["003_sponsor_portal", "004_sponsor_requests", "004_sponsor_requests"]) {
+  await db.exec(`create schema neon_auth;
+    create table neon_auth."user" (id uuid primary key, email text, name text, "emailVerified" boolean, banned boolean);
+    insert into neon_auth."user" values ('${USER}','contact@example.com','Contact',true,false),('${OTHER}','other@example.com','Other',true,false),
+    ('${ADMIN}','admin@helixnmbu.no','Admin',true,false),('${ADMIN2}','other-admin@helixnmbu.no','Admin 2',true,false),
+    ('${PARTNER_USER}','partner@example.com','Partner',true,false),('${OTHER_PARTNER_USER}','other-partner@example.com','Other partner',true,false);`);
+  for (const name of ["003_sponsor_portal", "004_partner_portal", "004_sponsor_requests", "008_partner_agreement_terms", "009_partner_engagement_requests"]) {
     await db.exec(await readFile(new URL(`../../db/migrations/${name}.sql`, import.meta.url), "utf8"));
   }
   await db.exec(`insert into sponsor.organizations(id,name) values ('${ORG}','Example Racing'),('${OTHER_ORG}','Other Racing');
     insert into sponsor.contacts(organization_id,email,auth_user_id) values ('${ORG}','contact@example.com','${USER}'),('${OTHER_ORG}','other@example.com','${OTHER}');
     insert into sponsor.agreements(organization_id,tier,starts_at,ends_at) values
     ('${ORG}','bronze',now()-interval '1 day',now()+interval '1 day'),('${OTHER_ORG}','silver',now()-interval '1 day',now()+interval '1 day');
+    insert into partner.organizations(id,name,active,agreement_tier) values ('${PARTNER_ORG}','Partner Example',true,'main'),('${OTHER_PARTNER_ORG}','Other Partner',true,'main');
+    insert into partner.memberships(organization_id,auth_user_id,invited_email,status,approved_at,starts_at)
+      values ('${PARTNER_ORG}','${PARTNER_USER}','partner@example.com','active',now(),now()),
+      ('${OTHER_PARTNER_ORG}','${OTHER_PARTNER_USER}','other-partner@example.com','active',now(),now());
     insert into sponsor.staff(id,email,auth_user_id,role) values ('${STAFF}','admin@helixnmbu.no','${ADMIN}','admin'),('${STAFF2}','other-admin@helixnmbu.no','${ADMIN2}','admin');`);
   const access = createSponsorAccess({ db: db as unknown as SponsorDatabase, verifySession: async token => ({ userId: token }) });
   const handler = createSponsorRequestsHandler({ db: db as unknown as SponsorDatabase, access });
@@ -47,10 +58,37 @@ async function fixture() {
   async function mutate(request: RequestDetail, operation: string, extra: Record<string, unknown>, user = USER) {
     return call(user, "request", "POST", { id: request.id, expectedRevision: request.revision, operation, ...extra });
   }
-  return { db, access, call, create, mutate };
+  const partner = createPartnerServices({
+    db: db as unknown as Parameters<typeof createPartnerServices>[0]["db"],
+    verify: async () => ({ userId: PARTNER_USER }),
+    storage: () => ({ presign: async () => "https://storage.example.test/signed" }),
+  });
+  return { db, access, call, create, mutate, partner };
 }
 
 describe("sponsor requests with real SQL", () => {
+  it("stores partner submissions in the shared administrator queue with separate org isolation", async () => {
+    const { partner, call } = await fixture();
+    const result = await partner.createRequest(PARTNER_USER, PARTNER_ORG, {
+      type: "thesis_project", title: "Joint research", body: "Explore a joint thesis project.",
+    });
+    expect(result.request).toMatchObject({ organizationId: PARTNER_ORG, organizationName: "Partner Example", authorEmail: "partner@example.com", status: "submitted", revision: 0 });
+    expect((await partner.requests(PARTNER_USER, PARTNER_ORG)).requests).toHaveLength(1);
+    expect((await call(ADMIN)).result).toMatchObject({ requests: [{ id: result.request.id, organizationId: PARTNER_ORG, organizationName: "Partner Example" }] });
+    await expect(partner.request(OTHER_PARTNER_USER, OTHER_PARTNER_ORG, result.request.id)).rejects.toMatchObject({ status: 404 });
+    await expect(partner.requests(OTHER_PARTNER_USER, OTHER_PARTNER_ORG)).resolves.toMatchObject({ requests: [] });
+  });
+  it("rechecks partner request entitlement and expiry in the SQL functions", async () => {
+    const { db, partner } = await fixture();
+    expect((await db.query("select partner.can_manage_requests($1,$2) as allowed", [PARTNER_USER, PARTNER_ORG])).rows[0]).toEqual({ allowed: true });
+    expect((await db.query("select partner.can_access_directory($1,$2) as allowed", [PARTNER_USER, PARTNER_ORG])).rows[0]).toEqual({ allowed: true });
+    const request = await partner.createRequest(PARTNER_USER, PARTNER_ORG, { type: "recruitment", title: "New roles", body: "Discuss recruitment." });
+    await db.exec(`update partner.memberships set expires_at = now() - interval '1 minute' where organization_id = '${PARTNER_ORG}'`);
+    expect((await db.query("select partner.can_manage_requests($1,$2) as allowed", [PARTNER_USER, PARTNER_ORG])).rows[0]).toEqual({ allowed: false });
+    await expect(partner.mutateRequest(PARTNER_USER, PARTNER_ORG, request.request.id, { id: request.request.id, organizationId: PARTNER_ORG, expectedRevision: 0, operation: "reply", body: "Late reply" })).rejects.toMatchObject({ status: 403 });
+    const rows = (await db.query("select count(*)::integer as count from sponsor.request_replies where request_id = $1", [request.request.id])).rows;
+    expect(rows[0]).toEqual({ count: 0 });
+  });
   it("creates a Bronze request scoped to the signed-in organization and records its shared history", async () => {
     const { call, create } = await fixture(); const request = await create();
     expect(request).toMatchObject({ organizationId: ORG, authorEmail: "contact@example.com", status: "submitted", revision: 0, assignedAdminId: null, replies: [] });
