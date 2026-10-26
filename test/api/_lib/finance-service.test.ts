@@ -97,9 +97,12 @@ beforeAll(async () => {
       ('${operatorId}', 'operator-sub', 'operator@example.test', 'Operator Example', 'Member'),
       ('${memberId}', 'member-sub', 'member@example.test', 'Member Example', 'Member'),
       ('${adminId}', 'admin-sub', 'admin@example.test', 'Admin Example', 'Admin');
-    insert into identity.platform_roles values ('platform_administrator');
-    insert into identity.member_roles values ('${adminId}', 'platform_administrator');
+    insert into identity.departments (department_key, name, sort_order) values ('finance', 'Finance', 2);
+    insert into identity.platform_roles values ('platform_administrator'), ('team_member');
+    insert into identity.member_roles values ('${adminId}', 'platform_administrator'), ('${operatorId}', 'platform_administrator');
     insert into identity.recruiter_grants values ('${adminId}');
+    create table identity.member_departments (member_id uuid primary key, department_key text not null);
+    create table identity.role_feature_grants (role_key text not null, feature_key text not null, scope text not null);
     create role anon;
     create role authenticated;
     create role anonymous;
@@ -118,8 +121,9 @@ beforeAll(async () => {
   handler = createFinanceHandler(() => services);
 });
 
-beforeEach(async () => {
+async function resetFinance() {
   await pg.exec(`
+    alter table finance.audit_log disable trigger user;
     truncate table
       finance.allocations,
       finance.purchase_lines,
@@ -146,9 +150,12 @@ beforeEach(async () => {
       finance.reference_counters,
       finance.audit_log
     restart identity;
+    alter table finance.audit_log enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
-});
+}
+
+beforeEach(resetFinance);
 
 afterAll(async () => { await pg.close(); });
 
@@ -179,6 +186,7 @@ describe("finance schema privacy", () => {
     await sql("select finance.append_audit($1::uuid, 'settings', 'current_season', 'current_season', null, 'S27', null)", [operatorId]);
     await expect(sql("update finance.audit_log set reason = 'changed'")).rejects.toThrow(/append-only/i);
     await expect(sql("delete from finance.audit_log")).rejects.toThrow(/append-only/i);
+    await expect(sql("truncate finance.audit_log")).rejects.toThrow(/append-only/i);
   });
 
   it("does not derive profiles from title, department, platform administration, or recruiting", async () => {
@@ -193,7 +201,7 @@ describe("finance schema privacy", () => {
   it("matches the capability union for every active profile combination", async () => {
     const profiles: FinanceProfile[] = ["business", "finance", "head_of_finance"];
     for (let mask = 0; mask < 8; mask += 1) {
-      await pg.exec("truncate finance.member_grants, finance.audit_log; update finance.view_versions set version = 0;");
+      await pg.exec("alter table finance.audit_log disable trigger user; truncate finance.member_grants, finance.audit_log; alter table finance.audit_log enable trigger user; update finance.view_versions set version = 0;");
       const selected = profiles.filter((_, index) => mask & (1 << index));
       for (const profile of selected) await grant(memberId, profile);
       const row = await sql<{ flags: Record<string, unknown> & { profiles: FinanceProfile[] } }>("select finance.capability_flags($1::uuid) as flags", [memberId]);
@@ -206,6 +214,8 @@ describe("finance schema privacy", () => {
 
   it("rejects self-grant and records operator grant and revoke", async () => {
     await expect(sql("select finance.set_member_grant($1::uuid, $1::uuid, 'finance', true, 'Self')", [operatorId])).rejects.toThrow(/self-grant/i);
+    await expect(sql("select finance.set_member_grant($1::uuid, $2::uuid, 'finance', true, 'Not an administrator')", [memberId, adminId])).rejects.toThrow(/platform administrator/i);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.member_grants")).rows[0]?.count).toBe("0");
     await grant(memberId, "finance");
     await expect(grant(memberId, "finance")).resolves.toBeUndefined();
     const active = await sql<{ count: string }>("select count(*)::text as count from finance.member_grants where active");
@@ -302,6 +312,100 @@ describe("finance schema privacy", () => {
       from finance.purchases p, finance.systems s where s.code = 'SYS-FR';
     `)).rejects.toThrow(/allocation/i);
   });
+
+  it("rejects an earmark from another season", async () => {
+    await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
+    await sql(
+      `insert into finance.seasons (code, name, start_date, end_date, created_by_member_id, updated_by_member_id)
+       values ('S26', 'Earlier season', '2025-08-01', '2026-07-31', $1::uuid, $1::uuid)`,
+      [operatorId],
+    );
+    await sql(
+      `insert into finance.funding (season_id, public_ref, source_name, owner_name, funding_type, amount_ore, status, created_by_member_id, updated_by_member_id)
+       select id, 'F-S26-001', 'Example source', 'Example owner', 'other', 100000, 'secured', $1::uuid, $1::uuid
+       from finance.seasons where code = 'S26'`,
+      [operatorId],
+    );
+    await sql(
+      `insert into finance.funding_parts (funding_id, public_ref, purpose, amount_ore, created_by_member_id, updated_by_member_id)
+       select id, 'FE-002', 'Earlier frame', 100000, $1::uuid, $1::uuid from finance.funding where public_ref = 'F-S26-001'`,
+      [operatorId],
+    );
+    await sql("insert into finance.systems (department_key, code, name) values ('mechanical-production', 'SYS-FR', 'Frame')");
+    await sql(
+      `insert into finance.budgets (season_id, public_ref, status, created_by_member_id, updated_by_member_id)
+       select id, 'B-S27', 'draft', $1::uuid, $1::uuid from finance.seasons where code = 'S27'`,
+      [operatorId],
+    );
+    await expect(sql(
+      `insert into finance.budget_items (
+         budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, earmark_id, created_by_member_id, updated_by_member_id
+       )
+       select b.id, s.id, 'BI-S27-001', 'Frame tube', 'material', 1000, 'EM', 'new', 'planned', p.id, $1::uuid, $1::uuid
+       from finance.budgets b, finance.systems s, finance.funding_parts p
+       where s.code = 'SYS-FR' and p.public_ref = 'FE-002'`,
+      [operatorId],
+    )).rejects.toThrow(/same season/i);
+    await sql(
+      `insert into finance.funding (season_id, public_ref, source_name, owner_name, funding_type, amount_ore, status, created_by_member_id, updated_by_member_id)
+       select id, 'F-S27-001', 'Example source', 'Example owner', 'other', 100000, 'secured', $1::uuid, $1::uuid
+       from finance.seasons where code = 'S27'`,
+      [operatorId],
+    );
+    await sql(
+      `insert into finance.funding_parts (funding_id, public_ref, purpose, amount_ore, created_by_member_id, updated_by_member_id)
+       select id, 'FE-001', 'Frame work', 100000, $1::uuid, $1::uuid from finance.funding where public_ref = 'F-S27-001'`,
+      [operatorId],
+    );
+    await expect(sql(
+      `insert into finance.budget_items (
+         budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, earmark_id, created_by_member_id, updated_by_member_id
+       )
+       select b.id, s.id, 'BI-S27-001', 'Frame tube', 'material', 1000, 'EM', 'new', 'planned', p.id, $1::uuid, $1::uuid
+       from finance.budgets b, finance.systems s, finance.funding_parts p
+       where s.code = 'SYS-FR' and p.public_ref = 'FE-001'`,
+      [operatorId],
+    )).resolves.toBeDefined();
+  });
+
+  it("accepts a request season counter without a calendar year", async () => {
+    await sql(
+      `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+       values ('request:S27', null, 1, $1::uuid)`,
+      [operatorId],
+    );
+    const stored = await sql<{ counter_key: string; calendar_year: number | null }>(
+      "select counter_key, calendar_year from finance.reference_counters where counter_key = 'request:S27'",
+    );
+    expect(stored.rows).toEqual([{ counter_key: "request:S27", calendar_year: null }]);
+    await expect(sql(
+      `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+       values ('request:2026', null, 1, $1::uuid)`,
+      [operatorId],
+    )).rejects.toThrow();
+    await expect(sql(
+      `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+       values ('request:S26', 2026, 1, $1::uuid)`,
+      [operatorId],
+    )).rejects.toThrow();
+  });
+
+  it("keeps a member row while a finance grant points at it", async () => {
+    const definition = await sql<{ definition: string }>(`
+      select pg_get_constraintdef(c.oid) as definition
+      from pg_constraint c
+      join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any (c.conkey)
+      where c.conrelid = 'finance.member_grants'::regclass
+        and c.contype = 'f'
+        and a.attname = 'member_id'
+        and array_length(c.conkey, 1) = 1
+    `);
+    expect(definition.rows[0]?.definition).toMatch(/on delete restrict/i);
+    await grant(memberId, "finance");
+    await expect(sql("delete from identity.members where id = $1::uuid", [memberId])).rejects.toThrow(/member_grants|foreign key|restrict/i);
+    const stillThere = await sql<{ id: string }>("select id from identity.members where id = $1::uuid", [memberId]);
+    expect(stillThere.rows).toEqual([{ id: memberId }]);
+  });
 });
 
 describe("finance access API", () => {
@@ -337,6 +441,42 @@ describe("finance access API", () => {
     expect(mutation.status).toBe(403);
     const purchases = await call({ query: { action: "purchases" }, token: "admin" });
     expect(purchases.body).not.toHaveProperty("register");
+  });
+
+  it("gives no finance capability for a department, a title, team.finance, or the admin wildcard", async () => {
+    const elevated = ["financing", "manageFunding", "purchaseRegister", "filesAndRefunds", "paymentsVoidReview", "draftBudgetItems", "permittedImports", "createBudget", "approveBudget", "protectedBudgetEdits", "decideRequests"] as const;
+    async function expectNothing(token: "member" | "admin", id: string) {
+      const flags = await sql<{ flags: Record<string, unknown> }>("select finance.capability_flags($1::uuid) as flags", [id]);
+      expect(flags.rows[0]?.flags.profiles).toEqual([]);
+      expect(flags.rows[0]?.flags.publicBudgets).toBe(true);
+      for (const key of elevated) expect(flags.rows[0]?.flags[key], key).toBe(false);
+      const capabilities = await call({ query: { action: "capabilities" }, token });
+      expect(capabilities.status).toBe(200);
+      const body = capabilities.body as { profiles: string[]; capabilities: Record<string, boolean> };
+      expect(body.profiles).toEqual([]);
+      expect(body.capabilities.publicBudgets).toBe(true);
+      for (const key of elevated) expect(body.capabilities[key], key).toBe(false);
+      expect((await call({ query: { action: "financing" }, token })).status).toBe(403);
+      expect((await call({ query: { action: "purchases" }, token })).body).not.toHaveProperty("register");
+    }
+
+    await sql("insert into identity.member_departments (member_id, department_key) values ($1::uuid, 'finance')", [memberId]);
+    await expectNothing("member", memberId);
+    await sql("delete from identity.member_departments where member_id = $1::uuid", [memberId]);
+
+    await sql("update identity.members set helix_role = 'Head of Finance' where id = $1::uuid", [memberId]);
+    await expectNothing("member", memberId);
+    await sql("update identity.members set helix_role = 'Member' where id = $1::uuid", [memberId]);
+
+    await sql("insert into identity.role_feature_grants (role_key, feature_key, scope) values ('team_member', 'team.finance', 'global')");
+    await sql("insert into identity.member_roles (member_id, role_key) values ($1::uuid, 'team_member')", [memberId]);
+    await expectNothing("member", memberId);
+    await sql("delete from identity.member_roles where member_id = $1::uuid and role_key = 'team_member'", [memberId]);
+    await sql("delete from identity.role_feature_grants where feature_key = 'team.finance'");
+
+    await sql("insert into identity.role_feature_grants (role_key, feature_key, scope) values ('platform_administrator', '*', 'all_features')");
+    await expectNothing("admin", adminId);
+    await sql("delete from identity.role_feature_grants where feature_key = '*'");
   });
 
   it("filters financing, the purchase register, and head actions by the active grant", async () => {
@@ -375,6 +515,35 @@ describe("finance access API", () => {
 
     await grant(adminId, "head_of_finance");
     expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 503, body: { error: "This finance operation is not available yet." } });
+  });
+
+  it("hides draft budget items and limits the register to the current season", async () => {
+    await seedPrivateRows();
+    await sql("update finance.budgets set status = 'draft', approved_by_member_id = null, approved_on = null");
+    const hidden = await call({ query: { action: "budgets" }, token: "member" });
+    expect(hidden.body).toMatchObject({ budgetStatus: "draft", departments: [] });
+    expect(JSON.stringify(hidden.body)).not.toContain("Frame tube");
+    await grant(memberId, "business");
+    expect(JSON.stringify((await call({ query: { action: "budgets" }, token: "member" })).body)).not.toContain("Frame tube");
+    await grant(memberId, "finance");
+    expect(JSON.stringify((await call({ query: { action: "budgets" }, token: "member" })).body)).toContain("Frame tube");
+
+    await sql(
+      `insert into finance.seasons (code, name, start_date, end_date, created_by_member_id, updated_by_member_id)
+       values ('S26', 'Earlier season', '2025-08-01', '2026-07-31', $1::uuid, $1::uuid)`,
+      [operatorId],
+    );
+    await sql(
+      `insert into finance.purchases (
+         season_id, requester_member_id, public_ref, status, buyer_name, supplier_name, payment_method, purchase_date, justification, document_kind
+       )
+       select id, $1::uuid, '2025-0001', 'registered', 'Buyer Example', 'Other Season Supplier', 'invoice', '2025-10-01', 'Workshop material', 'invoice'
+       from finance.seasons where code = 'S26'`,
+      [memberId],
+    );
+    const register = JSON.stringify((await call({ query: { action: "purchases" }, token: "member" })).body);
+    expect(register).toContain("Hidden Supplier");
+    expect(register).not.toContain("Other Season Supplier");
   });
 
   it("returns an unchanged view without skipping a financing denial", async () => {
@@ -423,4 +592,68 @@ async function seedPrivateRows() {
      ) values ($1::uuid, $2::uuid, '2026-0042', 'registered', 'Buyer Example', 'Hidden Supplier', 'outlay', '2026-10-01', 'Workshop material', 'receipt', '12345678901')`,
     [seasonId, memberId],
   );
+  await sql(
+    `update finance.budgets
+     set status = 'approved', approved_by_member_id = $1::uuid, approved_on = '2026-10-01'`,
+    [operatorId],
+  );
 }
+
+describe("finance snapshot", () => {
+  it("reads flags and the view version together, then redacts refunds and draft items", async () => {
+    const queries: string[] = [];
+    const flags = {
+      ...capabilitiesForProfiles([]),
+      profiles: [] as string[],
+      purchaseRegister: true,
+      filesAndRefunds: false,
+      draftBudgetItems: false,
+    };
+    const snapshot = createFinanceServices({
+      db: {
+        query: async <T>(text: string) => {
+          queries.push(text);
+          if (text.includes("capability_flags") !== text.includes("finance.view_versions")) throw new Error("split snapshot");
+          if (text.includes("finance.budget_items")) throw new Error("draft items queried");
+          if (text.includes("identity.members")) return { rows: [{ id: memberId }] as T[] };
+          if (text.includes("capability_flags")) {
+            return { rows: [{ flags, version: "4", season_code: "S27", threshold_ore: null }] as T[] };
+          }
+          if (text.includes("finance.requests")) return { rows: [] as T[] };
+          if (text.includes("finance.purchases")) {
+            if (!text.includes("s.code")) throw new Error("missing season filter");
+            return {
+              rows: [{
+                id: "purchase",
+                public_ref: "2026-0042",
+                status: "registered",
+                buyer_name: "Buyer Example",
+                supplier_name: "Hidden Supplier",
+                payment_method: "outlay",
+                purchase_date: "2026-10-01",
+                total_ore: "1000",
+                refund_account: "private-account",
+                refund_phone: "private-phone",
+              }] as T[],
+            };
+          }
+          if (text.includes("finance.budgets")) {
+            return { rows: [{ id: "budget", status: "draft", approved_on: null }] as T[] };
+          }
+          return { rows: [] as T[] };
+        },
+      },
+      authenticate: async () => identities.member,
+    });
+    const purchases = await snapshot.purchases("member");
+    expect(purchases).toMatchObject({
+      viewVersion: 4,
+      register: [{ supplierName: "Hidden Supplier", refundAccount: null, refundPhone: null }],
+    });
+    const budgets = await snapshot.budgets("member");
+    expect(budgets).toMatchObject({ budgetStatus: "draft", departments: [] });
+    const snapshots = queries.filter((query) => query.includes("capability_flags") || query.includes("finance.view_versions"));
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(snapshots.every((query) => query.includes("capability_flags") && query.includes("finance.view_versions") && !query.includes(";"))).toBe(true);
+  });
+});

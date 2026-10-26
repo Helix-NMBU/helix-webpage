@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilitiesForProfiles, isFinanceAction, mutationCapability, mutationRequiresRevision } from "./access";
+import { capabilitiesForProfiles, isFinanceAction, isFinanceProfile, mutationCapability, mutationRequiresRevision, presentPurchases } from "./access";
 import {
   addCalendarDays,
   allocationReference,
@@ -122,6 +122,43 @@ describe("finance capability matrix", () => {
     for (const profile of profiles) {
       expect(capabilitiesForProfiles([profile]).publicBudgets).toBe(true);
     }
+  });
+
+  it("ignores a department title, team.finance, and an admin wildcard", () => {
+    expect(isFinanceProfile("Head of Finance")).toBe(false);
+    expect(isFinanceProfile("team.finance")).toBe(false);
+    expect(isFinanceProfile("*")).toBe(false);
+    expect(isFinanceProfile("finance")).toBe(true);
+    const member = capabilitiesForProfiles([]);
+    for (const key of ["financing", "manageFunding", "purchaseRegister", "filesAndRefunds", "paymentsVoidReview", "draftBudgetItems", "permittedImports", "createBudget", "approveBudget", "protectedBudgetEdits", "decideRequests"] as const) {
+      expect(member[key]).toBe(false);
+    }
+  });
+
+  it("keeps refund fields behind the files capability", () => {
+    const view = {
+      viewVersion: 1,
+      ownRequests: [],
+      register: [{
+        id: "purchase",
+        publicRef: "2026-0042",
+        status: "registered" as const,
+        buyerName: "Buyer Example",
+        supplierName: "Hidden Supplier",
+        paymentMethod: "outlay" as const,
+        purchaseDate: "2026-10-01",
+        totalNok: "10.00",
+        refundAccount: "private-account",
+        refundPhone: "private-phone",
+      }],
+    };
+    const registerOnly = { ...capabilitiesForProfiles(["finance"]), filesAndRefunds: false };
+    const redacted = presentPurchases(view, registerOnly);
+    expect(redacted.register?.[0]?.refundAccount).toBeNull();
+    expect(redacted.register?.[0]?.refundPhone).toBeNull();
+    expect(redacted.register?.[0]?.supplierName).toBe("Hidden Supplier");
+    expect(presentPurchases(view, capabilitiesForProfiles([])).register).toBeUndefined();
+    expect(presentPurchases(view, capabilitiesForProfiles(["finance"])).register?.[0]?.refundAccount).toBe("private-account");
   });
 
   it("maps private actions to capabilities and rejects unknown actions", () => {

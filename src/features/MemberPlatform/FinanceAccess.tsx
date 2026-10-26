@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Navigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Skeleton } from "@libs/components/ui/skeleton";
+import { presentPurchases } from "../Finance/access";
 import { createFinanceApi, FinanceRequestError } from "../Finance/repository";
 import type { FinancePageId } from "../Finance/routes";
 import type {
@@ -56,12 +57,9 @@ function errorStatus(error: unknown): number {
   return error instanceof FinanceRequestError ? error.status : 0;
 }
 
-function withoutRegister(view: PurchasesView | null, allowed: boolean): PurchasesView | null {
-  if (!view) return null;
-  if (allowed) return view;
-  const next = { ...view };
-  delete next.register;
-  return next;
+function visibleBudgets(budgets: PublicBudgets | null, capabilities: FinanceCapabilitySet): PublicBudgets | null {
+  if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems) return budgets;
+  return { ...budgets, departments: [] };
 }
 
 export function FinanceAccessProvider({ children, userId }: { children: ReactNode; userId: string }) {
@@ -85,7 +83,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       approvalThresholdNok: body.approvalThresholdNok,
       today: body.today,
       financing: body.capabilities.financing ? current.financing : null,
-      purchases: withoutRegister(current.purchases, body.capabilities.purchaseRegister),
+      budgets: visibleBudgets(current.budgets, body.capabilities),
+      purchases: current.purchases ? presentPurchases(current.purchases, body.capabilities) : null,
     }));
   }, []);
   const fail = useCallback((error: unknown) => {
@@ -142,12 +141,37 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       if (page === "financing") {
         const financing = await api.financing();
         if (!active.current || generation.current !== current || pageToken.current !== token) return;
-        setState((value) => ({ ...value, financing, pageLoading: false }));
+        setState((value) => {
+          if (value.access !== "allowed" || !value.capabilities?.financing) return { ...value, financing: null, pageLoading: false };
+          return { ...value, financing, pageLoading: false };
+        });
         return;
       }
-      const data = page === "overview" ? await api.overview() : page === "budgets" ? await api.budgets() : await api.purchases();
+      if (page === "purchases") {
+        const purchases = await api.purchases();
+        if (!active.current || generation.current !== current || pageToken.current !== token) return;
+        setState((value) => {
+          if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };
+          return { ...value, purchases: presentPurchases(purchases, value.capabilities), pageLoading: false };
+        });
+        return;
+      }
+      if (page === "budgets") {
+        const budgets = await api.budgets();
+        if (!active.current || generation.current !== current || pageToken.current !== token) return;
+        setState((value) => {
+          if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };
+          return { ...value, budgets: visibleBudgets(budgets, value.capabilities), pageLoading: false };
+        });
+        return;
+      }
+      const overview = await api.overview();
       if (!active.current || generation.current !== current || pageToken.current !== token) return;
-      setState((value) => ({ ...value, [page]: data, pageLoading: false }));
+      setState((value) => (
+        value.access === "allowed"
+          ? { ...value, overview, pageLoading: false }
+          : { ...value, pageLoading: false }
+      ));
     } catch (error) {
       if (!active.current || generation.current !== current || pageToken.current !== token) return;
       if (errorStatus(error) === 403 || errorStatus(error) === 401) {

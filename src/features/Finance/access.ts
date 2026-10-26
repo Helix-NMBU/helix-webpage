@@ -1,4 +1,4 @@
-import type { FinanceAction, FinanceCapabilitySet, FinanceProfile } from "./types.js";
+import type { FinanceAction, FinanceCapabilitySet, FinanceProfile, FinancePurchaseSummary, PurchasesView } from "./types.js";
 import { FINANCE_PROFILES } from "./types.js";
 
 export const EMPTY_CAPABILITIES: FinanceCapabilitySet = {
@@ -40,6 +40,19 @@ export function capabilitiesForProfiles(profiles: readonly FinanceProfile[]): Fi
     approveBudget: head,
     protectedBudgetEdits: head,
     decideRequests: head,
+  };
+}
+
+export function presentPurchases(view: PurchasesView, capabilities: FinanceCapabilitySet): PurchasesView {
+  if (!capabilities.purchaseRegister) {
+    const next = { ...view };
+    delete next.register;
+    return next;
+  }
+  if (!view.register || capabilities.filesAndRefunds) return view;
+  return {
+    ...view,
+    register: view.register.map((row: FinancePurchaseSummary) => ({ ...row, refundAccount: null, refundPhone: null })),
   };
 }
 

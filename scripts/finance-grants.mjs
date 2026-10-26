@@ -41,7 +41,7 @@ async function main() {
     return;
   }
   if (!args.apply) {
-    console.log("Dry run only. Re-run with --apply to call finance.set_member_grant. No database connection was opened.");
+    console.log("Dry run only. Re-run with --apply to call finance.set_member_grant. The operator must be an active platform administrator. No database connection was opened.");
     return;
   }
   if (!process.env.DATABASE_URL) {

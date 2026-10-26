@@ -35,6 +35,7 @@ describe("finance grant operator script", () => {
     ], { DATABASE_URL: "postgres://invalid.example/should-not-connect" });
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("finance.set_member_grant");
+    expect(result.stdout).toContain("active platform administrator");
     expect(result.stdout).toContain("No database connection was opened.");
   });
 

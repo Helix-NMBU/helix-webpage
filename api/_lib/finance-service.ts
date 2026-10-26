@@ -1,5 +1,5 @@
 import pg from "pg";
-import { isFinanceAction, isFinanceProfile, mutationCapability, mutationRequiresRevision } from "./finance-access.js";
+import { isFinanceAction, isFinanceProfile, mutationCapability, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
 import { FinanceError } from "./finance-error.js";
 import { formatOre, osloToday } from "./finance-money.js";
 import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
@@ -67,29 +67,32 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
 
   async function context(token: string): Promise<Context> {
     const memberId = await memberIdFor(token);
-    const [flagRow] = await rows<{ flags: FlagsRow }>("select finance.capability_flags($1::uuid) as flags", [memberId]);
-    const flags = flagRow?.flags;
-    if (!flags || !Array.isArray(flags.profiles)) throw new FinanceError(503, UNAVAILABLE);
-    const profiles = flags.profiles.filter(isFinanceProfile);
-    const [versionRow] = await rows<{ version: string | number }>("select version from finance.view_versions where singleton");
-    const [settings] = await rows<{ season_code: string | null; threshold_ore: string | null }>(
-      `select
-         (select setting_value #>> '{}' from finance.settings where setting_key = 'current_season') as season_code,
-         (select setting_value::text from finance.settings where setting_key = 'approval_threshold_ore') as threshold_ore`,
+    // One statement, so the flags and the version come from the same snapshot.
+    const [row] = await rows<{ flags: FlagsRow; version: string | number; season_code: string | null; threshold_ore: string | null }>(
+      `select finance.capability_flags($1::uuid) as flags,
+              v.version,
+              (select setting_value #>> '{}' from finance.settings where setting_key = 'current_season') as season_code,
+              (select setting_value::text from finance.settings where setting_key = 'approval_threshold_ore') as threshold_ore
+       from finance.view_versions v
+       where v.singleton`,
+      [memberId],
     );
+    const flags = row?.flags;
+    const viewVersion = Number(row?.version);
+    if (!flags || !Array.isArray(flags.profiles) || !Number.isSafeInteger(viewVersion)) throw new FinanceError(503, UNAVAILABLE);
     let approvalThresholdNok: string | null = null;
-    if (settings?.threshold_ore != null) {
-      if (!/^[0-9]+$/.test(settings.threshold_ore)) throw new FinanceError(503, UNAVAILABLE);
-      approvalThresholdNok = formatOre(BigInt(settings.threshold_ore));
+    if (row.threshold_ore != null) {
+      if (!/^[0-9]+$/.test(row.threshold_ore)) throw new FinanceError(503, UNAVAILABLE);
+      approvalThresholdNok = formatOre(BigInt(row.threshold_ore));
     }
     const { profiles: _ignored, ...capabilities } = flags;
     return {
       memberId,
-      viewVersion: Number(versionRow?.version ?? 0),
-      seasonCode: settings?.season_code ?? null,
+      viewVersion,
+      seasonCode: row.season_code,
       approvalThresholdNok,
       capabilities,
-      profiles,
+      profiles: flags.profiles.filter(isFinanceProfile),
     };
   }
 
@@ -166,7 +169,8 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
       const same = unchanged(current, knownVersion);
       if (same) return same;
       const budget = await budgetState(current.seasonCode);
-      const items = budget.budgetId
+      const showItems = budget.status !== "draft" || current.capabilities.draftBudgetItems;
+      const items = budget.budgetId && showItems
         ? await rows<{
           id: string; public_ref: string; system_id: string; system_code: string; system_name: string; active: boolean;
           department_key: string; department_name: string; description: string; category: string; planned_ore: string;
@@ -234,7 +238,7 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
       }));
       const view: PurchasesView = { viewVersion: current.viewVersion, ownRequests };
       if (current.capabilities.purchaseRegister) {
-        view.register = (await rows<{
+        view.register = current.seasonCode ? (await rows<{
           id: string; public_ref: string; status: FinancePurchaseSummary["status"]; buyer_name: string; supplier_name: string;
           payment_method: FinancePurchaseSummary["paymentMethod"]; purchase_date: string; total_ore: string;
           refund_account: string | null; refund_phone: string | null;
@@ -243,9 +247,12 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
                   p.purchase_date::text as purchase_date, coalesce(sum(l.amount_ore), 0)::text as total_ore,
                   p.refund_account, p.refund_phone
            from finance.purchases p
+           join finance.seasons s on s.id = p.season_id
            left join finance.purchase_lines l on l.purchase_id = p.id
+           where s.code = $1
            group by p.id
            order by p.public_ref`,
+          [current.seasonCode],
         )).map((row): FinancePurchaseSummary => ({
           id: row.id,
           publicRef: row.public_ref,
@@ -257,9 +264,9 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
           totalNok: formatOre(BigInt(row.total_ore)),
           refundAccount: row.refund_account,
           refundPhone: row.refund_phone,
-        }));
+        })) : [];
       }
-      return view;
+      return presentPurchases(view, current.capabilities);
     },
     async financing(token, knownVersion) {
       const current = await context(token);

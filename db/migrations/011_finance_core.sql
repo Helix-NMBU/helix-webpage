@@ -19,7 +19,7 @@ insert into finance.view_versions (singleton, version) values (true, 0);
 
 create table finance.member_grants (
   id uuid primary key default gen_random_uuid(),
-  member_id uuid not null references identity.members(id) on delete cascade,
+  member_id uuid not null references identity.members(id) on delete restrict,
   profile text not null check (profile in ('business', 'finance', 'head_of_finance')),
   active boolean not null,
   granted_at timestamptz not null default now(),
@@ -74,6 +74,7 @@ create table finance.reference_counters (
     counter_key ~ '^purchase:[0-9]{4}$'
     or counter_key ~ '^budget_item:S[0-9]{2}$'
     or counter_key ~ '^funding:S[0-9]{2}$'
+    or counter_key ~ '^request:S[0-9]{2}$'
     or counter_key = 'earmark'
   ),
   check (
@@ -427,6 +428,10 @@ create trigger audit_log_append_only
   before update or delete on finance.audit_log
   for each row execute function finance.reject_audit_mutation();
 
+create trigger audit_log_no_truncate
+  before truncate on finance.audit_log
+  for each statement execute function finance.reject_audit_mutation();
+
 create or replace function finance.append_audit(
   p_actor_member_id uuid,
   p_entity text,
@@ -519,6 +524,34 @@ create trigger budget_items_one_earmark_system
   before insert or update on finance.budget_items
   for each row execute function finance.enforce_earmark_system();
 
+create or replace function finance.enforce_earmark_season()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog, finance
+as $fn$
+begin
+  if new.earmark_id is null then
+    return new;
+  end if;
+  if not exists (
+    select 1
+    from finance.funding_parts p
+    join finance.funding f on f.id = p.funding_id
+    join finance.budgets b on b.id = new.budget_id
+    where p.id = new.earmark_id
+      and f.season_id = b.season_id
+  ) then
+    raise exception 'An earmarked part must belong to the same season' using errcode = '23514';
+  end if;
+  return new;
+end;
+$fn$;
+
+create trigger budget_items_earmark_same_season
+  before insert or update on finance.budget_items
+  for each row execute function finance.enforce_earmark_season();
+
 create or replace function finance.enforce_allocation_total()
 returns trigger
 language plpgsql
@@ -591,6 +624,14 @@ begin
   end if;
   if p_operator_member_id = p_member_id then
     raise exception 'Self-grant is not allowed' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1
+    from identity.member_roles
+    where member_id = p_operator_member_id
+      and role_key = 'platform_administrator'
+  ) then
+    raise exception 'Operator must be an active platform administrator' using errcode = '42501';
   end if;
   if p_profile not in ('business', 'finance', 'head_of_finance') then
     raise exception 'Invalid finance profile' using errcode = '22023';
@@ -879,7 +920,7 @@ $$;
 
 grant usage on schema finance to current_user;
 grant select, insert, update, delete on all tables in schema finance to current_user;
-revoke update, delete on finance.audit_log from current_user;
+revoke update, delete, truncate on finance.audit_log from current_user;
 grant execute on all functions in schema finance to current_user;
 
 commit;
