@@ -804,7 +804,7 @@ export default function MemberCV() {
       if (hasUnsavedInput(saved) && !(await confirmUnsaved("reload", opener))) return;
       if (generation.current !== current) return;
       setError(null);
-      const result = await repository.load();
+      const result = await (repository.refresh?.() ?? repository.load());
       if (generation.current !== current) return;
       controller?.reset(result);
       acknowledgedInput.current = null;
@@ -1043,8 +1043,8 @@ export default function MemberCV() {
         </Card>}
         {draft && envelope && !ended && <section className="mt-8 space-y-4" aria-labelledby="member-cv-title">
           <h2 id="member-cv-title" className="text-xl font-medium">CV</h2>
-          {hasRegisteredCv(draft) ? <Card className="gap-0 py-0 shadow-none"><CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
-            <div className="space-y-3">
+          {hasRegisteredCv(draft) ? <Card className="gap-0 py-0 shadow-none"><CardContent className="flex flex-row flex-wrap items-center justify-between gap-4 p-5">
+            <div className="min-w-0 space-y-3">
               <p className="font-medium">CV {memberName}</p>
               <div className="flex items-center gap-2">
                 <Switch id={`${sharingId}-directory`} className="cv-control data-[state=checked]:bg-green-600 dark:data-[state=checked]:bg-green-500" checked={envelope.document.cvVisible ?? envelope.document.publishedRevision !== null}
