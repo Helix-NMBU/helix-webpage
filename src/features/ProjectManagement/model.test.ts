@@ -29,7 +29,7 @@ describe("project progress and deadlines", () => {
     expect(() => validateTask({ ...base, blockedReason: "" })).toThrow("blocking");
     expect(() => validateTask({ ...base, kind: "milestone", milestoneId: null, deadline: null })).toThrow("deadline");
     expect(() => validateTask({ ...base, category: "partnership-deliverables", partnerName: "" })).toThrow("partner");
-    expect(validateProject({ name: " Shared project ", description: "", departments: ["Mechanical", "Electrical", "Mechanical"], category: "production", deadline: null }).departments).toEqual(["Mechanical", "Electrical"]);
+    expect(validateProject({ name: " Shared project ", description: "", departments: ["Mechanical & Production", "Electronics", "Mechanical & Production"], category: "production", deadline: null }).departments).toEqual(["Mechanical & Production", "Electronics"]);
   });
   it("accepts several unique assignees and rejects malformed assignment lists", () => {
     const base = initialLocalWorkspace().tasks[0];

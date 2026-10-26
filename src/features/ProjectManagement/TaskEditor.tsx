@@ -1,12 +1,13 @@
 import { AssigneePicker } from "./TaskAssignees";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { Checkbox } from "@libs/components/ui/checkbox";
 import { Button } from "@libs/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { Textarea } from "@libs/components/ui/textarea";
-import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type Project, type ProjectInput, type ProjectMutation, type ProjectWorkspace, type Task, type TaskCategory, type TaskInput } from "./types";
+import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_PRIORITIES, ORGANIZATION_DEPARTMENTS, TASK_STATUSES, type Project, type ProjectInput, type ProjectMutation, type ProjectWorkspace, type Task, type TaskCategory, type TaskInput } from "./types";
 import { compatibleMilestones, updateTaskDraft } from "./progress";
 import { validateProject, validateTask } from "./model";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -79,12 +80,11 @@ export function ProjectEditor({ project, category, busy, onSave, onClose }: { pr
   const [id] = useState(() => project?.id ?? crypto.randomUUID());
   const [revision] = useState(project?.revision ?? 0);
   const [draft, setDraft] = useState<ProjectInput>(() => project ? { ...project } : { name: "", description: "", category, departments: [], deadline: null });
-  const [departments, setDepartments] = useState(project?.departments.join(", ") ?? "");
   const notify = useNotify();
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
-    try { await onSave({ action: "save_project", id, expectedRevision: revision, project: validateProject({ ...draft, departments: departments.split(",").map(value => value.trim()).filter(Boolean) }) }); }
+    try { await onSave({ action: "save_project", id, expectedRevision: revision, project: validateProject(draft) }); }
     catch (error) { notify("Could not save project", error instanceof Error ? error.message : "Check the project details and try again.", { variant: "error", href: null }); }
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90svh] overflow-y-auto" showCloseButton={!busy}>
@@ -93,7 +93,7 @@ export function ProjectEditor({ project, category, busy, onSave, onClose }: { pr
       <Field id="project-name" label="Project name"><Input id="project-name" autoFocus required maxLength={200} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></Field>
       <Field id="project-description" label="Description"><Textarea id="project-description" maxLength={2000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></Field>
       <Field id="project-category" label="Area"><Choice id="project-category" disabled={busy} value={draft.category} options={categoryOptions} onChange={value => setDraft({ ...draft, category: value as TaskCategory })} /></Field>
-      <Field id="project-departments" label="Departments"><Input id="project-departments" value={departments} placeholder="Mechanical, Electrical" onChange={event => setDepartments(event.target.value)} /><p className="text-xs text-muted-foreground">Separate department names with commas.</p></Field>
+      <Field id="project-departments" label="Departments"><div id="project-departments" role="group" aria-label="Project departments" className="grid gap-2 sm:grid-cols-2">{ORGANIZATION_DEPARTMENTS.map(name => <label key={name} className="flex items-center gap-2 text-sm"><Checkbox checked={draft.departments.includes(name)} disabled={busy} aria-label={name} onCheckedChange={checked => setDraft(previous => ({ ...previous, departments: checked === true ? [...previous.departments, name] : previous.departments.filter(value => value !== name) }))} />{name}</label>)}</div></Field>
       <Field id="project-deadline" label="Project deadline"><Input id="project-deadline" type="date" min="2000-01-01" max="2100-12-31" value={draft.deadline ?? ""} onChange={event => setDraft({ ...draft, deadline: event.target.value || null })} /></Field>
     </fieldset><DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save project"}</Button></DialogFooter></form>
   </DialogContent></Dialog>;

@@ -47,3 +47,6 @@ Migration `014_milestone_field_updates.sql` adds the `update_milestone` operatio
 
 
 Migration `015_project_departments.sql` adds platform-managed S27 departments and memberships. Project managers (`can_manage`) configure them from Areas; ordinary members and scoped task Leads have read-only access to that management surface. A department Lead must be one of its members. These records do not change task-area feature grants. Existing project department names can be configured in place, and names remain stable after creation. No public website roster is imported. Apply migration 015 before releasing the updated API/client.
+
+
+Migration `016_fixed_departments.sql` limits departments to Management, Mechanical & Production, Electronics, Software & Autonomous, Business & Marketing, Logistics and Finance. It creates the fixed records without assigning members, maps recognized old names and project associations, and preserves original metadata in private backup tables. Merged departments keep the union of members; if prior Leads disagree, a manager must select the Lead. Membership editing remains manager-only, department creation is rejected, and project department values are constrained to the catalog. Apply migration 016 before releasing the corresponding API/client.

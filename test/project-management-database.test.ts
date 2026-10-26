@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createProjectServices } from "../api/_lib/project-management-service.js";
 import type { WorkspaceIdentity } from "../api/_lib/member-cv-service.js";
-import type { TaskInput } from "../src/features/ProjectManagement/types.js";
+import { ORGANIZATION_DEPARTMENTS, type TaskInput } from "../src/features/ProjectManagement/types.js";
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const manager: WorkspaceIdentity = { userId: id(1), googleSub: "google-manager", email: "manager@helixnmbu.no", name: "Manager" };
@@ -58,6 +58,7 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/015_project_departments.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
 
   }, 60000);
   afterAll(async () => { await db?.close(); });
@@ -91,10 +92,10 @@ describe("project management database and authorization", () => {
   });
   it("persists department-spanning subprojects and complete tasks in the shared season", async () => {
     await service().mutate("verified", { action: "save_project", id: id(20), expectedRevision: 0,
-      project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical", "Electrical"], deadline: "2026-12-10" } });
+      project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical & Production", "Electronics"], deadline: "2026-12-10" } });
     await save(960, task({ kind: "milestone", projectId: id(20) }));
     const workspace = await save(10, task({ projectId: id(20), milestoneId: id(960) }));
-    expect(workspace.projects.find(item => item.id === id(20))).toMatchObject({ id: id(20), departments: ["Mechanical", "Electrical"], deadline: "2026-12-10", revision: 1 });
+    expect(workspace.projects.find(item => item.id === id(20))).toMatchObject({ id: id(20), departments: ["Mechanical & Production", "Electronics"], deadline: "2026-12-10", revision: 1 });
     expect(workspace.tasks.find(item => item.id === id(10))).toMatchObject({ id: id(10), projectId: id(20), title: "Manufacture brackets", assigneeIds: [member.userId], revision: 1, completedAt: null });
   });
   it("rejects duplicate creates and stale edits without overwriting saved work", async () => {
@@ -370,48 +371,59 @@ describe("project management database and authorization", () => {
     await expect(service({ ...manager, googleSub: "untrusted" }).mutate("verified", { ...change, expectedRevision: 3 })).rejects.toMatchObject({ status: 403 });
   });
 
-  it("stores department membership and a single Lead without changing tasks or access grants", async () => {
+  it("stores membership and a Lead for a fixed department without changing tasks or access", async () => {
     const before = await service().load("verified");
+    expect(before.departments.map(item => item.name).sort()).toEqual([...ORGANIZATION_DEPARTMENTS].sort());
+    const target = before.departments.find(item => item.name === "Mechanical & Production")!;
     const grants = (await db.query("select * from project_management.access order by member_id")).rows;
-    const department = { name: "Mechanical", memberIds: [member.userId, manager.userId, member.userId], leadId: member.userId };
-    const after = await service().mutate("verified", { action: "save_department", id: id(500), expectedRevision: 0, department });
-    expect(after.departments.find(item => item.id === id(500))).toEqual({ id: id(500), season: "S27", revision: 1, name: "Mechanical", memberIds: [manager.userId, member.userId], leadId: member.userId });
+    const department = { name: target.name, memberIds: [member.userId, manager.userId, member.userId], leadId: member.userId };
+    const after = await service().mutate("verified", { action: "save_department", id: target.id, expectedRevision: target.revision, department });
+    expect(after.departments.find(item => item.id === target.id)).toMatchObject({ name: target.name, memberIds: [manager.userId, member.userId], leadId: member.userId, revision: target.revision + 1 });
     expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
     expect((await db.query("select * from project_management.access order by member_id")).rows).toEqual(grants);
-    await expect(service().mutate("verified", { action: "save_department", id: id(501), expectedRevision: 0, department: { ...department, name: "mechanical" } })).rejects.toMatchObject({ status: 400 });
-    await expect(db.query("update project_management.department_members set is_lead=true where department_id=$1 and member_id=$2", [id(500), manager.userId])).rejects.toThrow();
+    await expect(service().mutate("verified", { action: "save_department", id: id(501), expectedRevision: 0, department })).rejects.toMatchObject({ status: 400 });
+    await expect(db.query("update project_management.department_members set is_lead=true where department_id=$1 and member_id=$2", [target.id, manager.userId])).rejects.toThrow();
   });
-  it("atomically updates membership and Lead, rejects stale revisions and keeps names stable", async () => {
-    const change = { action: "save_department", id: id(500), expectedRevision: 1, department: { name: "Mechanical", memberIds: [manager.userId], leadId: null } };
-    const after = await service().mutate("verified", change);
-    expect(after.departments.find(item => item.id === id(500))).toMatchObject({ revision: 2, memberIds: [manager.userId], leadId: null });
-    await expect(service().mutate("verified", change)).rejects.toMatchObject({ status: 409 });
-    await expect(service().mutate("verified", { ...change, expectedRevision: 2, department: { ...change.department, name: "Renamed" } })).rejects.toMatchObject({ status: 400 });
-    expect(await service().load("verified")).toEqual(after);
-  });
-  it("rejects ineligible members and nonmember Leads before changing department membership", async () => {
+  it("rejects stale department revisions, nonmember Leads, ineligible members and additional departments", async () => {
     const before = await service().load("verified");
-    const change = { action: "save_department", id: id(500), expectedRevision: 2 };
-    for (const department of [{ name: "Mechanical", memberIds: [manager.userId, id(9999)], leadId: null }, { name: "Mechanical", memberIds: [manager.userId], leadId: member.userId }]) {
-      await expect(service().mutate("verified", { ...change, department })).rejects.toMatchObject({ status: 400 });
-      await expect(db.query("select project_management.save_department($1,$2,$3,$4::jsonb)", [manager.userId, manager.googleSub, manager.email, JSON.stringify({ ...change, department })])).rejects.toThrow();
+    const target = before.departments.find(item => item.name === "Mechanical & Production")!;
+    const base = { action: "save_department", id: target.id, expectedRevision: target.revision };
+    for (const department of [{ name: target.name, memberIds: [manager.userId, id(9999)], leadId: null }, { name: target.name, memberIds: [manager.userId], leadId: member.userId }, { name: "Other", memberIds: [], leadId: null }]) {
+      await expect(service().mutate("verified", { ...base, department })).rejects.toMatchObject({ status: 400 });
+      await expect(db.query("select project_management.save_department($1,$2,$3,$4::jsonb)", [manager.userId, manager.googleSub, manager.email, JSON.stringify({ ...base, department })])).rejects.toThrow();
     }
-    await db.query('update neon_auth."user" set banned=true where id=$1', [member.userId]);
-    await expect(service().mutate("verified", { ...change, department: { name: "Mechanical", memberIds: [member.userId], leadId: null } })).rejects.toMatchObject({ status: 400 });
-    await db.query('update neon_auth."user" set banned=false where id=$1', [member.userId]);
+    await expect(service().mutate("verified", { ...base, expectedRevision: target.revision - 1, department: { name: target.name, memberIds: [], leadId: null } })).rejects.toMatchObject({ status: 409 });
+    await expect(db.query("insert into project_management.departments(id,season,name) values($1,'S27','Other')", [id(501)])).rejects.toThrow();
+    await expect(db.query("update project_management.projects set departments=array['Other'] where id=$1", [id(20)])).rejects.toThrow();
     expect(await service().load("verified")).toEqual(before);
   });
-  it("requires project-management access to manage departments and protects stored memberships", async () => {
-    const change = { action: "save_department", id: id(502), expectedRevision: 0, department: { name: "Software", memberIds: [], leadId: null } };
+  it("requires project-management access for fixed department membership edits", async () => {
+    const before = await service().load("verified");
+    const target = before.departments.find(item => item.name === "Software & Autonomous")!;
+    const change = { action: "save_department", id: target.id, expectedRevision: target.revision, department: { name: target.name, memberIds: [], leadId: null } };
     await db.query("update project_management.access set task_lead_categories=array['production'] where member_id=$1", [member.userId]);
     await expect(service(member).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
     await expect(service({ ...manager, googleSub: "wrong" }).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
     await db.query("update project_management.access set task_lead_categories='{}' where member_id=$1", [member.userId]);
-    const after = await service().mutate("verified", change);
-    expect(after.departments.find(item => item.id === id(502))).toMatchObject({ memberIds: [], leadId: null });
+    await service().mutate("verified", change);
     expect((await db.query("select has_table_privilege('public','project_management.department_members','SELECT') as allowed")).rows[0]).toEqual({ allowed: false });
-    expect((await db.query("select relrowsecurity from pg_class where oid='project_management.departments'::regclass")).rows[0]).toEqual({ relrowsecurity: true });
-    await db.exec(readFileSync(new URL("../db/migrations/015_project_departments.sql", import.meta.url), "utf8"));
+  });
+  it("maps older departments and project links, preserves memberships and archives conflicting or unknown metadata", async () => {
+    const before = await service().load("verified");
+    await db.exec("alter table project_management.departments drop constraint organization_department_name; alter table project_management.projects drop constraint organization_project_departments");
+    for (const [number, name, lead] of [[701, "Business", manager.userId], [702, "Marketing", member.userId], [703, "Unknown", manager.userId]] as const) {
+      await db.query("insert into project_management.departments(id,season,name) values($1,'S27',$2)", [id(number), name]);
+      await db.query("insert into project_management.department_members(department_id,member_id,is_lead) values($1,$2,true)", [id(number), lead]);
+    }
+    await db.query("insert into project_management.projects(id,season,name,category,departments) values($1,'S27','Legacy departments','marketing',array['Business','Marketing','Unknown'])", [id(703)]);
+    await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
+    const after = await service().load("verified");
+    expect(after.departments.map(item => item.name).sort()).toEqual([...ORGANIZATION_DEPARTMENTS].sort());
+    expect(after.departments.find(item => item.name === "Business & Marketing")).toMatchObject({ memberIds: [manager.userId, member.userId], leadId: null });
+    expect(after.projects.find(item => item.id === id(703))?.departments).toEqual(["Business & Marketing"]);
+    expect((await db.query("select count(*)::int as count from project_management.department_catalog_backup where id=any($1::uuid[])", [[id(701), id(702), id(703)]])).rows[0]).toEqual({ count: 3 });
+    expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
+    await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
     expect(await service().load("verified")).toEqual(after);
   });
 

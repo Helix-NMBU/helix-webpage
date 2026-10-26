@@ -167,3 +167,12 @@ Areas now has one department per table row, with member count, Lead avatar/name,
 Migration 015 adds manager-only department saves with verified identity, eligible-member and Lead-membership checks, stable unique names, revision guards and atomic membership replacement. It imports no live roster and changes no access grants. Older local workspaces gain an empty department collection without invented assignments.
 
 All 132 focused UI/model/repository/API/database tests, all three TypeScript checks and the production build passed (9.24 MB, 9 source functions). Local browser verification created Mechanical with two members and Alex as Lead, Electrical with one member and Sam as Lead, and confirmed both counts and Leads after reload. Screenshot: `department-areas-table.png` in this chat's visualization directory. Migration 015 remains unapplied to live data; no push or deployment performed.
+
+
+## Fixed organization departments, 26 October 2026
+
+Areas now always lists the seven organization departments in the user's specified order. Removed Add department and editable department names. Each row still lets project managers edit its members and Lead. Project editing uses seven department checkboxes, and client/API/database validation rejects arbitrary departments or creation requests. The separate unallocated-work row remains for tasks without a department.
+
+Migration 016 preserves recognized old memberships, maps Mechanical/Electrical and the other former labels, merges membership lists, and archives original department/project metadata. Conflicting merged Leads remain unset rather than being guessed. Task data, task progress history and access grants are unchanged. Local fixture upgrades preserve the prior department collection and retain the existing Mechanical and Electronics members and Leads.
+
+All 134 focused UI/model/repository/API/database tests, all three TypeScript checks and the production build passed (9.24 MB, 9 source functions). Browser inspection confirmed seven ordered rows, no creation control, preserved membership/Lead values and the fixed project selector. Screenshot: `fixed-departments.png` in this chat's visualization directory. Migration 016 remains unapplied to live data; no push or deployment performed.

@@ -110,7 +110,7 @@ describe("dedicated local project mode", () => {
     localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...workspace, tasks: workspace.tasks.map(task => task.id === goal.id ? legacy : task) }));
     const changes = { priority: "high" as const, deadline: "2027-01-01", assigneeIds: workspace.members.map(member => member.id) };
     const updated = await repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes });
-    expect(updated.tasks.find(task => task.id === goal.id)).toMatchObject({ ...legacy, ...changes, revision: 2 });
+    expect(updated.tasks.find(task => task.id === goal.id)).toMatchObject({ ...legacy, ...changes, revision: 2, updatedAt: expect.any(String) });
     expect(updated.tasks.filter(task => task.id !== goal.id)).toEqual(workspace.tasks.filter(task => task.id !== goal.id));
     expect(updated.progressEvents).toEqual(workspace.progressEvents);
     await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { priority: "low" } })).rejects.toMatchObject({ status: 409 });
@@ -128,15 +128,15 @@ describe("dedicated local project mode", () => {
 
   it("persists department membership and Lead without changing tasks, history or permissions", async () => {
     const repository = createLocalProjectRepository(); const before = await repository.load();
-    const change = { action: "save_department" as const, id: "00000000-0000-4000-8000-000000000900", expectedRevision: 0, department: { name: "Software", memberIds: before.members.map(member => member.id), leadId: before.members[1].id } };
+    const change = { action: "save_department" as const, id: before.departments.find(department => department.name === "Software & Autonomous")!.id, expectedRevision: 1, department: { name: "Software & Autonomous", memberIds: before.members.map(member => member.id), leadId: before.members[1].id } };
     const after = await repository.mutate(change);
-    expect((await createLocalProjectRepository().load()).departments.find(item => item.id === change.id)).toMatchObject({ ...change.department, revision: 1, season: "S27" });
+    expect((await createLocalProjectRepository().load()).departments.find(item => item.id === change.id)).toMatchObject({ ...change.department, revision: 2, season: "S27" });
     expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents); expect(after.taskLeadCategories).toEqual(before.taskLeadCategories);
     await expect(repository.mutate(change)).rejects.toMatchObject({ status: 409 });
-    await expect(repository.mutate({ ...change, expectedRevision: 1, department: { ...change.department, leadId: "00000000-0000-4000-8000-000000009999" } })).rejects.toThrow("member");
-    await expect(repository.mutate({ ...change, expectedRevision: 1, department: { ...change.department, name: "Changed" } })).rejects.toThrow("names");
+    await expect(repository.mutate({ ...change, expectedRevision: 2, department: { ...change.department, leadId: "00000000-0000-4000-8000-000000009999" } })).rejects.toThrow("member");
+    await expect(repository.mutate({ ...change, expectedRevision: 2, department: { ...change.department, name: "Finance" } })).rejects.toThrow("names");
     localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...after, canManage: false }));
-    await expect(repository.mutate({ ...change, expectedRevision: 1 })).rejects.toMatchObject({ status: 403 });
+    await expect(repository.mutate({ ...change, expectedRevision: 2 })).rejects.toMatchObject({ status: 403 });
   });
 
   it("does not invent department membership when upgrading older local workspaces", async () => {
@@ -144,7 +144,22 @@ describe("dedicated local project mode", () => {
     const { departments: _departments, ...older } = before;
     localStorage.setItem("helix-member-local-projects-v1", JSON.stringify(older));
     const after = await repository.load();
-    expect(after.departments).toEqual([]); expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
+    expect(after.departments).toHaveLength(7); expect(after.departments.every(department => department.memberIds.length === 0 && !department.leadId)).toBe(true); expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
+  });
+
+  it("maps older department names to the fixed catalog without losing memberships or Leads", async () => {
+    const repository = createLocalProjectRepository(); const before = await repository.load();
+    const oldName = (name: string) => name === "Mechanical & Production" ? "Mechanical" : name === "Electronics" ? "Electrical" : name;
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...before, departments: before.departments.map(department => ({ ...department, name: oldName(department.name) })), projects: before.projects.map(project => ({ ...project, departments: project.departments.map(oldName) })) }));
+    const after = await repository.load();
+    expect(after.departments).toHaveLength(7);
+    for (const name of ["Mechanical & Production", "Electronics"]) {
+      const prior = before.departments.find(department => department.name === name)!;
+      expect(after.departments.find(department => department.name === name)).toMatchObject({ id: prior.id, memberIds: prior.memberIds, leadId: prior.leadId, revision: prior.revision + 1 });
+    }
+    expect(after.projects[0].departments).toEqual(["Mechanical & Production", "Electronics"]);
+    expect(await repository.load()).toEqual(after);
+    expect(localStorage.getItem("helix-member-local-department-archive-v1")).not.toBeNull();
   });
 
 });

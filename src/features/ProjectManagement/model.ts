@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type DepartmentInput, type MilestoneChanges, type ProjectInput, type Task, type TaskInput } from "./types";
+import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type DepartmentInput, type MilestoneChanges, type ProjectInput, type Task, type TaskInput } from "./types";
 
 export function osloDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
@@ -59,7 +59,9 @@ export function validateDepartment(input: DepartmentInput): DepartmentInput {
   }))];
   const leadId = uuidOrNull(input.leadId)?.toLowerCase() ?? null;
   if (leadId && !memberIds.includes(leadId)) throw new Error("The department Lead must be a member of the department.");
-  return { name: text(input.name, "Department name", 100, true), memberIds, leadId };
+  const name = text(input.name, "Department name", 100, true);
+  if (!ORGANIZATION_DEPARTMENTS.includes(name as typeof ORGANIZATION_DEPARTMENTS[number])) throw new Error("Choose an organization department.");
+  return { name, memberIds, leadId };
 }
 
 export function validateMilestoneChanges(input: MilestoneChanges): MilestoneChanges {
@@ -102,5 +104,6 @@ export function validateTask(input: TaskInput, { allowUnorganized = false }: { a
 }
 export function validateProject(input: ProjectInput): ProjectInput {
   if (!TASK_CATEGORIES.includes(input.category) || !Array.isArray(input.departments) || input.departments.length > 10) throw new Error("Choose a category and up to ten departments.");
+  if (input.departments.some(name => !ORGANIZATION_DEPARTMENTS.includes(name.trim() as typeof ORGANIZATION_DEPARTMENTS[number]))) throw new Error("Choose departments from the organization list.");
   return { name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline: date(input.deadline) };
 }

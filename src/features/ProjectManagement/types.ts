@@ -6,6 +6,8 @@ export const TASK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type TaskPriority = typeof TASK_PRIORITIES[number];
 export const MAX_TASK_ASSIGNEES = 20;
 export const MAX_DEPARTMENT_MEMBERS = 500;
+export const ORGANIZATION_DEPARTMENTS = ["Management", "Mechanical & Production", "Electronics", "Software & Autonomous", "Business & Marketing", "Logistics", "Finance"] as const;
+export type OrganizationDepartment = typeof ORGANIZATION_DEPARTMENTS[number];
 export const CATEGORY_LABELS: Record<TaskCategory, string> = { production: "Production", "partnership-deliverables": "Partnership deliverables", marketing: "Marketing", operations: "Operations" };
 export const STATUS_LABELS: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
 

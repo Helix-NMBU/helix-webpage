@@ -1,5 +1,6 @@
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { addDays, osloDate, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
+import { canonicalDepartment, fixedDepartmentRecords, fixedProjectDepartments } from "./departments";
 import { progressEvent } from "./progress";
 import { ProjectRequestError } from "./repository";
 import { TASK_CATEGORIES, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
@@ -24,10 +25,10 @@ export function initialLocalWorkspace(): ProjectWorkspace {
       task(18, "Campaign launch", "marketing", 14, { kind: "milestone" }),
   ];
   return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
-    departments: [{ id: id(300), season: "S27", revision: 1, name: "Mechanical", memberIds: [id(1), id(2)], leadId: id(1) }, { id: id(301), season: "S27", revision: 1, name: "Electrical", memberIds: [id(2)], leadId: id(2) }],
+    departments: fixedDepartmentRecords([{ id: id(300), season: "S27", revision: 1, name: "Mechanical & Production", memberIds: [id(1), id(2)], leadId: id(1) }, { id: id(301), season: "S27", revision: 1, name: "Electronics", memberIds: [id(2)], leadId: id(2) }]),
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
-    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical", "Electrical"], deadline: addDays(today, 35), revision: 1 },
-      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: [name], deadline: addDays(today, 35), revision: 1 })),
+    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical & Production", "Electronics"], deadline: addDays(today, 35), revision: 1 },
+      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: fixedProjectDepartments([name]), deadline: addDays(today, 35), revision: 1 })),
     ],
     tasks,
     progressEvents: [
@@ -47,7 +48,9 @@ export function createLocalProjectRepository(): ProjectRepository {
       const { assigneeId: legacy, ...task } = item as Task & { assigneeId?: string | null };
       return { ...task, milestoneId: task.milestoneId ?? null, assigneeIds: Array.isArray(task.assigneeIds) ? task.assigneeIds : legacy ? [legacy] : [] };
     });
-    return { ...workspace, tasks, departments: workspace.departments ?? [], progressEvents: workspace.progressEvents ?? tasks.map(item => progressEvent(item)), taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
+    const previousDepartments = workspace.departments ?? [];
+    if (previousDepartments.some(department => canonicalDepartment(department.name) !== department.name) && !localStorage.getItem("helix-member-local-department-archive-v1")) localStorage.setItem("helix-member-local-department-archive-v1", JSON.stringify(previousDepartments));
+    return { ...workspace, tasks, projects: workspace.projects.map(project => ({ ...project, departments: fixedProjectDepartments(project.departments) })), departments: fixedDepartmentRecords(previousDepartments), progressEvents: workspace.progressEvents ?? tasks.map(item => progressEvent(item)), taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
   }
   return {
     async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return workspace; },
@@ -59,6 +62,7 @@ export function createLocalProjectRepository(): ProjectRepository {
       const now = new Date().toISOString();
       if (mutation.action === "save_department") {
         if (!workspace.canManage) throw new ProjectRequestError("Project management access is required to manage departments.", 403);
+        if (mutation.expectedRevision < 1) throw new Error("Organization departments are fixed.");
         const department = validateDepartment(mutation.department);
         const previous = workspace.departments.find(item => item.id === mutation.id);
         if (previous && previous.name !== department.name) throw new Error("Department names cannot be changed after creation.");

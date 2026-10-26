@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
+import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
 import { MemberCvError } from "./member-cv-error.js";
 
 function invalid(message = "Invalid project management request."): never { throw new MemberCvError(400, message); }
@@ -48,6 +48,7 @@ function task(value: unknown): TaskInput {
 function project(value: unknown): ProjectInput {
   const body = object(value);
   if (!Array.isArray(body.departments) || body.departments.length > 10) return invalid("Choose at most 10 departments.");
+  if (body.departments.some(name => typeof name !== "string" || !ORGANIZATION_DEPARTMENTS.includes(name.trim() as typeof ORGANIZATION_DEPARTMENTS[number]))) return invalid("Choose departments from the organization list.");
   return { name: text(body.name, "project name", 200, true), description: text(body.description, "description", 2000),
     category: oneOf(body.category, TASK_CATEGORIES), departments: [...new Set(body.departments.map(value => text(value, "department", 100, true)))], deadline: date(body.deadline) };
 }
@@ -58,12 +59,15 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
   const expectedRevision = body.expectedRevision;
   if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
   if (body.action === "save_department") {
+    if (expectedRevision < 1) return invalid("Organization departments are fixed.");
     const input = object(body.department);
     if (!Array.isArray(input.memberIds) || input.memberIds.length > MAX_DEPARTMENT_MEMBERS) return invalid(`Choose up to ${MAX_DEPARTMENT_MEMBERS} department members.`);
     const memberIds = [...new Set(input.memberIds.map(uuid))];
     const leadId = input.leadId === null ? null : uuid(input.leadId);
     if (leadId && !memberIds.includes(leadId)) return invalid("The department Lead must be a member of the department.");
-    return { action: body.action, id, expectedRevision, department: { name: text(input.name, "department name", 100, true), memberIds, leadId } };
+    const name = text(input.name, "department name", 100, true);
+    if (!ORGANIZATION_DEPARTMENTS.includes(name as typeof ORGANIZATION_DEPARTMENTS[number])) return invalid("Choose an organization department.");
+    return { action: body.action, id, expectedRevision, department: { name, memberIds, leadId } };
   }
   if (body.action === "update_milestone") {
     if (expectedRevision < 1) return invalid("A saved milestone revision is required.");
