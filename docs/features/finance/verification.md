@@ -25,7 +25,7 @@ Commands run on Node 24.19.0 and npm 11.17.0:
 - `npm run typecheck:api`
 - `npm run typecheck:api:runtime`
 - `npm run lint`
-- `npm test`: 89 Vitest files, 1061 tests passed, then 3 deployment-guard tests passed
+- `npm test`: 89 Vitest files, 1062 tests passed, then 3 deployment-guard tests passed
 - `npm run build`: static output 9.23 MB of 10 MB; source functions 11 of 11. The Vite build does not emit `.vercel/output/functions`, so the generated-function comparison is unchanged from the existing guard and is skipped until that directory exists.
 - `git diff --check`
 

@@ -441,6 +441,30 @@ describe("season budgets", () => {
     expect((await call("member", { action: "ensureUnallocated", requestId: requestId(), systemId: linkage })).status).toBe(403);
   });
 
+  it("returns an existing unallocated item without locking that item row", async () => {
+    const sources = await sql<{ proname: string; prosrc: string }>(
+      `select p.proname, p.prosrc
+       from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'finance' and p.proname in ('add_budget_item', 'ensure_unallocated_item')`,
+    );
+    const add = sources.find((row) => row.proname === "add_budget_item")?.prosrc.toLowerCase() ?? "";
+    const ensure = sources.find((row) => row.proname === "ensure_unallocated_item")?.prosrc.toLowerCase() ?? "";
+    expect(add).not.toContain("for update");
+    const itemRead = ensure.indexOf("from finance.budget_items");
+    expect(itemRead).toBeGreaterThan(-1);
+    expect(ensure.slice(itemRead)).not.toContain("for update");
+    await season();
+    await grant(headId, "head_of_finance");
+    await grant(financeId, "finance");
+    await call("head", { action: "createBudget", requestId: requestId() });
+    const frame = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'"))[0]?.id;
+    const existing = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-FR-UNALLOC'"))[0]?.id;
+    const ensured = await call("finance", { action: "ensureUnallocated", requestId: requestId(), systemId: frame });
+    expect(ensured.status).toBe(200);
+    expect(ensured.body).toMatchObject({ id: existing });
+  });
+
   it("keeps an earmark in one system and the same season", async () => {
     await season();
     await grant(headId, "head_of_finance");

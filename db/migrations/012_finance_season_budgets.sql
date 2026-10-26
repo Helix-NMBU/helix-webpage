@@ -1020,8 +1020,7 @@ begin
   current_budget := finance.lock_current_budget();
   select id into existing_id
   from finance.budget_items
-  where budget_id = current_budget.id and system_id = p_system_id and protected
-  for update;
+  where budget_id = current_budget.id and system_id = p_system_id and protected;
   if found then
     return finance.store_budget_result(p_actor, p_request_id, 'ensureUnallocated', p_payload_hash, existing_id);
   end if;
