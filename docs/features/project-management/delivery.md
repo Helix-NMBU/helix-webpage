@@ -196,3 +196,10 @@ Replaced the department placeholder with a workspace matching the supplied layou
 Migration 018 keeps home metadata separate from directory membership revisions and private to current verified department members. Department Leads and joined platform admins can edit it; ordinary members are read-only. Stale writes are rejected, membership removal is enforced on every read/write, and shared Drive access remains Google's responsibility. No real folders or permissions were changed. Local browser checks covered both entry points, all tabs, the settings form, saved-description reload and project navigation. A Google Drive file-browser connection is still follow-up work.
 
 Validation: all 1,123 regression tests, all three TypeScript checks, repository lint, deployment guards and the production build passed. Static size 9.28 MB; 9 source API functions. Browser screenshots: `department-workspace-overview.png` and `department-workspace-members.png` in this chat's visualization folder. Migration 018 remains unapplied to live data; no push or deployment performed.
+
+
+## Department settings permissions — 26 October 2026
+
+Department settings now accepts the department head, an active project manager or a platform administrator. Current department membership and verified Google identity remain required. Ordinary members, task-area Leads and heads of other departments have no settings access unless they separately have a manager/admin grant. The server-derived edit capability controls the settings, description and Drive-link controls; the database rechecks the same role on every write. Migration 019 locks the manager grant against concurrent revocation and preserves existing data.
+
+Validation: 72 focused UI/model/API/database tests and client/API TypeScript checks passed, including a manager write, revoked-manager denial, ordinary-member denial and migration replay. Migration 019 remains unapplied to live data. No push or deployment performed.

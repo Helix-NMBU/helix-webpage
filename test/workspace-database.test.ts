@@ -78,6 +78,7 @@ describe("Workspace directory authorization and persistence", () => {
       "016_fixed_departments",
       "017_workspace_directory",
       "018_department_homes",
+      "019_department_settings_permissions",
     ])
       await db.exec(migration(name));
     for (const person of identities) {
@@ -393,5 +394,61 @@ describe("Workspace directory authorization and persistence", () => {
         )
       ).rows[0],
     ).toEqual({ allowed: false });
+  });
+  it("allows project managers with department access and rejects revoked or task-only grants", async () => {
+    await db.exec(migration("019_department_settings_permissions"));
+    const department = (await service().load("verified")).departments.find(
+      (d) => d.name === "Mechanical & Production",
+    )!;
+    const home = (index: number) =>
+      createDepartmentHomeServices({
+        db,
+        authenticate: async () => identities[index],
+      });
+    // A management role does not bypass department membership.
+    await expect(home(1).load("verified", department.id)).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await db.query(
+      "insert into project_management.department_members values($1,$2,false)",
+      [department.id, id(2)],
+    );
+    const manager = await home(1).load("verified", department.id);
+    expect(manager.canEdit).toBe(true);
+    const input = {
+      action: "save_department_home",
+      departmentId: department.id,
+      expectedRevision: manager.revision,
+      description: "Managed department",
+      driveFolderUrl: null,
+    };
+    const saved = await home(1).save("verified", input);
+    expect(saved.description).toBe("Managed department");
+    await db.query(
+      "update project_management.access set active=false where member_id=$1",
+      [id(2)],
+    );
+    expect((await home(1).load("verified", department.id)).canEdit).toBe(false);
+    await expect(
+      home(1).save("verified", { ...input, expectedRevision: saved.revision }),
+    ).rejects.toMatchObject({ status: 403 });
+    await db.query(
+      "update project_management.access set task_lead_categories=array['production'] where member_id=$1",
+      [id(3)],
+    );
+    expect((await home(2).load("verified", department.id)).canEdit).toBe(false);
+    await expect(
+      home(2).save("verified", { ...input, expectedRevision: saved.revision }),
+    ).rejects.toMatchObject({ status: 403 });
+    await db.query(
+      "insert into project_management.department_members values($1,$2,true)",
+      [department.id, id(4)],
+    );
+    expect((await home(3).load("verified", department.id)).canEdit).toBe(true);
+    expect((await home(0).load("verified", department.id)).canEdit).toBe(true);
+    await db.exec(migration("019_department_settings_permissions"));
+    expect((await home(3).load("verified", department.id)).description).toBe(
+      "Managed department",
+    );
   });
 });

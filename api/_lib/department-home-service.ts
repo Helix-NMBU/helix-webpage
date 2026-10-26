@@ -64,9 +64,13 @@ export function createDepartmentHomeServices(deps: {
     if (!uuid(id)) throw new MemberCvError(400, "Choose a valid department.");
     const result = (
       await deps.db.query<
-        Omit<DepartmentHome, "canEdit"> & { isLead: boolean }
+        Omit<DepartmentHome, "canEdit"> & {
+          isLead: boolean;
+          isProjectManager: boolean;
+        }
       >(
-        `select d.id as "departmentId",coalesce(h.revision,0) as revision,coalesce(h.description,'') as description,h.drive_folder_url as "driveFolderUrl",dm.is_lead as "isLead"
+        `select d.id as "departmentId",coalesce(h.revision,0) as revision,coalesce(h.description,'') as description,h.drive_folder_url as "driveFolderUrl",dm.is_lead as "isLead",
+    exists(select 1 from project_management.access a where a.member_id=$1::uuid and a.active and a.can_manage) as "isProjectManager"
     from project_management.departments d join project_management.department_members dm on dm.department_id=d.id and dm.member_id=$1::uuid
     join identity.members m on m.id=dm.member_id join neon_auth."user" u on u.id=m.auth_user_id
     left join project_management.department_homes h on h.department_id=d.id
@@ -80,10 +84,11 @@ export function createDepartmentHomeServices(deps: {
         403,
         "You can open departments that you belong to.",
       );
-    const { isLead, ...home } = result;
+    const { isLead, isProjectManager, ...home } = result;
     return {
       ...home,
-      canEdit: isLead || memberAccount(identity).role === "Admin",
+      canEdit:
+        isLead || isProjectManager || memberAccount(identity).role === "Admin",
     };
   }
   return {
@@ -110,7 +115,7 @@ export function createDepartmentHomeServices(deps: {
         if (message.includes("department_home_forbidden"))
           throw new MemberCvError(
             403,
-            "Only the department Lead or a joined platform admin can edit this department.",
+            "Only the department head, a project manager or a platform admin with department access can edit these settings.",
           );
         if (message.includes("department_home_conflict"))
           throw new MemberCvError(

@@ -33,6 +33,7 @@ export function createLocalDepartmentHomeRepository(): DepartmentHomeRepository 
       ...saved,
       canEdit:
         department.leadId === workspace.viewerId ||
+        workspace.canManage ||
         localMemberAccount.role === "Admin",
     };
   }
@@ -42,7 +43,7 @@ export function createLocalDepartmentHomeRepository(): DepartmentHomeRepository 
       const home = await read(change.departmentId);
       if (!home.canEdit)
         throw new WorkspaceRequestError(
-          "The department Lead or a joined platform admin must save these settings.",
+          "The department head, a project manager or a platform admin with department access must save these settings.",
           403,
         );
       if (home.revision !== change.expectedRevision)
