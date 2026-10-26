@@ -29,8 +29,9 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
   const [revision] = useState(task?.revision ?? 0);
   const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, assigneeId: null, deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
   const notify = useNotify();
-  const manager = !statusOnly && workspace.taskLeadCategories.includes(task?.category ?? category);
-  const canEdit = manager || workspace.canManage || (task?.assigneeId === workspace.viewerId);
+  const canLeadTask = workspace.taskLeadCategories.includes(task?.category ?? category);
+  const manager = !statusOnly && canLeadTask;
+  const canEdit = canLeadTask || workspace.canManage || (task?.assigneeId === workspace.viewerId);
   const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => ({ ...previous, [key]: value }));
   async function submit(event: FormEvent) {
     event.preventDefault();

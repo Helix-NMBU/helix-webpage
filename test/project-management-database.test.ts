@@ -122,6 +122,7 @@ describe("project management database and authorization", () => {
     await expect(save(90, task(), 0, outsider)).rejects.toMatchObject({ status: 403 });
     await expect(save(10, task({ assigneeId: outsider.userId }), 5, outsider)).rejects.toMatchObject({ status: 403 });
     await db.query("update project_management.access set can_manage=false,task_lead_categories=array['production'] where member_id=$1", [outsider.userId]);
+    await expect(save(12, task({ category: "production" }), 1, outsider)).rejects.toMatchObject({ status: 403 });
     await save(90, task({ assigneeId: outsider.userId }), 0, outsider);
     await expect(save(91, task({ category: 'marketing' }), 0, outsider)).rejects.toMatchObject({ status: 403 });
     const workspace = await save(90, task({ assigneeId: member.userId }), 1, outsider);
