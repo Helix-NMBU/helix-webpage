@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { IconAntennaBars2, IconAntennaBars3, IconAntennaBars4, IconCalendar, IconChevronLeft, IconChevronRight, IconExclamationCircle } from "@tabler/icons-react";
+import { IconCalendar, IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
+import { PriorityGlyph } from "./PriorityGlyph";
 import { AssigneePicker } from "./TaskAssignees";
 import { addDays, formatDate, osloDate } from "./model";
 import type { MilestoneChanges, ProjectMember, Task, TaskPriority } from "./types";
 
 export type { MilestoneChanges } from "./types";
 export type SaveMilestone = (task: Task, changes: MilestoneChanges) => Promise<boolean>;
-const priorities: { value: TaskPriority; label: string; icon: typeof IconCalendar }[] = [
-  { value: "urgent", label: "Urgent", icon: IconExclamationCircle },
-  { value: "high", label: "High", icon: IconAntennaBars4 },
-  { value: "normal", label: "Normal", icon: IconAntennaBars3 },
-  { value: "low", label: "Low", icon: IconAntennaBars2 },
+const priorities: { value: TaskPriority; label: string }[] = [
+  { value: "urgent", label: "Urgent" },
+  { value: "high", label: "High" },
+  { value: "normal", label: "Medium" },
+  { value: "low", label: "Low" },
 ];
 const compactDate = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 const monthLabel = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -24,7 +25,7 @@ const dayDate = (value: string) => new Date(`${value}T12:00:00Z`);
 
 export function PriorityIndicator({ priority }: { priority: TaskPriority }) {
   const choice = priorities.find(item => item.value === priority)!;
-  return <span className="inline-flex text-muted-foreground" role="img" aria-label={`${choice.label} priority`} title={`${choice.label} priority`}><choice.icon aria-hidden="true" className="size-4" /></span>;
+  return <span className="inline-flex text-muted-foreground" role="img" aria-label={`${choice.label} priority`} title={`${choice.label} priority`}><PriorityGlyph priority={priority} /></span>;
 }
 
 export function TargetDate({ deadline }: { deadline: string | null }) {
@@ -33,7 +34,7 @@ export function TargetDate({ deadline }: { deadline: string | null }) {
 
 export function MilestonePriorityControl({ task, busy, onSave }: { task: Task; busy: boolean; onSave: SaveMilestone }) {
   const [open, setOpen] = useState(false);
-  return <DropdownMenu open={open} onOpenChange={next => { if (!busy) setOpen(next); }}><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mx-2 size-8" disabled={busy} aria-label={`Change priority for ${task.title}`}><PriorityIndicator priority={task.priority} /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" className="w-56"><DropdownMenuLabel>Change priority</DropdownMenuLabel><DropdownMenuRadioGroup value={task.priority} onValueChange={value => { if (!busy) void onSave(task, { priority: value as TaskPriority }).then(saved => { if (saved) setOpen(false); }); }}>{priorities.map(choice => <DropdownMenuRadioItem key={choice.value} value={choice.value} disabled={busy} onSelect={event => event.preventDefault()}><choice.icon className="size-4 text-muted-foreground" aria-hidden="true" />{choice.label}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuContent></DropdownMenu>;
+  return <DropdownMenu open={open} onOpenChange={next => { if (!busy) setOpen(next); }}><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mx-2 size-8" disabled={busy} aria-label={`Change priority for ${task.title}`}><PriorityIndicator priority={task.priority} /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" className="w-56"><DropdownMenuLabel>Change priority</DropdownMenuLabel><DropdownMenuRadioGroup value={task.priority} onValueChange={value => { if (!busy) void onSave(task, { priority: value as TaskPriority }).then(saved => { if (saved) setOpen(false); }); }}>{priorities.map(choice => <DropdownMenuRadioItem key={choice.value} value={choice.value} disabled={busy} onSelect={event => event.preventDefault()}><span className="text-muted-foreground"><PriorityGlyph priority={choice.value} /></span>{choice.label}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuContent></DropdownMenu>;
 }
 
 export function MilestoneLeadsControl({ task, members, busy, onSave }: { task: Task; members: ProjectMember[]; busy: boolean; onSave: SaveMilestone }) {
