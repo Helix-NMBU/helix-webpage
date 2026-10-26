@@ -44,3 +44,6 @@ Publishing, migration of a production database, and deployment require user auth
 
 
 Migration `014_milestone_field_updates.sql` adds the `update_milestone` operation for priority, multiple Leads and target dates, including unorganized legacy milestones. Apply it before releasing the corresponding API/client. It preserves existing placement, task links, status and history; full saves and new records still require organization. Test locally with the project-management database suite before an authorized production release.
+
+
+Migration `015_project_departments.sql` adds platform-managed S27 departments and memberships. Project managers (`can_manage`) configure them from Areas; ordinary members and scoped task Leads have read-only access to that management surface. A department Lead must be one of its members. These records do not change task-area feature grants. Existing project department names can be configured in place, and names remain stable after creation. No public website roster is imported. Apply migration 015 before releasing the updated API/client.

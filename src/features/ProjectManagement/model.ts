@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type Task, type TaskInput } from "./types";
+import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type DepartmentInput, type MilestoneChanges, type ProjectInput, type Task, type TaskInput } from "./types";
 
 export function osloDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
@@ -51,6 +51,17 @@ function uuidOrNull(value: unknown): string | null {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new Error("Choose a valid member or project.");
   return value;
 }
+export function validateDepartment(input: DepartmentInput): DepartmentInput {
+  if (!Array.isArray(input.memberIds) || input.memberIds.length > MAX_DEPARTMENT_MEMBERS) throw new Error(`Choose up to ${MAX_DEPARTMENT_MEMBERS} department members.`);
+  const memberIds = [...new Set(input.memberIds.map(id => {
+    if (typeof id !== "string" || !id) throw new Error("Choose a valid member.");
+    return uuidOrNull(id)!.toLowerCase();
+  }))];
+  const leadId = uuidOrNull(input.leadId)?.toLowerCase() ?? null;
+  if (leadId && !memberIds.includes(leadId)) throw new Error("The department Lead must be a member of the department.");
+  return { name: text(input.name, "Department name", 100, true), memberIds, leadId };
+}
+
 export function validateMilestoneChanges(input: MilestoneChanges): MilestoneChanges {
   if (!input || typeof input !== "object" || Array.isArray(input) || !Object.keys(input).length || Object.keys(input).some(key => !["priority", "assigneeIds", "deadline"].includes(key))) throw new Error("Choose priority, Leads or target date to update.");
   const changes: MilestoneChanges = {};

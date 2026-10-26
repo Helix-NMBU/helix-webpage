@@ -491,7 +491,7 @@ describe("project management interface", () => {
     expect(document.querySelector('[data-testid="notifications"]')?.textContent).toContain("Choose a milestone");
   });
   it("renders an empty Overview without inventing task completion or history", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], taskLeadCategories: [] });
+    load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], departments: [], taskLeadCategories: [] });
     await open();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope0Started0Completed0");
     expect(container.textContent).toContain("No departments yet.");
@@ -545,14 +545,20 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
   });
-  it("shows a single Areas section with department progress instead of assignees or task categories", async () => {
+  it("shows one department per table row with members, Lead, task count and circular status", async () => {
     await open();
     const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
     expect(areas.querySelector("h3")?.textContent).toBe("Areas");
     expect(areas.querySelector('[aria-label="Mechanical: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(areas.querySelector('[aria-label="Electrical: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(areas.textContent).not.toContain("Production");
-    expect(areas.textContent).not.toContain("Alex Example");
+    expect(areas.textContent).toContain("Alex Example");
+    const table = areas.querySelector("table")!;
+    expect([...table.querySelectorAll("thead th")].map(cell => cell.textContent)).toEqual(["Department", "Members", "Lead", "Tasks", "Status"]);
+    const mechanical = areas.querySelector('[aria-label="Edit department Mechanical"]')!.closest("tr")!;
+    expect(mechanical.querySelectorAll("td")[1].textContent).toBe("2");
+    expect(mechanical.querySelectorAll("td")[3].textContent).toBe("1 / 3");
+    expect(mechanical.querySelector('[aria-label="Leads: Alex Example"]')).not.toBeNull();
     expect(container.querySelector('[role="tablist"][aria-label="Progress breakdown"]')).toBeNull();
   });
   it("retains unallocated work in the department breakdown", async () => {
@@ -561,6 +567,51 @@ describe("project management interface", () => {
     await open();
     const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
     expect(areas.querySelector('[aria-label="No department: 1 of 5 tasks complete, 20%"]')).not.toBeNull();
+  });
+
+  it("creates a platform department with multiple members and a Lead", async () => {
+    await open(); await click("Add department"); await fill("department-name", "Software");
+    await act(async () => document.getElementById("department-members")!.click());
+    for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Add ${name} to department"]`)!.click());
+    await click("Done");
+    await act(async () => document.getElementById("department-lead")!.click());
+    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === "Sam Example")!.click());
+    await click("Save department");
+    const workspace = initialLocalWorkspace();
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 0, department: { name: "Software", memberIds: workspace.members.map(member => member.id), leadId: workspace.members[1].id } }));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("removes the Lead when that member is removed from a department", async () => {
+    await open(); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Mechanical"]')!.click());
+    expect((document.getElementById("department-name") as HTMLInputElement).readOnly).toBe(true);
+    await act(async () => document.getElementById("department-members")!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Add Alex Example to department"]')!.click());
+    await click("Done");
+    expect(document.getElementById("department-lead")?.textContent).toBe("No Lead");
+    await click("Save department");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Mechanical", memberIds: [initialLocalWorkspace().members[1].id], leadId: null } }));
+  });
+  it("retains a department draft after a save conflict", async () => {
+    mutate.mockRejectedValueOnce(new ProjectRequestError("This department changed. Reload before saving.", 409));
+    await open(); await click("Add department"); await fill("department-name", "Software"); await click("Save department");
+    expect((document.getElementById("department-name") as HTMLInputElement).value).toBe("Software");
+    expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Reload departments");
+  });
+  it("shows configured departments without projects and leaves unknown membership uncounted", async () => {
+    const workspace = initialLocalWorkspace();
+    load.mockResolvedValue({ ...workspace, departments: [{ ...workspace.departments[0], name: "Software", memberIds: [], leadId: null }] });
+    await open();
+    const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
+    const software = areas.querySelector('[aria-label="Edit department Software"]')!.closest("tr")!;
+    expect(software.querySelectorAll("td")[1].textContent).toBe("0");
+    expect(software.querySelectorAll("td")[3].textContent).toBe("0 / 0");
+    expect(areas.querySelector('[aria-label="Set up department Mechanical"]')!.closest("tr")!.querySelectorAll("td")[1].textContent).toBe("—");
+  });
+  it("hides department management from members without project-management access", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: ["production"] }); await open();
+    expect(button("Add department")).toBeUndefined();
+    expect(container.querySelector('[aria-label="Edit department Mechanical"]')).toBeNull();
+    expect(container.querySelector('section[aria-labelledby="progress-areas-title"]')?.textContent).toContain("Mechanical");
   });
 
 });

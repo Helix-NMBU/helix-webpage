@@ -33,6 +33,12 @@ describe("project management HTTP boundaries", () => {
     for (const changes of [{}, null, [], { projectId: null }, { category: "marketing" }, { status: "done" }, { priority: "invalid" }, { deadline: null }, { deadline: "2026-02-30" }, { assigneeIds: [null] }, { assigneeIds: Array(21).fill(id) }]) expect(() => parseProjectMutation({ ...input, changes })).toThrow();
     expect(() => parseProjectMutation({ ...input, expectedRevision: 0 })).toThrow();
   });
+  it("bounds department membership and requires its Lead to be a member", () => {
+    const id = "10000000-0000-4000-8000-000000000001";
+    const input = { action: "save_department", id, expectedRevision: 0, department: { name: " Mechanical ", memberIds: [id, id], leadId: id } };
+    expect(parseProjectMutation(input)).toMatchObject({ department: { name: "Mechanical", memberIds: [id], leadId: id } });
+    for (const patch of [{ name: "" }, { memberIds: null }, { memberIds: Array(501).fill(id) }, { memberIds: [null] }, { leadId: "invalid" }, { memberIds: [] }]) expect(() => parseProjectMutation({ ...input, department: { ...input.department, ...patch } })).toThrow();
+  });
   it("requires project and milestone placement on saves while keeping status-only updates separate", () => {
     const projectId = "10000000-0000-4000-8000-000000000010";
     const milestoneId = "10000000-0000-4000-8000-000000000002";

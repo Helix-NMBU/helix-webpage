@@ -1,5 +1,5 @@
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
-import { addDays, osloDate, validateProject, validateTask, validateMilestoneChanges } from "./model";
+import { addDays, osloDate, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
 import { progressEvent } from "./progress";
 import { ProjectRequestError } from "./repository";
 import { TASK_CATEGORIES, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
@@ -24,6 +24,7 @@ export function initialLocalWorkspace(): ProjectWorkspace {
       task(18, "Campaign launch", "marketing", 14, { kind: "milestone" }),
   ];
   return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
+    departments: [{ id: id(300), season: "S27", revision: 1, name: "Mechanical", memberIds: [id(1), id(2)], leadId: id(1) }, { id: id(301), season: "S27", revision: 1, name: "Electrical", memberIds: [id(2)], leadId: id(2) }],
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
     projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical", "Electrical"], deadline: addDays(today, 35), revision: 1 },
       ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: [name], deadline: addDays(today, 35), revision: 1 })),
@@ -46,17 +47,25 @@ export function createLocalProjectRepository(): ProjectRepository {
       const { assigneeId: legacy, ...task } = item as Task & { assigneeId?: string | null };
       return { ...task, milestoneId: task.milestoneId ?? null, assigneeIds: Array.isArray(task.assigneeIds) ? task.assigneeIds : legacy ? [legacy] : [] };
     });
-    return { ...workspace, tasks, progressEvents: workspace.progressEvents ?? tasks.map(item => progressEvent(item)), taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
+    return { ...workspace, tasks, departments: workspace.departments ?? [], progressEvents: workspace.progressEvents ?? tasks.map(item => progressEvent(item)), taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
   }
   return {
     async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return workspace; },
     async mutate(mutation) {
       const workspace = read();
-      const collection = mutation.action === "save_project" ? workspace.projects : workspace.tasks;
+      const collection = mutation.action === "save_department" ? workspace.departments : mutation.action === "save_project" ? workspace.projects : workspace.tasks;
       const current = collection.find(item => item.id === mutation.id);
       if ((current?.revision ?? 0) !== mutation.expectedRevision) throw new ProjectRequestError("This item changed in another session. Reload before saving again.", 409);
       const now = new Date().toISOString();
-      if (mutation.action === "save_project") {
+      if (mutation.action === "save_department") {
+        if (!workspace.canManage) throw new ProjectRequestError("Project management access is required to manage departments.", 403);
+        const department = validateDepartment(mutation.department);
+        const previous = workspace.departments.find(item => item.id === mutation.id);
+        if (previous && previous.name !== department.name) throw new Error("Department names cannot be changed after creation.");
+        if (workspace.departments.some(item => item.id !== mutation.id && item.name.toLowerCase() === department.name.toLowerCase())) throw new Error("A department with this name already exists.");
+        if (department.memberIds.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active platform members for this department.");
+        workspace.departments = [...workspace.departments.filter(item => item.id !== mutation.id), { ...department, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
+      } else if (mutation.action === "save_project") {
         if (!workspace.canManage) throw new ProjectRequestError("Project management access is required.", 403);
         const project = validateProject(mutation.project);
         if (workspace.tasks.some(task => task.projectId === mutation.id && task.category !== project.category)) throw new Error("Move the project's tasks before changing its category.");
@@ -84,7 +93,7 @@ export function createLocalProjectRepository(): ProjectRepository {
         }
         workspace.tasks = [...workspace.tasks.filter(item => item.id !== mutation.id), { ...task, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1, createdAt: previous?.createdAt ?? now, updatedAt: now, completedAt: task.status === "done" ? previous?.completedAt ?? now : null }];
       }
-      if (mutation.action !== "save_project") {
+      if (mutation.action !== "save_project" && mutation.action !== "save_department") {
         const saved = workspace.tasks.find(item => item.id === mutation.id)!;
         const previous = current as Task | undefined;
         if (!previous || previous.status !== saved.status || previous.kind !== saved.kind || previous.category !== saved.category) workspace.progressEvents.push(progressEvent(saved, now));

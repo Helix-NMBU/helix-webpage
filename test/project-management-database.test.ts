@@ -57,6 +57,7 @@ describe("project management database and authorization", () => {
     await db.query("insert into project_management.task_assignees values($1,$2)", [id(805), member.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/015_project_departments.sql", import.meta.url), "utf8"));
 
   }, 60000);
   afterAll(async () => { await db?.close(); });
@@ -367,6 +368,51 @@ describe("project management database and authorization", () => {
     await db.query("update project_management.access set task_lead_categories='{}' where member_id=$1", [member.userId]);
     await expect(service(member).mutate("verified", { ...change, expectedRevision: 3 })).rejects.toMatchObject({ status: 403 });
     await expect(service({ ...manager, googleSub: "untrusted" }).mutate("verified", { ...change, expectedRevision: 3 })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("stores department membership and a single Lead without changing tasks or access grants", async () => {
+    const before = await service().load("verified");
+    const grants = (await db.query("select * from project_management.access order by member_id")).rows;
+    const department = { name: "Mechanical", memberIds: [member.userId, manager.userId, member.userId], leadId: member.userId };
+    const after = await service().mutate("verified", { action: "save_department", id: id(500), expectedRevision: 0, department });
+    expect(after.departments.find(item => item.id === id(500))).toEqual({ id: id(500), season: "S27", revision: 1, name: "Mechanical", memberIds: [manager.userId, member.userId], leadId: member.userId });
+    expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
+    expect((await db.query("select * from project_management.access order by member_id")).rows).toEqual(grants);
+    await expect(service().mutate("verified", { action: "save_department", id: id(501), expectedRevision: 0, department: { ...department, name: "mechanical" } })).rejects.toMatchObject({ status: 400 });
+    await expect(db.query("update project_management.department_members set is_lead=true where department_id=$1 and member_id=$2", [id(500), manager.userId])).rejects.toThrow();
+  });
+  it("atomically updates membership and Lead, rejects stale revisions and keeps names stable", async () => {
+    const change = { action: "save_department", id: id(500), expectedRevision: 1, department: { name: "Mechanical", memberIds: [manager.userId], leadId: null } };
+    const after = await service().mutate("verified", change);
+    expect(after.departments.find(item => item.id === id(500))).toMatchObject({ revision: 2, memberIds: [manager.userId], leadId: null });
+    await expect(service().mutate("verified", change)).rejects.toMatchObject({ status: 409 });
+    await expect(service().mutate("verified", { ...change, expectedRevision: 2, department: { ...change.department, name: "Renamed" } })).rejects.toMatchObject({ status: 400 });
+    expect(await service().load("verified")).toEqual(after);
+  });
+  it("rejects ineligible members and nonmember Leads before changing department membership", async () => {
+    const before = await service().load("verified");
+    const change = { action: "save_department", id: id(500), expectedRevision: 2 };
+    for (const department of [{ name: "Mechanical", memberIds: [manager.userId, id(9999)], leadId: null }, { name: "Mechanical", memberIds: [manager.userId], leadId: member.userId }]) {
+      await expect(service().mutate("verified", { ...change, department })).rejects.toMatchObject({ status: 400 });
+      await expect(db.query("select project_management.save_department($1,$2,$3,$4::jsonb)", [manager.userId, manager.googleSub, manager.email, JSON.stringify({ ...change, department })])).rejects.toThrow();
+    }
+    await db.query('update neon_auth."user" set banned=true where id=$1', [member.userId]);
+    await expect(service().mutate("verified", { ...change, department: { name: "Mechanical", memberIds: [member.userId], leadId: null } })).rejects.toMatchObject({ status: 400 });
+    await db.query('update neon_auth."user" set banned=false where id=$1', [member.userId]);
+    expect(await service().load("verified")).toEqual(before);
+  });
+  it("requires project-management access to manage departments and protects stored memberships", async () => {
+    const change = { action: "save_department", id: id(502), expectedRevision: 0, department: { name: "Software", memberIds: [], leadId: null } };
+    await db.query("update project_management.access set task_lead_categories=array['production'] where member_id=$1", [member.userId]);
+    await expect(service(member).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
+    await expect(service({ ...manager, googleSub: "wrong" }).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
+    await db.query("update project_management.access set task_lead_categories='{}' where member_id=$1", [member.userId]);
+    const after = await service().mutate("verified", change);
+    expect(after.departments.find(item => item.id === id(502))).toMatchObject({ memberIds: [], leadId: null });
+    expect((await db.query("select has_table_privilege('public','project_management.department_members','SELECT') as allowed")).rows[0]).toEqual({ allowed: false });
+    expect((await db.query("select relrowsecurity from pg_class where oid='project_management.departments'::regclass")).rows[0]).toEqual({ relrowsecurity: true });
+    await db.exec(readFileSync(new URL("../db/migrations/015_project_departments.sql", import.meta.url), "utf8"));
+    expect(await service().load("verified")).toEqual(after);
   });
 
 });

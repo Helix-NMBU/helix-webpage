@@ -6,7 +6,9 @@ import { addDays, formatDate, osloDate, summarize } from "./model";
 import { isOrganized } from "./hierarchy";
 import { progressSeries, progressStepPath } from "./progress";
 import { ProgressRing } from "./ProgressRing";
-import { type Project, type ProjectWorkspace, type Task } from "./types";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
+import { AssigneeAvatars } from "./TaskAssignees";
+import { type Project, type ProjectDepartment, type ProjectWorkspace, type Task } from "./types";
 
 const series = [
   { key: "scope", label: "Scope", description: "All non-cancelled tasks, excluding milestones", color: "var(--muted-foreground)" },
@@ -51,25 +53,35 @@ function ProgressChart({ workspace }: { workspace: ProjectWorkspace }) {
   </div>;
 }
 
-function ProgressBreakdown({ rows }: { rows: { id: string; label: string; tasks: Task[] }[] }) {
-  return <div className="mt-1 grid gap-x-6 gap-y-0.5 sm:grid-cols-2">{rows.map(row => <div key={row.id} className="flex min-h-7 items-center justify-between gap-3 py-0.5"><span className="min-w-0 truncate text-sm">{row.label}</span><ProgressRing {...summarize(row.tasks)} label={row.label} /></div>)}{!rows.length && <p className="py-3 text-sm text-muted-foreground">No departments yet. Add departments to projects to see their progress.</p>}</div>;
+type AreaRow = { id: string; label: string; tasks: Task[]; department?: ProjectDepartment };
+function ProgressBreakdown({ rows, workspace, busy, onEdit }: { rows: AreaRow[]; workspace: ProjectWorkspace; busy: boolean; onEdit: (department: ProjectDepartment | null, name: string) => void }) {
+  return rows.length ? <Table aria-label="Department progress"><TableHeader><TableRow><TableHead>Department</TableHead><TableHead>Members</TableHead><TableHead>Lead</TableHead><TableHead>Tasks</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const progress = summarize(row.tasks); return <TableRow key={row.id}>
+    <TableCell>{workspace.canManage && row.id !== "unallocated" ? <button disabled={busy} className="text-left hover:underline" aria-label={`${row.department ? "Edit" : "Set up"} department ${row.label}`} onClick={() => onEdit(row.department ?? null, row.label)}>{row.label}</button> : row.label}</TableCell>
+    <TableCell className="tabular-nums text-muted-foreground">{row.department ? row.department.memberIds.length : <span title={row.id === "unallocated" ? "Work without a department" : "Department membership has not been set up"}>—</span>}</TableCell>
+    <TableCell>{row.department?.leadId ? <AssigneeAvatars assigneeIds={[row.department.leadId]} members={workspace.members} assignmentRole="lead" showNames /> : <span className="text-muted-foreground">{row.id === "unallocated" ? "—" : "No Lead"}</span>}</TableCell>
+    <TableCell className="tabular-nums"><span aria-label={`${row.label}: ${progress.done} of ${progress.total} tasks complete`}>{progress.done} / {progress.total}</span></TableCell>
+    <TableCell><ProgressRing {...progress} label={row.label} showTotal={false} /></TableCell>
+  </TableRow>; })}</TableBody></Table> : <p className="py-3 text-sm text-muted-foreground">No departments yet. Add a department to manage its members and track task progress.</p>;
 }
+const departmentKey = (name: string) => name.trim().toLowerCase();
 
-export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrganization, onOpenProject, onCreateProject }: {
-  workspace: ProjectWorkspace; busy: boolean; onSelectProject: (id: string) => void; onNeedsOrganization: () => void; onOpenProject: (project: Project) => void; onCreateProject: () => void;
+export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrganization, onOpenProject, onCreateProject, onEditDepartment }: {
+  workspace: ProjectWorkspace; busy: boolean; onSelectProject: (id: string) => void; onNeedsOrganization: () => void; onOpenProject: (project: Project) => void; onCreateProject: () => void; onEditDepartment: (department: ProjectDepartment | null, name: string) => void;
 }) {
   const projects = [...workspace.projects].sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.name.localeCompare(b.name));
   const unorganized = workspace.tasks.filter(task => !isOrganized(task, workspace));
-  const departments = [...new Set(workspace.projects.flatMap(project => project.departments))].sort((a, b) => a.localeCompare(b));
-  const areaRows = departments.map(name => {
-    const projectIds = new Set(workspace.projects.filter(project => project.departments.includes(name)).map(project => project.id));
-    return { id: `department:${name}`, label: name, tasks: workspace.tasks.filter(task => task.projectId && projectIds.has(task.projectId)) };
+  const configured = new Map((workspace.departments ?? []).map(department => [departmentKey(department.name), department]));
+  const departmentNames = new Map(workspace.projects.flatMap(project => project.departments).map(name => [departmentKey(name), name.trim()]));
+  for (const [key, department] of configured) departmentNames.set(key, department.name);
+  const areaRows: AreaRow[] = [...departmentNames].sort(([, a], [, b]) => a.localeCompare(b)).map(([key, name]) => {
+    const projectIds = new Set(workspace.projects.filter(project => project.departments.some(value => departmentKey(value) === key)).map(project => project.id));
+    return { id: `department:${key}`, label: name, department: configured.get(key), tasks: workspace.tasks.filter(task => task.projectId && projectIds.has(task.projectId)) };
   });
   const allocatedProjects = new Set(workspace.projects.filter(project => project.departments.length > 0).map(project => project.id));
   const unallocatedTasks = workspace.tasks.filter(task => !task.projectId || !allocatedProjects.has(task.projectId));
   if (summarize(unallocatedTasks).total > 0) areaRows.push({ id: "unallocated", label: "No department", tasks: unallocatedTasks });
   return <div data-project-progress className="grid w-full grid-cols-1 gap-4">
-    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3><ProgressBreakdown rows={areaRows} /></section></CardContent></Card>
+    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3>{workspace.canManage && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={busy} onClick={() => onEditDepartment(null, "")}>Add department</Button>}</div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
     <section aria-labelledby="overview-projects-title" className="space-y-3"><div className="flex items-center justify-between"><h2 id="overview-projects-title" className="text-base font-medium">Projects <span className="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{projects.length}</span></h2>{workspace.canManage && <Button size="icon" variant="ghost" className="-my-2 size-7" disabled={busy} aria-label="Create project" onClick={onCreateProject}><IconPlus aria-hidden="true" className="size-4" /></Button>}</div><Card className="gap-3 py-2"><CardContent className="px-2">
       {projects.map(project => { const progress = summarize(workspace.tasks.filter(task => task.projectId === project.id)); return <div key={project.id} className="group flex items-center gap-1 rounded-md px-2 hover:bg-muted/50"><button className="flex min-w-0 flex-1 items-center gap-2 py-3 text-left" onClick={() => onSelectProject(project.id)} aria-label={`See tasks for project ${project.name}, ${progress.done} of ${progress.total} tasks complete, ${progress.percent}%`}><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1"><span className="block truncate text-sm">{project.name}</span><span className="mt-1 block text-xs text-muted-foreground">{project.departments.join(", ") || "No department"} · {formatDate(project.deadline)}</span></span><ProgressRing {...progress} label={project.name} /></button>{workspace.canManage && <Button size="icon" variant="ghost" className="size-7 shrink-0" disabled={busy} aria-label={`Edit project ${project.name}`} onClick={() => onOpenProject(project)}><IconDots aria-hidden="true" className="size-4" /></Button>}</div>; })}
       {!projects.length && <p className="px-3 py-4 text-sm text-muted-foreground">No projects yet. A project and milestone are needed before adding tasks.</p>}

@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
+import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
 import { MemberCvError } from "./member-cv-error.js";
 
 function invalid(message = "Invalid project management request."): never { throw new MemberCvError(400, message); }
@@ -57,6 +57,14 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
   const id = uuid(body.id);
   const expectedRevision = body.expectedRevision;
   if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
+  if (body.action === "save_department") {
+    const input = object(body.department);
+    if (!Array.isArray(input.memberIds) || input.memberIds.length > MAX_DEPARTMENT_MEMBERS) return invalid(`Choose up to ${MAX_DEPARTMENT_MEMBERS} department members.`);
+    const memberIds = [...new Set(input.memberIds.map(uuid))];
+    const leadId = input.leadId === null ? null : uuid(input.leadId);
+    if (leadId && !memberIds.includes(leadId)) return invalid("The department Lead must be a member of the department.");
+    return { action: body.action, id, expectedRevision, department: { name: text(input.name, "department name", 100, true), memberIds, leadId } };
+  }
   if (body.action === "update_milestone") {
     if (expectedRevision < 1) return invalid("A saved milestone revision is required.");
     const input = object(body.changes);

@@ -13,6 +13,10 @@ export interface ProjectServices {
 // A single statement reads one consistent snapshot and the current module grant.
 const workspaceSql = `select a.can_manage as "canManage", a.member_id as "viewerId", 'S27' as season,
   to_jsonb(a.task_lead_categories) as "taskLeadCategories",
+  coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'season',d.season,'name',d.name,'revision',d.revision,
+    'memberIds',coalesce((select jsonb_agg(dm.member_id order by dm.member_id) from project_management.department_members dm where dm.department_id=d.id),'[]'::jsonb),
+    'leadId',(select dm.member_id from project_management.department_members dm where dm.department_id=d.id and dm.is_lead)) order by lower(d.name),d.id)
+    from project_management.departments d where d.season='S27'),'[]'::jsonb) as departments,
   coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,
     'category',p.category,'departments',p.departments,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
     from project_management.projects p where p.season = 'S27'),'[]'::jsonb) as projects,
@@ -39,6 +43,9 @@ function projectError(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("project_department_exists")) throw new MemberCvError(400, "A department with this name already exists.");
+  if (message.includes("project_department_name")) throw new MemberCvError(400, "Department names cannot be changed after creation.");
+  if (message.includes("project_department_member")) throw new MemberCvError(400, "Choose active platform members and a Lead who belongs to the department.");
   if (message.includes("project_task_lead_required")) throw new MemberCvError(403, "A Department Lead grant for this area is required to create, edit or assign tasks.");
   if (message.includes("project_forbidden")) throw new MemberCvError(403, "Project management access is required. Contact your project manager.");
   if (message.includes("project_not_found")) throw new MemberCvError(404, "This task or project is no longer available.");
@@ -64,7 +71,7 @@ export function createProjectServices(deps: { db: CvDatabase; authenticate(token
       try {
         const identity = await deps.authenticate(token);
         const change = parseProjectMutation(body);
-        await deps.db.query("select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
+        await deps.db.query(change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
         return await read(identity);
       } catch (error) { return projectError(error); }
     },

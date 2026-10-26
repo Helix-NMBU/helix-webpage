@@ -5,6 +5,7 @@ export type TaskStatus = typeof TASK_STATUSES[number];
 export const TASK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type TaskPriority = typeof TASK_PRIORITIES[number];
 export const MAX_TASK_ASSIGNEES = 20;
+export const MAX_DEPARTMENT_MEMBERS = 500;
 export const CATEGORY_LABELS: Record<TaskCategory, string> = { production: "Production", "partnership-deliverables": "Partnership deliverables", marketing: "Marketing", operations: "Operations" };
 export const STATUS_LABELS: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
 
@@ -47,6 +48,8 @@ export interface TaskProgressEvent {
   status: TaskStatus;
 }
 export interface ProjectMember { id: string; name: string; avatarUrl?: string | null; }
+export interface DepartmentInput { name: string; memberIds: string[]; leadId: string | null; }
+export interface ProjectDepartment extends DepartmentInput { id: string; season: string; revision: number; }
 export interface ProjectWorkspace {
   season: string;
   viewerId: string;
@@ -56,9 +59,11 @@ export interface ProjectWorkspace {
   tasks: Task[];
   progressEvents: TaskProgressEvent[];
   members: ProjectMember[];
+  departments: ProjectDepartment[];
 }
 export type MilestoneChanges = Partial<Pick<TaskInput, "priority" | "assigneeIds" | "deadline">>;
 export type ProjectMutation =
+  | { action: "save_department"; id: string; expectedRevision: number; department: DepartmentInput }
   | { action: "update_milestone"; id: string; expectedRevision: number; changes: MilestoneChanges }
   | { action: "save_task"; id: string; expectedRevision: number; task: TaskInput }
   | { action: "save_project"; id: string; expectedRevision: number; project: ProjectInput }

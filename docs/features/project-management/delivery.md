@@ -158,3 +158,12 @@ The previously blocked Submit competition registration milestone was edited in t
 ## Reference priority glyphs, 26 October 2026
 
 Replaced Tabler's antenna and circular alert approximations with custom 16px SVG glyphs traced from the user's reference pixels. High/Medium/Low share the same three rectangular bars at 6/9/12px heights, with inactive bars at 50% opacity; Urgent uses the filled rounded square and exclamation cutout. Icon color is the reference #929295, including focused menu items. The reusable set includes the three-dash glyph, without adding another stored priority level. The normal value displays as Medium. Client TypeScript and all 53 UI tests passed; browser inspection confirmed the menu and table use the same glyphs. Screenshot: `priority-reference-icons.png` in this chat's visualization directory.
+
+
+## Platform-managed Areas membership, 26 October 2026
+
+Areas now has one department per table row, with member count, Lead avatar/name, completed/total tasks and circular status. The user chose platform-managed membership rather than the website roster. Project managers can add departments and edit membership and the single Lead from Areas; removing the Lead from the member list clears that selection. Counts use explicit membership, not task assignments. Configured departments without projects remain visible, unknown membership is unset, and unallocated work has no membership fields. Task progress still counts project tasks once per participating department and excludes cancelled work and milestone records.
+
+Migration 015 adds manager-only department saves with verified identity, eligible-member and Lead-membership checks, stable unique names, revision guards and atomic membership replacement. It imports no live roster and changes no access grants. Older local workspaces gain an empty department collection without invented assignments.
+
+All 132 focused UI/model/repository/API/database tests, all three TypeScript checks and the production build passed (9.24 MB, 9 source functions). Local browser verification created Mechanical with two members and Alex as Lead, Electrical with one member and Sam as Lead, and confirmed both counts and Leads after reload. Screenshot: `department-areas-table.png` in this chat's visualization directory. Migration 015 remains unapplied to live data; no push or deployment performed.

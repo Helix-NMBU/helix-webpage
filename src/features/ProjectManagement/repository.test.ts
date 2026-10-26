@@ -126,4 +126,25 @@ describe("dedicated local project mode", () => {
     await expect(repository.mutate({ action: "update_milestone", id: workspace.tasks[0].id, expectedRevision: 1, changes: { priority: "high" } })).rejects.toThrow("Milestone");
   });
 
+  it("persists department membership and Lead without changing tasks, history or permissions", async () => {
+    const repository = createLocalProjectRepository(); const before = await repository.load();
+    const change = { action: "save_department" as const, id: "00000000-0000-4000-8000-000000000900", expectedRevision: 0, department: { name: "Software", memberIds: before.members.map(member => member.id), leadId: before.members[1].id } };
+    const after = await repository.mutate(change);
+    expect((await createLocalProjectRepository().load()).departments.find(item => item.id === change.id)).toMatchObject({ ...change.department, revision: 1, season: "S27" });
+    expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents); expect(after.taskLeadCategories).toEqual(before.taskLeadCategories);
+    await expect(repository.mutate(change)).rejects.toMatchObject({ status: 409 });
+    await expect(repository.mutate({ ...change, expectedRevision: 1, department: { ...change.department, leadId: "00000000-0000-4000-8000-000000009999" } })).rejects.toThrow("member");
+    await expect(repository.mutate({ ...change, expectedRevision: 1, department: { ...change.department, name: "Changed" } })).rejects.toThrow("names");
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...after, canManage: false }));
+    await expect(repository.mutate({ ...change, expectedRevision: 1 })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("does not invent department membership when upgrading older local workspaces", async () => {
+    const repository = createLocalProjectRepository(); const before = await repository.load();
+    const { departments: _departments, ...older } = before;
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify(older));
+    const after = await repository.load();
+    expect(after.departments).toEqual([]); expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
+  });
+
 });
