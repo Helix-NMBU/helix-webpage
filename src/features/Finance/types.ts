@@ -64,7 +64,10 @@ export type PublicEarmarkSummary = {
   purpose: string;
   amountNok: string;
   usedNok: string;
+  leftNok: string;
+  mustReturnNok: string;
   spendBy: string | null;
+  systemName: string | null;
 };
 
 export type PublicDepartmentSummary = {
@@ -167,6 +170,19 @@ export type FundingRecord = {
   agreementLink: string | null;
   note: string | null;
   revision: number;
+  earmarkedNok: string;
+  unrestrictedNok: string;
+  linkedItemCount: number;
+};
+
+export type FundingLinkedItem = {
+  id: string;
+  publicRef: string;
+  description: string;
+  systemId: string;
+  systemCode: string;
+  systemName: string;
+  status: BudgetItemStatus;
 };
 
 export type FundingPartRecord = {
@@ -178,6 +194,12 @@ export type FundingPartRecord = {
   spendBy: string | null;
   conditions: string | null;
   revision: number;
+  usedNok: string;
+  leftNok: string;
+  mustReturnNok: string;
+  overdue: boolean;
+  systemName: string | null;
+  linkedItems: FundingLinkedItem[];
 };
 
 export type FundingScenario = {
@@ -326,6 +348,7 @@ export type FinanceMutationResult = {
   ok: true;
   viewVersion: number;
   id?: string;
+  revision?: number;
   warnings: FinanceWarning[];
   errors: FinanceFieldError[];
 };

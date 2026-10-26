@@ -4,13 +4,14 @@ import { Button } from "@libs/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
+import { FinancingPage } from "./FinancingPage";
 import { financeRoutes, type FinancePageId } from "./routes";
 
 const pages: { id: FinancePageId; label: string; title: string; empty: string; description: string }[] = [
   { id: "overview", label: "Overview", title: "Overview", empty: "No season is configured yet", description: "Season budget, spending and public earmarks will appear here." },
   { id: "purchases", label: "Purchases", title: "Purchases", empty: "No purchases to show", description: "Your requests will appear here." },
   { id: "budgets", label: "Budgets", title: "Budgets", empty: "No budget is published yet", description: "Department and system plans will appear here." },
-  { id: "financing", label: "Financing", title: "Financing", empty: "No funding records yet", description: "Funding sources and earmarked parts will appear here." },
+  { id: "financing", label: "Financing", title: "Financing", empty: "No funding records yet", description: "Funding sources and earmarked parts for the current season." },
 ];
 
 function FinanceSection({ page }: { page: FinancePageId }) {
@@ -44,7 +45,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           </Button>
         ))}
       </nav>
-      {session.pageLoading || !loaded ? (
+      {page === "financing" ? <FinancingPage /> : session.pageLoading || !loaded ? (
         <div role="status" aria-label="Loading finance page" className="space-y-4">
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-40 w-full" />

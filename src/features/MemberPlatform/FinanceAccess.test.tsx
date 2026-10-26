@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   budgets: vi.fn(),
   purchases: vi.fn(),
   financing: vi.fn(),
+  mutate: vi.fn(),
 }));
 const notify = vi.hoisted(() => vi.fn());
 vi.mock("../Finance/repository", async (original) => ({
@@ -197,6 +198,9 @@ it("discards a financing response that arrives after financing access is removed
         agreementLink: null,
         note: null,
         revision: 0,
+        earmarkedNok: "0.00",
+        unrestrictedNok: "10.00",
+        linkedItemCount: 0,
       }],
     });
     await loading;
