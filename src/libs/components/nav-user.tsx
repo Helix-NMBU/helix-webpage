@@ -1,20 +1,20 @@
 import { useState } from "react";
-import { ChevronsUpDown, LogOut, Settings, UserRound } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, LogOut, Settings, SunMoon, UserRound } from "lucide-react";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
 import { Button } from "@libs/components/ui/button";
 import { Label } from "@libs/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@libs/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@libs/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@libs/components/ui/select";
 import { Separator } from "@libs/components/ui/separator";
 import {
   SidebarMenu,
@@ -71,28 +71,15 @@ export function NavUser({
           </PopoverTrigger>
           <PopoverContent
             aria-label="Account menu"
-            className="w-64 rounded-lg p-1"
+            className="w-64 gap-0 rounded-lg p-1"
             side={isMobile ? "top" : "right"}
             align="end"
             sideOffset={4}
           >
-            <div className="flex items-center gap-2 px-2 py-2 text-sm">
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 leading-tight">
-                <span className="truncate font-medium">{name}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {role}
-                </span>
-              </div>
-            </div>
-            <Separator className="my-1" />
             <Button
+              size="sm"
               variant="ghost"
-              className="w-full justify-start px-2 font-normal"
+              className="h-8 min-h-8 w-full justify-start gap-2 px-2 py-1 font-normal"
               disabled={disabled}
               onClick={(event) => {
                 setOpen(false);
@@ -103,8 +90,9 @@ export function NavUser({
               Profile
             </Button>
             <Button
+              size="sm"
               variant="ghost"
-              className="w-full justify-start px-2 font-normal"
+              className="h-8 min-h-8 w-full justify-start gap-2 px-2 py-1 font-normal"
               disabled={disabled}
               onClick={(event) => {
                 setOpen(false);
@@ -114,33 +102,37 @@ export function NavUser({
               <Settings />
               Settings
             </Button>
-            <Separator className="my-1" />
-            <div className="flex items-center justify-between gap-3 px-2 py-2">
-              <Label htmlFor="member-appearance" className="font-normal">
+            <div className="flex h-8 items-center justify-between gap-2 rounded-md px-2 text-sm">
+              <Label id="member-appearance-label" className="flex items-center gap-2 font-normal">
+                <SunMoon aria-hidden="true" className="size-4 text-muted-foreground" />
                 Appearance
               </Label>
-              <Select
-                value={theme}
-                onValueChange={(value) => setTheme(value as MemberTheme)}
-              >
-                <SelectTrigger
-                  id="member-appearance"
-                  aria-label="Appearance"
-                  className="h-8 w-28 shadow-none"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
-                </SelectContent>
-              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    aria-labelledby="member-appearance-label member-appearance-value"
+                    className="shadow-none"
+                  >
+                    <span id="member-appearance-value">{theme.charAt(0).toUpperCase() + theme.slice(1)}</span>
+                    <ChevronDown aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={4}>
+                  <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as MemberTheme)}>
+                    <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <Separator className="my-1" />
+            <Separator className="my-0.5" />
             <Button
+              size="sm"
               variant="ghost"
-              className="w-full justify-start px-2 font-normal"
+              className="h-8 min-h-8 w-full justify-start gap-2 px-2 py-1 font-normal"
               disabled={disabled}
               onClick={() => {
                 setOpen(false);

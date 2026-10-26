@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 import {
   Navigate,
+  Outlet,
   Route,
   Routes,
   useLocation,
@@ -35,7 +36,7 @@ import "@fontsource-variable/geist";
 import "./member-platform.css";
 import "./member-theme.css";
 
-export function MemberAccess({ children }: { children: ReactNode }) {
+export function MemberAccess({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [landing, setLanding] = useState<MemberLanding | null>(null);
@@ -112,7 +113,9 @@ export function MemberAccess({ children }: { children: ReactNode }) {
     );
   return (
     <MemberAccountProvider account={landing.account ?? null}>
-      <MemberNotificationsProvider key={landing.userId} renderToaster={false}><RecruitmentAccessProvider>{children}</RecruitmentAccessProvider></MemberNotificationsProvider>
+      <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
+        <RecruitmentAccessProvider>{children ?? <Outlet />}</RecruitmentAccessProvider>
+      </MemberNotificationsProvider>
     </MemberAccountProvider>
   );
 }
@@ -135,82 +138,26 @@ export default function MemberPlatform() {
         <div className="member-platform portal-root">
           <Routes>
             <Route path="/login" element={<CVBankLogin />} />
-            <Route
-              path="/"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <WorkspaceHomePreview />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <MemberCV />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route path="/notifications" element={<MemberAccess><MemberShell><MemberNotificationsPage /></MemberShell></MemberAccess>} />
-            <Route path="/recruiting" element={<MemberAccess><MemberShell><RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess></MemberShell></MemberAccess>} />
-            <Route path="/recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
-            <Route path="/recruitment" element={<LegacyMemberRedirect to="/recruiting" />} />
-            <Route path="/recruitment/*" element={<LegacyMemberRedirect to="/recruiting" />} />
-            <Route
-              path="/mail"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <MailWorkspace />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <MemberSettingsPreview />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/teams/:teamId/:sectionId"
-              element={
-                <MemberAccess>
-                  <MemberShell>
-                    <TeamWorkspacePreview />
-                  </MemberShell>
-                </MemberAccess>
-              }
-            />
-            <Route
-              path="/member/login"
-              element={<LegacyMemberRedirect to="/login" />}
-            />
-            <Route
-              path="/member/profile"
-              element={<LegacyMemberRedirect to="/profile" />}
-            />
-            <Route
-              path="/cv-bank"
-              element={<LegacyMemberRedirect to="/login" />}
-            />
-            <Route
-              path="/cv-bank/login"
-              element={<LegacyMemberRedirect to="/login" />}
-            />
-            <Route
-              path="/cv-bank/profile"
-              element={<LegacyMemberRedirect to="/profile" />}
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/" element={<MemberAccess />}>
+              <Route element={<MemberShell />}>
+                <Route index element={<WorkspaceHomePreview />} />
+                <Route path="profile" element={<MemberCV />} />
+                <Route path="notifications" element={<MemberNotificationsPage />} />
+                <Route path="recruiting" element={<RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess>} />
+                <Route path="mail" element={<MailWorkspace />} />
+                <Route path="settings" element={<MemberSettingsPreview />} />
+                <Route path="teams/:teamId/:sectionId" element={<TeamWorkspacePreview />} />
+              </Route>
+              <Route path="recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
+              <Route path="recruitment" element={<LegacyMemberRedirect to="/recruiting" />} />
+              <Route path="recruitment/*" element={<LegacyMemberRedirect to="/recruiting" />} />
+              <Route path="/member/login" element={<LegacyMemberRedirect to="/login" />} />
+              <Route path="/member/profile" element={<LegacyMemberRedirect to="/profile" />} />
+              <Route path="/cv-bank" element={<LegacyMemberRedirect to="/login" />} />
+              <Route path="/cv-bank/login" element={<LegacyMemberRedirect to="/login" />} />
+              <Route path="/cv-bank/profile" element={<LegacyMemberRedirect to="/profile" />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
           </Routes>
           <MemberNotificationToaster />
         </div>

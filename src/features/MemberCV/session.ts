@@ -1,6 +1,6 @@
 import { createAuthClient } from "@neondatabase/neon-js/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/adapters";
-import { CvRequestError } from "./repository";
+import { clearMemberCvCache, CvRequestError } from "./repository";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
 import { readMemberAccount, type MemberAccount } from "../MemberPlatform/account";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn, setLocalMemberSignedIn } from "../MemberPlatform/local-mode";
@@ -127,6 +127,7 @@ export function clearMemberLanding(): void {
   jwtCache = null;
   jwtFlight = null;
   sessionRejected = false;
+  clearMemberCvCache();
 }
 
 function rejectMemberSession(): void {
@@ -134,6 +135,7 @@ function rejectMemberSession(): void {
   jwtCache = null;
   jwtFlight = null;
   sessionRejected = true;
+  clearMemberCvCache();
 }
 
 // Read claims only to detect account changes and schedule refresh. The API

@@ -28,10 +28,6 @@ export function RecruitmentAccessProvider({ children }: { children: ReactNode })
     });
     return () => { active = false; };
   }, [account?.email, attempt]);
-  useEffect(() => {
-    window.addEventListener("focus", retry);
-    return () => window.removeEventListener("focus", retry);
-  }, [retry]);
   const value = useMemo(() => ({ access, retry, deny }), [access, retry, deny]);
   return <RecruitmentContext.Provider value={value}>{children}</RecruitmentContext.Provider>;
 }
