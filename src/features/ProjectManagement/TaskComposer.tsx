@@ -13,15 +13,15 @@ import { compatibleMilestones, updateTaskDraft } from "./progress";
 import { formatDate, validateTask } from "./model";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 
-export function TaskComposer({ workspace, category, projectId, busy, onSave, onClose, initialKind = "task" }: {
-  workspace: ProjectWorkspace; category: TaskCategory; projectId: string | null; busy: boolean; initialKind?: TaskInput["kind"];
+export function TaskComposer({ workspace, category, projectId, busy, onSave, onClose, initialKind = "task", initialMilestoneId = null }: {
+  workspace: ProjectWorkspace; category: TaskCategory; projectId: string | null; busy: boolean; initialKind?: TaskInput["kind"]; initialMilestoneId?: string | null;
   onSave: (mutation: ProjectMutation) => Promise<boolean>; onClose: () => void;
 }) {
   const areaProjects = workspace.projects.filter(project => project.category === category);
   const initialProjectId = projectId ?? (areaProjects.length === 1 ? areaProjects[0].id : null);
   const initialMilestones = workspace.tasks.filter(task => task.kind === "milestone" && task.projectId && task.projectId === initialProjectId && task.category === category && task.status !== "cancelled");
   const [id, setId] = useState(() => crypto.randomUUID());
-  const [draft, setDraft] = useState<TaskInput>(() => ({ title: "", description: "", category, projectId: initialProjectId, milestoneId: initialKind === "task" && initialMilestones.length === 1 ? initialMilestones[0].id : null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: initialKind, partnerName: "", blockedReason: "" }));
+  const [draft, setDraft] = useState<TaskInput>(() => ({ title: "", description: "", category, projectId: initialProjectId, milestoneId: initialKind === "task" ? (initialMilestones.find(item => item.id === initialMilestoneId)?.id ?? (initialMilestones.length === 1 ? initialMilestones[0].id : null)) : null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: initialKind, partnerName: "", blockedReason: "" }));
   const [details, setDetails] = useState(initialKind === "milestone");
   const [createMore, setCreateMore] = useState(false);
   const notify = useNotify();

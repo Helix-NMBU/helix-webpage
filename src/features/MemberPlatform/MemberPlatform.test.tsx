@@ -9,6 +9,10 @@ import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
+import { initialLocalWorkspace } from '../ProjectManagement/local-repository';
+import { ProjectRequestError } from '../ProjectManagement/repository';
+const projectTasks = vi.hoisted(() => ({load:vi.fn(),mutate:vi.fn()}));
+vi.mock('../ProjectManagement/repository', async original => ({...await original<typeof import('../ProjectManagement/repository')>(),projectRepository:async()=>projectTasks}));
 import { directoryFixture } from '../Workspace/fixtures.test-support';
 const departmentHome = vi.hoisted(() => ({load:vi.fn(),save:vi.fn()}));
 vi.mock('../Workspace/department-home-repository', async original => ({...await original<typeof import('../Workspace/department-home-repository')>(),departmentHomeRepository:async()=>departmentHome}));
@@ -47,6 +51,8 @@ describe("internal member platform", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     window.localStorage.removeItem("helix-member-theme");
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
+    projectTasks.load.mockReset().mockResolvedValue(initialLocalWorkspace());
+    projectTasks.mutate.mockReset();
     departmentHome.load.mockReset().mockImplementation(async departmentId => ({departmentId,description:'',driveFolderUrl:null,revision:0,canEdit:true}));
     departmentHome.save.mockReset();
     workspace.load.mockReset().mockResolvedValue(directoryFixture());
@@ -428,6 +434,69 @@ describe("internal member platform", () => {
     expect(router.state.location.pathname).toBe('/projects');
     expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
     expect(container.querySelector('table')?.textContent).toContain('Chassis & assembly');
+  });
+
+
+  function detailFixture(){
+    const data=initialLocalWorkspace();const milestone=data.tasks.find(t=>t.kind==='milestone'&&t.category==='production')!;const base=data.tasks.find(t=>t.kind==='task'&&t.category==='production')!;
+    const id=(number:number)=>`00000000-0000-4000-8000-${String(number).padStart(12,'0')}`;
+    data.tasks.push({...milestone,id:id(40),title:'Manufacturing sign-off'}, {...base,id:id(41),title:'Verify dimensions',milestoneId:id(40),status:'todo',completedAt:null}, {...base,id:id(42),title:'Legacy inspection',milestoneId:null,status:'todo',completedAt:null}, {...milestone,id:id(50),title:'Planning review'});
+    return data;
+  }
+
+  it("opens project issues with Properties, Milestones and whole-project Progress",async()=>{
+    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects');
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('table button')].find(b=>b.textContent==='Chassis & assembly')!.click());
+    expect(router.state.location.pathname).toBe('/projects/00000000-0000-4000-8000-000000000100');
+    const issues=container.querySelector('[aria-label="Project issues"]')!;
+    expect(issues.textContent).toContain('Complete chassis design review');expect(issues.textContent).toContain('Verify dimensions');expect(issues.textContent).not.toContain('Publish workshop update');
+    const details=container.querySelector('[aria-label="Project details"]')!;
+    expect(details.textContent).toContain('Properties');expect(details.textContent).toContain('Milestones');expect(details.textContent).toContain('Progress');
+    expect(details.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
+  });
+
+  it("toggles a milestone filter off on a second click and keeps progress scoped to the whole project",async()=>{
+    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects/00000000-0000-4000-8000-000000000100');
+    const milestone=container.querySelector<HTMLButtonElement>('[aria-label="Filter issues by milestone Chassis ready for assembly"]')!;
+    await act(async()=>milestone.click());
+    const list=()=>container.querySelector('[aria-label="Project issues"]')!;
+    expect(milestone.getAttribute('aria-pressed')).toBe('true');expect(list().textContent).toContain('Confirm material delivery');expect(list().textContent).not.toContain('Verify dimensions');expect(list().textContent).not.toContain('Legacy inspection');
+    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
+    await act(async()=>milestone.click());expect(milestone.getAttribute('aria-pressed')).toBe('false');expect(list().textContent).toContain('Verify dimensions');expect(list().textContent).toContain('Legacy inspection');expect(router.state.location.search).toBe('');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Filter issues by milestone Manufacturing sign-off"]')!.click());expect(list().textContent).toContain('Verify dimensions');expect(list().textContent).not.toContain('Confirm material delivery');
+    await act(async()=>[...list().querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='New issue')!.click());expect(document.querySelector('#new-task-milestone')?.textContent).toBe('Manufacturing sign-off');
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(b=>b.textContent?.startsWith('Cancel'))!.click());
+    await act(async()=>[...list().querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Clear milestone filter')!.click());expect(list().textContent).toContain('Confirm material delivery');
+  });
+
+  it("restores milestone filters from the URL and handles an empty milestone",async()=>{
+    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');
+    expect(container.querySelector('[aria-label="Project issues"]')?.textContent).toContain('Verify dimensions');expect(container.querySelector('[aria-label="Project issues"]')?.textContent).not.toContain('Confirm material delivery');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Filter issues by milestone Planning review"]')!.click());expect(container.querySelector('[aria-label="Project issues"]')?.textContent).toContain('No matching issues');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Filter issues by milestone Planning review"]')!.click());expect(container.querySelector('[aria-label="Project issues"]')?.textContent).toContain('Verify dimensions');
+    const noMilestone=[...container.querySelectorAll<HTMLButtonElement>('[aria-label="Project details"] button')].find(b=>b.textContent?.startsWith('No milestone'))!;
+    await act(async()=>noMilestone.click());expect(container.querySelector('[aria-label="Project issues"]')?.textContent).toContain('Legacy inspection');expect(container.querySelector('[aria-label="Project issues"]')?.textContent).not.toContain('Verify dimensions');
+  });
+
+  it("updates issue completion, milestone progress and project progress together",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');
+    const next=structuredClone(data);const issue=next.tasks.find(t=>t.title==='Verify dimensions')!;issue.status='done';issue.completedAt=new Date().toISOString();issue.revision+=1;projectTasks.mutate.mockResolvedValue(next);
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Complete Verify dimensions"]')!.click());
+    expect(projectTasks.mutate).toHaveBeenCalledWith(expect.objectContaining({action:'set_status',id:issue.id,status:'done',expectedRevision:1}));
+    expect(container.querySelector('[aria-label="Reopen Verify dimensions"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(container.querySelector('[aria-label="Filter issues by milestone Manufacturing sign-off"]')?.textContent).toContain('100%');
+    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('40');
+  });
+
+  it("preserves project-module access requirements for issue lists",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();data.projectAccess=false;workspace.load.mockResolvedValue(data);
+    await open('/projects/00000000-0000-4000-8000-000000000100');expect(projectTasks.load).not.toHaveBeenCalled();expect(container.textContent).toContain('Project issue access required');expect(container.textContent).not.toContain('Complete chassis design review');
+  });
+
+  it("keeps issues hidden when the server revokes project access",async()=>{
+    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockRejectedValue(new ProjectRequestError('Access revoked',403));
+    await open('/projects/00000000-0000-4000-8000-000000000100');expect(container.textContent).toContain('Project issue access required');expect(container.textContent).not.toContain('Complete chassis design review');
   });
 
   it("saves member edits through the admin action and retains the form on a failed save",async()=>{

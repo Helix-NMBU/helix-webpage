@@ -18,7 +18,7 @@ const series = [
 const dayNumber = (date: string) => Date.parse(`${date}T12:00:00Z`) / 86400000;
 const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
 
-function ProgressChart({ workspace }: { workspace: ProjectWorkspace }) {
+export function ProgressChart({ workspace, compact = true }: { workspace: ProjectWorkspace; compact?: boolean }) {
   const patternId = useId().replace(/:/g, "");
   const today = osloDate();
   const points = progressSeries(workspace.progressEvents, workspace.tasks, today);
@@ -31,10 +31,10 @@ function ProgressChart({ workspace }: { workspace: ProjectWorkspace }) {
   const line = (key: typeof series[number]["key"]) => progressStepPath(points, key, x, y);
   return <div className="space-y-1.5">
     <div className="grid grid-cols-3 gap-3" aria-label={`Progress on ${formatDate(current.date)}`}>
-      {series.map(item => <div key={item.key} className="flex items-baseline gap-2"><div title={item.description} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-1.5" style={{ background: item.color }} />{item.label}</div><div className="text-base font-medium tabular-nums">{current[item.key]}</div></div>)}
+      {series.map(item => <div key={item.key} className={compact ? "flex items-baseline gap-2" : "space-y-1"}><div title={item.description} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-1.5" style={{ background: item.color }} />{item.label}</div><div className="text-base font-medium tabular-nums">{current[item.key]}</div></div>)}
     </div>
     <div>
-    <div className="relative h-20">
+    <div className={compact ? "relative h-20" : "relative h-40"}>
       <svg viewBox="0 0 640 180" preserveAspectRatio="none" className="h-full w-full overflow-visible" role="img" aria-label="Task progress over time" aria-describedby={`${patternId}-description`}>
         <desc id={`${patternId}-description`}>Scope is non-cancelled tasks. Started includes in-progress, blocked and completed tasks. Lines show recorded daily states through today; shaded space is the future, without a forecast.</desc>
         <defs><pattern id={patternId} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><line x1="0" y1="0" x2="0" y2="7" stroke="currentColor" strokeOpacity="0.1" strokeWidth="2" /></pattern></defs>
@@ -46,7 +46,7 @@ function ProgressChart({ workspace }: { workspace: ProjectWorkspace }) {
       </svg>
       {series.map(item => <span key={item.key} aria-hidden="true" className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${x(current.date) / 640 * 100}%`, top: `${y(current[item.key]) / 180 * 100}%`, background: item.color }} />)}
     </div>
-    <div className="relative mt-1 h-4 text-[11px] text-muted-foreground"><span className="absolute" style={{ left: `${22 / 640 * 100}%` }}>{shortDate(start)}</span><span className="absolute -translate-x-1/2" style={{ left: `${x(today) / 640 * 100}%` }}>Today</span><span className="absolute -translate-x-full" style={{ left: `${618 / 640 * 100}%` }}>{shortDate(end)}</span></div>
+    <div className="relative mt-1 h-4 text-[11px] text-muted-foreground [&>span]:whitespace-nowrap"><span className="absolute" style={{ left: `${22 / 640 * 100}%` }}>{shortDate(start)}</span><span className="absolute -translate-x-1/2" style={{ left: `${x(today) / 640 * 100}%` }}>Today</span><span className="absolute -translate-x-full" style={{ left: `${618 / 640 * 100}%` }}>{shortDate(end)}</span></div>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-muted-foreground"><span>{points.length === 1 ? `History begins ${shortDate(current.date)}` : `Recorded since ${shortDate(points[0].date)}`}</span><span>Shaded area: future</span></div>
     <table className="sr-only"><caption>Progress history</caption><thead><tr><th>Date</th>{series.map(item => <th key={item.key}>{item.label}</th>)}</tr></thead><tbody>{points.map(point => <tr key={point.date}><th scope="row">{shortDate(point.date)}</th><td>{point.scope}</td><td>{point.started}</td><td>{point.completed}</td></tr>)}</tbody></table>

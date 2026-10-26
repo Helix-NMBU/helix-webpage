@@ -24,6 +24,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
+import { ProjectDetail } from "./ProjectDetail";
 import { ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { ProgressRing } from "../ProjectManagement/ProgressRing";
 import {
@@ -124,7 +125,6 @@ export function ProjectsPage() {
   const data = workspace?.data;
   const { projectId } = useParams();
   const [params, setParams] = useSearchParams();
-  const navigate = useNavigate();
   const notify = useNotify();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(false);
@@ -138,11 +138,6 @@ export function ProjectsPage() {
     .filter((d) => d.leadId === data.viewerId)
     .map((d) => d.name);
   const canCreate = data.canManageProjects || leadDepartments.length > 0;
-  const canEdit =
-    canCreate &&
-    (!selected ||
-      data.canManageProjects ||
-      selected.departments.some((d) => leadDepartments.includes(d)));
   const departmentId = params.get("department");
   const department = data.departments.find((item) => item.id === departmentId);
   const projects = data.projects.filter(
@@ -174,105 +169,52 @@ export function ProjectsPage() {
       setBusy(false);
     }
   }
+  if (selected)
+    return (
+      <ProjectDetail key={selected.id} project={selected} directory={data} />
+    );
   return (
     <>
       <Directory
-        title={selected?.name ?? "Projects"}
+        title="Projects"
         action={
-          canEdit ? (
+          canCreate ? (
             <Button
               variant="ghost"
               size="sm"
               disabled={busy}
               onClick={() => setEditing(true)}
             >
-              {selected ? "Edit project" : "New project"}
+              New project
             </Button>
           ) : undefined
         }
       >
-        {selected ? (
-          <>
-            <div className="space-y-3 border-b p-4">
+        <>
+          {departmentId && (
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3 text-sm">
+              <span>{department?.name ?? "Unknown department"}</span>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => navigate("/projects")}
+                onClick={() => {
+                  const next = new URLSearchParams(params);
+                  next.delete("department");
+                  setParams(next);
+                }}
               >
                 All projects
               </Button>
-              {selected.description && (
-                <p className="text-sm text-muted-foreground">
-                  {selected.description}
-                </p>
-              )}
-              {data.projectAccess && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    navigate(
-                      `/project-management/${selected.category}?project=${selected.id}`,
-                    )
-                  }
-                >
-                  View tasks and milestones
-                </Button>
-              )}
             </div>
-            <ProjectRows data={data} projects={[selected]} />
-            <div className="border-t p-4">
-              <h2 className="mb-3 text-sm font-medium">Milestones</h2>
-              {selected.milestones.length ? (
-                selected.milestones.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center justify-between gap-3 py-2 text-sm"
-                  >
-                    <span className="flex items-center gap-2">
-                      <IconDiamonds
-                        aria-hidden="true"
-                        className="size-4 text-muted-foreground"
-                      />
-                      {m.title}
-                    </span>
-                    <TargetDate deadline={m.deadline} />
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No open milestones.
-                </p>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            {departmentId && (
-              <div className="flex items-center justify-between gap-3 border-b px-4 py-3 text-sm">
-                <span>{department?.name ?? "Unknown department"}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const next = new URLSearchParams(params);
-                    next.delete("department");
-                    setParams(next);
-                  }}
-                >
-                  All projects
-                </Button>
-              </div>
-            )}
-            <Search label="Find projects" value={search} onChange={setSearch} />
-            <ProjectRows data={data} projects={projects} />
-          </>
-        )}
+          )}
+          <Search label="Find projects" value={search} onChange={setSearch} />
+          <ProjectRows data={data} projects={projects} />
+        </>
       </Directory>
-      {editing && canEdit && (
+      {editing && canCreate && (
         <ProjectEditor
-          project={selected ?? null}
-          category={selected?.category ?? "production"}
+          project={null}
+          category="production"
           members={data.members}
           busy={busy}
           onSave={save}
