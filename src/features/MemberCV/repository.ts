@@ -77,6 +77,7 @@ export function memberLoginDestination(state: unknown): string {
         ? from.pathname
         : null;
   if (isMemberPlatform()) {
+    if (pathname === "/recruiting") return pathname;
     return pathname === paths.profile || pathname === "/member/profile" ? paths.profile : paths.home;
   }
   return pathname === paths.profile ? pathname : paths.home;

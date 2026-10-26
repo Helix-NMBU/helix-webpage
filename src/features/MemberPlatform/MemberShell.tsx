@@ -35,6 +35,8 @@ function Workspace({ children }: { children: ReactNode }) {
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
+      : location.pathname === "/recruiting"
+        ? "Recruiting"
       : location.pathname === "/notifications"
         ? "Notifications"
         : location.pathname.startsWith("/mail")

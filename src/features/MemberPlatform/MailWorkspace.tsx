@@ -20,6 +20,7 @@ import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Textarea } from "@libs/components/ui/textarea";
+import { Skeleton } from "@libs/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -267,6 +268,50 @@ export function GmailLogo({ className }: { className?: string }) {
   );
 }
 
+function MailListSkeleton() {
+  return (
+    <div className="divide-y divide-border" role="status" aria-label="Loading messages">
+      {Array.from({ length: 7 }, (_, index) => (
+        <div key={index} className="space-y-2 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <Skeleton className={`h-3 ${index % 2 === 0 ? "w-28" : "w-36"}`} />
+            <Skeleton className="h-2.5 w-12" />
+          </div>
+          <Skeleton className={`h-3 ${index % 3 === 0 ? "w-44" : "w-32"}`} />
+          <Skeleton className="h-2.5 w-11/12" />
+          <Skeleton className="h-2.5 w-3/4" />
+        </div>
+      ))}
+      <span className="sr-only">Loading messages…</span>
+    </div>
+  );
+}
+
+function MailContentSkeleton() {
+  return (
+    <div className="flex h-full min-h-0 flex-col" role="status" aria-label="Loading message">
+      <div className="shrink-0 space-y-4 border-b px-5 py-5 md:px-8">
+        <Skeleton className="h-6 w-2/3 max-w-md" />
+        <div className="flex items-center justify-between gap-4">
+          <Skeleton className="h-3.5 w-48" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 space-y-4 p-6 md:p-8">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-3 w-11/12" />
+        <Skeleton className="h-3 w-10/12" />
+        <Skeleton className="h-3 w-8/12" />
+        <Skeleton className="mt-8 h-3 w-28" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-9/12" />
+        <Skeleton className="h-3 w-7/12" />
+      </div>
+      <span className="sr-only">Loading message…</span>
+    </div>
+  );
+}
+
 function ConnectedMailSidebar({
   activeFolder,
   onFolderChange,
@@ -426,7 +471,7 @@ function ConnectedMailSidebar({
               {error && messages.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-destructive" role="alert">{error}</p>
               ) : loading && messages.length === 0 ? (
-                <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">Loading messages…</p>
+                <MailListSkeleton />
               ) : messages.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-muted-foreground" aria-live="polite">{activeFolder === "inbox" && unreadOnly ? "No unread messages in your inbox." : "No messages in this folder."}</p>
               ) : (
@@ -520,7 +565,6 @@ function MessageComposer({
   onBodyChange,
   error,
   sending,
-  onCancel,
   onSend,
 }: {
   mode: ComposeMode;
@@ -535,44 +579,43 @@ function MessageComposer({
   onBodyChange: (value: string) => void;
   error: string | null;
   sending: boolean;
-  onCancel: () => void;
   onSend: () => void;
 }) {
   const label = mode === "new" ? "New message" : mode === "reply" ? "Reply" : "Forward";
   return (
-    <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
-      <DialogHeader className="border-b px-6 py-5 pr-14">
-        <DialogTitle>{label}</DialogTitle>
-        <DialogDescription>{mode === "reply" ? "Write your reply." : mode === "forward" ? "Forward this message to someone." : "Compose and send an email from your Gmail account."}</DialogDescription>
+    <form className="flex h-full min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
+      <DialogHeader className="shrink-0 border-b px-5 py-3 pr-14">
+        <DialogTitle className="text-sm font-medium">{label}</DialogTitle>
+        <DialogDescription className="sr-only">{mode === "reply" ? "Write your reply." : mode === "forward" ? "Forward this message to someone." : "Compose and send an email from your Gmail account."}</DialogDescription>
       </DialogHeader>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-        <div className="grid gap-2">
-          <Label htmlFor="compose-from">From</Label>
-          <Input id="compose-from" value={from} readOnly disabled aria-label="From" />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 divide-y divide-border">
+          <div className="flex min-h-11 items-center gap-3 px-5">
+            <Label htmlFor="compose-to" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">To</Label>
+            <Input id="compose-to" type="text" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus aria-label="To" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+          </div>
+          <div className="flex min-h-11 items-center gap-3 px-5">
+            <Label htmlFor="compose-cc" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">Cc</Label>
+            <Input id="compose-cc" type="text" value={cc} onChange={(event) => onCcChange(event.target.value)} placeholder="Optional recipients" aria-label="Cc" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+          </div>
+          <div className="flex min-h-11 items-center gap-3 px-5">
+            <Label htmlFor="compose-subject" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">Subject</Label>
+            <Input id="compose-subject" value={subject} onChange={(event) => onSubjectChange(event.target.value)} aria-label="Subject" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+          </div>
+          <div className="flex min-h-11 items-center gap-3 px-5">
+            <Label htmlFor="compose-from" className="w-12 shrink-0 text-sm font-normal text-muted-foreground">From</Label>
+            <Input id="compose-from" value={from} readOnly disabled aria-label="From" className="h-10 border-0 px-0 shadow-none focus-visible:ring-0" />
+          </div>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="compose-to">To</Label>
-          <Input id="compose-to" type="text" value={to} onChange={(event) => onToChange(event.target.value)} placeholder="name@example.com" autoFocus aria-label="To" />
-          <p className="text-xs text-muted-foreground">Separate multiple recipients with commas.</p>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Label htmlFor="compose-body" className="sr-only">Message</Label>
+          <Textarea id="compose-body" className="min-h-0 flex-1 resize-none rounded-none border-0 px-5 py-5 leading-6 shadow-none focus-visible:ring-0" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="compose-cc">Cc</Label>
-          <Input id="compose-cc" type="text" value={cc} onChange={(event) => onCcChange(event.target.value)} placeholder="Optional recipients" aria-label="Cc" />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="compose-subject">Subject</Label>
-          <Input id="compose-subject" value={subject} onChange={(event) => onSubjectChange(event.target.value)} aria-label="Subject" />
-        </div>
-        <div className="grid min-h-0 gap-2">
-          <Label htmlFor="compose-body">Message</Label>
-          <Textarea id="compose-body" className="min-h-[320px] resize-y leading-6" value={body} onChange={(event) => onBodyChange(event.target.value)} aria-label="Message" />
-        </div>
-        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+        {error && <p className="shrink-0 px-5 pb-3 text-sm text-destructive" role="alert">{error}</p>}
       </div>
-      <DialogFooter className="border-t px-6 py-4">
-        <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>Cancel</Button>
-        <Button type="submit" disabled={sending || !to.trim() || !subject.trim()}>
-          {sending ? <><LoaderCircle className="mr-2 size-4 animate-spin" />Sending…</> : <><Send className="mr-2 size-4" />Send</>}
+      <DialogFooter className="shrink-0 border-t px-5 py-3">
+        <Button type="submit" size="icon" aria-label="Send" title="Send" disabled={sending || !to.trim() || !subject.trim()}>
+          {sending ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
         </Button>
       </DialogFooter>
     </form>
@@ -872,13 +915,19 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       if (!response.ok) throw new Error(result?.error || "Could not update this message.");
       removeCachedGmailMessage(accountEmail, selectedMessageId);
       const remainingMessages = messages.filter((message) => message.id !== selectedMessageId);
+      const selectedIndex = messages.findIndex((message) => message.id === selectedMessageId);
+      const nextMessage = selectedIndex >= 0
+        ? messages[selectedIndex + 1] ?? messages[selectedIndex - 1]
+        : remainingMessages[0];
       setCachedGmailList(accountEmail, mailListCacheKey(activeFolder, search, unreadOnly), {
         messages: remainingMessages,
         nextPageToken,
       });
       setMessages(remainingMessages);
-      setSelectedMessageId(null);
+      setSelectedMessageId(nextMessage?.id ?? null);
       setSelectedMessage(null);
+      setMessageError(null);
+      setMessageLoading(Boolean(nextMessage));
       setConfirmAction(null);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not update this message.");
@@ -920,10 +969,10 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
             nextPageToken={nextPageToken}
             onLoadMore={loadMoreMessages}
           />
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-live="polite">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-live="polite" aria-busy={messageLoading}>
             {selectedMessageId ? (
               messageLoading && !selectedMessage ? (
-                <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading message…</div>
+                <MailContentSkeleton />
               ) : messageError ? (
                 <div className="flex h-full items-center justify-center p-6 text-sm text-destructive" role="alert">{messageError}</div>
               ) : selectedMessage ? (
@@ -952,7 +1001,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                 </>
               ) : null
             ) : listLoading && messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">Loading messages…</div>
+              <MailContentSkeleton />
             ) : listError && messages.length === 0 ? (
               <div className="flex h-full items-center justify-center p-6 text-center text-sm text-destructive" role="alert">{listError}</div>
             ) : messages.length === 0 ? (
@@ -981,7 +1030,6 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                   onBodyChange={setComposeBody}
                   error={composeError}
                   sending={sending}
-                  onCancel={() => setComposeMode(null)}
                   onSend={() => void sendMessage()}
                 />
               </DialogContent>
