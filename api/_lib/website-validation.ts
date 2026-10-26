@@ -6,6 +6,41 @@ export const MAX_CV_BYTES = 500 * 1024;
 export const MAX_BODY_BYTES = 768 * 1024;
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type WebsitePosition = { id: string; title: string; department: string; [key: string]: unknown };
+export type ManagedWebsitePosition = WebsitePosition & { visible: boolean };
+const POSITION_DEPARTMENTS = new Set(["Open", "Finance", "Mechanical & Production", "Electrical", "Software & Autonomous", "Business & Marketing", "Logistics"]);
+export function parseWebsitePosition(value: unknown): WebsitePosition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position details.");
+  const raw = value as Record<string, unknown>;
+  const field = (key: string, max: number, required = true) => {
+    const v = raw[key];
+    if (v === undefined && !required) return undefined;
+    if (typeof v !== "string" || (required && !v.trim()) || v.length > max || /[\u0000-\u001f]/.test(v)) throw new MemberCvError(400, `Check the ${key} field.`);
+    return v.trim();
+  };
+  const title = field("title", 160)!;
+  const department = field("department", 100)!;
+  if (!POSITION_DEPARTMENTS.has(department)) throw new MemberCvError(400, "Choose a valid department.");
+  const about = field("about", 5000)!;
+  const applyUrl = field("applyUrl", 2048)!;
+  try { if (new URL(applyUrl).protocol !== "https:") throw new Error(); } catch { throw new MemberCvError(400, "Use a valid HTTPS application link."); }
+  const contactRaw = raw.contact;
+  if (!contactRaw || typeof contactRaw !== "object" || Array.isArray(contactRaw)) throw new MemberCvError(400, "Check the contact details.");
+  const contact = contactRaw as Record<string, unknown>;
+  const contactName = typeof contact.name === "string" && contact.name.trim().length <= 160 ? contact.name.trim() : "";
+  const contactEmail = typeof contact.email === "string" && contact.email.trim().length <= 254 ? contact.email.trim().toLowerCase() : "";
+  if (!contactName || !isValidEmail(contactEmail)) throw new MemberCvError(400, "Check the contact details.");
+  const linkedin = contact.linkedin;
+  if (linkedin !== undefined && (typeof linkedin !== "string" || linkedin.length > 2048 || (linkedin && !/^https:\/\//i.test(linkedin)))) throw new MemberCvError(400, "Check the contact LinkedIn link.");
+  const list = (key: "tasks" | "achieve") => {
+    const v = raw[key];
+    if (!Array.isArray(v) || v.length > 20 || v.some(item => typeof item !== "string" || !item.trim() || item.length > 500)) throw new MemberCvError(400, `Check the ${key} list.`);
+    return v.map(item => (item as string).trim());
+  };
+  const slug = title.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80).replace(/-$/, "");
+  const id = typeof raw.id === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(raw.id) ? raw.id : slug;
+  if (!id) throw new MemberCvError(400, "Enter a valid position title.");
+  return { id, title, department, about, applyUrl, contact: { name: contactName, email: contactEmail, ...(linkedin ? { linkedin: (linkedin as string).trim() } : {}) }, tasks: list("tasks"), achieve: list("achieve") };
+}
 export type ApplicationInput = {
   full_name: string; email: string; phone: string; study_program: string;
   study_program_other: string | null; year_of_study: number; motivation: string;
