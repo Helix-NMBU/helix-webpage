@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PartnerPortal from "./PartnerPortal";
 import { partnerRepository } from "./repository";
@@ -11,8 +12,8 @@ import type { PartnerCv, PartnerDirectory, PartnerSession } from "./types";
 vi.mock("./session", async (original) => ({ ...await original<typeof import("./session")>(),
   hasPartnerAuthSession: vi.fn(), sendPartnerOtp: vi.fn(), signOutPartner: vi.fn(), verifyPartnerOtp: vi.fn(), watchPartnerAuthSession: vi.fn(),
 }));
-vi.mock("./repository", () => ({ partnerRepository: { session: vi.fn(), directory: vi.fn(), download: vi.fn() } }));
-const session: PartnerSession = { user: { email: "first@example.test", name: "First partner" }, organizations: [{ id: "organization", name: "Partner company" }] };
+vi.mock("./repository", () => ({ partnerRepository: { session: vi.fn(), directory: vi.fn(), download: vi.fn(), requests: vi.fn(), request: vi.fn(), createRequest: vi.fn(), mutateRequest: vi.fn() } }));
+const session: PartnerSession = { user: { email: "first@example.test", name: "First partner" }, organizations: [{ id: "organization", name: "Partner company", entitlements: { directory: true, requests: true } }] };
 const member: PartnerCv = { memberId: "member", fullName: "Published member", fieldOfStudy: "Robotics", graduationYear: 2027, contactEmail: null, phone: null, hasPdf: true };
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -34,6 +35,7 @@ describe("partner portal recovery and identity isolation", () => {
     vi.mocked(hasPartnerAuthSession).mockResolvedValue(true);
     vi.mocked(partnerRepository.session).mockResolvedValue(session);
     vi.mocked(partnerRepository.directory).mockResolvedValue({ members: [member] });
+    vi.mocked(partnerRepository.requests).mockResolvedValue({ requests: [], administrators: [] });
     vi.spyOn(toast, "error");
     container = document.createElement("div");
     document.body.append(container);
@@ -45,9 +47,15 @@ describe("partner portal recovery and identity isolation", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
-  async function open() { await act(async () => root.render(<PartnerPortal />)); }
-  function button(text: string) { return [...container.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === text)!; }
-  async function click(text: string) { await act(async () => { expect(button(text)).toBeDefined(); button(text).click(); }); }
+  async function open() { await act(async () => root.render(<MemoryRouter initialEntries={["/"]}><PartnerPortal /></MemoryRouter>)); }
+  function button(text: string) { return [...document.body.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === text)!; }
+  async function click(text: string) { await act(async () => {
+    if (text === "Sign out" && ![...document.body.querySelectorAll("button")].some((item) => item.textContent === text)) {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Sponsor account menu"]')?.click();
+    }
+    const target = button(text);
+    expect(target).toBeDefined(); target.click();
+  }); }
   async function fill(id: string, value: string) {
     await act(async () => {
       const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
@@ -64,10 +72,21 @@ describe("partner portal recovery and identity isolation", () => {
   it("uses the shared theme and directory UI without inline status banners", async () => {
     await open();
     expect(container.textContent).toContain("Published member");
+    expect(container.textContent).toContain("Talent Directory");
     expect(container.textContent).toContain("Partner company");
     expect(container.querySelector(".member-platform")).not.toBeNull();
     expect(container.querySelector('[role="alert"], [role="dialog"]')).toBeNull();
     expect(container.textContent).not.toMatch(/demo|mockup|local preview/i);
+  });
+
+  it("exposes the entitled Engagement Requests page in the partner workspace", async () => {
+    await open();
+    const requestsLink = container.querySelector<HTMLAnchorElement>('a[href="/requests"]');
+    expect(requestsLink?.textContent).toContain("Engagement Requests");
+    await act(async () => { requestsLink?.click(); });
+    expect(container.textContent).toContain("Engagement Requests");
+    expect(container.textContent).toContain("You have no requests yet.");
+    expect(partnerRepository.requests).toHaveBeenCalledWith("organization");
   });
 
   it("shows a return-to-webpage link on the invitation sign-in page", async () => {
