@@ -15,7 +15,7 @@ vi.mock("../MemberCV/session", () => ({ memberSessionToken: async () => "member-
 const member = { name: "Åse Example", email: "ase@helixnmbu.no", role: "Member" as const, helixRole: "Mechanical lead" };
 const original = { id: "unread-1", threadId: "thread-1", from: "Jordan <jordan@example.test>", replyTo: "jordan@example.test", subject: "Team update", date: "2026-10-26T10:00:00Z", snippet: "Meeting agenda", unread: true, starred: false, body: "Original plain text", htmlBody: '<table><tr><td style="color:#123456">Original <b>formatted email</b></td></tr></table><script>evil()</script>' };
 
-function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean; multipleUnread?: boolean } = {}) {
+function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean; multipleUnread?: boolean; readBeforeOpening?: boolean } = {}) {
   const unreadIds = new Set([original.id, ...(options.multipleUnread ? ["unread-2"] : [])]);
   const source = [original, ...(options.multipleUnread ? [{ ...original, id: "unread-2", subject: "Design review" }] : []), { ...original, id: "read-1", subject: "Already read" }];
   const requests: URL[] = [];
@@ -34,6 +34,7 @@ function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean; mul
       }
       case "message": {
         const message = source.find((message) => message.id === url.searchParams.get("id"))!;
+        if (options.readBeforeOpening) unreadIds.delete(message.id);
         return Response.json({ ...message, unread: unreadIds.has(message.id) });
       }
       case "messageAction": {
@@ -104,6 +105,17 @@ describe("mail workspace", () => {
     await until(() => Boolean(container.querySelector('[aria-label="Jordan <jordan@example.test>, Team update"] [aria-label="Unread"]')));
     expect(server.actions.map((action) => action.action)).toEqual(["markRead", "markUnread"]);
     expect(getCachedGmailMessage(member.email, "unread-1")?.unread).toBe(true);
+  });
+
+  it("clears a stale unread indicator when Gmail reports that an opened message is already read", async () => {
+    const server = mailServer({ readBeforeOpening: true });
+    await openLive();
+    const row = () => container.querySelector<HTMLButtonElement>('[aria-label="Jordan <jordan@example.test>, Team update"]');
+    expect(row()!.querySelector('[aria-label="Unread"]')).not.toBeNull();
+    await act(async () => row()!.click());
+    await until(() => Boolean(container.querySelector('[aria-label="Mark as unread"]')) && Boolean(row()) && !row()!.querySelector('[aria-label="Unread"]'));
+    expect(server.actions).toEqual([]);
+    expect(getCachedGmailMessage(member.email, original.id)?.unread).toBe(false);
   });
 
   it("keeps a read row until the next selection under the unread filter, including after revalidation", async () => {

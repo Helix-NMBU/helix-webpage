@@ -675,6 +675,16 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
     };
   }, [accountEmail, activeFolder, connected, connectedOverride, search, unreadOnly, refreshVersion, refreshMail, notify, listContext]);
 
+  const applyReadState = useCallback((messageId: string, unread: boolean) => {
+    updateCachedGmailUnread(accountEmail, messageId, unread);
+    // Invalidate lists started before Gmail confirmed the current label state.
+    listRequestId.current += 1;
+    setListLoading(false);
+    setMessages((current) => current.map((message) => message.id === messageId ? { ...message, unread } : message));
+    setSelectedMessage((current) => current?.id === messageId ? { ...current, unread } : current);
+    refreshMail();
+  }, [accountEmail, refreshMail]);
+
   const updateReadState = useCallback(async (messageId: string, unread: boolean) => {
     if (readRequests.current.has(messageId)) return;
     readRequests.current.add(messageId);
@@ -686,20 +696,14 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(result?.error || "Could not update the message's read state.");
-      updateCachedGmailUnread(accountEmail, messageId, unread);
-      // Invalidate lists started before Gmail acknowledged the label change.
-      listRequestId.current += 1;
-      setListLoading(false);
-      setMessages((current) => current.map((message) => message.id === messageId ? { ...message, unread } : message));
-      setSelectedMessage((current) => current?.id === messageId ? { ...current, unread } : current);
-      refreshMail();
+      applyReadState(messageId, unread);
     } catch (error) {
       notify("Could not update read state", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null, action: { label: "Try again", onClick: () => void updateReadState(messageId, unread) } });
     } finally {
       readRequests.current.delete(messageId);
       setReadPending(readRequests.current.size > 0);
     }
-  }, [accountEmail, notify, refreshMail]);
+  }, [applyReadState, notify]);
 
   useEffect(() => {
     if (!connected || connectedOverride !== undefined || !selectedMessageId) return;
@@ -721,6 +725,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
         setSelectedMessage(body);
         // Only opening a selected message marks it read. Hover/focus prefetch is read-only.
         if (body.unread) void updateReadState(body.id, false);
+        else applyReadState(body.id, false);
       } catch (error) {
         if (requestId === detailRequestId.current) {
           const message = error instanceof Error ? error.message : "Could not open this message.";
@@ -732,7 +737,7 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
       }
     })();
     return () => { detailRequestId.current += 1; };
-  }, [accountEmail, connected, connectedOverride, selectedMessageId, updateReadState, detailRetry, notify]);
+  }, [accountEmail, connected, connectedOverride, selectedMessageId, updateReadState, applyReadState, detailRetry, notify]);
 
   async function prefetchMessage(messageId: string) {
     if (getCachedGmailMessage(accountEmail, messageId)) return;
