@@ -1,28 +1,21 @@
+import type { RecruitmentPosition } from "./positions";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "../MemberPlatform/local-mode";
 
+export type WebsitePosition = RecruitmentPosition;
+export type WebsitePositionInput = Omit<WebsitePosition, "id">;
 export type ApplicationRow = {
   id: string; created_at: string; season: string; full_name: string; email: string; phone: string;
   study_program: string; study_program_other: string | null; year_of_study: number; motivation: string;
   position_id: string; position_title: string; interested_departments: string[];
   cv_path: string; photo_path: string | null; consent: boolean;
 };
-export type WebsitePosition = {
-  id: string;
-  title: string;
-  department: string;
-  applyUrl: string;
-  contact: { name: string; email: string; linkedin?: string };
-  about: string;
-  tasks: string[];
-  achieve: string[];
-  visible: boolean;
-};
-export type WebsitePositionInput = Omit<WebsitePosition, "id">;
 export class RecruitmentRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 export function createRecruitmentApi(owner: { current: string | null }) {
+  let localPositions: RecruitmentPosition[] = [];
+  const local = () => isLocalMemberMode() && localMemberSignedIn();
   async function request<T>(query: string, body?: object): Promise<T> {
     // Read a fresh member JWT for every server-authorized operation.
     const token = await memberSessionToken(owner);
@@ -51,14 +44,35 @@ export function createRecruitmentApi(owner: { current: string | null }) {
       }
       return applications;
     },
-    async managedPositions() {
-      const result = await request<{ positions: WebsitePosition[] }>("?action=managed-positions");
-      return result.positions;
+    async positions() {
+      if (local()) return localPositions;
+      return (await request<{ positions: RecruitmentPosition[] }>("?action=manage-positions")).positions;
     },
+    async savePosition(position: Omit<RecruitmentPosition, "id"> & { id?: string }) {
+      if (local()) {
+        const saved = { ...position, id: position.id ?? crypto.randomUUID() };
+        localPositions = [...localPositions.filter(row => row.id !== saved.id), saved];
+        return saved;
+      }
+      return (await request<{ position: RecruitmentPosition }>("", { action: "save-position", position })).position;
+    },
+    async deletePosition(id: string) {
+      if (local()) { localPositions = localPositions.filter(row => row.id !== id); return; }
+      await request("", { action: "delete-position", position_id: id });
+    },
+    async setPositionVisibility(id: string, visible: boolean) {
+      if (local()) {
+        const saved = localPositions.find(position => position.id === id);
+        if (!saved) throw new RecruitmentRequestError("Position not found.", 404);
+        const updated = { ...saved, visible };
+        localPositions = localPositions.map(position => position.id === id ? updated : position);
+        return updated;
+      }
+      return (await request<{ position: RecruitmentPosition }>("", { action: "set-position-visibility", id, visible })).position;
+    },
+    managedPositions: async () => (await request<{ positions: RecruitmentPosition[] }>("?action=managed-positions")).positions,
     createPosition: (position: WebsitePositionInput) => request<{ position: WebsitePosition }>("", { action: "create-position", position }),
-    updatePosition: (position: WebsitePosition) => request<{ position: WebsitePosition }>("", { action: "update-position", position }),
-    setPositionVisibility: (id: string, visible: boolean) => request<{ position: WebsitePosition }>("", { action: "set-position-visibility", id, visible }),
-    deletePosition: (id: string) => request<{ deleted: boolean }>("", { action: "delete-position", id }),
+    updatePosition: (position: WebsitePosition) => request<{ position: WebsitePosition }>("", { action: "update-position", id: position.id, position }),
     file: (id: string, kind: "cv" | "photo") => request<{ url: string; expiresIn: number }>(`?action=file&id=${encodeURIComponent(id)}&kind=${kind}`),
     reject: (id: string) => request<{ emailStatus: "sent" | "skipped"; cleanupPending: boolean }>("", { action: "reject", application_id: id }),
     remove: (id: string) => request<{ emailStatus: "skipped"; cleanupPending: boolean }>("", { action: "delete", application_id: id }),

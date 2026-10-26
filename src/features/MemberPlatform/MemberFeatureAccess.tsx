@@ -51,7 +51,8 @@ export function MemberFeatureAccessProvider({ userId, children }: { userId: stri
   const notify = useNotify();
   const owner = useRef<string | null>(userId);
   owner.current = userId;
-  const reload = useCallback(() => setAttempt((value) => value + 1), []);
+  const request = useRef<Promise<MemberFeatureState> | null>(null);
+  const reload = useCallback(() => { request.current = null; setAttempt((value) => value + 1); }, []);
 
   useEffect(() => {
     let active = true;
@@ -61,8 +62,7 @@ export function MemberFeatureAccessProvider({ userId, children }: { userId: stri
       setStatus("ready");
       return () => { active = false; };
     }
-    void (async () => {
-      try {
+    request.current ??= (async () => {
         const token = await memberSessionToken(owner);
         const response = await fetch("/api/member-access?action=self", {
           cache: "no-store",
@@ -72,10 +72,13 @@ export function MemberFeatureAccessProvider({ userId, children }: { userId: stri
         const body = await response.json().catch(() => null) as MemberFeatureState | { error?: unknown } | null;
         if (!response.ok) throw new Error(body && "error" in body && typeof body.error === "string" ? body.error : "Could not load your feature access.");
         if (!body || !Array.isArray((body as MemberFeatureState).roles) || !Array.isArray((body as MemberFeatureState).features)) throw new Error("The access response was incomplete.");
-        if (!active) return;
-        setMember(body as MemberFeatureState);
-        setStatus("ready");
-      } catch {
+        return body as MemberFeatureState;
+    })();
+    void request.current.then(body => {
+      if (!active) return;
+      setMember(body);
+      setStatus("ready");
+    }).catch(() => {
         if (!active) return;
         setMember(null);
         setStatus("unavailable");
@@ -83,17 +86,10 @@ export function MemberFeatureAccessProvider({ userId, children }: { userId: stri
           id: "member-feature-access", variant: "error", href: null,
           action: { label: "Try again", onClick: reload },
         });
-      }
-    })();
+    });
     return () => { active = false; };
   }, [notify, reload, userId, attempt]);
 
-  useEffect(() => {
-    if (isLocalMemberMode()) return;
-    const refresh = () => reload();
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, [reload]);
 
   const canAccess = useCallback((feature: string) => member?.features.includes(feature) ?? false, [member?.features]);
   const value = useMemo(() => ({ authUserId: userId, status, member, canAccess, reload }), [userId, status, member, canAccess, reload]);

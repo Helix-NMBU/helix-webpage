@@ -3,20 +3,20 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { useNotify } from "../MemberPlatform/MemberNotifications";
-import { fetchPublicPositions, type PublicPosition } from "./positions-api";
 
 gsap.registerPlugin(useGSAP);
 
-type Position = PublicPosition;
+import { publicPositions, positionApplicationUrl } from "../Recruitment/positions";
+import type { PublicPosition as Position } from "./positions-api";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 
 const DEPARTMENTS = [
   "All",
-  "Finance",
   "Mechanical & Production",
   "Electrical",
-  "Software & Autonomous",
   "Business & Marketing",
+  "Finance",
+  "Software",
   "Logistics",
 ];
 
@@ -32,10 +32,8 @@ export default function ApplyPage() {
 
   useEffect(() => {
     let active = true;
-    void fetchPublicPositions().then((available) => {
-      if (active) setPositions(available);
-    }).catch((error: unknown) => {
-      if (active) notify("Could not load open positions", error instanceof Error ? error.message : "Please try again.", {
+    void publicPositions().then(data => { if (active) setPositions(data); }).catch((error: unknown) => {
+      if (active) notify("Could not load positions", error instanceof Error ? error.message : "Please try again.", {
         variant: "error", href: null, action: { label: "Reload", onClick: () => window.location.reload() },
       });
     });
@@ -43,15 +41,16 @@ export default function ApplyPage() {
   }, [notify]);
 
   const openApplications = useMemo(() => positions.filter((p) => p.department === "Open"), [positions]);
+  const departments = useMemo(() => [...new Set([...DEPARTMENTS, ...positions.map(p => p.department).filter(department => department !== "Open")])], [positions]);
 
   const filtered = useMemo(() => {
     const regular = positions.filter((p) => p.department !== "Open");
     const sorted =
       activeDept === "All"
-        ? [...regular].sort((a, b) => DEPARTMENTS.indexOf(a.department) - DEPARTMENTS.indexOf(b.department))
+        ? [...regular].sort((a, b) => departments.indexOf(a.department) - departments.indexOf(b.department))
         : regular.filter((p) => p.department === activeDept);
     return sorted;
-  }, [positions, activeDept]);
+  }, [positions, activeDept, departments]);
 
   const toggle = (id: string) => setOpenId((prev) => (prev === id ? null : id));
 
@@ -189,7 +188,7 @@ export default function ApplyPage() {
 
         {/* Department filters */}
         <div className="flex flex-wrap gap-2 mb-10">
-          {DEPARTMENTS.map((dept) => {
+          {departments.map((dept) => {
             const active = activeDept === dept;
             return (
               <button
@@ -399,7 +398,7 @@ export default function ApplyPage() {
                           </div>
 
                           <Link
-                            to={`/apply/form?position=${pos.id}`}
+                            to={positionApplicationUrl(pos)}
                             style={{
                               display: "block",
                               textAlign: "center",
@@ -436,14 +435,14 @@ export default function ApplyPage() {
           )}
         </div>
 
-        {/* Open application — always visible */}
-        {openApplications.length > 0 && <div style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
-          <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
-            Don't see the right fit?
-          </p>
-          {openApplications.map((pos) => {
+        {/* Published open applications */}
+        {openApplications.map(pos => {
           const isOpen = openId === pos.id;
           return (
+            <div key={pos.id} style={{ marginTop: "48px", borderTop: "1.5px dashed rgba(3,9,74,0.15)" }}>
+              <p className="pt-6 mb-3 text-xs tracking-widest uppercase" style={{ color: "rgba(3,9,74,0.35)" }}>
+                Don't see the right fit?
+              </p>
               <div
                 key={pos.id}
                 data-pos-id={pos.id}
@@ -532,7 +531,7 @@ export default function ApplyPage() {
                             <a href={`mailto:${pos.contact.email}`} style={{ display: "block", fontSize: "14px", color: "#002EC4", textDecoration: "none" }}>{pos.contact.email}</a>
                           </div>
                           <Link
-                            to={`/apply/form?position=${pos.id}`}
+                            to={positionApplicationUrl(pos)}
                             style={{ display: "block", textAlign: "center", backgroundColor: "#03094A", color: "#FDFDFD", padding: "14px 24px", fontSize: "13px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none", borderRadius: "6px", transition: "background-color 0.18s ease", fontFamily: "inherit" }}
                             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}
@@ -545,9 +544,9 @@ export default function ApplyPage() {
                   )}
                 </AnimatePresence>
               </div>
+            </div>
           );
-          })}
-        </div>}
+        })}
       </div>
     </div>
   );

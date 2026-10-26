@@ -151,6 +151,7 @@ describe("pending retired file cleanup", () => {
       cleanupPending: true,
       document: { revision: 2 },
     });
+    // Loading after a successful mutation reuses the saved session envelope.
     expect(request).toHaveBeenCalledTimes(1);
   });
 });

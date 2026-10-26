@@ -1,3 +1,5 @@
+import { publicWebsiteApiUrl } from "./public-api";
+
 export type PublicPosition = {
   id: string;
   title: string;
@@ -12,7 +14,7 @@ export type PublicPosition = {
 };
 
 export async function fetchPublicPositions(): Promise<PublicPosition[]> {
-  const response = await fetch("/api/website?action=positions", { cache: "no-store" });
+  const response = await fetch(`${publicWebsiteApiUrl()}?action=positions`, { cache: "no-store" });
   if (!response.ok) throw new Error("Could not load open positions. Please try again.");
 
   const result: unknown = await response.json();

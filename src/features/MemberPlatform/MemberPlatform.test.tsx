@@ -9,7 +9,7 @@ import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
-const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn() }));
+const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn(), positions: vi.fn() }));
 vi.mock("../Recruitment/website-api", async original => ({ ...await original<typeof import("../Recruitment/website-api")>(), createRecruitmentApi: () => recruitment }));
 import { RecruitmentRequestError } from "../Recruitment/website-api";
 
@@ -49,6 +49,7 @@ describe("internal member platform", () => {
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
     recruitment.session.mockReset().mockRejectedValue(new RecruitmentRequestError("Recruiter access required", 403));
     recruitment.list.mockReset().mockResolvedValue([]);
+    recruitment.positions.mockReset().mockResolvedValue([]);
     session.landing.mockReset().mockResolvedValue(signedOut);
     session.signOut.mockReset().mockResolvedValue(undefined);
     session.editorNavigate.mockReset();
@@ -150,21 +151,44 @@ describe("internal member platform", () => {
     expect(link).not.toBeNull();
     await act(async () => link!.click());
     expect(router.state.location.pathname).toBe("/recruiting");
-    expect(container.querySelector("h1")?.textContent).toBe("Recruitment");
+    expect(container.querySelector("h1")?.textContent).toBe("Applications");
     expect(container.querySelector('[aria-label="Profile menu"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
 
-  it("loads recruitment access once for the session instead of rechecking on focus", async () => {
+  it("preloads once at login and retains data and access across navigation and focus", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    recruitment.session.mockResolvedValue({ email: signedIn.account.email });
+    recruitment.list.mockResolvedValue([{ id: "app", created_at: "2026-10-26", season: "S27", full_name: "Applicant One", email: "one@example.test", position_title: "Engineer", study_program: "Robotics" }]);
+    await open("/");
+    expect(recruitment.list).toHaveBeenCalledOnce();
+    expect(recruitment.positions).toHaveBeenCalledOnce();
+    await act(async () => router.navigate("/recruiting"));
+    expect(container.textContent).toContain("Applicant One");
+    await act(async () => router.navigate("/profile"));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await act(async () => router.navigate("/recruiting"));
+    expect(container.textContent).toContain("Applicant One");
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).startsWith("/api/member-access?action=self"))).toHaveLength(1);
+    expect(recruitment.session).toHaveBeenCalledOnce();
+    expect(recruitment.list).toHaveBeenCalledOnce();
+    expect(recruitment.positions).toHaveBeenCalledOnce();
+    recruitment.list.mockResolvedValue([]);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]')?.click());
+    expect(container.textContent).not.toContain("Applicant One");
+    expect(recruitment.list).toHaveBeenCalledTimes(2);
+    expect(recruitment.session).toHaveBeenCalledOnce();
+  });
+
+  it("clears private data and the sidebar grant when an operation is denied", async () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     await open("/recruiting");
-    expect(container.querySelector("h1")?.textContent).toBe("Recruitment");
-    expect(recruitment.session).toHaveBeenCalledOnce();
-    await act(async () => window.dispatchEvent(new Event("focus")));
-    expect(router.state.location.pathname).toBe("/recruiting");
-    expect(recruitment.session).toHaveBeenCalledOnce();
-    expect(container.textContent).toContain("Applications");
+    recruitment.list.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]')?.click());
+    expect(router.state.location.pathname).toBe("/");
+    expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
+    expect(container.textContent).not.toContain("Applications");
   });
 
   it("preserves recruitment as a safe member login destination", () => {
