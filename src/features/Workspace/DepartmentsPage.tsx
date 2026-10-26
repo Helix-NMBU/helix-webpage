@@ -113,13 +113,18 @@ export function DepartmentsPage() {
     );
   const departments = ORGANIZATION_DEPARTMENTS.map((name) =>
     data.departments.find((d) => d.name === name),
-  ).filter(
-    (d) =>
-      !!d &&
-      `${d.name} ${data.members.find(member => member.id === d.leadId)?.name ?? ""}`
+  )
+    .filter((department) => department !== undefined)
+    .filter((department) =>
+      `${department.name} ${data.members.find((member) => member.id === department.leadId)?.name ?? ""}`
         .toLowerCase()
         .includes(search.toLowerCase()),
-  );
+    )
+    .sort(
+      (a, b) =>
+        Number(b.memberIds.includes(data.viewerId)) -
+        Number(a.memberIds.includes(data.viewerId)),
+    );
   return (
     <Directory title="Departments">
       <Search label="Find departments" value={search} onChange={setSearch} />
@@ -135,14 +140,16 @@ export function DepartmentsPage() {
         </TableHeader>
         <TableBody>
           {departments.map((d) => {
-            if (!d) return null;
             const DepartmentIcon = getDepartmentIcon(d.name);
             const joined = d.memberIds.includes(data.viewerId);
             const members = d.memberIds.filter((id) =>
               data.members.some((m) => m.id === id),
             );
             return (
-              <TableRow key={d.id}>
+              <TableRow
+                key={d.id}
+                className={joined ? undefined : "opacity-70 grayscale"}
+              >
                 <TableCell className="py-4 pl-4 font-medium">
                   <span className="inline-flex items-center gap-2">
                     <DepartmentIcon

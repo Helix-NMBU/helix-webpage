@@ -366,6 +366,8 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);await open('/departments');
     const table=container.querySelector('table')!;
     expect(table.querySelectorAll('tbody tr')).toHaveLength(7);
+    expect(table.querySelector('tbody tr td')?.textContent).toBe('Mechanical & Production');
+    expect(table.querySelectorAll('tbody tr')[2].textContent).toContain('Sam Example');
     expect([...table.querySelectorAll('button')].map(b=>b.textContent)).toEqual(['Mechanical & Production']);
     await act(async()=>[...table.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Mechanical & Production')!.click());
     expect(router.state.location.pathname).toBe('/departments/mechanical-and-production');
