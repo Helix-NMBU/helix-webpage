@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sharedCvData, validateCvData, validateSharing, withoutCv, privateSharing } from "../../src/features/MemberCV/model.js";
 import type { CvMutation, PdfRenderer } from "../../src/features/MemberCV/types.js";
 import { bearer, envelope, MemberCvError, neonCvServices, type CvServices } from "./member-cv-service.js";
+import { withMemberName } from "../../src/features/MemberCV/member-name.js";
 
 export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () => CvServices = neonCvServices) {
   return async (req: VercelRequest, res: VercelResponse) => {
@@ -20,7 +21,7 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       if (req.method === "GET") return respond(await services.read(identity.userId));
       const body = parseMutation(req.body);
       if (body.action === "preview") {
-        const draft = parseData(body.draft);
+        const draft = parseData(body.draft, false, identity.name);
         const sharing = parseSharing(body.sharing);
         const bytes = await renderPdf(sharedCvData(draft, sharing), sharing, body.language ?? draft.cvLanguage ?? "en");
         res.setHeader("Content-Type", "application/pdf");
@@ -32,13 +33,13 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       if (body.action === "delete") {
         const current = await services.read(identity.userId);
         return respond(await services.commit(identity.userId, { action: "delete", expectedRevision,
-          draft: withoutCv(current.draft), sharing: { ...privateSharing } }));
+          draft: withoutCv(withMemberName(current.draft, identity.name)), sharing: { ...privateSharing } }));
       }
       if (body.action === "withdraw") {
         const saved = await services.commit(identity.userId, { action: "withdraw", expectedRevision });
         return respond(saved);
       }
-      const draft = parseData(body.draft, body.action === "publish");
+      const draft = parseData(body.draft, body.action === "publish", identity.name);
       const sharing = parseSharing(body.sharing);
       if (body.action === "save") return respond(await services.commit(identity.userId, { action: "save", expectedRevision, draft, sharing }));
       let path: string | null = null;
@@ -85,8 +86,11 @@ function parseMutation(value: unknown): CvMutation {
   if (!["save", "publish", "withdraw", "delete", "preview"].includes(body.action) || JSON.stringify(value).length > 120000) throw new MemberCvError(400, "Invalid or oversized CV request.");
   return body;
 }
-function parseData(value: unknown, publication = false) {
-  try { return validateCvData(value, publication); }
+function parseData(value: unknown, publication: boolean, name: string) {
+  try {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid CV data.");
+    return withMemberName(validateCvData({ ...value, fullName: name }, publication), name);
+  }
   catch (error) { throw new MemberCvError(400, error instanceof Error ? error.message : "Invalid CV data."); }
 }
 function parseSharing(value: unknown) {

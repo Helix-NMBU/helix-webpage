@@ -1,7 +1,7 @@
 import { englishCopy, memberText, type StaticMemberCopyKey } from "./locale.js";
 import type { CvData, CvOutputLanguage, CvTranslations } from "./types.js";
 
-const rootFields = ["fullName", "city", "headline", "summary", "fieldOfStudy", "references"] as const;
+const rootFields = ["city", "headline", "summary", "fieldOfStudy", "references"] as const;
 const rowFields = {
   education: ["institution", "degree", "fieldOfStudy", "grade", "activities", "description"],
   experience: ["organization", "title", "description", "employmentType", "location", "locationType", "department", "season"],

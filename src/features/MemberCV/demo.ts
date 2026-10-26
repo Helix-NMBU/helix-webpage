@@ -6,6 +6,7 @@ import {
 } from "./repository";
 import type { CvData, CvEnvelope } from "./types";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
+import { withMemberName } from "./member-name";
 
 export const DEMO_STORAGE_KEY = "helix-member-cv-fictional-demo-v1";
 
@@ -55,7 +56,7 @@ export function createDemoRepository(
   const initial = (): CvEnvelope => ({
     identity: { name: "Alex Example", email: "alex@example.invalid" },
     document: {
-      draft: initialDraft ?? emptyCv("Alex Example", "alex@example.invalid"),
+      draft: withMemberName(initialDraft ?? emptyCv("Alex Example", "alex@example.invalid"), "Alex Example"),
       sharing: { ...privateSharing },
       revision: 0,
       publishedRevision: null,
@@ -66,13 +67,13 @@ export function createDemoRepository(
     const saved = storage.getItem(DEMO_STORAGE_KEY);
     if (!saved) return initial();
     const envelope = JSON.parse(saved) as CvEnvelope & { published?: { sharing: { cv: boolean } } };
-    return { ...envelope, document: { ...envelope.document, cvVisible: envelope.document.publishedRevision !== null && Boolean(envelope.published?.sharing.cv ?? envelope.document.sharing.cv) } };
+    return { ...envelope, document: { ...envelope.document, draft: withMemberName(envelope.document.draft, envelope.identity.name), cvVisible: envelope.document.publishedRevision !== null && Boolean(envelope.published?.sharing.cv ?? envelope.document.sharing.cv) } };
   }
   return {
     load: async () => read(),
     mutate: async (input) => {
-      const mutation = validateMutation(input);
       const envelope = read();
+      const mutation = validateMutation(input.draft ? { ...input, draft: withMemberName(input.draft, envelope.identity.name) } : input);
       if (mutation.expectedRevision !== envelope.document.revision)
         throw new CvRequestError(
           "Another tab saved a newer version. Reload the saved draft before continuing. Your input has been kept.",
@@ -119,7 +120,8 @@ export function createDemoRepository(
     preview: async (mutation) => {
       if (!mutation.draft || !mutation.sharing) throw new Error("Could not load your CV.");
       const { generateBrowserCvPdf } = await import("./browser-pdf");
-      return generateBrowserCvPdf(validateMutation(mutation).draft!, mutation.sharing, mutation.language ?? mutation.draft.cvLanguage ?? "en");
+      const draft = withMemberName(mutation.draft, read().identity.name);
+      return generateBrowserCvPdf(validateMutation({ ...mutation, draft }).draft!, mutation.sharing, mutation.language ?? draft.cvLanguage ?? "en");
     },
     downloadPublished: async () => {
       throw new Error(

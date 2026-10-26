@@ -92,7 +92,7 @@ describe("additive profile fields", () => {
       setItem: (key: string, value: string) => { values.set(key, value); },
     };
     const repository = createDemoRepository(storage, true);
-    const cv = expanded();
+    const cv = { ...expanded(), fullName: "Alex Example" };
     await repository.mutate({ action: "save", draft: cv, expectedRevision: 0 });
     expect((await createDemoRepository(storage, true).load()).document.draft).toEqual(cv);
     const published = await repository.mutate({ action: "publish", draft: cv, expectedRevision: 1 });
