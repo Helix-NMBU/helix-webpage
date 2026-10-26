@@ -10,8 +10,9 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
   return async (req: VercelRequest, res: VercelResponse) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    if ((req.method !== "GET" && req.method !== "POST") || (fixedAction && req.method !== "POST")) {
-      res.setHeader("Allow", fixedAction ? "POST" : "GET, POST");
+    const routeAction = fixedAction ?? (req.query.action === "reject" || req.query.action === "confirmation" ? req.query.action : undefined);
+    if ((req.method !== "GET" && req.method !== "POST") || (routeAction && req.method !== "POST")) {
+      res.setHeader("Allow", routeAction ? "POST" : "GET, POST");
       return res.status(405).json({ error: "Method not allowed." });
     }
     try {
@@ -21,7 +22,7 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
         if (action === "positions") return res.status(200).json({ positions: await getServices().positions() });
         const token = bearer(req.headers.authorization);
         const services = getServices();
-        if (action === "manage-positions") return res.status(200).json({ positions: await services.managePositions(token) });
+        if (action === "managed-positions" || action === "manage-positions") return res.status(200).json({ positions: await services.managedPositions(token) });
         if (action === "session") return res.status(200).json(await services.session(token));
         if (action === "applications") {
           const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
@@ -34,12 +35,25 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
         throw new MemberCvError(400, "Unknown request.");
       }
       const body = websiteBody(req.body);
-      const action = fixedAction ?? body.action;
+      const action = routeAction ?? body.action;
       if (action === "submit") return res.status(201).json(await getServices().submit(body, submissionRateKey(req)));
       const token = bearer(req.headers.authorization);
       const services = getServices();
       if (action === "save-position") return res.status(200).json({ position: await services.savePosition(token, body.position) });
-      if (action === "delete-position") return res.status(200).json(await services.deletePosition(token, body.position_id as string));
+      if (action === "create-position") return res.status(201).json({ position: await services.createPosition(token, body) });
+      if (action === "update-position") {
+        if (typeof body.id !== "string") throw new MemberCvError(400, "A valid position ID is required.");
+        return res.status(200).json({ position: await services.updatePosition(token, body.id, body) });
+      }
+      if (action === "set-position-visibility") {
+        if (typeof body.id !== "string") throw new MemberCvError(400, "A valid position ID is required.");
+        return res.status(200).json({ position: await services.setPositionVisibility(token, body.id, body.visible as boolean) });
+      }
+      if (action === "delete-position") {
+        body.id ??= body.position_id;
+        if (typeof body.id !== "string") throw new MemberCvError(400, "A valid position ID is required.");
+        return res.status(200).json(await services.deletePosition(token, body.id));
+      }
       const id = applicationId(body.application_id);
       if (action === "reject" || action === "delete") return res.status(200).json(await services.remove(token, id, action === "reject"));
       if (action === "confirmation") return res.status(200).json(await services.confirmation(token, id));

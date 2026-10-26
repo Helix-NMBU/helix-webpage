@@ -36,8 +36,12 @@ function sqlError(error: unknown): never {
   if (["22023", "22P02", "23514"].includes(code)) throw new SponsorError(400, "Check the request fields and choose an active administrator.");
   throw new SponsorError(503, "Could not save the request. Reload it before trying again.");
 }
-const SELECT_REQUEST = `select r.*, o.name as organization_name, s.email as assigned_admin_email
-  from sponsor.requests r join sponsor.organizations o on o.id = r.organization_id
+const SELECT_REQUEST = `select r.id, coalesce(o.id, po.id)::text as organization_id,
+    coalesce(o.name, po.name) as organization_name, r.type, r.title, r.status, r.revision,
+    r.assigned_admin_id, s.email as assigned_admin_email, r.created_at, r.updated_at,
+    r.body, r.author_email
+  from sponsor.requests r left join sponsor.organizations o on o.id = r.organization_id
+  left join partner.organizations po on po.id = r.partner_organization_id
   left join sponsor.staff s on s.id = r.assigned_admin_id`;
 
 export function createSponsorRequests(deps: { db: SponsorDatabase; access: SponsorAccess }) {

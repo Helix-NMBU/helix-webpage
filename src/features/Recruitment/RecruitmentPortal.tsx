@@ -19,7 +19,7 @@ import { type ApplicationRow } from "./website-api";
 export default function RecruitmentPortal() {
   const navigate = useNavigate();
   const notify = useNotify();
-  const { deny, api, applications, positions, ready, loading, refresh: load, removeApplication, savePosition, deletePosition } = useRecruitmentAccess();
+  const { deny, api, applications, positions, ready, loading, refresh: load, removeApplication, savePosition, deletePosition, setPositionVisibility } = useRecruitmentAccess();
   const [season, setSeason] = useState(currentSeason());
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -84,7 +84,7 @@ export default function RecruitmentPortal() {
         </header>
         <Tabs defaultValue="applications">
           <TabsList aria-label="Recruiting views"><TabsTrigger value="applications">Applications</TabsTrigger><TabsTrigger value="positions">Positions</TabsTrigger></TabsList>
-          <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} /></TabsContent>
+          <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} onVisibilityChange={setPositionVisibility} /></TabsContent>
           <TabsContent value="applications" className="space-y-6">
         {loading && <div role="status" aria-label="Loading applications" className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-20 w-full" />)}</div>}
         {ready && !loading && <>

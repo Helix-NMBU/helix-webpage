@@ -8,37 +8,47 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 export type WebsitePosition = {
   id: string; title: string; department: string; applyUrl: string;
   contact: { name: string; email: string; linkedin?: string };
-  about: string; tasks: string[]; achieve: string[]; visible: boolean;
+  about: string; tasks: string[]; achieve: string[];
 };
-export function positionId(value: unknown): string {
-  if (typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(value)) throw new MemberCvError(400, "A valid position ID is required.");
-  return value;
-}
-export function parsePosition(value: unknown, id: string): WebsitePosition {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position fields.");
-  const body = value as Record<string, unknown>;
-  const contact = body.contact;
-  if (!contact || typeof contact !== "object" || Array.isArray(contact)) throw new MemberCvError(400, "Check the contact fields.");
-  const details = contact as Record<string, unknown>;
-  const email = text(details, "email", 254).toLowerCase();
-  if (!isValidEmail(email)) throw new MemberCvError(400, "Enter a valid contact email.");
-  function url(input: unknown, relative = false): string {
-    if (input === undefined || input === "") return "";
-    if (typeof input !== "string" || input.length > 2048 || /[\\\u0000-\u0020]/.test(input)) throw new MemberCvError(400, "Enter a valid position URL.");
-    if (relative && input.startsWith("/") && !input.startsWith("//")) return input;
-    try { const parsed = new URL(input); if (["https:", "http:"].includes(parsed.protocol) && !parsed.username && !parsed.password) return input; } catch { /* handled below */ }
-    throw new MemberCvError(400, "Enter an HTTP or HTTPS URL.");
+export type ManagedWebsitePosition = WebsitePosition & { visible: boolean };
+const POSITION_DEPARTMENTS = new Set(["Open", "Finance", "Mechanical & Production", "Electrical", "Software & Autonomous", "Business & Marketing", "Logistics"]);
+export function parseWebsitePosition(value: unknown): WebsitePosition {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position details.");
+  const raw = value as Record<string, unknown>;
+  const field = (key: string, max: number, required = true, multiline = false) => {
+    const v = raw[key];
+    if (v === undefined && !required) return undefined;
+    if (typeof v !== "string" || (required && !v.trim()) || v.length > max || (multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/ : /[\u0000-\u001f]/).test(v)) throw new MemberCvError(400, `Check the ${key} field.`);
+    return v.trim();
+  };
+  const title = field("title", 160)!;
+  const department = field("department", 100)!;
+  if (!POSITION_DEPARTMENTS.has(department)) throw new MemberCvError(400, "Choose a valid department.");
+  const about = field("about", 5000, true, true)!;
+  function safeUrl(value: unknown, relative = false): string {
+    if (value === undefined || value === "") return "";
+    if (typeof value !== "string" || value.length > 2048 || /[\\\u0000-\u0020]/.test(value)) throw new MemberCvError(400, "Use a valid HTTPS application link.");
+    if (relative && value.startsWith("/") && !value.startsWith("//")) return value;
+    try { const url = new URL(value); if (url.protocol === "https:" && !url.username && !url.password) return value; } catch { /* handled below */ }
+    throw new MemberCvError(400, "Use a valid HTTPS application link.");
   }
-  function lines(key: string): string[] {
-    const values = body[key];
-    if (!Array.isArray(values) || values.length > 50 || values.some(item => typeof item !== "string" || !item.trim() || item.length > 1000 || /[\u0000]/.test(item))) throw new MemberCvError(400, `Check the ${key} field.`);
-    return values.map(item => (item as string).trim());
-  }
-  if (body.visible !== undefined && typeof body.visible !== "boolean") throw new MemberCvError(400, "Check the public visibility field.");
-  const linkedin = url(details.linkedin);
-  return { id: positionId(id), title: text(body, "title", 200), department: text(body, "department", 100),
-    applyUrl: url(body.applyUrl, true), contact: { name: text(details, "name", 200), email, ...(linkedin ? { linkedin } : {}) },
-    about: text(body, "about", 10000), tasks: lines("tasks"), achieve: lines("achieve"), visible: body.visible === true };
+  const applyUrl = safeUrl(raw.applyUrl, true);
+  const contactRaw = raw.contact;
+  if (!contactRaw || typeof contactRaw !== "object" || Array.isArray(contactRaw)) throw new MemberCvError(400, "Check the contact details.");
+  const contact = contactRaw as Record<string, unknown>;
+  const contactName = typeof contact.name === "string" && contact.name.trim().length <= 160 ? contact.name.trim() : "";
+  const contactEmail = typeof contact.email === "string" && contact.email.trim().length <= 254 ? contact.email.trim().toLowerCase() : "";
+  if (!contactName || !isValidEmail(contactEmail)) throw new MemberCvError(400, "Check the contact details.");
+  const linkedin = safeUrl(contact.linkedin);
+  const list = (key: "tasks" | "achieve") => {
+    const v = raw[key];
+    if (!Array.isArray(v) || v.length > 20 || v.some(item => typeof item !== "string" || !item.trim() || item.length > 500)) throw new MemberCvError(400, `Check the ${key} list.`);
+    return v.map(item => (item as string).trim());
+  };
+  const slug = title.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80).replace(/-$/, "");
+  const id = typeof raw.id === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(raw.id) ? raw.id : slug;
+  if (!id) throw new MemberCvError(400, "Enter a valid position title.");
+  return { id, title, department, about, applyUrl, contact: { name: contactName, email: contactEmail, ...(linkedin ? { linkedin: (linkedin as string).trim() } : {}) }, tasks: list("tasks"), achieve: list("achieve") };
 }
 export type ApplicationInput = {
   full_name: string; email: string; phone: string; study_program: string;

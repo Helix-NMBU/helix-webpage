@@ -28,6 +28,7 @@ import {
 } from "@/features/MemberPlatform/MemberTheme";
 import { useMemberAccount } from "@/features/MemberPlatform/MemberAccountContext";
 import { accountInitials } from "@/features/MemberPlatform/account";
+import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 
 export function NavUser({
   onNavigate,
@@ -41,8 +42,9 @@ export function NavUser({
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useMemberTheme();
   const account = useMemberAccount();
+  const featureAccess = useMemberFeatureAccess();
   const name = account?.name || account?.email || "Helix member";
-  const role = account?.role ?? "Member";
+  const role = featureAccess.member?.roles.map((item) => item.label).join(", ") || account?.role || "Member";
   const initials = accountInitials(name);
   const [open, setOpen] = useState(false);
   return (

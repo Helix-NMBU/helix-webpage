@@ -6,7 +6,8 @@ import gsap from "gsap";
 
 gsap.registerPlugin(useGSAP);
 
-import { publicPositions, type RecruitmentPosition as Position } from "../Recruitment/positions";
+import { publicPositions, positionApplicationUrl } from "../Recruitment/positions";
+import type { PublicPosition as Position } from "./positions-api";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 
 const DEPARTMENTS = [
@@ -397,7 +398,7 @@ export default function ApplyPage() {
                           </div>
 
                           <Link
-                            to={pos.applyUrl || `/apply/form?position=${encodeURIComponent(pos.id)}`}
+                            to={positionApplicationUrl(pos)}
                             style={{
                               display: "block",
                               textAlign: "center",
@@ -530,7 +531,7 @@ export default function ApplyPage() {
                             <a href={`mailto:${pos.contact.email}`} style={{ display: "block", fontSize: "14px", color: "#002EC4", textDecoration: "none" }}>{pos.contact.email}</a>
                           </div>
                           <Link
-                            to={pos.applyUrl || `/apply/form?position=${encodeURIComponent(pos.id)}`}
+                            to={positionApplicationUrl(pos)}
                             style={{ display: "block", textAlign: "center", backgroundColor: "#03094A", color: "#FDFDFD", padding: "14px 24px", fontSize: "13px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none", borderRadius: "6px", transition: "background-color 0.18s ease", fontFamily: "inherit" }}
                             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#002EC4")}
                             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#03094A")}

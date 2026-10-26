@@ -18,6 +18,7 @@ vi.mock("../MemberCV/session", async (original) => ({
   ...await original<typeof import("../MemberCV/session")>(),
   authClient: {},
   memberAuthConfigured: true,
+  memberSessionToken: async () => "test-session-token",
   ensureMemberLanding: session.landing,
   watchMemberSession: () => () => undefined,
   signOutMember: session.signOut,
@@ -33,6 +34,10 @@ vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
 
 const signedOut = { phase: "signed-out", token: null, userId: null, status: 401, error: null };
 const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null, account: { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" } };
+let selfAccess = {
+  memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
+  roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
+};
 
 describe("internal member platform", () => {
   let container: HTMLDivElement;
@@ -49,6 +54,15 @@ describe("internal member platform", () => {
     session.signOut.mockReset().mockResolvedValue(undefined);
     session.editorNavigate.mockReset();
     session.editorSignOut.mockReset();
+    selfAccess = {
+      memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
+      roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/gmail-status" ? { connected: false } : {};
+      return { ok: true, status: 200, json: async () => body } as unknown as Response;
+    }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -70,7 +84,7 @@ describe("internal member platform", () => {
   it.each([
     { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" },
     { name: "Åse Hansen", email: "ase@helixnmbu.no", role: "Member" },
-  ])("shows the signed-in account $name and its role", async (account) => {
+  ])("shows the signed-in account $name and its role in the sidebar", async (account) => {
     session.landing.mockResolvedValue({ ...signedIn, account });
     await open("/");
     const trigger = container.querySelector('[aria-label="Profile menu"]');
@@ -79,8 +93,8 @@ describe("internal member platform", () => {
     expect(trigger?.textContent).not.toContain("Member account");
     await profileMenu();
     const menu = document.querySelector('[aria-label="Account menu"]');
-    expect(menu?.textContent).toContain("Profile");
-    expect(menu?.textContent).toContain("Sign out");
+    expect(menu?.textContent).not.toContain(account.name);
+    expect(menu?.textContent).not.toContain(account.role);
   });
 
   it.each(["/", "/settings", "/teams/business-marketing/campaigns"])("removes preview notices from %s", async (path) => {
@@ -88,11 +102,11 @@ describe("internal member platform", () => {
     await open(path);
     expect(container.textContent).not.toMatch(/\bpreview\b|\bmockup\b|\bfictional\b|\bexample mode\b|added later/i);
     if (path === "/settings") {
-      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toContain("Admin");
+      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toMatch(/\bAdmin\b/);
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/admin/access", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
@@ -107,6 +121,17 @@ describe("internal member platform", () => {
     expect(router.state.location.pathname).toBe("/");
     expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
     expect(recruitment.list).not.toHaveBeenCalled();
+  });
+
+  it("shows only the assigned department team and blocks direct access to another team", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    selfAccess = { ...selfAccess, features: ["team.finance"] };
+    await open("/");
+    expect(container.textContent).toContain("Finance");
+    expect(container.textContent).not.toContain("Business & Marketing");
+    await act(async () => router.navigate("/teams/business-marketing/campaigns"));
+    expect(router.state.location.pathname).toBe("/");
+    expect(container.textContent).not.toContain("Partner Spotlight");
   });
 
   it("redirects legacy recruitment links to the Recruiting route", async () => {
@@ -144,6 +169,7 @@ describe("internal member platform", () => {
     await act(async () => window.dispatchEvent(new Event("focus")));
     await act(async () => router.navigate("/recruiting"));
     expect(container.textContent).toContain("Applicant One");
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).startsWith("/api/member-access?action=self"))).toHaveLength(1);
     expect(recruitment.session).toHaveBeenCalledOnce();
     expect(recruitment.list).toHaveBeenCalledOnce();
     expect(recruitment.positions).toHaveBeenCalledOnce();
@@ -208,7 +234,7 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
     await profileMenu();
-    const appearance = document.querySelector('button[aria-labelledby="member-appearance-label member-appearance-value"]');
+    const appearance = [...document.querySelectorAll<HTMLButtonElement>('[aria-labelledby="member-appearance-label member-appearance-value"]')][0];
     await act(async () => appearance?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
     const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
     expect(dark).toBeDefined();

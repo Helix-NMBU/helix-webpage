@@ -1,5 +1,13 @@
 # Recruitment milestone completion
 
+## Release reconciliation, 26 October 2026
+
+The user has authorized review, publication, merge to main and production release, with the feature branch retained. Work is isolated at /Users/henrik.noteless/.codex/worktrees/recruitment-release/helix-webpage so ongoing project-management edits remain untouched.
+
+Current main already contains the managed positions schema and role-based recruitment permissions from migration 009. The undeployed 008 migration is superseded and removed. This release preserves the existing catalog and permission assignments; it does not replay 009 seeding or legacy role grants. The new editor and session cache use those current services. Legacy placeholder application URLs resolve to the platform form. The row visibility switch uses the dedicated visibility endpoint so it does not overwrite posting content. Platform feature access is retained for the session and no longer rechecked on browser focus.
+
+The following sections record the earlier implementation and verification history; final release evidence is appended when checked.
+
 Updated: 2026-10-26
 Repository: Helix-NMBU/helix-webpage
 Branch: codex/recruitment-milestone-completion

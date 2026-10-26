@@ -4,16 +4,14 @@ import { PGlite } from "@electric-sql/pglite";
 import { createWebsiteServices, applicationSeason } from "../../../api/_lib/website-service.js";
 import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
 import type { CvDatabase } from "../../../api/_lib/member-cv-service.js";
-import type { ApplicationRow, WebsitePosition } from "../../../api/_lib/website-validation.js";
+import type { ApplicationRow } from "../../../api/_lib/website-validation.js";
 import { MAX_CV_BYTES, parseCv, websiteBody, isApplicationPath } from "../../../api/_lib/website-validation.js";
 import type { WebsiteStorage } from "../../../api/_lib/website-storage.js";
 import { createWebsiteMailer, websiteEmailMessage, type WebsiteEmailMessage } from "../../../api/_lib/website-email.js";
 
 const member = "10000000-0000-4000-8000-000000000001";
 const recruiterId = "20000000-0000-4000-8000-000000000001";
-const positionFields = { applyUrl: "", contact: { name: "Recruiter", email: "recruiter@helixnmbu.no" }, about: "Join the team", tasks: ["Build"], achieve: ["Learn"], visible: true };
-const positions: WebsitePosition[] = [{ ...positionFields, id: "software", title: "Software Engineer", department: "Software" }, { ...positionFields, id: "other", title: "Engineer", department: "Mechanical" }];
-const positionMigration = () => readFileSync(new URL("../../../db/migrations/008_recruitment_positions.sql", import.meta.url), "utf8");
+const positions = [{ id: "software", title: "Software Engineer", department: "Software" }, { id: "other", title: "Engineer", department: "Mechanical" }];
 const pdf = Buffer.from("%PDF-1.7\nexample");
 const input = { full_name: "Test Applicant", email: "applicant@example.test", phone: "+47 12345678", study_program: "Robotics", year_of_study: 3,
   motivation: "I want to build the car.", position_id: "software", interested_departments: ["Mechanical"], consent: true, cv_base64: pdf.toString("base64") };
@@ -23,16 +21,16 @@ beforeAll(async () => {
   pg = new PGlite();
   await pg.exec("create schema identity; create table identity.members (id uuid primary key, google_sub text, email text);");
   const migration = readFileSync(new URL("../../../db/migrations/005_website_applications.sql", import.meta.url), "utf8");
+  await pg.exec(readFileSync(new URL("../../../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
   await pg.exec(migration);
   await pg.exec(migration); // idempotent without broadening permissions
   await pg.exec(readFileSync(new URL("../../../db/migrations/007_application_submission_limits.sql", import.meta.url), "utf8"));
-  await pg.exec(positionMigration());
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
 }, 30000);
 beforeEach(async () => {
-  await pg.exec("truncate website.applications, website.recruiters, website.application_uploads, website.email_events, website.file_cleanup, website.application_submission_limits, website.positions, identity.members");
-  for (const position of positions) await db.query("insert into website.positions (id, document, visible) values ($1, $2::jsonb, true)", [position.id, JSON.stringify(position)]);
+  await pg.exec("truncate website.applications, website.recruiters, website.application_uploads, website.email_events, website.file_cleanup, website.application_submission_limits, website.positions, identity.members cascade");
   await db.query("insert into identity.members values ($1, 'google-member', 'recruiter@helixnmbu.no')", [member]);
+  for (const position of positions) await db.query("insert into website.positions (id, document, visible) values ($1, $2::jsonb, true)", [position.id, JSON.stringify(position)]);
 });
 afterAll(async () => { await pg.close(); });
 function fixture(options: { uncertain?: boolean; uploadFails?: boolean; deleteFails?: boolean; mailFails?: boolean } = {}) {
@@ -56,71 +54,84 @@ function fixture(options: { uncertain?: boolean; uploadFails?: boolean; deleteFa
     mail, now: () => new Date("2026-10-26T12:00:00Z") });
   return { service, storage, mail, calls, authenticate };
 }
-async function allow() { await db.query("insert into website.recruiters values ($1, 'recruiter@helixnmbu.no', true)", [recruiterId]); }
+async function allow() { await db.query("insert into identity.member_roles (member_id, role_key) values ($1, 'project_manager')", [member]); }
 const rateLimitKey = "a".repeat(64);
 function submit(f: ReturnType<typeof fixture>, body: Record<string, unknown> = input, key = rateLimitKey) {
   return f.service.submit(body, key);
 }
 
 describe("website access and submission against PostgreSQL", () => {
-  it("creates hidden drafts, publishes edits, accepts applications and retains their saved title after deletion", async () => {
+  it("saves catalog drafts atomically, publishes them and retains applications after deletion", async () => {
     await allow(); const f = fixture();
-    const draft = await f.service.savePosition("member", { ...positionFields, title: "Data Engineer", department: "Software", visible: undefined });
+    const details = { title: "Controls Engineer", department: "Software & Autonomous", applyUrl: "",
+      contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build controls.\nTest on the car.", tasks: ["Build"], achieve: ["Learn"] };
+    const draft = await f.service.savePosition("member", details);
     expect(draft.visible).toBe(false);
-    expect(await f.service.managePositions("member")).toContainEqual(draft);
-    expect(await f.service.positions()).not.toContainEqual(draft);
+    expect(await f.service.positions()).not.toContainEqual(expect.objectContaining({ id: draft.id }));
     await expect(submit(f, { ...input, position_id: draft.id })).rejects.toMatchObject({ status: 400 });
-    const published = await f.service.savePosition("member", { ...draft, visible: true, title: "Lead Data Engineer" });
-    expect(await f.service.positions()).toContainEqual(published);
-    const { id } = await submit(f, { ...input, position_id: draft.id });
-    expect((await f.service.list("member", 0)).applications).toContainEqual(expect.objectContaining({ id, position_title: "Lead Data Engineer", motivation: input.motivation }));
-    await f.service.savePosition("member", { ...published, visible: false });
-    await expect(submit(f, { ...input, email: "other@example.test", position_id: draft.id })).rejects.toMatchObject({ status: 400 });
-    await f.service.deletePosition("member", draft.id);
-    expect((await f.service.read("member", id)).position_title).toBe("Lead Data Engineer");
-    expect(await f.service.managePositions("member")).not.toContainEqual(expect.objectContaining({ id: draft.id }));
+    const published = await f.service.savePosition("member", { ...draft, visible: true });
+    expect(await f.service.positions()).toContainEqual(expect.objectContaining({ id: published.id, about: details.about }));
+    const { id } = await submit(f, { ...input, position_id: published.id, position_title: "Forged title" });
+    expect((await f.service.list("member", 0)).applications).toContainEqual(expect.objectContaining({ id, position_title: details.title }));
+    await f.service.setPositionVisibility("member", published.id, false);
+    await expect(submit(f, { ...input, position_id: published.id, email: "second@example.test" })).rejects.toMatchObject({ status: 400 });
+    await f.service.deletePosition("member", published.id);
+    expect(await f.service.read("member", id)).toMatchObject({ position_id: published.id, position_title: details.title });
+    await expect(f.service.file("member", id, "cv")).resolves.toMatchObject({ expiresIn: 120 });
     await expect(f.service.savePosition("member", published)).rejects.toMatchObject({ status: 404 });
-    await expect(submit(f, { ...input, position_id: draft.id })).rejects.toMatchObject({ status: 400 });
   });
-  it("does not restore deleted seed entries when the migration is replayed", async () => {
-    await pg.exec("delete from website.position_catalog_seeded");
-    await pg.exec(positionMigration());
-    await pg.exec("delete from website.positions where id = 'open-application'");
-    await pg.exec(positionMigration());
-    expect((await db.query("select id from website.positions where id = 'open-application'")).rows).toEqual([]);
+  it("denies catalog management without a feature grant and rejects unsafe edited links", async () => {
+    const f = fixture(); const details = { title: "Engineer", department: "Finance", contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build", tasks: [], achieve: [] };
+    await expect(f.service.savePosition("member", details)).rejects.toMatchObject({ status: 403 });
+    await expect(f.service.managedPositions("member")).rejects.toMatchObject({ status: 403 });
+    await allow();
+    for (const applyUrl of ["javascript:alert(1)", "//example.test", "/\\example.test"]) await expect(f.service.savePosition("member", { ...details, applyUrl })).rejects.toMatchObject({ status: 400 });
+    await expect(f.service.savePosition("member", { ...details, visible: "true" })).rejects.toMatchObject({ status: 400 });
+    await expect(f.service.savePosition("member", { ...details, contact: { ...details.contact, linkedin: "https://example.test\" onclick=\"alert(1)" } })).rejects.toMatchObject({ status: 400 });
   });
-  it("rejects unsafe URLs and malformed position edits before writing", async () => {
-    await allow(); const f = fixture();
-    for (const change of [{ applyUrl: "javascript:alert(1)" }, { applyUrl: "//attacker.test" }, { applyUrl: "/\\attacker.test" },
-      { contact: { ...positionFields.contact, linkedin: "data:text/html,unsafe" } }, { title: "" }, { tasks: ["x".repeat(1001)] }, { visible: "true" }]) {
-      await expect(f.service.savePosition("member", { ...positions[0], ...change })).rejects.toMatchObject({ status: 400 });
-    }
-    expect(await f.service.positions()).toEqual(expect.arrayContaining(positions));
-  });
-  it("revokes position management immediately on the server", async () => {
-    await allow(); const f = fixture();
-    await f.service.managePositions("member");
-    await db.query("update website.recruiters set active = false");
-    for (const operation of [() => f.service.managePositions("member"), () => f.service.savePosition("member", positions[0]), () => f.service.deletePosition("member", "software")]) {
-      await expect(operation()).rejects.toMatchObject({ status: 403 });
-    }
-    expect(await f.service.positions()).toEqual(expect.arrayContaining(positions));
-  });
-  it("seeds no recruiter permissions and denies every protected operation to an ordinary member", async () => {
+  it("denies every protected operation to a member without recruitment access", async () => {
     const f = fixture();
     const id = "30000000-0000-4000-8000-000000000001";
-    const operations = [() => f.service.managePositions("member"), () => f.service.savePosition("member", positions[0]), () => f.service.deletePosition("member", "software"), () => f.service.session("member"), () => f.service.list("member", 0), () => f.service.read("member", id),
+    const operations = [() => f.service.session("member"), () => f.service.list("member", 0), () => f.service.read("member", id),
       () => f.service.file("member", id, "cv"), () => f.service.remove("member", id, false), () => f.service.remove("member", id, true), () => f.service.confirmation("member", id)];
     for (const run of operations) await expect(run()).rejects.toMatchObject({ status: 403 });
-    expect(f.calls.every(sql => sql.includes("website.recruiters"))).toBe(true);
+    expect(f.calls.every(sql => sql.includes("member_has_feature"))).toBe(true);
     expect(f.storage.download).not.toHaveBeenCalled();
     expect(f.storage.remove).not.toHaveBeenCalled(); expect(f.mail).not.toHaveBeenCalled();
   });
-  it("allows an existing server-verified administrator without creating recruiter grants", async () => {
+  it("does not grant recruitment access based on an email address alone", async () => {
     const f = fixture();
     f.authenticate.mockResolvedValueOnce({ userId: member, googleSub: "admin-google", email: "henrik.engdal@helixnmbu.no", name: "Admin" });
-    await expect(f.service.session("member")).resolves.toMatchObject({ email: "henrik.engdal@helixnmbu.no" });
+    await expect(f.service.session("member")).rejects.toMatchObject({ status: 403 });
     expect((await db.query("select * from website.recruiters")).rows).toEqual([]);
+  });
+  it("creates positions hidden, then publishes and permanently deletes them", async () => {
+    const f = fixture();
+    const inputPosition = {
+      title: "Finance Lead", department: "Finance", applyUrl: "https://apply.example.test/finance",
+      contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build the finance function.",
+      tasks: ["Plan the budget"], achieve: ["Lead finance"],
+    };
+    await expect(f.service.createPosition("member", { position: inputPosition })).rejects.toMatchObject({ status: 403 });
+    await allow();
+    const created = await f.service.createPosition("member", { position: inputPosition });
+    expect(created).toMatchObject({ id: "finance-lead", visible: false, title: "Finance Lead" });
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(false);
+    await expect(f.service.createPosition("member", { position: inputPosition })).rejects.toMatchObject({ status: 409 });
+    await f.service.updatePosition("member", created.id, { position: { ...inputPosition, title: "Finance Director" } });
+    await f.service.setPositionVisibility("member", created.id, true);
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(true);
+    await f.service.deletePosition("member", created.id);
+    expect((await f.service.positions()).some((position) => position.id === created.id)).toBe(false);
+  });
+  it("keeps application position snapshots after the posting is deleted", async () => {
+    await allow();
+    const f = fixture();
+    const submitted = await submit(f);
+    await f.service.deletePosition("member", "software");
+    const row = (await db.query<ApplicationRow>("select * from website.applications where id = $1", [submitted.id])).rows[0];
+    expect(row).toMatchObject({ position_id: "software", position_title: "Software Engineer" });
+    expect((await f.service.positions()).some((position) => position.id === "software")).toBe(false);
   });
   it("requires member authentication even when the recruiter allowlist is populated", async () => {
     await allow(); const f = fixture();
@@ -146,7 +157,9 @@ describe("website access and submission against PostgreSQL", () => {
       { cv_base64: "a".repeat(4 * Math.ceil(MAX_CV_BYTES / 3) + 4) }, { email: "invalid" }, { website: "bot" }]) {
       await expect(submit(f, { ...input, ...change })).rejects.toMatchObject({ status: 400 });
     }
-    expect(f.calls.every(sql => sql.includes("from website.positions"))).toBe(true); expect(f.storage.put).not.toHaveBeenCalled();
+    expect(f.calls).toHaveLength(10);
+    expect(f.calls.every(sql => sql.startsWith("select document from website.positions where visible = true"))).toBe(true);
+    expect(f.storage.put).not.toHaveBeenCalled();
   });
   it("enforces case-insensitive email/season uniqueness and only removes the new conflicting file", async () => {
     const f = fixture(); await submit(f);
@@ -178,10 +191,10 @@ describe("website access and submission against PostgreSQL", () => {
     expect(f.storage.put).toHaveBeenCalledTimes(10);
     expect((await db.query("select * from website.applications")).rows).toHaveLength(10);
   });
-  it("rechecks recruiter revocation for listing, file access and rejection", async () => {
+  it("rechecks platform role revocation for listing, file access and rejection", async () => {
     await allow(); const f = fixture(); const { id } = await submit(f);
     await expect(f.service.file("member", id, "cv")).resolves.toMatchObject({ expiresIn: 120 });
-    await db.query("update website.recruiters set active = false");
+    await db.query("delete from identity.member_roles where member_id = $1 and role_key = 'project_manager'", [member]);
     await expect(f.service.list("member", 0)).rejects.toMatchObject({ status: 403 });
     await expect(f.service.file("member", id, "cv")).rejects.toMatchObject({ status: 403 });
     await expect(f.service.remove("member", id, true)).rejects.toMatchObject({ status: 403 });
@@ -211,7 +224,6 @@ describe("website access and submission against PostgreSQL", () => {
   it("denies Data API/browser roles, including roles with an inherited table grant", async () => {
     await pg.exec("create role authenticated; grant usage on schema website to authenticated; grant select on website.applications to authenticated; set role authenticated");
     expect((await db.query("select * from website.applications")).rows).toEqual([]);
-    await expect(db.query("select * from website.positions")).rejects.toMatchObject({ code: "42501" });
     await expect(db.query("select * from website.recruiters")).rejects.toMatchObject({ code: "42501" });
     await pg.exec("reset role");
   });

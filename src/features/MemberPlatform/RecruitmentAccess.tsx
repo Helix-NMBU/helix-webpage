@@ -26,6 +26,7 @@ type RecruitmentSession = RecruitmentState & {
   refresh: () => Promise<void>;
   removeApplication: (id: string, reject: boolean) => ReturnType<ReturnType<typeof createRecruitmentApi>["reject"]>;
   savePosition: (position: Omit<RecruitmentPosition, "id"> & { id?: string }) => Promise<void>;
+  setPositionVisibility: (id: string, visible: boolean) => Promise<void>;
   deletePosition: (id: string) => Promise<void>;
 };
 const initialState: RecruitmentState = { access: "loading", applications: [], positions: [], loading: true, ready: false };
@@ -127,6 +128,17 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
       notify("Position saved", saved.visible ? "This position is visible on the website." : "This position is hidden from the website.", { variant: "success", href: null });
     } catch (error) { if (active.current && generation.current === current) failure(error); throw error; }
   }, [api, failure, notify]);
+  const setPositionVisibility = useCallback(async (id: string, visible: boolean) => {
+    const current = generation.current;
+    dataRevision.current += 1;
+    try {
+      const saved = await api.setPositionVisibility(id, visible);
+      if (!active.current || generation.current !== current) return;
+      dataRevision.current += 1;
+      setState(value => ({ ...value, positions: value.positions.map(position => position.id === id ? saved : position) }));
+      notify("Position saved", saved.visible ? "This position is visible on the website." : "This position is hidden from the website.", { variant: "success", href: null });
+    } catch (error) { if (active.current && generation.current === current) failure(error); throw error; }
+  }, [api, failure, notify]);
   const deletePosition = useCallback(async (id: string) => {
     const current = generation.current;
     dataRevision.current += 1;
@@ -138,8 +150,8 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
       notify("Position deleted", "Existing applications have been kept.", { variant: "success", href: null });
     } catch (error) { if (active.current && generation.current === current) failure(error); throw error; }
   }, [api, failure, notify]);
-  const value = useMemo(() => ({ ...state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition }),
-    [state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition]);
+  const value = useMemo(() => ({ ...state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition, setPositionVisibility }),
+    [state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition, setPositionVisibility]);
   return <RecruitmentContext.Provider value={value}>{state.access === "loading"
     ? <div role="status" aria-label="Loading your workspace" className="p-8"><Skeleton className="h-40 w-full" /></div>
     : children}</RecruitmentContext.Provider>;

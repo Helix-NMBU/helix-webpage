@@ -3,16 +3,18 @@ import pg from "pg";
 import { createCvServices, type CvDatabase, type WorkspaceIdentity } from "./member-cv-service.js";
 import { createCvStorage } from "./member-cv-storage.js";
 import { MemberCvError } from "./member-cv-error.js";
-import { memberAccount } from "./member-account.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
 import { createWebsiteStorage, type WebsiteStorage } from "./website-storage.js";
 import { createWebsiteMailer, type EmailStatus, type WebsiteMailer } from "./website-email.js";
-import { applicationId, isApplicationPath, parseApplication, parseCv, parsePosition, positionId, type ApplicationRow, type WebsitePosition } from "./website-validation.js";
+import { applicationId, isApplicationPath, parseApplication, parseCv, parseWebsitePosition, type ApplicationRow, type ManagedWebsitePosition, type WebsitePosition } from "./website-validation.js";
 
 export interface WebsiteServices {
   positions(): Promise<WebsitePosition[]>;
-  managePositions(token: string): Promise<WebsitePosition[]>;
-  savePosition(token: string, value: unknown): Promise<WebsitePosition>;
+  savePosition(token: string, value: unknown): Promise<ManagedWebsitePosition>;
+  managedPositions(token: string): Promise<ManagedWebsitePosition[]>;
+  createPosition(token: string, body: Record<string, unknown>): Promise<ManagedWebsitePosition>;
+  updatePosition(token: string, id: string, body: Record<string, unknown>): Promise<ManagedWebsitePosition>;
+  setPositionVisibility(token: string, id: string, visible: boolean): Promise<ManagedWebsitePosition>;
   deletePosition(token: string, id: string): Promise<{ deleted: true }>;
   submit(body: Record<string, unknown>, rateLimitKey: string): Promise<{ id: string; emailStatus: EmailStatus | "pending" }>;
   session(token: string): Promise<{ email: string; name: string }>;
@@ -36,13 +38,18 @@ export function createWebsiteServices(deps: {
   const { db } = deps;
   async function authorize(token: string) {
     const identity = await deps.authenticate(token);
-    if (memberAccount(identity).role === "Admin") return identity;
-    const { rows } = await db.query(`select r.id from website.recruiters r
-      join identity.members m on m.email = r.email
-      where m.id = $1::uuid and m.google_sub = $2 and r.email = $3 and r.active = true`,
-    [identity.userId, identity.googleSub, identity.email]);
-    if (!rows.length) throw new MemberCvError(403, "Your account does not have recruiter access. Contact Helix.");
+    const { rows } = await db.query<{ allowed: boolean }>(`select identity.member_has_feature(m.id, 'recruitment.manage') as allowed
+      from identity.members m where m.id = $1::uuid and m.google_sub = $2 and lower(m.email) = lower($3)`, [identity.userId, identity.googleSub, identity.email]);
+    if (!rows[0]?.allowed) throw new MemberCvError(403, "Your account does not have recruitment access. Contact Helix.");
     return identity;
+  }
+  const positionId = (id: string) => {
+    if (typeof id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) throw new MemberCvError(400, "A valid position ID is required.");
+    return id;
+  };
+  async function visiblePositions(): Promise<WebsitePosition[]> {
+    const { rows } = await db.query<{ document: WebsitePosition }>("select document from website.positions where visible = true order by display_order, id");
+    return rows.map(row => row.document);
   }
   async function readRow(id: string): Promise<ApplicationRow> {
     const row = (await db.query<ApplicationRow>("select * from website.applications where id = $1::uuid", [applicationId(id)])).rows[0];
@@ -54,35 +61,69 @@ export function createWebsiteServices(deps: {
     if (keys.some(path => !isApplicationPath(row, path))) throw new MemberCvError(409, "Application file ownership could not be verified. Contact Helix.");
     return keys;
   }
-  async function positions(includeHidden = false): Promise<WebsitePosition[]> {
-    const { rows } = await db.query<{ position: WebsitePosition }>(`select document || jsonb_build_object('visible', visible) as position
-      from website.positions ${includeHidden ? "" : "where visible = true"} order by created_at, id`);
-    return rows.map(row => row.position);
-  }
   return {
-    positions: () => positions(),
-    async managePositions(token) { await authorize(token); return positions(true); },
+    positions: visiblePositions,
+    async managedPositions(token) {
+      await authorize(token);
+      const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>("select document, visible from website.positions order by display_order, id");
+      return rows.map(row => ({ ...row.document, visible: row.visible }));
+    },
     async savePosition(token, value) {
       await authorize(token);
-      const suppliedId = value && typeof value === "object" && "id" in value ? value.id : undefined;
-      const id = suppliedId === undefined ? randomUUID() : positionId(suppliedId);
-      const position = parsePosition(value, id);
-      if (suppliedId === undefined) {
-        await db.query("insert into website.positions (id, document, visible) values ($1, $2::jsonb, $3)", [id, JSON.stringify(position), position.visible]);
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position fields.");
+      const input = value as Record<string, unknown>;
+      const isNew = input.id === undefined;
+      const id = isNew ? randomUUID() : positionId(input.id as string);
+      if (input.visible !== undefined && typeof input.visible !== "boolean") throw new MemberCvError(400, "Check the public visibility field.");
+      const position = parseWebsitePosition({ ...input, id });
+      const visible = input.visible === true;
+      if (isNew) {
+        await db.query(`insert into website.positions (id, document, visible, display_order)
+          values ($1, $2::jsonb, $3, coalesce((select max(display_order) + 1 from website.positions), 0))`, [id, JSON.stringify(position), visible]);
       } else {
-        const updated = await db.query("update website.positions set document = $2::jsonb, visible = $3 where id = $1 returning id", [id, JSON.stringify(position), position.visible]);
+        const updated = await db.query("update website.positions set document = $2::jsonb, visible = $3, updated_at = now() where id = $1 returning id", [id, JSON.stringify(position), visible]);
         if (!updated.rows.length) throw new MemberCvError(404, "Position no longer exists. Refresh the positions list.");
       }
-      return position;
+      return { ...position, visible };
+    },
+    async createPosition(token, body) {
+      await authorize(token);
+      const position = parseWebsitePosition(body.position ?? body);
+      let rows: { document: WebsitePosition; visible: boolean }[];
+      try {
+        ({ rows } = await db.query<{ document: WebsitePosition; visible: boolean }>(`insert into website.positions (id, document, visible, display_order)
+          values ($1, $2::jsonb, false, coalesce((select max(display_order) + 1 from website.positions), 0))
+          returning document, visible`, [position.id, JSON.stringify(position)]));
+      } catch (error) {
+        if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") throw new MemberCvError(409, "A position with this title already exists. Choose a different title.");
+        throw error;
+      }
+      if (!rows[0]) throw new MemberCvError(503, "Could not save the position.");
+      return { ...rows[0].document, visible: rows[0].visible };
+    },
+    async updatePosition(token, id, body) {
+      await authorize(token);
+      const key = positionId(id);
+      const position = parseWebsitePosition({ ...(body.position && typeof body.position === "object" ? body.position as object : body), id: key });
+      const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>("update website.positions set document = $2::jsonb, updated_at = now() where id = $1 returning document, visible", [key, JSON.stringify(position)]);
+      if (!rows[0]) throw new MemberCvError(404, "Position not found.");
+      return { ...rows[0].document, visible: rows[0].visible };
+    },
+    async setPositionVisibility(token, id, visible) {
+      await authorize(token);
+      if (typeof visible !== "boolean") throw new MemberCvError(400, "Choose whether the position is visible.");
+      const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>("update website.positions set visible = $2, updated_at = now() where id = $1 returning document, visible", [positionId(id), visible]);
+      if (!rows[0]) throw new MemberCvError(404, "Position not found.");
+      return { ...rows[0].document, visible: rows[0].visible };
     },
     async deletePosition(token, id) {
       await authorize(token);
-      const removed = await db.query("delete from website.positions where id = $1 returning id", [positionId(id)]);
-      if (!removed.rows.length) throw new MemberCvError(404, "Position no longer exists. Refresh the positions list.");
+      const { rows } = await db.query("delete from website.positions where id = $1 returning id", [positionId(id)]);
+      if (!rows.length) throw new MemberCvError(404, "Position not found.");
       return { deleted: true };
     },
     async submit(body, rateLimitKey) {
-      const input = parseApplication(body, await positions());
+      const input = parseApplication(body, await visiblePositions());
       const bytes = parseCv(body.cv_base64);
       await db.query("delete from website.application_submission_limits where window_started_at < now() - interval '2 days'");
       const limited = await db.query<{ request_count: number }>(`insert into website.application_submission_limits (rate_key, window_started_at, request_count)

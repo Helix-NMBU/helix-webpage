@@ -8,9 +8,9 @@ import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
 const id = "10000000-0000-4000-8000-000000000001";
 function fixture() {
   const services: WebsiteServices = {
-    positions: vi.fn(async () => [{ id: "software", title: "Software Engineer", department: "Software", applyUrl: "", about: "Build the car", visible: true, tasks: ["Build"], achieve: [], contact: { name: "Recruiter", email: "test@example.test" } }]),
+    positions: vi.fn(async () => [{ id: "software", title: "Software Engineer", department: "Software", tasks: ["Build"], applyUrl: "", about: "Join", achieve: [], contact: { name: "Recruiter", email: "test@example.test" } }]),
+    savePosition: vi.fn(), managedPositions: vi.fn(async () => []), createPosition: vi.fn(), updatePosition: vi.fn(), setPositionVisibility: vi.fn(), deletePosition: vi.fn(),
     submit: vi.fn(async () => ({ id, emailStatus: "skipped" as const })),
-    managePositions: vi.fn(), savePosition: vi.fn(), deletePosition: vi.fn(),
     session: vi.fn(), list: vi.fn(), read: vi.fn(), file: vi.fn(), remove: vi.fn(), confirmation: vi.fn(),
   };
   return { services, get: vi.fn(() => services) };
@@ -26,23 +26,11 @@ async function call(handler: ReturnType<typeof createWebsiteHandler>, args: { me
   return { status, result, headers };
 }
 describe("website HTTP boundaries", () => {
-  it("serves public positions with all published fields", async () => {
+  it("serves public positions without discarding the static fields", async () => {
     const f = fixture(); const r = await call(createWebsiteHandler(f.get), { query: { action: "positions" } });
     expect(r.status).toBe(200); expect(r.headers["Cache-Control"]).toBe("no-store");
-    expect(r.result).toMatchObject({ positions: [{ tasks: ["Build"], contact: { email: "test@example.test" } }] });
+    expect(r.result).toMatchObject({ positions: [{ tasks: ["Build"], applyUrl: "", about: "Join", achieve: [], contact: { name: "Recruiter", email: "test@example.test" } }] });
     expect(f.services.session).not.toHaveBeenCalled();
-  });
-  it("routes position management through authenticated services", async () => {
-    const f = fixture(); const handler = createWebsiteHandler(f.get);
-    vi.mocked(f.services.managePositions).mockResolvedValue([]);
-    vi.mocked(f.services.savePosition).mockResolvedValue((await f.services.positions())[0]);
-    vi.mocked(f.services.deletePosition).mockResolvedValue({ deleted: true });
-    expect((await call(handler, { token: "jwt", query: { action: "manage-positions" } })).status).toBe(200);
-    const position = { title: "New position" };
-    expect((await call(handler, { token: "jwt", method: "POST", body: { action: "save-position", position } })).status).toBe(200);
-    expect(f.services.savePosition).toHaveBeenCalledWith("jwt", position);
-    expect((await call(handler, { token: "jwt", method: "POST", body: { action: "delete-position", position_id: "software" } })).status).toBe(200);
-    expect(f.services.deletePosition).toHaveBeenCalledWith("jwt", "software");
   });
   it("passes a keyed digest of Vercel's client IP to anonymous application submissions", async () => {
     const f = fixture();
@@ -77,10 +65,10 @@ describe("website HTTP boundaries", () => {
   });
   it("rejects anonymous direct reads, signed downloads, deletions and rejection/confirmation requests", async () => {
     const f = fixture(); const handler = createWebsiteHandler(f.get);
-    for (const action of ["session", "applications", "application", "file", "manage-positions"]) {
+    for (const action of ["session", "applications", "application", "file"]) {
       expect((await call(handler, { query: { action, id, kind: "cv" } })).status).toBe(401);
     }
-    for (const action of ["delete", "reject", "confirmation", "save-position", "delete-position"]) {
+    for (const action of ["delete", "reject", "confirmation"]) {
       expect((await call(handler, { method: "POST", body: { action, application_id: id } })).status).toBe(401);
     }
     expect(f.get).not.toHaveBeenCalled();
@@ -100,6 +88,17 @@ describe("website HTTP boundaries", () => {
       application_id: id, to_email: "forged@example.test", cv_path: "another/file.pdf", applicant_name: "Forged",
     } });
     expect(response.status).toBe(200); expect(f.services.remove).toHaveBeenCalledExactlyOnceWith("jwt", id, true);
+  });
+  it("routes rewritten rejection and confirmation URLs through query actions and keeps them POST-only", async () => {
+    const f = fixture(); const handler = createWebsiteHandler(f.get);
+    const reject = await call(handler, { method: "POST", query: { action: "reject" }, token: "jwt", body: { application_id: id } });
+    const confirmation = await call(handler, { method: "POST", query: { action: "confirmation" }, token: "jwt", body: { application_id: id } });
+    expect(reject.status).toBe(200);
+    expect(f.services.remove).toHaveBeenCalledExactlyOnceWith("jwt", id, true);
+    expect(confirmation.status).toBe(200);
+    expect(f.services.confirmation).toHaveBeenCalledExactlyOnceWith("jwt", id);
+    expect((await call(handler, { query: { action: "reject" } })).status).toBe(405);
+    expect((await call(handler, { query: { action: "confirmation" } })).status).toBe(405);
   });
   it("returns access denials without a successful response or leaking server error details", async () => {
     const f = fixture(); vi.mocked(f.services.list).mockRejectedValueOnce(new MemberCvError(403, "Recruiter access required."));

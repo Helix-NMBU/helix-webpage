@@ -16,8 +16,6 @@ const handlers = new Map([
   ['/api/partner', '/api/partner.ts'],
   ['/api/website', '/api/website.ts'],
   ['/api/contact', '/api/contact.ts'],
-  ['/api/apply-confirmation', '/api/apply-confirmation.ts'],
-  ['/api/reject', '/api/reject.ts'],
 ]);
 
 class RequestError extends Error {
