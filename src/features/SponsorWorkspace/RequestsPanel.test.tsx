@@ -12,7 +12,7 @@ const initial: RequestDetail = { id: "request-a", organizationId: "organization-
 
 describe("sponsor request conversations", () => {
   let container: HTMLDivElement; let root: Root;
-  beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.spyOn(toast, "success"); vi.spyOn(toast, "error"); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
+  beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); vi.spyOn(toast, "success"); vi.spyOn(toast, "warning"); vi.spyOn(toast, "error"); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
   function transport(options: { failMutation?: boolean; detail?: RequestDetail; deferredMutation?: Promise<{ request: RequestDetail }> } = {}) {
     let detail = structuredClone(options.detail ?? initial);
@@ -68,6 +68,25 @@ describe("sponsor request conversations", () => {
     const mutation = calls.mock.calls.find(([action, init]) => action === "requests" && init?.method === "POST")!;
     expect(JSON.parse(String(mutation[1]?.body))).toEqual({ type: "general_collaboration", title: "New request title", body: "New request message" });
     expect(toast.success).toHaveBeenCalledWith("Request submitted", expect.any(Object)); expect(container.querySelector<HTMLTextAreaElement>("#request-reply")?.value).toBe("");
+  });
+  it("reports a saved request as successful if the follow-up list refresh fails", async () => {
+    const base = transport();
+    let listReads = 0;
+    const request: RequestsPanelProps["request"] = async <T,>(action: string, init?: RequestInit & { query?: Record<string, string> }) => {
+      if (action === "requests" && !init?.method && ++listReads > 1) throw new Error("Temporary refresh failure.");
+      return base.request<T>(action, init);
+    };
+    await mount(request);
+    await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "New request")!.click());
+    for (const [selector, value] of [["#new-request-title", "Saved request"], ["#new-request-message", "Saved request message"]]) {
+      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)!;
+      const prototype = input.tagName === "INPUT" ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+      await act(async () => { Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    }
+    await act(async () => document.querySelector("#new-request-title")!.closest("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(toast.success).toHaveBeenCalledWith("Request submitted", expect.any(Object));
+    expect(toast.warning).toHaveBeenCalledWith("Request saved, but the list could not refresh", expect.objectContaining({ description: "Temporary refresh failure." }));
+    expect(toast.error).not.toHaveBeenCalledWith("Could not submit request", expect.anything());
   });
   it("does not offer reply or cancellation on a terminal conversation", async () => {
     const { request } = transport({ detail: { ...initial, status: "completed" } }); await mount(request); await open();

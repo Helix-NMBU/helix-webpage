@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@libs/components/ui/card";
@@ -47,7 +47,8 @@ function PartnerPortalContent() {
       const next = await partnerRepository.session();
       if (current === generation.current) {
         setSession(next);
-        setOrganizationId((previous) => next.organizations.some((organization) => organization.id === previous) ? previous : next.organizations[0]?.id ?? "");
+        const eligible = next.organizations.filter((organization) => organization.entitlements.directory || organization.entitlements.requests);
+        setOrganizationId((previous) => eligible.some((organization) => organization.id === previous) ? previous : eligible[0]?.id ?? "");
         setOtp(""); setOtpEmail(null);
       }
     } catch (error) {
@@ -139,12 +140,13 @@ function PartnerPortalContent() {
       action: { label: "Try again", onClick: () => { void load(); } } });
   }, [notify, load]);
 
-  const organization = session?.organizations.find((item) => item.id === organizationId);
+  const eligibleOrganizations = useMemo(() => session?.organizations.filter((item) => item.entitlements.directory || item.entitlements.requests) ?? [], [session]);
+  const organization = eligibleOrganizations.find((item) => item.id === organizationId);
   const page = location.pathname === "/requests" ? "requests" : "directory";
   const entitledPage = page === "requests" ? organization?.entitlements.requests : organization?.entitlements.directory;
   useEffect(() => {
-    if (!session || loading) return;
-    if (!organization) { setOrganizationId(session.organizations[0]?.id ?? ""); return; }
+    if (!session || loading || eligibleOrganizations.length === 0) return;
+    if (!organization) { setOrganizationId(eligibleOrganizations[0]?.id ?? ""); return; }
     if (location.pathname === "/" || location.pathname === "/login") {
       navigate(organization.entitlements.directory ? "/directory" : "/requests", { replace: true });
     } else if (location.pathname !== "/directory" && location.pathname !== "/requests") {
@@ -153,7 +155,13 @@ function PartnerPortalContent() {
       notify("Page access unavailable", "Your current agreement does not include this page.", { variant: "warning", href: null });
       navigate(page === "directory" && organization.entitlements.requests ? "/requests" : "/directory", { replace: true });
     }
-  }, [session, loading, organization, location.pathname, entitledPage, page, navigate, notify]);
+  }, [session, loading, eligibleOrganizations, organization, location.pathname, entitledPage, page, navigate, notify]);
+
+  useEffect(() => {
+    if (session && !loading && eligibleOrganizations.length === 0) {
+      notify("No current portal access", "Your active agreement does not include the Talent Directory or Engagement Requests. Contact Helix if you think this is incorrect.", { id: "partner-entitlement", variant: "warning", href: null });
+    }
+  }, [session, loading, eligibleOrganizations.length, notify]);
 
   const request = useCallback(async <T,>(action: string, options?: RequestInit & { query?: Record<string, string> }): Promise<T> => {
     const orgId = organizationId;
@@ -180,12 +188,17 @@ function PartnerPortalContent() {
       <a href="https://www.helixnmbu.no" className="partner-login-back">Go back to the webpage</a>
     </>}
     {loading ? <main className="mx-auto max-w-6xl p-6" aria-busy="true"><span className="sr-only">Loading partner portal</span></main>
+      : session && eligibleOrganizations.length === 0 ? <main className="mx-auto max-w-lg space-y-4 px-6 py-16 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Partner portal access unavailable</h1>
+          <p className="text-sm text-muted-foreground">Your active agreement does not include the Talent Directory or Engagement Requests. Contact <a className="underline" href="mailto:post@helixnmbu.no">Helix</a> if you think this is incorrect.</p>
+          <Button variant="outline" disabled={busy} onClick={() => { void signOut(); }}>{busy ? "Signing out…" : "Sign out"}</Button>
+        </main>
       : session && organization ? <SponsorShell context={{
           authUserId: session.user.email, email: session.user.email, contactId: null, organizationId: organization.id,
           organizationName: organization.name, role: "sponsor", portal: organization.entitlements.requests, directory: organization.entitlements.directory,
         }} page={page} signingOut={busy} onSignOut={() => { void signOut(); }} variant="partner">
-          {session.organizations.length > 1 && <div className="max-w-sm space-y-2"><Label htmlFor="partner-organization">Organization</Label>
-            <Select value={organization.id} onValueChange={(nextId) => setOrganizationId(nextId)}><SelectTrigger id="partner-organization"><SelectValue /></SelectTrigger><SelectContent>{session.organizations.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
+          {eligibleOrganizations.length > 1 && <div className="max-w-sm space-y-2"><Label htmlFor="partner-organization">Organization</Label>
+            <Select value={organization.id} onValueChange={(nextId) => setOrganizationId(nextId)}><SelectTrigger id="partner-organization"><SelectValue /></SelectTrigger><SelectContent>{eligibleOrganizations.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent></Select>
           </div>}
           {page === "requests" && organization.entitlements.requests ? <RequestsPanel key={`${session.user.email}:${organization.id}`} context={{
             authUserId: session.user.email, email: session.user.email, contactId: null, organizationId: organization.id,

@@ -65,14 +65,18 @@ describe("partner membership and publication authorization against SQL", () => {
       insert into neon_auth.account ("accountId", "providerId", "userId") values ('google-member', 'google', '${memberAuth}');
     `);
     await db.exec(readFileSync(new URL("../../../db/migrations/001_member_cv.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../../../db/migrations/003_sponsor_portal.sql", import.meta.url), "utf8"));
     const migration = readFileSync(new URL("../../../db/migrations/004_partner_portal.sql", import.meta.url), "utf8");
     await db.exec(migration);
     await db.exec(migration);
+    await db.exec(readFileSync(new URL("../../../db/migrations/004_sponsor_requests.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../../../db/migrations/008_partner_agreement_terms.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../../../db/migrations/009_partner_engagement_requests.sql", import.meta.url), "utf8"));
     member = (await db.query<{ id: string }>("select identity.onboard_member($1, 'google-member', 'member@helixnmbu.no', 'Member', $2::jsonb, $3::jsonb) as id",
       [memberAuth, JSON.stringify(profile), JSON.stringify(sharing)])).rows[0].id;
     path = `${member}/30000000-0000-4000-8000-000000000001.pdf`;
     await db.exec(`
-      insert into partner.organizations(id, name, active) values ('${org}', 'First partner', true), ('${otherOrg}', 'Other partner', true);
+      insert into partner.organizations(id, name, active, agreement_tier) values ('${org}', 'First partner', true, 'main'), ('${otherOrg}', 'Other partner', true, 'main');
       insert into partner.memberships (organization_id, auth_user_id, invited_email, status, approved_at) values
         ('${org}', '${partnerUser}', 'partner@example.test', 'active', now()),
         ('${otherOrg}', '${otherUser}', 'other@example.test', 'active', now()),
@@ -86,7 +90,7 @@ describe("partner membership and publication authorization against SQL", () => {
 
   it("resolves an explicit active organization without creating or updating access rows", async () => {
     const before = (await db.query("select * from partner.memberships order by id")).rows;
-    expect(await services().session(partnerUser)).toEqual({ user: { email: "partner@example.test", name: "Partner" }, organizations: [{ id: org, name: "First partner" }] });
+    expect(await services().session(partnerUser)).toEqual({ user: { email: "partner@example.test", name: "Partner" }, organizations: [{ id: org, name: "First partner", entitlements: { directory: true, requests: true } }] });
     expect((await db.query("select * from partner.memberships order by id")).rows).toEqual(before);
     await expect(services().session(memberAuth)).rejects.toMatchObject({ status: 403 });
     await expect(services().directory(memberAuth, org)).rejects.toMatchObject({ status: 403 });
