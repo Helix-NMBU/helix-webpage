@@ -766,6 +766,69 @@ describe("financing and earmarked funding", () => {
     expect((await financing()).funding).toHaveLength(1);
   });
 
+  it("replays a stored response for a concurrent duplicate and leaves an in-flight response unresolved", async () => {
+    await openSeason();
+    await grant("business");
+    const requestId = nextRequestId();
+    const first = await call({ token: "member", body: addFundingBody(requestId) });
+    expect(first.status).toBe(200);
+    const fundingId = (first.body as { id: string }).id;
+    const stored = (await sql<{
+      member_id: string;
+      action: string;
+      payload_hash: string;
+      response: unknown;
+    }>(
+      "select member_id, action, payload_hash, response from finance.idempotency_keys where request_id = $1::uuid",
+      [requestId],
+    )).rows[0];
+    expect(stored?.action).toBe("addFunding");
+    const replayed = await sql<{ response: unknown }>(
+      "select finance.replay_funding_mutation($1::uuid, $2::uuid, $3, $4) as response",
+      [stored?.member_id, requestId, stored?.action, stored?.payload_hash],
+    );
+    expect(replayed.rows[0]?.response).toEqual(stored?.response);
+    await expect(sql(
+      "select finance.replay_funding_mutation($1::uuid, $2::uuid, $3, $4)",
+      [stored?.member_id, requestId, stored?.action, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+    )).rejects.toThrow(/IDEMPOTENCY_CONFLICT/);
+    await expect(sql(
+      "select finance.replay_funding_mutation($1::uuid, $2::uuid, 'editFunding', $3)",
+      [stored?.member_id, requestId, stored?.payload_hash],
+    )).rejects.toThrow(/IDEMPOTENCY_CONFLICT/);
+    const definition = await sql<{ definition: string }>(
+      "select pg_get_functiondef('finance.apply_funding_change(uuid,uuid,text,jsonb,boolean)'::regprocedure) as definition",
+    );
+    expect(definition.rows[0]?.definition).toContain("finance.replay_funding_mutation");
+
+    await sql("update finance.idempotency_keys set response = null where request_id = $1::uuid", [requestId]);
+    const inFlight = await sql<{ response: unknown }>(
+      "select finance.replay_funding_mutation($1::uuid, $2::uuid, $3, $4) as response",
+      [stored?.member_id, requestId, stored?.action, stored?.payload_hash],
+    );
+    expect(inFlight.rows[0]?.response).toBeNull();
+    const versionBefore = await version();
+    const fundingBefore = (await sql<{ count: string }>("select count(*)::text as count from finance.funding")).rows[0]?.count;
+    const auditsBefore = (await sql<{ count: string }>("select count(*)::text as count from finance.audit_log")).rows[0]?.count;
+    const unresolved = await call({ token: "member", body: addFundingBody(requestId) });
+    expect(unresolved).toMatchObject({ status: 409, body: { error: "This request was already used with different details." } });
+    expect(await version()).toBe(versionBefore);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.funding")).rows[0]?.count).toBe(fundingBefore);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.audit_log")).rows[0]?.count).toBe(auditsBefore);
+
+    await sql(
+      "update finance.idempotency_keys set response = $2::jsonb where request_id = $1::uuid",
+      [requestId, JSON.stringify(stored?.response)],
+    );
+    await sql("delete from finance.funding where id = $1::uuid", [fundingId]);
+    const replay = await call({ token: "member", body: addFundingBody(requestId) });
+    expect(replay.body).toEqual(first.body);
+    expect(await version()).toBe(versionBefore);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.funding")).rows[0]?.count).toBe("0");
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.audit_log")).rows[0]?.count).toBe(auditsBefore);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.idempotency_keys")).rows[0]?.count).toBe("1");
+  });
+
   it("rejects a stale revision without changing the record or the view version", async () => {
     await openSeason();
     await grant("business");

@@ -3,6 +3,7 @@
 -- Does not seed funding, parts, grants, or seasons.
 -- Same-season and one-system earmark links stay enforced by the 011 triggers.
 -- Each successful change audits, bumps finance.view_versions, and stores the idempotency response in one function call.
+-- A concurrent duplicate request replays that stored response through finance.replay_funding_mutation.
 
 begin;
 
@@ -121,6 +122,35 @@ begin
 end;
 $fn$;
 
+-- Reads a committed idempotency row after a concurrent duplicate lost the insert race.
+-- A null response means the other transaction has not stored one yet.
+-- Defined here, not as finance.replay_budget_mutation, so migration 012 can land beside this file.
+create or replace function finance.replay_funding_mutation(
+  p_actor_member_id uuid,
+  p_request_id uuid,
+  p_action text,
+  p_payload_hash text
+) returns jsonb
+language plpgsql
+security invoker
+set search_path = pg_catalog, finance
+as $fn$
+declare
+  existing finance.idempotency_keys%rowtype;
+begin
+  select * into existing
+  from finance.idempotency_keys
+  where member_id = p_actor_member_id and request_id = p_request_id;
+  if not found or existing.response is null then
+    return null;
+  end if;
+  if existing.action = p_action and existing.payload_hash = p_payload_hash then
+    return existing.response;
+  end if;
+  raise exception 'finance:IDEMPOTENCY_CONFLICT' using errcode = '23505';
+end;
+$fn$;
+
 create or replace function finance.apply_funding_change(
   p_actor_member_id uuid,
   p_request_id uuid,
@@ -176,12 +206,18 @@ begin
     raise exception 'finance:INVALID' using errcode = '22023';
   end if;
 
-  select keys.response into stored
+  perform 1
   from finance.idempotency_keys as keys
   where keys.member_id = p_actor_member_id and keys.request_id = p_request_id
   for update;
   if found then
-    if (select payload_hash from finance.idempotency_keys where member_id = p_actor_member_id and request_id = p_request_id) is distinct from p_payload_hash then
+    stored := finance.replay_funding_mutation(
+      p_actor_member_id,
+      p_request_id,
+      coalesce(p_command->>'action', ''),
+      p_payload_hash
+    );
+    if stored is null then
       raise exception 'finance:IDEMPOTENCY_CONFLICT' using errcode = '23505';
     end if;
     return stored;
@@ -644,6 +680,15 @@ exception
   when unique_violation then
     get stacked diagnostics constraint_name = CONSTRAINT_NAME;
     if constraint_name = 'idempotency_keys_pkey' then
+      stored := finance.replay_funding_mutation(
+        p_actor_member_id,
+        p_request_id,
+        coalesce(p_command->>'action', ''),
+        p_payload_hash
+      );
+      if stored is not null then
+        return stored;
+      end if;
       raise exception 'finance:IDEMPOTENCY_CONFLICT' using errcode = '23505';
     end if;
     raise;
