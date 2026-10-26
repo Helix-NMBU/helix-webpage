@@ -3,9 +3,9 @@ import { PGlite } from "@electric-sql/pglite";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { emptyCv } from "../../src/features/MemberCV/model.js";
-import { createPartnerServices } from "./partner-service.js";
-import { createPartnerHandler } from "./partner-handler.js";
+import { emptyCv } from "../../../src/features/MemberCV/model.js";
+import { createPartnerServices } from "../../../api/_lib/partner-service.js";
+import { createPartnerHandler } from "../../../api/_lib/partner-handler.js";
 
 const partnerUser = "10000000-0000-4000-8000-000000000001";
 const otherUser = "10000000-0000-4000-8000-000000000002";
@@ -64,8 +64,8 @@ describe("partner membership and publication authorization against SQL", () => {
         ('${memberAuth}', 'Member', 'member@helixnmbu.no', true, false);
       insert into neon_auth.account ("accountId", "providerId", "userId") values ('google-member', 'google', '${memberAuth}');
     `);
-    await db.exec(readFileSync(new URL("../../db/migrations/001_member_cv.sql", import.meta.url), "utf8"));
-    const migration = readFileSync(new URL("../../db/migrations/004_partner_portal.sql", import.meta.url), "utf8");
+    await db.exec(readFileSync(new URL("../../../db/migrations/001_member_cv.sql", import.meta.url), "utf8"));
+    const migration = readFileSync(new URL("../../../db/migrations/004_partner_portal.sql", import.meta.url), "utf8");
     await db.exec(migration);
     await db.exec(migration);
     member = (await db.query<{ id: string }>("select identity.onboard_member($1, 'google-member', 'member@helixnmbu.no', 'Member', $2::jsonb, $3::jsonb) as id",

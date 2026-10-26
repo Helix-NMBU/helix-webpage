@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createWebsiteStorage } from "./website-storage.js";
+import { createWebsiteStorage } from "../../../api/_lib/website-storage.js";
 
 describe("private application storage", () => {
   const env = { NEON_APPLICATIONS_BUCKET: "applications", NEON_S3_ENDPOINT: "https://storage.example.test",

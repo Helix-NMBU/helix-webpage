@@ -1,9 +1,9 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createWebsiteHandler } from "./website-handler.js";
-import type { WebsiteServices } from "./website-service.js";
-import { MemberCvError } from "./member-cv-error.js";
+import { createWebsiteHandler } from "../../../api/_lib/website-handler.js";
+import type { WebsiteServices } from "../../../api/_lib/website-service.js";
+import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
 
 const id = "10000000-0000-4000-8000-000000000001";
 function fixture() {

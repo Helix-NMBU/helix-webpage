@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
-import { createSponsorAuthHandler, sendSponsorMagicLink, sponsorCallback } from "./sponsor-auth.js";
-import { SponsorError, type SponsorAccess } from "./sponsor-access.js";
-import { proxyNeonAuth } from "./auth-proxy.js";
+import { createSponsorAuthHandler, sendSponsorMagicLink, sponsorCallback } from "../../../api/_lib/sponsor-auth.js";
+import { SponsorError, type SponsorAccess } from "../../../api/_lib/sponsor-access.js";
+import { proxyNeonAuth } from "../../../api/_lib/auth-proxy.js";
 
 function fixture(invited = true) {
   const access: SponsorAccess = { mayRequestLogin: vi.fn(async () => invited), authenticate: vi.fn(async () => { throw new SponsorError(403, "Invitation revoked."); }) };

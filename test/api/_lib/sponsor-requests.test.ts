@@ -2,9 +2,9 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createSponsorAccess, type SponsorDatabase } from "./sponsor-access.js";
-import { createSponsorRequestsHandler } from "./sponsor-requests.js";
-import type { RequestDetail, RequestList } from "../../src/features/SponsorWorkspace/request-types.js";
+import { createSponsorAccess, type SponsorDatabase } from "../../../api/_lib/sponsor-access.js";
+import { createSponsorRequestsHandler } from "../../../api/_lib/sponsor-requests.js";
+import type { RequestDetail, RequestList } from "../../../src/features/SponsorWorkspace/request-types.js";
 
 const USER = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
@@ -23,7 +23,7 @@ async function fixture() {
     insert into neon_auth."user" values ('${USER}','contact@example.com',true,false),('${OTHER}','other@example.com',true,false),
     ('${ADMIN}','admin@helixnmbu.no',true,false),('${ADMIN2}','other-admin@helixnmbu.no',true,false);`);
   for (const name of ["003_sponsor_portal", "004_sponsor_requests", "004_sponsor_requests"]) {
-    await db.exec(await readFile(new URL(`../../db/migrations/${name}.sql`, import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL(`../../../db/migrations/${name}.sql`, import.meta.url), "utf8"));
   }
   await db.exec(`insert into sponsor.organizations(id,name) values ('${ORG}','Example Racing'),('${OTHER_ORG}','Other Racing');
     insert into sponsor.contacts(organization_id,email,auth_user_id) values ('${ORG}','contact@example.com','${USER}'),('${OTHER_ORG}','other@example.com','${OTHER}');

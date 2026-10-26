@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createSponsorHandler } from "../sponsor.js";
-import { SponsorError } from "../_lib/sponsor-access.js";
+import { createSponsorHandler } from "../../../api/sponsor.js";
+import { SponsorError } from "../../../api/_lib/sponsor-access.js";
 
 function fixture() {
   const authenticate = vi.fn(async () => { throw new SponsorError(401, "Sign in to continue."); });

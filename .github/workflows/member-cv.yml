@@ -1,9 +1,9 @@
-name: Member CV checks
+name: Deployment stabilization checks
 on:
   pull_request:
-    branches: [main]
+    branches: [internal-member-platform-mvp, main]
   push:
-    branches: [main]
+    branches: [internal-member-platform-mvp, main]
 permissions:
   contents: read
 jobs:
@@ -13,8 +13,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
+      - run: npm install --global npm@11.17.0
+      - run: node --version && npm --version
       - run: npm ci
       - run: npm run typecheck
       - run: npm run typecheck:api

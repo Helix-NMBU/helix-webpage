@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import handler, { config } from "../auth.js";
-import { isForwardedAuthCookie, proxyNeonAuth, sendAuthProxyResponse } from "./auth-proxy.js";
+import handler, { config } from "../../../api/auth.js";
+import { isForwardedAuthCookie, proxyNeonAuth, sendAuthProxyResponse } from "../../../api/_lib/auth-proxy.js";
 
 const BASE = "https://ep-rough-truth-barv8aki.neonauth.c-8.eu-central-1.aws.neon.tech/neondb/auth";
 
