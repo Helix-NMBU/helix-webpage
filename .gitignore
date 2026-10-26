@@ -9,6 +9,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+api/_lib/generated/email-sanitizer.mjs
 *.local
 
 # Environment variables

@@ -5,6 +5,9 @@
   "installCommand": "npm ci",
   "framework": "vite",
   "functions": {
+    "api/gmail.ts": {
+      "includeFiles": "api/_lib/generated/email-sanitizer.mjs"
+    },
     "api/member-cv.ts": {
       "includeFiles": "api/_lib/fonts/*.ttf"
     }

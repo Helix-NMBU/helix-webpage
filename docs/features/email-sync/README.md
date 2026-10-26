@@ -61,4 +61,6 @@ git diff --check
 
 The production build measured 9.19 MB against the 10 MB static-output budget and 10 serverless functions against the 11-function target. Four-worker database runs encountered resource-related timeouts; the complete suite passed with two workers. ESLint currently targets JavaScript/JSX; TypeScript files are covered by the TypeScript checks and tests.
 
+The first production smoke check exposed an incompatibility between sanitize-html's ESM-only parser dependency and Vercel's instrumented CommonJS loader. Production traffic was temporarily restored to the preceding deployment. Installation and builds now bundle the current sanitizer and its parser into one generated server module, retaining the current security fixes. The generated file is ignored by Git and traced into the Gmail function. A subprocess regression test disables synchronous require of ESM to reproduce the deployment restriction and checks that sanitization still runs.
+
 Real Gmail delivery and read-state changes still need the member's acceptance check. The browser checks used the dedicated local mode, and Gmail API tests used controlled responses. The user authorized merging this branch into `main` for verification in production and requested that `codex/email-sync` be retained for follow-up PRs. The Linear milestone remains open pending that verification.
