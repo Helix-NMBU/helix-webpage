@@ -113,3 +113,8 @@ After these repairs, all 60 focused project-management tests and the client Type
 The user requested a single Areas breakdown by department, removal of the Assignees view, full-width Progress and Milestones underneath it. The Overview now uses a one-column layout and a fixed Areas section. Department membership comes from project department assignments; shared-project tasks contribute to each participating department, and work without an allocated department remains in No department. Known departments with no tasks show zero progress. Assignment avatars elsewhere are unchanged.
 
 Client TypeScript and all 33 ProjectManagement UI tests passed. Regression coverage checks both participating departments in a shared project, absence of the old switch/assignee breakdown, and unallocated work. Browser verification confirmed the full-width graph, department rows and Milestones below. Screenshot: `overview-department-areas.png` in this chat's visualization directory. No live migration, push or deployment was performed.
+
+
+## Compact Overview height, 26 October 2026
+
+The user requested roughly half the Progress widget's total height while retaining its full width. The plot now uses a fixed 80px drawing area, with readable HTML axis labels and fixed-size current-value markers. Tighter card spacing, inline totals and compact two-column department rows reduce the desktop card from about 720px to about 355px in browser inspection. Milestones remains below it. TypeScript and all 33 ProjectManagement UI tests passed; the rendered result was inspected in the loopback preview. Screenshot: `overview-compact-height.png` in this chat's visualization directory. No data, migration, push or deployment changes.
