@@ -260,6 +260,7 @@ describe("project management interface", () => {
     await open();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope0Started0Completed0");
     expect(container.textContent).toContain("No tasks yet.");
+    expect(container.textContent).toContain("A project and milestone are needed before adding tasks.");
     expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
   });
 
@@ -296,6 +297,30 @@ describe("project management interface", () => {
     expect(project?.textContent).toContain("Chassis ready for assembly");
     expect(project?.textContent).toContain("Confirm material delivery");
     expect(project?.textContent).not.toContain("Publish workshop update");
+  });
+
+  it("clears an unrelated search when opening a milestone from a project card", async () => {
+    await open();
+    const search = container.querySelector<HTMLInputElement>('[aria-label="Search tasks"]')!;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "no matching task"); search.dispatchEvent(new Event("input", { bubbles: true })); });
+    const project = container.querySelector('[aria-label="Milestones in Chassis & assembly"]')!;
+    const view = [...project.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "View tasks")!;
+    await act(async () => view.click());
+    expect(search.value).toBe("");
+    const tables = container.querySelectorAll("table");
+    expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
+  });
+  it("connects each active progress breakdown tab to its content panel", async () => {
+    await open();
+    const tabs = container.querySelector('[role="tablist"][aria-label="Progress breakdown"]')!;
+    const assignees = [...tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(item => item.textContent === "Assignees")!;
+    const areas = [...tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(item => item.textContent === "Areas")!;
+    expect(document.getElementById(assignees.getAttribute("aria-controls")!)?.getAttribute("role")).toBe("tabpanel");
+    expect(document.getElementById(assignees.getAttribute("aria-controls")!)?.textContent).toContain("Alex Example");
+    await act(async () => areas.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    expect(areas.getAttribute("aria-selected")).toBe("true");
+    expect(document.getElementById(areas.getAttribute("aria-controls")!)?.getAttribute("role")).toBe("tabpanel");
+    expect(document.getElementById(areas.getAttribute("aria-controls")!)?.textContent).toContain("Production");
   });
 
 });

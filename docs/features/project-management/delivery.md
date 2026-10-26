@@ -93,3 +93,14 @@ Initial independent reviewers `milestones_spec_review` and `milestones_standards
 
 - Final integrated validation before the new review: 169 UI/model/repository/API tests across 17 files and 23 database tests passed. All three TypeScript checks, lint and build passed. The canonical static output is 9.22 MB with 9 source API functions. The final filter layout waits until the xl breakpoint for four columns to avoid crowding the narrower member-content viewport.
 - Browser verification in member-local mode on loopback port 5190 placed a legacy goal into Chassis & assembly, placed Verify assembly handover under that goal, confirmed the queue count decreased, and verified the complete association after reload. Expanding both project milestones showed their respective child tasks. Light and dark graph rendering was inspected; the original System appearance preference was restored. Light-mode screenshot: `season-hierarchy-light.png` in this chat's visualization directory. Production migrations and real authentication remain untested and unapplied.
+
+
+### Final Standards review
+
+Independent reviewer `hierarchy_standards_review` inspected `7642daf...b4064fa` and found one P2 accessibility defect: the breakdown tabs had no associated panels. The repair places Assignees and Areas content in separate shared TabsContent panels and labels the tab list. A regression verifies active tab-to-panel relationships and matching content. No other documented-standard violations or actionable Fowler smells were reported.
+
+### Final Spec and correctness review
+
+Independent reviewer `hierarchy_spec_review` inspected the same full feature and found a P2 project-card milestone action retaining an unrelated search, plus P3 empty-state guidance still permitting direct season tasks. The repair clears search and selects the task list when opening a project milestone, and updates the empty-state and setup guidance to require a project and milestone. Regressions cover the reset and hierarchy wording. No additional correctness/security findings were reported.
+
+After these repairs, all 60 focused project-management tests and the client TypeScript check passed. Final reviewer rechecks are pending. No live database migration or deployment performed.
