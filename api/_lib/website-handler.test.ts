@@ -89,6 +89,17 @@ describe("website HTTP boundaries", () => {
     } });
     expect(response.status).toBe(200); expect(f.services.remove).toHaveBeenCalledExactlyOnceWith("jwt", id, true);
   });
+  it("routes rewritten rejection and confirmation URLs through query actions and keeps them POST-only", async () => {
+    const f = fixture(); const handler = createWebsiteHandler(f.get);
+    const reject = await call(handler, { method: "POST", query: { action: "reject" }, token: "jwt", body: { application_id: id } });
+    const confirmation = await call(handler, { method: "POST", query: { action: "confirmation" }, token: "jwt", body: { application_id: id } });
+    expect(reject.status).toBe(200);
+    expect(f.services.remove).toHaveBeenCalledExactlyOnceWith("jwt", id, true);
+    expect(confirmation.status).toBe(200);
+    expect(f.services.confirmation).toHaveBeenCalledExactlyOnceWith("jwt", id);
+    expect((await call(handler, { query: { action: "reject" } })).status).toBe(405);
+    expect((await call(handler, { query: { action: "confirmation" } })).status).toBe(405);
+  });
   it("returns access denials without a successful response or leaking server error details", async () => {
     const f = fixture(); vi.mocked(f.services.list).mockRejectedValueOnce(new MemberCvError(403, "Recruiter access required."));
     expect((await call(createWebsiteHandler(f.get), { token: "jwt", query: { action: "applications" } })).status).toBe(403);

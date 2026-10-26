@@ -8,7 +8,7 @@
     "dev": "vite",
     "dev:member": "vite --mode member-local --host 127.0.0.1 --port 5190 --strictPort",
     "dev:sponsor": "vite --mode sponsor-local --host 127.0.0.1 --port 5192 --strictPort",
-    "build": "vite build && node scripts/check-deployment-size.mjs",
+    "build": "vite build && node scripts/check-deployment-size.mjs && node scripts/check-vercel-functions.mjs",
     "lint": "eslint .",
     "test": "vitest run --maxWorkers=4 --exclude scripts/deployment-guards.test.mjs && node --test scripts/deployment-guards.test.mjs",
     "typecheck": "tsc --noEmit",

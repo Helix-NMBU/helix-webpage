@@ -10,8 +10,9 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
   return async (req: VercelRequest, res: VercelResponse) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    if ((req.method !== "GET" && req.method !== "POST") || (fixedAction && req.method !== "POST")) {
-      res.setHeader("Allow", fixedAction ? "POST" : "GET, POST");
+    const routeAction = fixedAction ?? (req.query.action === "reject" || req.query.action === "confirmation" ? req.query.action : undefined);
+    if ((req.method !== "GET" && req.method !== "POST") || (routeAction && req.method !== "POST")) {
+      res.setHeader("Allow", routeAction ? "POST" : "GET, POST");
       return res.status(405).json({ error: "Method not allowed." });
     }
     try {
@@ -34,7 +35,7 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
         throw new MemberCvError(400, "Unknown request.");
       }
       const body = websiteBody(req.body);
-      const action = fixedAction ?? body.action;
+      const action = routeAction ?? body.action;
       if (action === "submit") return res.status(201).json(await getServices().submit(body, submissionRateKey(req)));
       const token = bearer(req.headers.authorization);
       const services = getServices();
