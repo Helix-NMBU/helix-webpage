@@ -81,7 +81,7 @@ export function MemberAccess({ children }: { children: ReactNode }) {
   if (!landing)
     return (
       <main className="member-platform-status">
-        <LoaderCircle className="size-5 animate-spin" aria-label="Verifying your Helix account" />
+        <LoaderCircle className="size-6 animate-spin" aria-label="Verifying your Helix account" />
       </main>
     );
   if (landing.phase === "signed-out") {

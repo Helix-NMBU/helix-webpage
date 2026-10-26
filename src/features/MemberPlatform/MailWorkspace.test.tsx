@@ -66,5 +66,7 @@ describe("mail workspace", () => {
     expect(document.body.querySelector('input[aria-label="Cc"]')).not.toBeNull();
     expect(document.body.querySelector('input[aria-label="Subject"]')).not.toBeNull();
     expect(document.body.querySelector('textarea[aria-label="Message"]')).not.toBeNull();
+    expect(document.body.querySelector('button[aria-label="Send"]')).not.toBeNull();
+    expect([...document.body.querySelectorAll("button")].some((button) => button.textContent?.includes("Cancel"))).toBe(false);
   });
 });

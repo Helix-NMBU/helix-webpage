@@ -23,11 +23,10 @@
 }
 .member-platform-status {
   display: grid;
-  justify-items: start;
+  place-items: center;
   gap: 16px;
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 64px 24px;
+  min-height: 100dvh;
+  padding: 24px;
 }
 .member-platform .mcv-profile { min-height: 0; }
 .member-platform .mcv-profile .mcv-container { max-width: 960px; padding: 32px 24px 64px; }
