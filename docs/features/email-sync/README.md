@@ -18,6 +18,10 @@ Supported placeholders are `{member.name}`, `{member.role}`, `{member.phone}`, a
 
 All verified members may read the settings and their own rendered signature. Every write checks the current `platform_administrator` role and the linked Google identity on the server. Revision checks reject stale saves. The singleton configuration records its latest editor and update time; it stores no email contents. The signature starts disabled until an administrator configures and enables it.
 
+Mail preloads the current member's signature as soon as the inbox opens. New drafts, replies, and forwards display that signature immediately above the original quote, keeping it visible during a background refresh. Requests are deduplicated, stale responses are ignored, and snapshots are restricted to the current member's email. A failed refresh clears the snapshot and blocks Send until retry succeeds. The writing text stays separate so sending adds exactly one authoritative signature. The signature display fits its content instead of reserving a fixed-height area.
+
+On 26 October 2026, the user requested automatic insertion for all compose modes. The saved production design was enabled with an administrator-role check and revision guard (revision 1 to 2); all other design fields were preserved. Administrators can still control this through **Automatically add signature**.
+
 ## Unread investigation and behavior
 
 The previous implementation already sent Gmail `INBOX` and `UNREAD` labels with `q=is:unread`. Adding those filters again would not address the missing read-state lifecycle:
