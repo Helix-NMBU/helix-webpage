@@ -3,9 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProjectRepository, ProjectRequestError } from "./repository";
 import { createLocalProjectRepository } from "./local-repository";
 import { CvRequestError } from "../MemberCV/repository";
+import { clearMemberLanding, ensureMemberLanding, loginAction } from "../MemberCV/session";
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { clearMemberLanding(); vi.unstubAllEnvs(); });
 describe("project repository", () => {
+  it.each(["load", "save"])("invalidates a cached signed-in landing when the API rejects %s with 401", async action => {
+    const jwt = `${btoa('{}')}.${btoa(JSON.stringify({ sub: "member", exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
+    const client = { getSession: vi.fn().mockResolvedValue({ data: { user: { id: "member" } } }), token: vi.fn().mockResolvedValue({ data: { token: jwt } }) };
+    const bootstrap = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+    expect(loginAction(await ensureMemberLanding(client, bootstrap))).toBe("profile");
+    const repository = createProjectRepository(async () => jwt, vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Your session has expired." }), { status: 401 })));
+    const request = action === "load" ? repository.load() : repository.mutate({ action: "set_status", id: "00000000-0000-4000-8000-000000000001", expectedRevision: 1, status: "done", blockedReason: "" });
+    await expect(request).rejects.toMatchObject({ status: 401 });
+    expect(loginAction(await ensureMemberLanding(client, bootstrap))).toBe("form");
+    expect(client.getSession).toHaveBeenCalledTimes(1);
+  });
   it.each([401, 403])("turns rejected session acquisition (%s) into sign-in recovery without a request", async status => {
     const request = vi.fn();
     const repository = createProjectRepository(async () => { throw new CvRequestError("Sign in again.", status); }, request);

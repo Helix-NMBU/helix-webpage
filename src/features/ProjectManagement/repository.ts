@@ -1,4 +1,4 @@
-import { memberSessionToken } from "../MemberCV/session";
+import { memberLoadFailure, memberSessionToken } from "../MemberCV/session";
 import { CvRequestError } from "../MemberCV/repository";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import type { ProjectMutation, ProjectRepository, ProjectWorkspace } from "./types";
@@ -23,7 +23,13 @@ export function createProjectRepository(token?: () => Promise<string>, request: 
       ...(mutation ? { body: JSON.stringify(mutation) } : {}),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new ProjectRequestError(typeof data.error === "string" ? data.error : "Could not load project management. Please try again.", response.status);
+    if (!response.ok) {
+      const message = typeof data.error === "string" ? data.error : "Could not load project management. Please try again.";
+      // A server-rejected JWT must also invalidate the cached signed-in landing,
+      // or /login would redirect straight back into the same rejected session.
+      if (response.status === 401) memberLoadFailure(new CvRequestError(message, 401));
+      throw new ProjectRequestError(message, response.status);
+    }
     return data as ProjectWorkspace;
   }
   return { load: () => call(), mutate: mutation => call(mutation) };
