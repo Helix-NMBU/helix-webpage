@@ -1,4 +1,8 @@
-export type PartnerOrganization = { id: string; name: string };
+export type PartnerOrganization = {
+  id: string;
+  name: string;
+  entitlements: { directory: boolean; requests: boolean };
+};
 export type PartnerSession = {
   user: { email: string; name: string };
   organizations: PartnerOrganization[];

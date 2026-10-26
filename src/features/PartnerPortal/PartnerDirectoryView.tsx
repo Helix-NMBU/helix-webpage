@@ -10,12 +10,16 @@ import { partnerRepository } from "./repository";
 import { PartnerRequestError } from "./session";
 import type { PartnerCv, PartnerSession } from "./types";
 
-export function PartnerDirectoryView({ session, onAccessLost }: {
+export function PartnerDirectoryView({ session, onAccessLost, selectedOrganizationId, onOrganizationChange }: {
   session: PartnerSession;
   onAccessLost: (error: PartnerRequestError) => void;
+  selectedOrganizationId?: string;
+  onOrganizationChange?: (organizationId: string) => void;
 }) {
   const notify = useNotify();
-  const [organizationId, setOrganizationId] = useState(session.organizations[0]?.id ?? "");
+  const [localOrganizationId, setLocalOrganizationId] = useState(session.organizations[0]?.id ?? "");
+  const organizationId = selectedOrganizationId ?? localOrganizationId;
+  const setOrganizationId = (value: string) => { setLocalOrganizationId(value); onOrganizationChange?.(value); };
   const [members, setMembers] = useState<PartnerCv[]>([]);
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -84,10 +88,10 @@ export function PartnerDirectoryView({ session, onAccessLost }: {
   return <main className="mx-auto w-full max-w-6xl space-y-8 px-6 py-10">
     <div className="flex flex-wrap items-start justify-between gap-5"><div className="space-y-2">
       <p className="text-sm text-muted-foreground">{organization?.name}</p>
-      <h1 className="text-3xl font-medium tracking-tight">Member directory</h1>
+      <h1 className="text-3xl font-medium tracking-tight">Talent Directory</h1>
       <p className="text-sm text-muted-foreground">Published profiles and CVs shared by Helix members.</p>
     </div><Button variant="outline" disabled={loading} onClick={() => setAttempt((value) => value + 1)}>Refresh members</Button></div>
-    {session.organizations.length > 1 && <div className="max-w-sm space-y-2"><Label htmlFor="partner-organization">Organization</Label>
+    {session.organizations.length > 1 && !selectedOrganizationId && <div className="max-w-sm space-y-2"><Label htmlFor="partner-organization">Organization</Label>
       <Select value={organizationId} onValueChange={(value) => { ++requestGeneration.current; setMembers([]); setLoaded(false); setLoading(true); setDownloading(null); setField("all"); setYear("all"); setOrganizationId(value); }}>
         <SelectTrigger id="partner-organization"><SelectValue /></SelectTrigger><SelectContent>{session.organizations.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
       </Select></div>}
