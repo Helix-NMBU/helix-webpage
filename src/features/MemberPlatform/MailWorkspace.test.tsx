@@ -25,7 +25,7 @@ function mailServer(options: { failRead?: boolean; emptyFirstPage?: boolean } = 
     requests.push(url);
     if (url.pathname === "/api/gmail-status") return Response.json({ connected: true });
     switch (url.searchParams.get("action")) {
-      case "signature": return Response.json({ settings, revision: 1, signature: renderSignature(settings, { ...member, role: member.helixRole }) });
+      case "signature": return Response.json({ settings, revision: 1, member: { ...member, role: member.helixRole, phone: "" }, signature: renderSignature(settings, { ...member, role: member.helixRole, phone: "" }) });
       case "messages": {
         if (options.emptyFirstPage && url.searchParams.get("unreadOnly") && !url.searchParams.has("pageToken")) return Response.json({ messages: [], nextPageToken: "next-unread" });
         const messages = [{ ...original, unread }, { ...original, id: "read-1", subject: "Already read", unread: false }];

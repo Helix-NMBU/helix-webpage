@@ -10,9 +10,11 @@ Sending creates a MIME `multipart/alternative` message with UTF-8 plain-text and
 
 ## Shared signature administration
 
-Open **Settings → Email signature**. Platform Administrators can enable the signature, configure a public HTTPS organization-logo URL and its description, add text lines with individual colors, and configure website or social links with a shared link color. The preview resolves placeholders for the signed-in member.
+Open **Settings → Email signature**. Platform Administrators control one design for all members: text, colors, font sizes, bold styling, spacing, optional organization logo, and Helix website/social links. Members can preview their signature but cannot edit the design. The preview resolves placeholders from the signed-in member's current server-side profile.
 
-Supported placeholders are `{member.name}`, `{member.role}`, and `{member.email}`. The role is the member's assigned `identity.members.helix_role`, not a platform permission such as administrator. Missing roles produce no empty line. Template text and member values are escaped as text. Colors must be six-digit hex values. Image and link URLs must use HTTPS.
+**Use Helix design** loads the supplied reference layout: a blue bold name, dark navy bold organization and role, phone number, then blue underlined Facebook, Instagram, LinkedIn, and Nettside links separated by vertical bars. These are Helix's organization accounts from the website footer. The default reference design has no logo; administrators can still add one. Loading the design keeps the enabled state and requires saving before it applies to everyone. Existing saved templates retain their text and legacy typography until an administrator changes them.
+
+Supported placeholders are `{member.name}`, `{member.role}`, `{member.phone}`, and `{member.email}`. Name and role come from `identity.members`; the role is `helix_role`, not a platform permission such as administrator. Phone comes from the member's saved profile (`cv.documents.draft.phone`), independently of CV directory-sharing settings. Only the sender's own resolved values are returned, and sending resolves them again on the server. Lines referencing a missing role or phone are omitted. Template text and member values are escaped as text. Colors must be six-digit hex values, font sizes must be 10–40 pixels, and line spacing must be 0–16 pixels. Image and link URLs must use HTTPS. This design update requires no database migration.
 
 All verified members may read the settings and their own rendered signature. Every write checks the current `platform_administrator` role and the linked Google identity on the server. Revision checks reject stale saves. The singleton configuration records its latest editor and update time; it stores no email contents. The signature starts disabled until an administrator configures and enables it.
 
@@ -59,7 +61,7 @@ npm run build
 git diff --check
 ```
 
-The production build measured 9.19 MB against the 10 MB static-output budget and 10 serverless functions against the 11-function target. Four-worker database runs encountered resource-related timeouts; the complete suite passed with two workers. ESLint currently targets JavaScript/JSX; TypeScript files are covered by the TypeScript checks and tests.
+The reference-design follow-up, integrated with the latest main, passed all 994 tests and three deployment guards, all three TypeScript checks, lint, and the production build. Local browser inspection verified the typography, Helix social links, phone substitution, and administrator save flow. The production build measured 9.20 MB against the 10 MB static-output budget and 10 serverless functions against the 11-function target. Four-worker database runs previously encountered resource-related timeouts; the complete suite passed with two workers. ESLint currently targets JavaScript/JSX; TypeScript files are covered by the TypeScript checks and tests.
 
 The first production smoke check exposed an incompatibility between sanitize-html's ESM-only parser dependency and Vercel's instrumented CommonJS loader. Production traffic was temporarily restored to the preceding deployment. Installation and builds now bundle the current sanitizer and its parser into one generated server module, retaining the current security fixes. The generated file is ignored by Git and traced into the Gmail function. A subprocess regression test disables synchronous require of ESM to reproduce the deployment restriction and checks that sanitization still runs.
 

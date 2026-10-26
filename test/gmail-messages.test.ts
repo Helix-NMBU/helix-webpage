@@ -9,7 +9,7 @@ function signatures(): EmailSignatureServices {
   const settings = { ...defaultSignatureSettings, enabled: true, logoUrl: "https://example.test/logo.png" };
   return {
     read: vi.fn(), save: vi.fn(),
-    forMember: vi.fn(async (member) => ({ settings, revision: 1, signature: renderSignature(settings, { ...member, role: "Mechanical lead" }) })),
+    forMember: vi.fn(async (member) => ({ settings, revision: 1, member: { ...member, role: "Mechanical lead", phone: "+47 12345678" }, signature: renderSignature(settings, { ...member, role: "Mechanical lead", phone: "+47 12345678" }) })),
   };
 }
 
@@ -163,7 +163,7 @@ describe("Gmail message endpoints", () => {
     const raw = JSON.parse(String(sendCall?.init?.body)).raw as string;
     const parts = mimeParts(raw);
     expect(parts.mime).toContain("Cc: copy@example.com");
-    expect(parts.text.replace(/\r\n/g, "\n")).toContain("Message body\n\nMember\nMechanical lead");
+    expect(parts.text.replace(/\r\n/g, "\n")).toContain("Message body\n\nMember\nHelix NMBU\nMechanical lead\nTlf: +47 12345678");
     expect(parts.html).toContain('src="https://example.test/logo.png"');
     expect(parts.html).toContain("Mechanical lead");
   });

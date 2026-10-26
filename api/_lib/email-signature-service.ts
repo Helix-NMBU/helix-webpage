@@ -12,10 +12,11 @@ export interface EmailSignatureServices {
 
 export function createEmailSignatureServices(deps: { db: CvDatabase; authenticate: (token: string) => Promise<WorkspaceIdentity> }): EmailSignatureServices {
   async function member(identity: WorkspaceIdentity, requireAdmin = false) {
-    const { rows } = await deps.db.query<{ name: string; email: string; role: string; admin: boolean }>(
-      `select coalesce(nullif(m.full_name, ''), m.email) as name, m.email, coalesce(m.helix_role, '') as role,
+    const { rows } = await deps.db.query<{ name: string; email: string; role: string; phone: string; admin: boolean }>(
+      `select coalesce(nullif(m.full_name, ''), m.email) as name, m.email, coalesce(m.helix_role, '') as role, coalesce(d.draft->>'phone', '') as phone,
         exists(select 1 from identity.member_roles r where r.member_id = m.id and r.role_key = 'platform_administrator') as admin
-       from identity.members m where m.id = $1::uuid and m.google_sub = $2 and lower(m.email) = lower($3)`,
+       from identity.members m left join cv.documents d on d.member_id = m.id
+       where m.id = $1::uuid and m.google_sub = $2 and lower(m.email) = lower($3)`,
       [identity.userId, identity.googleSub, identity.email],
     );
     if (!rows[0]) throw new MemberCvError(403, "Your Google identity no longer matches this profile.");
@@ -26,7 +27,8 @@ export function createEmailSignatureServices(deps: { db: CvDatabase; authenticat
     const profile = await member(identity);
     const { rows } = await deps.db.query<{ settings: unknown; revision: number }>("select settings, revision from member_mail.signature_settings where singleton = true");
     const settings = rows[0] ? parseSignatureSettings(rows[0].settings) : structuredClone(defaultSignatureSettings);
-    return { settings, revision: rows[0]?.revision ?? 0, signature: renderSignature(settings, profile) };
+    const ownMember = { name: profile.name, email: profile.email, role: profile.role, phone: profile.phone };
+    return { settings, revision: rows[0]?.revision ?? 0, signature: renderSignature(settings, ownMember), member: ownMember };
   }
   return {
     forMember,
