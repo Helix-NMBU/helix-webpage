@@ -211,7 +211,7 @@ describe("internal member platform", () => {
     await open("/");
     await profileMenu();
     const appearance = [...document.querySelectorAll<HTMLButtonElement>('[aria-labelledby="member-appearance-label member-appearance-value"]')][0];
-    await act(async () => appearance?.click());
+    await act(async () => appearance?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
     const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
     expect(dark).toBeDefined();
     await act(async () => dark?.click());
