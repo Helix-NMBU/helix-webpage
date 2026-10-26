@@ -17,10 +17,13 @@ const workspaceSql = `select a.can_manage as "canManage", a.member_id as "viewer
     'category',p.category,'departments',p.departments,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
     from project_management.projects p where p.season = 'S27'),'[]'::jsonb) as projects,
   coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'season',t.season,'title',t.title,'description',t.description,
-    'category',t.category,'projectId',t.project_id,'assigneeIds',coalesce((select jsonb_agg(ta.member_id order by ta.member_id) from project_management.task_assignees ta where ta.task_id=t.id),'[]'::jsonb),'deadline',t.deadline,'startDate',t.start_date,
+    'category',t.category,'projectId',t.project_id,'milestoneId',t.milestone_id,'assigneeIds',coalesce((select jsonb_agg(ta.member_id order by ta.member_id) from project_management.task_assignees ta where ta.task_id=t.id),'[]'::jsonb),'deadline',t.deadline,'startDate',t.start_date,
     'status',t.status,'priority',t.priority,'kind',t.kind,'partnerName',t.partner_name,'blockedReason',t.blocked_reason,
     'revision',t.revision,'createdAt',t.created_at,'updatedAt',t.updated_at,'completedAt',t.completed_at)
     order by t.deadline nulls last,t.created_at,t.id) from project_management.tasks t where t.season = 'S27'),'[]'::jsonb) as tasks,
+  coalesce((select jsonb_agg(jsonb_build_object('taskId',e.task_id,'recordedAt',e.recorded_at,
+    'category',e.category,'kind',e.kind,'status',e.status) order by e.recorded_at,e.event_id)
+    from project_management.task_progress_events e where e.season = 'S27'),'[]'::jsonb) as "progressEvents",
   coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name,'avatarUrl',to_jsonb(u)->>'image') order by m.full_name,m.id)
     from project_management.access eligible join identity.members m on m.id = eligible.member_id
     join neon_auth."user" u on u.id = m.auth_user_id
@@ -40,7 +43,7 @@ function projectError(error: unknown): never {
   if (message.includes("project_forbidden")) throw new MemberCvError(403, "Project management access is required. Contact your project manager.");
   if (message.includes("project_not_found")) throw new MemberCvError(404, "This task or project is no longer available.");
   if (message.includes("project_conflict") || code === "23505") throw new MemberCvError(409, "This task or project changed. Reload the workspace before saving again.");
-  if (message.includes("project_invalid_reference") || code === "23503") throw new MemberCvError(400, "Choose an eligible assignee and a project in the same category. A project category cannot change while it contains tasks in another category.");
+  if (message.includes("project_invalid_reference") || code === "23503") throw new MemberCvError(400, "Choose an eligible assignee, project and milestone in the same area. A milestone must match the task project or have no project. Linked milestones cannot be moved or converted while their tasks would become invalid.");
   if (message.includes("project_invalid") || ["23514", "22007", "22008", "22P02", "23502"].includes(code)) throw new MemberCvError(400, "Check the task or project fields and try again.");
   throw new MemberCvError(503, "Could not complete the project management request. Your input has been kept. Try again.");
 }

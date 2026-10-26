@@ -31,11 +31,13 @@ function task(value: unknown): TaskInput {
   const input: TaskInput = {
     title: text(body.title, "title", 200, true), description: text(body.description, "description", 2000),
     category: oneOf(body.category, TASK_CATEGORIES), projectId: body.projectId === null ? null : uuid(body.projectId),
+    milestoneId: body.milestoneId === null ? null : uuid(body.milestoneId),
     assigneeIds: [...new Set(body.assigneeIds.map(uuid))], deadline: date(body.deadline), startDate: date(body.startDate),
     status: oneOf(body.status, TASK_STATUSES), priority: oneOf(body.priority, TASK_PRIORITIES), kind: oneOf(body.kind, ["task", "milestone"]),
     partnerName: text(body.partnerName, "partner name", 200), blockedReason: text(body.blockedReason, "blocked reason", 500),
   };
   if (input.startDate && input.deadline && input.startDate > input.deadline) return invalid("The start date must be on or before the deadline.");
+  if (input.kind === "milestone" && input.milestoneId) return invalid("A milestone cannot belong to another milestone.");
   if (input.kind === "milestone" && !input.deadline) return invalid("A milestone needs a deadline.");
   if (input.category === "partnership-deliverables" && !input.partnerName) return invalid("Enter the partner this deliverable belongs to.");
   if (input.status === "blocked" && !input.blockedReason) return invalid("Explain what is blocking this task.");

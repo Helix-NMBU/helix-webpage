@@ -21,6 +21,7 @@ export interface TaskInput {
   description: string;
   category: TaskCategory;
   projectId: string | null;
+  milestoneId: string | null;
   assigneeIds: string[];
   deadline: string | null;
   startDate: string | null;
@@ -38,6 +39,13 @@ export interface Task extends TaskInput {
   updatedAt: string;
   completedAt: string | null;
 }
+export interface TaskProgressEvent {
+  taskId: string;
+  recordedAt: string;
+  category: TaskCategory;
+  kind: "task" | "milestone";
+  status: TaskStatus;
+}
 export interface ProjectMember { id: string; name: string; avatarUrl?: string | null; }
 export interface ProjectWorkspace {
   season: string;
@@ -46,6 +54,7 @@ export interface ProjectWorkspace {
   taskLeadCategories: TaskCategory[];
   projects: Project[];
   tasks: Task[];
+  progressEvents: TaskProgressEvent[];
   members: ProjectMember[];
 }
 export type ProjectMutation =
