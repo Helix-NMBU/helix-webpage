@@ -10,7 +10,8 @@ export async function emailSignatureRequest(owner: { current: string | null }, c
       if (change.revision !== localSnapshot.revision) throw new Error("The signature changed in another session. Reload it before saving again.");
       localSnapshot = { settings: parseSignatureSettings(change.settings), revision: change.revision + 1 };
     }
-    return { ...structuredClone(localSnapshot), signature: renderSignature(localSnapshot.settings, { ...localMemberAccount, role: localMemberAccount.helixRole ?? "" }) };
+    const member = { ...localMemberAccount, role: localMemberAccount.helixRole ?? "", phone: "+47 12345678" };
+    return { ...structuredClone(localSnapshot), signature: renderSignature(localSnapshot.settings, member), member };
   }
   const token = await memberSessionToken(owner);
   const response = await fetch("/api/gmail?action=signature", {
