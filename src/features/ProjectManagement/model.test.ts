@@ -27,7 +27,7 @@ describe("project progress and deadlines", () => {
     expect(() => validateTask({ ...base, deadline: "2026-02-30" })).toThrow("valid date");
     expect(() => validateTask({ ...base, startDate: "2027-01-01", deadline: "2026-01-01" })).toThrow("start date");
     expect(() => validateTask({ ...base, blockedReason: "" })).toThrow("blocking");
-    expect(() => validateTask({ ...base, kind: "milestone", deadline: null })).toThrow("deadline");
+    expect(() => validateTask({ ...base, kind: "milestone", milestoneId: null, deadline: null })).toThrow("deadline");
     expect(() => validateTask({ ...base, category: "partnership-deliverables", partnerName: "" })).toThrow("partner");
     expect(validateProject({ name: " Shared project ", description: "", departments: ["Mechanical", "Electrical", "Mechanical"], category: "production", deadline: null }).departments).toEqual(["Mechanical", "Electrical"]);
   });

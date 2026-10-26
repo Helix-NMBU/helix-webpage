@@ -25,8 +25,8 @@ describe("project management interface", () => {
     mutate.mockReset().mockResolvedValue(initialLocalWorkspace());
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
-  async function open(section = "overview", personal = false) {
-    const router = createMemoryRouter([{ path: "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [`/project-management/${section}`] });
+  async function open(section = "overview", personal = false, query = "") {
+    const router = createMemoryRouter([{ path: "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [`/project-management/${section}${query}`] });
     await act(async () => root.render(<RouterProvider key={`${section}-${personal}`} router={router} />));
   }
   const button = (title: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(element => element.textContent === title)!;
@@ -209,4 +209,56 @@ describe("project management interface", () => {
     expect(mutate.mock.calls[2][0]).toMatchObject({ id: failedId, task: { category: "marketing", title: "Second update" } });
     expect(first.id).not.toBe(failedId);
   });
+  it("replaces Overview summary cards with observed progress and linked milestone completion", async () => {
+    await open();
+    expect(container.querySelector('[aria-label="Task progress over time"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed1");
+    expect(container.querySelector('[aria-label="Chassis ready for assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
+    expect(container.textContent).toContain("Shaded area: future");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label^="See tasks for milestone Chassis ready for assembly,"]')!.click());
+    const tables = container.querySelectorAll("table");
+    expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
+    expect(tables[tables.length - 1].textContent).not.toContain("Publish workshop update");
+    expect(tables[tables.length - 1].textContent).not.toContain("Submit competition registration");
+  });
+  it("creates a dated milestone in its authorized work area", async () => {
+    await open("marketing"); await click("New milestone");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Create milestone");
+    await fill("new-task-title", "Campaign launch"); await click("Due date");
+    await fill("new-task-deadline", "2026-12-15");
+    // Dismiss the date popover before submitting the composer.
+    await click("15 Dec 2026"); await click("Save");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ title: "Campaign launch", kind: "milestone", milestoneId: null, category: "marketing", deadline: "2026-12-15" }) }));
+  });
+  it("shows the milestone link read-only in personal task details", async () => {
+    await open("overview", true); await click("Confirm material delivery");
+    const field = document.getElementById("task-milestone");
+    expect(field?.hasAttribute("disabled")).toBe(true);
+    expect(field?.textContent).toContain("Chassis ready for assembly");
+    await click("Save task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
+  });
+
+  it("opens a routed milestone composer only inside an authorized area", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), taskLeadCategories: ["marketing"] });
+    await open("production", false, "?create=milestone");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await open("marketing", false, "?create=milestone");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Create milestone");
+  });
+  it("lets a Lead unlink a task while preserving its other details", async () => {
+    await open("production"); await click("Confirm material delivery");
+    await act(async () => document.getElementById("task-milestone")!.click());
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "No milestone")!;
+    await act(async () => option.click()); await click("Save task");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ task: expect.objectContaining({ title: "Confirm material delivery", milestoneId: null }) }));
+  });
+  it("renders an empty Overview without inventing task completion or history", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], taskLeadCategories: [] });
+    await open();
+    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope0Started0Completed0");
+    expect(container.textContent).toContain("No tasks yet.");
+    expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
+  });
+
 });

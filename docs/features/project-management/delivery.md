@@ -71,3 +71,12 @@ Independent reviewer `assignees_standards_review` inspected `3f040024...57cf955`
 ### Spec and correctness review
 
 Independent reviewer `assignees_spec_review` inspected the same commits and found no actionable Spec, correctness or security issues. Shared visibility/status ownership, scoped Lead assignment, atomic replacement, backfill/idempotency, revocation, revision conflicts and old-payload rejection matched the approved behavior. Neither reviewer reran tests.
+
+## Overview graph and milestone progress, 26 October 2026
+
+Scope: user request and reference screenshots, recorded in `overview-progress.md`. Fixed base `7642daf`; integration remains `codex/project-management` in the canonical checkout. Unrelated uncommitted changes are preserved. No remote push, PR, ticket closure, production migration or deployment is authorized.
+
+- Backend worker `milestone_data` used isolated managed worktree `/Users/henrik.noteless/.codex/worktrees/project-milestone-data/helix-webpage`, detached at `7642daf`. Commit `59c5081` was integrated as `0691f31`. It owns migration 012, API, shared contracts and API/DB tests. Its 29 focused tests and both API typechecks passed.
+- Coordinator implemented the Overview graph/list, milestone creation/linking UI, model calculations, local fixture upgrades, documentation and client tests. Browser on loopback port 5190 verified existing task linking, milestone progress changing 50% → 100% → 50% through My tasks completion and reopening, persistence after reload, milestone task-list drill-down, and Overview add navigation into Production with a dated milestone successfully created. Existing local data received a present-time history baseline; earlier history was not invented. Independent final review is pending.
+
+- Integrated verification: 95 focused UI/model/repository/API/member-shell tests and 20 database tests passed. All three TypeScript checks, lint and production build passed (9.21 MB, 9 API functions). One additional shared draft-update regression was then added; the final focused run is recorded after review. No real Neon or Google authentication flow was exercised.

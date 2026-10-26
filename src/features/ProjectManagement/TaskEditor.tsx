@@ -7,6 +7,7 @@ import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { Textarea } from "@libs/components/ui/textarea";
 import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type Project, type ProjectInput, type ProjectMutation, type ProjectWorkspace, type Task, type TaskCategory, type TaskInput } from "./types";
+import { compatibleMilestones, updateTaskDraft } from "./progress";
 import { validateProject, validateTask } from "./model";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 
@@ -28,12 +29,14 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
 }) {
   const [id] = useState(() => task?.id ?? crypto.randomUUID());
   const [revision] = useState(task?.revision ?? 0);
-  const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
+  const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, milestoneId: null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
   const notify = useNotify();
   const canLeadTask = workspace.taskLeadCategories.includes(task?.category ?? category);
   const manager = !statusOnly && canLeadTask;
   const canEdit = canLeadTask || workspace.canManage || (task?.assigneeIds.includes(workspace.viewerId) ?? false);
-  const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => ({ ...previous, [key]: value }));
+  const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => updateTaskDraft(previous, key, value, workspace.tasks));
+  const milestones = compatibleMilestones(workspace.tasks, draft, id);
+  const milestoneOptions = [{ value: "none", label: "No milestone" }, ...milestones.map(item => ({ value: item.id, label: item.title }))];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || !canEdit) return;
@@ -52,7 +55,8 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
           <Field id="task-category" label="Area"><Input id="task-category" readOnly value={CATEGORY_LABELS[draft.category]} /></Field>
           <Field id="task-project" label="Project"><Choice id="task-project" disabled={busy || !manager} value={draft.projectId ?? "season"} onChange={value => change("projectId", value === "season" ? null : value)} options={[{ value: "season", label: `${workspace.season} season` }, ...workspace.projects.filter(project => project.category === draft.category).map(project => ({ value: project.id, label: project.name }))]} /></Field>
           <Field id="task-assignee" label="Assignees"><AssigneePicker id="task-assignee" disabled={busy || !manager} value={draft.assigneeIds} onChange={value => change("assigneeIds", value)} members={workspace.members} /></Field>
-          <Field id="task-kind" label="Type"><Choice id="task-kind" disabled={busy || !manager} value={draft.kind} onChange={value => change("kind", value as TaskInput["kind"])} options={[{ value: "task", label: "Task" }, { value: "milestone", label: "Milestone" }]} /></Field>
+          <Field id="task-kind" label="Type"><Choice id="task-kind" disabled={busy || !manager || workspace.tasks.some(item => item.milestoneId === id)} value={draft.kind} onChange={value => change("kind", value as TaskInput["kind"])} options={[{ value: "task", label: "Task" }, { value: "milestone", label: "Milestone" }]} /></Field>
+          {draft.kind === "task" && <Field id="task-milestone" label="Milestone"><Choice id="task-milestone" disabled={busy || !manager} value={draft.milestoneId ?? "none"} onChange={value => change("milestoneId", value === "none" ? null : value)} options={milestoneOptions} /></Field>}
           <Field id="task-start" label="Start date"><Input id="task-start" type="date" min="2000-01-01" max="2100-12-31" value={draft.startDate ?? ""} onChange={event => change("startDate", event.target.value || null)} /></Field>
           <Field id="task-deadline" label="Deadline"><Input id="task-deadline" type="date" min={draft.startDate ?? "2000-01-01"} max="2100-12-31" required={draft.kind === "milestone"} value={draft.deadline ?? ""} onChange={event => change("deadline", event.target.value || null)} /></Field>
           <Field id="task-priority" label="Priority"><Choice id="task-priority" disabled={busy || !manager} value={draft.priority} onChange={value => change("priority", value as TaskInput["priority"])} options={TASK_PRIORITIES.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} /></Field>

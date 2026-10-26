@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProjectRepository, ProjectRequestError } from "./repository";
+import { osloDate } from "./model";
 import { createLocalProjectRepository } from "./local-repository";
 import { CvRequestError } from "../MemberCV/repository";
 import { clearMemberLanding, ensureMemberLanding, loginAction } from "../MemberCV/session";
@@ -66,4 +67,25 @@ describe("dedicated local project mode", () => {
     await createLocalProjectRepository().mutate({ action: "save_task", id: task.id, expectedRevision: task.revision, task: { ...task, assigneeIds: both } });
     expect((await createLocalProjectRepository().load()).tasks.find(item => item.id === task.id)?.assigneeIds).toEqual(both);
   });
+  it("upgrades existing fixtures without inventing old history or milestone membership", async () => {
+    const initial = await createLocalProjectRepository().load();
+    const { progressEvents: _history, ...legacy } = initial;
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...legacy, tasks: initial.tasks.map(({ milestoneId: _milestone, ...task }) => task) }));
+    const loaded = await createLocalProjectRepository().load();
+    expect(loaded.tasks.every(task => task.milestoneId === null)).toBe(true);
+    expect(loaded.progressEvents).toHaveLength(loaded.tasks.length);
+    expect(loaded.progressEvents.every(event => osloDate(new Date(event.recordedAt)) === osloDate())).toBe(true);
+  });
+  it("records observed status changes and rolls back invalid milestone changes", async () => {
+    const repository = createLocalProjectRepository();
+    const initial = await repository.load();
+    const task = initial.tasks[1];
+    const updated = await repository.mutate({ action: "set_status", id: task.id, expectedRevision: task.revision, status: "done", blockedReason: "" });
+    expect(updated.progressEvents).toHaveLength(initial.progressEvents.length + 1);
+    expect(updated.progressEvents[updated.progressEvents.length - 1]).toMatchObject({ taskId: task.id, status: "done" });
+    const saved = updated.tasks.find(item => item.id === task.id)!;
+    await expect(repository.mutate({ action: "save_task", id: saved.id, expectedRevision: saved.revision, task: { ...saved, milestoneId: initial.tasks.find(item => item.category === "operations")!.id } })).rejects.toThrow("milestone");
+    expect(await repository.load()).toEqual(updated);
+  });
+
 });

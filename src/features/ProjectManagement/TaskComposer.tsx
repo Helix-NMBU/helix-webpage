@@ -9,21 +9,24 @@ import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/pop
 import { AssigneePicker } from "./TaskAssignees";
 import { Choice, Field } from "./TaskEditor";
 import { CATEGORY_LABELS, type ProjectMutation, type ProjectWorkspace, type TaskCategory, type TaskInput } from "./types";
+import { compatibleMilestones, updateTaskDraft } from "./progress";
 import { formatDate, validateTask } from "./model";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 
-export function TaskComposer({ workspace, category, projectId, busy, onSave, onClose }: {
-  workspace: ProjectWorkspace; category: TaskCategory; projectId: string | null; busy: boolean;
+export function TaskComposer({ workspace, category, projectId, busy, onSave, onClose, initialKind = "task" }: {
+  workspace: ProjectWorkspace; category: TaskCategory; projectId: string | null; busy: boolean; initialKind?: TaskInput["kind"];
   onSave: (mutation: ProjectMutation) => Promise<boolean>; onClose: () => void;
 }) {
   const [id, setId] = useState(() => crypto.randomUUID());
-  const [draft, setDraft] = useState<TaskInput>(() => ({ title: "", description: "", category, projectId, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" }));
-  const [details, setDetails] = useState(false);
+  const [draft, setDraft] = useState<TaskInput>(() => ({ title: "", description: "", category, projectId, milestoneId: null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: initialKind, partnerName: "", blockedReason: "" }));
+  const [details, setDetails] = useState(initialKind === "milestone");
   const [createMore, setCreateMore] = useState(false);
   const notify = useNotify();
   const titleInput = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { titleInput.current?.focus(); }, [id]);
-  const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => ({ ...previous, [key]: value }));
+  const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => updateTaskDraft(previous, key, value, workspace.tasks));
+  const milestones = compatibleMilestones(workspace.tasks, draft);
+  const milestoneOptions = [{ value: "none", label: "No milestone" }, ...milestones.map(item => ({ value: item.id, label: item.title }))];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || !workspace.taskLeadCategories.includes(category)) return;
@@ -35,7 +38,7 @@ export function TaskComposer({ workspace, category, projectId, busy, onSave, onC
     } catch (error) { notify("Could not create task", error instanceof Error ? error.message : "Please try again.", { variant: "error", href: null }); }
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90svh] gap-0 overflow-y-auto p-0 sm:max-w-4xl" showCloseButton={!busy}>
-    <DialogHeader className="flex-row items-baseline gap-3 space-y-0 border-b px-5 py-3"><DialogTitle className="text-sm font-medium">Create task</DialogTitle><DialogDescription className="text-xs">{CATEGORY_LABELS[category]}</DialogDescription></DialogHeader>
+    <DialogHeader className="flex-row items-baseline gap-3 space-y-0 border-b px-5 py-3"><DialogTitle className="text-sm font-medium">{draft.kind === "milestone" ? "Create milestone" : "Create task"}</DialogTitle><DialogDescription className="text-xs">{CATEGORY_LABELS[category]}</DialogDescription></DialogHeader>
     <form onSubmit={event => void submit(event)}>
       <fieldset disabled={busy}>
         <div className="space-y-3 px-5 py-4"><Label htmlFor="new-task-title" className="sr-only">Task title</Label><Textarea ref={titleInput} id="new-task-title" autoFocus required maxLength={200} rows={2} placeholder="What needs to be done?" className="min-h-12 resize-none border-0 p-0 text-base shadow-none focus-visible:ring-0" value={draft.title} onChange={event => change("title", event.target.value)} />
@@ -46,6 +49,7 @@ export function TaskComposer({ workspace, category, projectId, busy, onSave, onC
           <Popover><PopoverTrigger asChild><Button type="button" variant="ghost" size="sm">{draft.deadline ? formatDate(draft.deadline) : "Due date"}</Button></PopoverTrigger><PopoverContent className="w-64" align="start"><Field id="new-task-deadline" label="Due date"><Input id="new-task-deadline" type="date" min={draft.startDate ?? "2000-01-01"} max="2100-12-31" value={draft.deadline ?? ""} onChange={event => change("deadline", event.target.value || null)} /></Field></PopoverContent></Popover>
           <div className="min-w-44"><AssigneePicker id="new-task-assignee" disabled={busy} value={draft.assigneeIds} onChange={value => change("assigneeIds", value)} members={workspace.members} /></div>
           <div className="w-36"><Choice id="new-task-project" ariaLabel="Related project" disabled={busy} value={draft.projectId ?? "season"} onChange={value => change("projectId", value === "season" ? null : value)} options={[{ value: "season", label: `${workspace.season} season` }, ...workspace.projects.filter(project => project.category === category).map(project => ({ value: project.id, label: project.name }))]} /></div>
+          {draft.kind === "task" && <div className="w-44"><Choice id="new-task-milestone" ariaLabel="Milestone" disabled={busy} value={draft.milestoneId ?? "none"} onChange={value => change("milestoneId", value === "none" ? null : value)} options={milestoneOptions} /></div>}
           <Button type="button" variant="ghost" size="sm" onClick={() => setDetails(value => !value)} aria-expanded={details}>{details ? "Fewer details" : "More details"}</Button>
           <div className="flex flex-1 items-center justify-end gap-3"><div className="flex items-center gap-2 whitespace-nowrap"><Checkbox id="create-another-task" checked={createMore} disabled={busy} onCheckedChange={value => setCreateMore(value === true)} /><Label htmlFor="create-another-task" className="text-xs font-normal">Create another</Label></div><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" size="sm" disabled={busy}>{busy ? "Saving…" : "Save"}</Button></div>
         </div>

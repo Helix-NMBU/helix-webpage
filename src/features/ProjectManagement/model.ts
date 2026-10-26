@@ -58,9 +58,10 @@ export function validateTask(input: TaskInput): TaskInput {
     return uuidOrNull(id)!.toLowerCase();
   }))];
   if (!TASK_CATEGORIES.includes(input.category) || !TASK_STATUSES.includes(input.status) || !TASK_PRIORITIES.includes(input.priority) || !["task", "milestone"].includes(input.kind)) throw new Error("Choose a valid category, status, priority and task type.");
-  const value = { ...input, title: text(input.title, "Title", 200, true), description: text(input.description, "Description", 2000), partnerName: text(input.partnerName, "Partner name", 200), blockedReason: text(input.blockedReason, "Blocked reason", 500), assigneeIds, projectId: uuidOrNull(input.projectId), deadline: date(input.deadline), startDate: date(input.startDate) };
+  const value = { ...input, title: text(input.title, "Title", 200, true), description: text(input.description, "Description", 2000), partnerName: text(input.partnerName, "Partner name", 200), blockedReason: text(input.blockedReason, "Blocked reason", 500), assigneeIds, milestoneId: uuidOrNull(input.milestoneId), projectId: uuidOrNull(input.projectId), deadline: date(input.deadline), startDate: date(input.startDate) };
   if (value.category === "partnership-deliverables" && !value.partnerName) throw new Error("Enter the sponsor or partner name for this deliverable.");
   if (value.status === "blocked" && !value.blockedReason) throw new Error("Describe what is blocking this task.");
+  if (value.kind === "milestone" && value.milestoneId) throw new Error("A milestone cannot belong to another milestone.");
   if (value.kind === "milestone" && !value.deadline) throw new Error("Set a deadline for this milestone.");
   if (value.startDate && value.deadline && value.startDate > value.deadline) throw new Error("The start date must be on or before the deadline.");
   return value;
