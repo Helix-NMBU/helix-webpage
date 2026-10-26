@@ -151,7 +151,7 @@ describe("pending retired file cleanup", () => {
       cleanupPending: true,
       document: { revision: 2 },
     });
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });
 
