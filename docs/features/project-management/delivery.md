@@ -103,4 +103,6 @@ Independent reviewer `hierarchy_standards_review` inspected `7642daf...b4064fa` 
 
 Independent reviewer `hierarchy_spec_review` inspected the same full feature and found a P2 project-card milestone action retaining an unrelated search, plus P3 empty-state guidance still permitting direct season tasks. The repair clears search and selects the task list when opening a project milestone, and updates the empty-state and setup guidance to require a project and milestone. Regressions cover the reset and hierarchy wording. No additional correctness/security findings were reported.
 
-After these repairs, all 60 focused project-management tests and the client TypeScript check passed. Final reviewer rechecks are pending. No live database migration or deployment performed.
+After these repairs, all 60 focused project-management tests and the client TypeScript check passed. Both independent reviewers rechecked `b79657ac8c08c78e71af787dfe8e32d72dbaab29` and cleared every reported finding. Standards/React/accessibility: no remaining actionable findings. Spec/correctness/security: no remaining findings. No live database migration or deployment performed.
+
+- Final implementation location remains `/Users/henrik.noteless/Documents/Github/helix-webpage` on `codex/project-management`. Temporary milestone-data and icon worker worktrees were queued for archival after returning the chat to its original managed attachment; the older attached API checkout is not the integration checkout. Continue feature work explicitly in the canonical path.
