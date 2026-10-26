@@ -30,9 +30,9 @@ import { isMemberPlatform } from './features/MemberPlatform/routes.ts'
 
 function AppContent() {
   const location = useLocation();
-  const sponsorPath = location.pathname === '/sponsor' || location.pathname.startsWith('/sponsor/') || location.pathname === '/sponsorportal' || location.pathname === '/sponsorportal-login';
+  const sponsorPath = location.pathname === '/login' || location.pathname === '/sponsor' || location.pathname.startsWith('/sponsor/') || location.pathname === '/sponsorportal' || location.pathname === '/sponsorportal-login';
   useEffect(() => { if (!sponsorPath) void claimNeonAuthSession(); }, [sponsorPath]);
-  if (location.pathname === '/sponsorportal-login') return <Navigate to="/sponsor/login" replace />;
+  if (location.pathname === '/sponsorportal-login') return <Navigate to="https://partner.helixnmbu.no/login" replace />;
   if (location.pathname === '/sponsorportal') return <Navigate to="/sponsor" replace />;
   if (sponsorPath) return <SponsorWorkspace />;
   return isMemberPlatform() ? <MemberPlatform /> : <PublicAppContent />;

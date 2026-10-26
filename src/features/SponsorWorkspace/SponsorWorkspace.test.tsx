@@ -82,4 +82,12 @@ describe("composed sponsor workspace", () => {
     await act(async () => root.render(<MemoryRouter key="login" initialEntries={["/sponsor/login"]}><SponsorWorkspace /></MemoryRouter>));
     expect(host.querySelector(".member-platform.portal-root form")).not.toBeNull();
   });
+  it("renders the dedicated partner login with a return link and without site chrome", async () => {
+    await render("/login");
+    const returnLink = host.querySelector<HTMLAnchorElement>('a[href="https://www.helixnmbu.no"]');
+    expect(returnLink?.textContent).toBe("Go back to the webpage");
+    expect(host.querySelector("[data-navbar-ref]")).toBeNull();
+    expect(host.querySelector("footer")).toBeNull();
+    expect(host.textContent).toContain("Email me a sign-in link");
+  });
 });
