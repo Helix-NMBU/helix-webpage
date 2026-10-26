@@ -1,6 +1,6 @@
 import {
-  IconBriefcase,
-  IconTools,
+  IconCube3dSphere,
+  IconTool,
   IconCpu,
   IconCode,
   IconSpeakerphone,
@@ -11,8 +11,8 @@ import {
 } from "@tabler/icons-react";
 
 const departmentIcons: Record<string, TablerIcon> = {
-  Management: IconBriefcase,
-  "Mechanical & Production": IconTools,
+  Management: IconCube3dSphere,
+  "Mechanical & Production": IconTool,
   Electronics: IconCpu,
   "Software & Autonomous": IconCode,
   "Business & Marketing": IconSpeakerphone,
