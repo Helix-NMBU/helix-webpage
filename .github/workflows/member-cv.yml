@@ -1,9 +1,9 @@
 name: Deployment stabilization checks
 on:
   pull_request:
-    branches: [internal-member-platform-mvp, main]
+    branches: [internal-member-platform-mvp, main, feat/finance]
   push:
-    branches: [internal-member-platform-mvp, main]
+    branches: [internal-member-platform-mvp, main, feat/finance]
 permissions:
   contents: read
 jobs:
