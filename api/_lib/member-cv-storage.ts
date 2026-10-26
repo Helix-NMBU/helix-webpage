@@ -19,7 +19,7 @@ export function assertGeneratedPdf(bytes: Uint8Array): void {
 export interface CvObjectStorage {
   putPdf(path: string, bytes: Uint8Array): Promise<void>;
   remove(path: string): Promise<void>;
-  presign(path: string): Promise<string>;
+  presign(path: string, disposition?: "inline" | "attachment"): Promise<string>;
 }
 
 export function createCvStorage(env: NodeJS.ProcessEnv = process.env): CvObjectStorage {
@@ -60,14 +60,14 @@ export function createCvStorage(env: NodeJS.ProcessEnv = process.env): CvObjectS
         throw new MemberCvError(503, "Publication visibility has changed, but retired file deletion is pending. Reload your CV to retry cleanup.");
       }
     },
-    async presign(path) {
+    async presign(path, disposition = "attachment") {
       if (!OWNED_PDF.test(path)) throw new MemberCvError(404, "No published CV is available to download.");
       try {
         return await getSignedUrl(client, new GetObjectCommand({
           Bucket: bucket,
           Key: path,
           ResponseContentType: "application/pdf",
-          ResponseContentDisposition: 'attachment; filename="helix-cv.pdf"',
+          ResponseContentDisposition: `${disposition}; filename="helix-cv.pdf"`,
         }), { expiresIn: PRESIGN_SECONDS });
       } catch {
         throw new MemberCvError(503, "Could not load your CV.");

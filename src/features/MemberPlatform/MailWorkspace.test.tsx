@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { TooltipProvider } from "@libs/components/ui/tooltip";
 import { MailWorkspace } from "./MailWorkspace";
 
 describe("mail workspace", () => {
@@ -21,7 +22,7 @@ describe("mail workspace", () => {
   });
 
   it("shows only the disconnected Gmail state", async () => {
-    await act(async () => root.render(<MailWorkspace connected={false} />));
+    await act(async () => root.render(<TooltipProvider><MailWorkspace connected={false} /></TooltipProvider>));
 
     expect(container.querySelector("#connect-gmail-title")?.textContent).toBe(
       "Connect your Gmail account",
@@ -32,7 +33,7 @@ describe("mail workspace", () => {
   });
 
   it("shows one inbox column with folder controls in its header when connected", async () => {
-    await act(async () => root.render(<MailWorkspace connected />));
+    await act(async () => root.render(<TooltipProvider><MailWorkspace connected /></TooltipProvider>));
 
     expect(container.querySelector('[aria-label="Search mail"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Inbox"]')).not.toBeNull();
@@ -45,7 +46,7 @@ describe("mail workspace", () => {
   });
 
   it("keeps the connect action on the disconnected page", async () => {
-    await act(async () => root.render(<MailWorkspace connected={false} />));
+    await act(async () => root.render(<TooltipProvider><MailWorkspace connected={false} /></TooltipProvider>));
 
     expect(container.querySelector('[data-state="open"]')).toBeNull();
     expect([...container.querySelectorAll<HTMLButtonElement>("button")].some(
@@ -54,7 +55,7 @@ describe("mail workspace", () => {
   });
 
   it("opens a full compose form with sender, recipient, cc, subject, and message fields", async () => {
-    await act(async () => root.render(<MailWorkspace connected />));
+    await act(async () => root.render(<TooltipProvider><MailWorkspace connected /></TooltipProvider>));
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[aria-label="New message"]')?.click();
