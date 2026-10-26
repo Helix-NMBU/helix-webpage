@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@libs/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
@@ -48,6 +49,13 @@ export function PositionsPanel({ positions, loading, onSave, onDelete }: Props) 
     } catch { /* The caller reports the failure; keep the draft for retry. */ }
     finally { pending.current = false; setBusy(false); }
   };
+  const setVisibility = async (position: RecruitmentPosition, visible: boolean) => {
+    if (pending.current) return;
+    pending.current = true; setBusy(true);
+    try { await onSave({ ...position, visible }); }
+    catch { /* The caller reports the failure; retain the saved visibility. */ }
+    finally { pending.current = false; setBusy(false); }
+  };
   const remove = async () => {
     if (!deleting || pending.current) return;
     pending.current = true; setBusy(true);
@@ -62,8 +70,14 @@ export function PositionsPanel({ positions, loading, onSave, onDelete }: Props) 
     </header>
     {loading ? <div role="status" aria-label="Loading positions" className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-20 w-full" />)}</div>
       : positions.length ? <div className="divide-y rounded-lg border">{positions.map(position => <article key={position.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
-        <div><h3 className="font-medium">{position.title}</h3><p className="text-sm text-muted-foreground">{position.department} · {position.visible ? "Visible" : "Hidden"}</p></div>
-        <div className="flex gap-2"><Button variant="outline" disabled={busy} aria-label={`Edit ${position.title}`} onClick={() => edit(position)}>Edit</Button><Button variant="outline" disabled={busy} aria-label={`Delete ${position.title}`} onClick={() => setDeleting(position)}>Delete</Button></div>
+        <div><h3 className="font-medium">{position.title}</h3><p className="text-sm text-muted-foreground">{position.department}</p></div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="mr-2 flex items-center gap-2">
+            <Switch id={`position-${position.id}-visible`} checked={position.visible} disabled={busy || loading}
+              aria-label={`Show ${position.title} on the website`} onCheckedChange={visible => void setVisibility(position, visible)} />
+            <Label htmlFor={`position-${position.id}-visible`} className="font-normal">Visible on website</Label>
+          </div>
+          <Button variant="outline" size="icon" disabled={busy} aria-label={`Edit ${position.title}`} title={`Edit ${position.title}`} onClick={() => edit(position)}><Pencil aria-hidden="true" /></Button><Button variant="outline" size="icon" disabled={busy} aria-label={`Delete ${position.title}`} title={`Delete ${position.title}`} onClick={() => setDeleting(position)}><Trash2 aria-hidden="true" /></Button></div>
       </article>)}</div>
       : <p className="py-12 text-center text-sm text-muted-foreground">No positions yet. Create a position to start recruiting.</p>}
     <Dialog open={draft !== null} onOpenChange={open => { if (!open && !pending.current) setDraft(null); }}>
