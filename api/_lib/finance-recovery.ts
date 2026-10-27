@@ -228,9 +228,14 @@ async function retryOutbox(
   const payloadHash = hashRecoveryPayload({ action: "retryOutbox", outboxId, reconciliation });
   const existing = await replay(db, caller, requestId, "retryOutbox", payloadHash);
   if (existing) return existing;
-  if (reconciliation) {
+    if (reconciliation) {
     if (!outboxId) throw new FinanceError(400, "A valid delivery ID is required.");
-    const status = await reconcileOutboxDelivery(db, outboxId, reconciliation as "sent" | "not_sent" | "still_unknown");
+    let status: string;
+    try {
+      status = await reconcileOutboxDelivery(db, outboxId, reconciliation as "sent" | "not_sent" | "still_unknown");
+    } catch (error) {
+      throw mapFinanceDeliveryError(error);
+    }
     const message = status === "uncertain"
       ? "The delivery outcome is still unknown. It was not retried."
       : status === "sent"

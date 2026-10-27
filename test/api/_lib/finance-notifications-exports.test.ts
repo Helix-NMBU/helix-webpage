@@ -480,6 +480,82 @@ describe("FIN-10-A01 outbox delivery", () => {
     env.WEBSITE_EMAIL_TEST_RECIPIENTS = allowlist;
     for (const message of sent) privateMaterial(`${message.text}${message.html}`);
   });
+
+  it("keeps claiming when email is disabled so a config failure does not use up the retry bound", async () => {
+    await seedSeason();
+    const purchaseId = await insertPurchase({ ref: "2026-0049", method: "outlay", totalOre: "1000", refund: "account" });
+    await sql("delete from finance.outbox where recipient_member_id <> $1::uuid", [financeId]);
+    env.WEBSITE_EMAIL_ENABLED = "false";
+    send = async () => { throw new Error("sender must not be called"); };
+    try {
+      for (let index = 0; index < 8; index += 1) {
+        const result = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID() } });
+        expect(result.status).toBe(200);
+        expect((result.body as { recovery?: { failed: number; uncertain: number; sent: number } }).recovery).toMatchObject({ failed: 1, uncertain: 0, sent: 0 });
+      }
+      const row = (await sql<{ attempt_count: string; status: string; safe_error: string }>(
+        "select attempt_count::text as attempt_count, status, safe_error from finance.outbox where entity_id = $1::uuid",
+        [purchaseId],
+      ))[0];
+      expect(row).toMatchObject({ attempt_count: "0", status: "failed", safe_error: "delivery_disabled" });
+      expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox_attempts where status = 'failed'"))[0]?.count).toBe("8");
+      expect(sent).toHaveLength(0);
+      env.WEBSITE_EMAIL_ENABLED = "true";
+      env.WEBSITE_EMAIL_TEST_RECIPIENTS = "other@example.test";
+      const excluded = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID() } });
+      expect(excluded.status).toBe(200);
+      expect((excluded.body as { recovery?: { failed: number; uncertain: number } }).recovery).toMatchObject({ failed: 1, uncertain: 0 });
+      const after = (await sql<{ attempt_count: string; status: string; safe_error: string }>(
+        "select attempt_count::text as attempt_count, status, safe_error from finance.outbox where entity_id = $1::uuid",
+        [purchaseId],
+      ))[0];
+      expect(after).toMatchObject({ attempt_count: "0", status: "failed", safe_error: "recipient_not_allowlisted" });
+      expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox_attempts"))[0]?.count).toBe("9");
+      expect(sent).toHaveLength(0);
+    } finally {
+      env.WEBSITE_EMAIL_ENABLED = "true";
+      env.WEBSITE_EMAIL_TEST_RECIPIENTS = allowlist;
+    }
+  });
+
+  it("refuses to reconcile a claim that is still in progress", async () => {
+    await seedSeason();
+    const purchaseId = await insertPurchase({ ref: "2026-0050", method: "outlay", totalOre: "1000", refund: "phone" });
+    await sql("delete from finance.outbox where recipient_member_id <> $1::uuid", [financeId]);
+    const claimed = await claimOutboxDeliveries(db, 10);
+    expect(claimed).toHaveLength(1);
+    const outboxId = claimed[0]?.outbox_id as string;
+    const early = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId, reconciliation: "not_sent" } });
+    expect(early.status).toBe(409);
+    expect((early.body as { error?: string }).error).toBe("This delivery is still in progress. Try again in a few minutes.");
+    expect((await sql<{ status: string }>("select status from finance.outbox where id = $1::uuid", [outboxId]))[0]?.status).toBe("uncertain");
+    expect((await sql<{ status: string }>("select status from finance.outbox_attempts where outbox_id = $1::uuid", [outboxId]))[0]?.status).toBe("claimed");
+    await sql(
+      "update finance.outbox_attempts set claimed_at = clock_timestamp() - interval '6 minutes' where claim_token = $1::uuid",
+      [claimed[0]?.claim_token],
+    );
+    const later = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId, reconciliation: "not_sent" } });
+    expect(later.status).toBe(200);
+    expect((await sql<{ status: string; safe_error: string }>("select status, safe_error from finance.outbox where id = $1::uuid", [outboxId]))[0]).toMatchObject({ status: "failed", safe_error: "reconciled_not_sent" });
+    send = async () => { throw new Error("socket reset"); };
+    const recorded = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId } });
+    expect(recorded.status).toBe(200);
+    expect((recorded.body as { recovery?: { uncertain: number } }).recovery?.uncertain).toBe(1);
+    const reconciled = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId, reconciliation: "not_sent" } });
+    expect(reconciled.status).toBe(200);
+    expect((await sql<{ status: string }>("select status from finance.outbox where id = $1::uuid", [outboxId]))[0]?.status).toBe("failed");
+    send = async (message) => { sent.push(message); return { outcome: "sent", providerMessageId: "msg_after" }; };
+    const delivered = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId } });
+    expect(delivered.status).toBe(200);
+    expect(sent).toHaveLength(1);
+    const overwrite = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId, reconciliation: "not_sent" } });
+    expect(overwrite.status).toBe(409);
+    expect((overwrite.body as { error?: string }).error).toBe("Reconcile the unknown delivery before retrying.");
+    expect((await sql<{ status: string }>("select status from finance.outbox where id = $1::uuid", [outboxId]))[0]?.status).toBe("sent");
+    expect(sent).toHaveLength(1);
+    privateMaterial(sent[0]?.text ?? "");
+    expect(purchaseId).toBeTruthy();
+  });
 });
 
 describe("FIN-10-A03 and FIN-10-A04 export", () => {

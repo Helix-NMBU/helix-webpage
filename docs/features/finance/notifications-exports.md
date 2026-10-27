@@ -26,10 +26,10 @@ The outbox row is the business record. Claiming a pending or failed row sets it 
 
 Statuses are `pending`, `sent`, `failed`, and `uncertain`.
 
-- A known local failure before the provider is called (`delivery_disabled`, `recipient_not_allowlisted`, `recipient_inactive`, `recipient_email_missing`, `compose_failed`) is `failed` and can be retried.
+- A known local failure before the provider is called is `failed`. `delivery_disabled` and `recipient_not_allowlisted` do not use one of the five attempts, so a later dispatch can still deliver that row after mail is enabled or the recipient is allowlisted. `recipient_inactive`, `recipient_email_missing`, and `compose_failed` do use an attempt.
 - A provider error or an unknown result is `uncertain`.
-- `uncertain` is not claimed again. Reconcile it as `sent`, `not_sent`, or `still_unknown`. `sent` stays sent and is not sent again. `not_sent` becomes `failed` and a later explicit delivery may claim it. `still_unknown` stays `uncertain`.
-- Each row allows at most 5 attempts. One delivery action claims at most 25 rows and does not loop.
+- `uncertain` is not claimed again. Reconcile it as `sent`, `not_sent`, or `still_unknown`. Reconcile is refused while the latest attempt is still `claimed` and less than five minutes old, so it cannot overwrite a send that is still in progress. After five minutes, or after that attempt has been recorded, reconcile proceeds. `sent` stays sent and is not sent again. `not_sent` becomes `failed` and a later explicit delivery may claim it. `still_unknown` stays `uncertain`.
+- Each row allows at most 5 attempts that reached the provider or failed for a recipient or composition reason. A disabled mail switch or a recipient outside the local allowlist does not consume an attempt. One delivery action claims at most 25 rows and does not loop.
 
 Finance tools in the purchase register run one delivery batch. The head of finance receives a submitted request. The requester receives a decision. Active finance and head profiles receive a registration. Business does not. Registration text includes the reference, lines, amounts, current budget status, approval warnings, and a sign-in path. It does not include a file link.
 

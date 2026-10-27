@@ -229,7 +229,9 @@ begin
     for update skip locked
   loop
     token := gen_random_uuid();
-    attempt := locked.attempt_count + 1;
+    select coalesce(max(x.attempt_no), 0) + 1 into attempt
+    from finance.outbox_attempts x
+    where x.outbox_id = locked.id;
     idem := 'finance-outbox:' || locked.id::text || ':' || attempt::text;
     insert into finance.outbox_attempts (
       outbox_id, attempt_no, status, claim_token, provider_idempotency_key
@@ -238,7 +240,7 @@ begin
     );
     update finance.outbox
       set status = 'uncertain',
-          attempt_count = attempt,
+          attempt_count = locked.attempt_count + 1,
           safe_error = null,
           updated_at = clock_timestamp()
       where id = locked.id;
@@ -308,6 +310,11 @@ begin
     where id = attempt.id;
   update finance.outbox
     set status = p_outcome,
+        attempt_count = case
+          when p_outcome = 'failed' and p_safe_error in ('delivery_disabled', 'recipient_not_allowlisted')
+            then greatest(attempt_count - 1, 0)
+          else attempt_count
+        end,
         provider_message_id = coalesce(message_id, provider_message_id),
         safe_error = p_safe_error,
         sent_at = case when p_outcome = 'sent' then clock_timestamp() else sent_at end,
@@ -356,6 +363,9 @@ begin
   end if;
   if row.status <> 'uncertain' then
     raise exception 'FINANCE|conflict|Reconcile the unknown delivery before retrying.';
+  end if;
+  if found and attempt.status = 'claimed' and attempt.claimed_at > clock_timestamp() - interval '5 minutes' then
+    raise exception 'FINANCE|conflict|This delivery is still in progress. Try again in a few minutes.';
   end if;
   if found and attempt.status in ('claimed', 'uncertain') then
     update finance.outbox_attempts
