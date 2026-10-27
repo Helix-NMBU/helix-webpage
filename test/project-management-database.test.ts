@@ -99,7 +99,7 @@ describe("project management database and authorization", () => {
   it("persists department-spanning subprojects and complete tasks in the shared season", async () => {
     await service().mutate("verified", { action: "save_project", id: id(20), expectedRevision: 0,
       project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical & Production", "Electronics"], leadIds: [manager.userId], deadline: "2026-12-10" } });
-    expect((await db.query("select lead_ids from project_management.projects where id=$1", [id(20)])).rows[0]?.lead_ids).toEqual([manager.userId]);
+    expect((await db.query<{ lead_ids: string[] }>("select lead_ids from project_management.projects where id=$1", [id(20)])).rows[0]?.lead_ids).toEqual([manager.userId]);
     await save(960, task({ kind: "milestone", projectId: id(20) }));
     const workspace = await save(10, task({ projectId: id(20), milestoneId: id(960) }));
     expect(workspace.projects.find(item => item.id === id(20))).toMatchObject({ id: id(20), departments: ["Mechanical & Production", "Electronics"], deadline: "2026-12-10", revision: 1 });
