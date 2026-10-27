@@ -114,7 +114,7 @@ export function TaskBoard({
                       onDragStart={(event) => drag.start(event, task)}
                       onDragEnd={drag.end}
                       onClickCapture={drag.preventDragClick}
-                      className={`relative h-32 min-h-32 shrink-0 gap-0 py-2.5 transition-colors hover:border-muted-foreground/40 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
+                      className={`relative h-32 min-h-32 shrink-0 gap-0 py-2.5 transition-colors hover:border-muted-foreground/40 dark:bg-muted dark:ring-foreground/20 dark:hover:ring-foreground/35 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
                       role="article"
                       aria-label={task.title}
                     >
