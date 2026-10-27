@@ -289,7 +289,7 @@ describe("project management interface", () => {
   it("shows observed progress and project completion in Overview", async () => {
     await open();
     expect(container.querySelector('[aria-label="Task progress over time"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed1");
+    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scoped5Started4Completed1");
     expect(container.querySelector('[aria-label="Chassis & assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(container.querySelector("[data-scope-area]")).not.toBeNull();
     expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
@@ -300,12 +300,7 @@ describe("project management interface", () => {
     expect(container.textContent).not.toContain("Completion by department");
     expect(container.textContent).not.toContain("View progress data");
     expect(container.querySelector('.tabler-icon-cube')).not.toBeNull();
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label^="See tasks for project Chassis & assembly,"]')!.click());
-    const tables = container.querySelectorAll("table");
-    expect(document.getElementById("task-project-filter")?.textContent).toBe("Chassis & assembly");
-    expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
-    expect(tables[tables.length - 1].textContent).not.toContain("Publish workshop update");
-    expect(tables[tables.length - 1].textContent).not.toContain("Submit competition registration");
+    expect(container.querySelector('table[aria-label="Season projects"] button')?.textContent).toBe("Chassis & assembly");
   });
   it("uses the season deadline regardless of project and task deadlines", async () => {
     const workspace = initialLocalWorkspace();
@@ -330,7 +325,7 @@ describe("project management interface", () => {
     load.mockResolvedValueOnce(next);
     await act(async () => router.navigate("/season-overview"));
     expect(load).toHaveBeenCalledTimes(2);
-    expect(container.querySelector('[aria-label^="See tasks for project Updated project,"]')).not.toBeNull();
+    expect([...container.querySelectorAll<HTMLButtonElement>('table[aria-label="Season projects"] button')].some(item => item.textContent === "Updated project")).toBe(true);
   });
   it("updates Overview progress when returning after a task completion", async () => {
     const next = initialLocalWorkspace();
@@ -343,7 +338,7 @@ describe("project management interface", () => {
     load.mockResolvedValueOnce(next);
     await act(async () => router.navigate("/season-overview"));
     expect(container.querySelector('[aria-label="Chassis & assembly: 2 of 3 tasks complete, 67%"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed2");
+    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scoped5Started4Completed2");
     expect(load).toHaveBeenCalledTimes(3);
   });
   it("hides project editing controls from members without management access", async () => {
@@ -351,7 +346,7 @@ describe("project management interface", () => {
     await open();
     expect(container.querySelector('[aria-label="Create project"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Edit project"]')).toBeNull();
-    expect(container.querySelector('[aria-label^="See tasks for project"]')).not.toBeNull();
+    expect(container.querySelector('table[aria-label="Season projects"] button')?.textContent).toBe("Chassis & assembly");
   });
   it("places Upcoming Milestones directly after the overview widgets", async () => {
     await open();
@@ -402,7 +397,7 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     const table = tables[tables.length - 1];
     expect([...table.querySelectorAll("tbody tr")].map(row => row.querySelector("button")?.textContent)).toEqual(["Due today", "Due in 30 days"]);
-    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Department", "Priority", "Leads", "Target date", "Tasks", "Status"]);
+    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Project", "Priority", "Leads", "Target date", "Tasks", "Status"]);
     expect(container.querySelector('[aria-label="Search tasks"]')).toBeNull();
     expect(button("Timeline")).toBeUndefined();
   });
@@ -412,12 +407,12 @@ describe("project management interface", () => {
     return workspace;
   }
   const inlineButton = (field: string) => document.querySelector<HTMLButtonElement>(`[aria-label="Change ${field} for Chassis ready for assembly"]`)!;
-  it("keeps departments in a separate column and milestone names free of subtitles", async () => {
+  it("shows project in its own column and keeps milestone names free of subtitles", async () => {
     load.mockResolvedValue(inlineWorkspace()); await open();
     const row = button("Chassis ready for assembly").closest("tr")!;
     const cells = row.querySelectorAll("td");
     expect(cells[0].textContent).toBe("Chassis ready for assembly");
-    expect(cells[1].textContent).toBe("Mechanical & Production, Electronics");
+    expect(cells[1].textContent).toBe("Chassis & assembly");
     expect(cells[0].textContent).not.toContain("Chassis & assembly");
   });
   it("saves priority inline with the existing revision and unchanged hierarchy", async () => {
@@ -505,7 +500,7 @@ describe("project management interface", () => {
       const heading = document.getElementById(id)!;
       expect(heading.tagName).toBe("H2");
       expect(heading.closest('[data-slot="card"]')).toBeNull();
-      expect(heading.parentElement?.parentElement?.querySelector('[data-slot="card"]')).not.toBeNull();
+      expect(heading.closest("section")?.querySelector('[data-slot="card"]')).not.toBeNull();
     }
   });
   it("saves an unorganized milestone field without submitting or changing placement", async () => {
@@ -586,9 +581,9 @@ describe("project management interface", () => {
   it("renders an empty Overview without inventing task completion or history", async () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], departments: [], taskLeadCategories: [] });
     await open();
-    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope0Started0Completed0");
+    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scoped0Started0Completed0");
     expect(container.querySelectorAll('table[aria-label="Department progress"] tbody tr')).toHaveLength(7);
-    expect(container.textContent).toContain("A project and milestone are needed before adding tasks.");
+    expect(container.textContent).toContain("No projects yet.");
     expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
   });
 
@@ -602,22 +597,13 @@ describe("project management interface", () => {
     expect(document.getElementById("task-status-filter")?.textContent).toBe("All statuses");
   });
 
-  it("retains legacy work in Needs organization and sends a Lead to its area editor", async () => {
+  it("does not show legacy unlinked work in the season overview", async () => {
     const workspace = initialLocalWorkspace();
     const legacy = { ...workspace.tasks[1], projectId: null, milestoneId: null };
     load.mockResolvedValue({ ...workspace, tasks: [legacy] });
     await open();
-    await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent?.startsWith("Needs organization"))!.click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(legacy.title);
-    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Organize ${legacy.title}"]`)!.click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose a project and milestone");
-    expect(document.getElementById("task-project")?.hasAttribute("disabled")).toBe(false);
-  });
-  it("allows an assignee to update unorganized legacy work without changing its placement", async () => {
-    const workspace = initialLocalWorkspace();
-    load.mockResolvedValue({ ...workspace, tasks: [{ ...workspace.tasks[1], projectId: null, milestoneId: null }], canManage: false, taskLeadCategories: [] });
-    await open("overview", true); await click("Confirm material delivery"); await editTask(); await click("Save task");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
+    expect(container.textContent).not.toContain("Needs organization");
+    expect(container.textContent).not.toContain(legacy.title);
   });
   it("shows milestones and their tasks nested inside the department project in its work area", async () => {
     await open("production");
@@ -641,7 +627,7 @@ describe("project management interface", () => {
   it("shows one department per table row with members, Lead, task count and circular status", async () => {
     await open();
     const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
-    expect(areas.querySelector("h3")?.textContent).toBe("Areas");
+    expect(areas.querySelector("#progress-areas-title")?.textContent).toBe("Areas");
     expect(areas.querySelector('[aria-label="Mechanical & Production: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(areas.querySelector('[aria-label="Electronics: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect([...areas.querySelectorAll("tbody td:first-child")].map(cell => cell.textContent)).not.toContain("Production");
@@ -702,7 +688,7 @@ describe("project management interface", () => {
     expect(rows[0].querySelectorAll("td")[3].textContent).toBe("0 / 0");
   });
   it("offers only the fixed departments when editing a project", async () => {
-    await open(); await click("New project");
+    await open("production"); await click("New project");
     await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Departments"]')!.click());
     const group = document.getElementById("project-departments")!;
     expect([...group.querySelectorAll('[role="checkbox"]')].map(checkbox => checkbox.getAttribute("aria-label"))).toEqual([...ORGANIZATION_DEPARTMENTS]);

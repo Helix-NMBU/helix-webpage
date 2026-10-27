@@ -24,7 +24,7 @@ describe("deadline progress charts", () => {
     expect(Number(marker.querySelector("line")?.getAttribute("x1"))).toBeCloseTo(expectedX);
     expect(Number(marker.querySelector("rect")?.getAttribute("width"))).toBeGreaterThan(0);
     expect(marker.querySelector('rect[fill^="url"]')).not.toBeNull();
-    expect(container.querySelector("desc")?.textContent).toContain("Red hatching marks time after that deadline");
+    expect(container.querySelector("desc")?.textContent).toContain("Red hatching marks time after the end event");
     // The deadline does not manufacture future progress observations.
     expect(container.querySelector("tbody")?.innerHTML).toBe(render(null).querySelector("tbody")?.innerHTML);
   });
@@ -54,7 +54,7 @@ describe("deadline progress charts", () => {
       const container = render(deadline, { startDate });
       expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe(startDate);
       expect(container.querySelector('[data-chart-boundary="start"] time')?.getAttribute('dateTime')).toBe(startDate);
-      expect(parseFloat(container.querySelector<HTMLElement>('[data-chart-boundary="start"]')!.style.left)).toBeCloseTo(22 / 640 * 100);
+      expect(container.querySelector('[data-chart-boundary="start"] time')?.getAttribute("datetime")).toBe(startDate);
       const range = progressChartRange(addDays(today,-7),today,deadline,{startDate});
       const expectedX = 22 + (chartDay(deadline)-chartDay(startDate))/(chartDay(range.end)-chartDay(startDate))*596;
       expect(Number(container.querySelector('[data-progress-deadline] line')?.getAttribute('x1'))).toBeCloseTo(expectedX);
@@ -108,7 +108,7 @@ describe("deadline progress charts", () => {
     expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
     expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
     expect(container.querySelector('[data-chart-boundary="end"]')?.textContent).toBe('31 Jul');
-    expect(container.querySelector('[data-chart-boundary="end"]')?.getAttribute('class')).toContain('text-destructive');
+    expect(container.querySelector('[title="Red hatching marks time after the end event"]')?.classList.contains("text-destructive")).toBe(true);
   });
 
   it.each(['S27','S28'])("marks Production start at its actual position in %s", season => {
