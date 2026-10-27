@@ -109,6 +109,7 @@ beforeAll(async () => {
   `);
   await pg.exec(readFileSync(new URL("../../../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   services = createFinanceServices({
     db,
@@ -134,6 +135,7 @@ async function resetFinance() {
       finance.uploads,
       finance.exception_reviews,
       finance.purchases,
+      finance.request_draft_lines,
       finance.request_lines,
       finance.request_decisions,
       finance.request_revisions,
