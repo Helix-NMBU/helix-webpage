@@ -4,6 +4,7 @@ import { Button } from "@libs/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
+import { BudgetsBoard } from "./BudgetsPage";
 import { FinancingPage } from "./FinancingPage";
 import { financeRoutes, type FinancePageId } from "./routes";
 
@@ -25,7 +26,12 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     if (session.access !== "allowed" || session.viewVersion === null || loadedVersion === session.viewVersion) return;
     void session.loadPage(page);
   }, [loadedVersion, page, session.access, session.loadPage, session.viewVersion]);
-  const empty = !session.pageLoading && loaded && (
+  const budgetsReady = page === "budgets" && Boolean(session.budgets) && (
+    (session.budgets?.departments.length ?? 0) > 0
+    || session.budgets?.budgetStatus !== "absent"
+    || Boolean(session.capabilities?.createBudget)
+  );
+  const empty = !session.pageLoading && loaded && !budgetsReady && (
     page === "overview" ? session.overview?.departments.length === 0 && session.overview.publicEarmarks.length === 0 && session.overview.budgetStatus === "absent"
       : page === "budgets" ? session.budgets?.departments.length === 0
         : page === "purchases" ? session.purchases?.ownRequests.length === 0 && (session.purchases.register?.length ?? 0) === 0
@@ -50,6 +56,8 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-40 w-full" />
         </div>
+      ) : budgetsReady ? (
+        <BudgetsBoard />
       ) : empty ? (
         <Empty className="min-h-72 border border-solid">
           <EmptyHeader>

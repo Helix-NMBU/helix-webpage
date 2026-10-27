@@ -1,9 +1,9 @@
-export type FinanceFailure = { field: string; message: string; line?: number };
+import type { FinanceFieldError } from "./finance-types.js";
 
 export class FinanceError extends Error {
-  readonly errors?: FinanceFailure[];
+  readonly errors?: FinanceFieldError[];
 
-  constructor(public status: number, message: string, errors?: FinanceFailure[]) {
+  constructor(public status: number, message: string, errors?: FinanceFieldError[]) {
     super(message);
     this.name = "FinanceError";
     this.errors = errors;

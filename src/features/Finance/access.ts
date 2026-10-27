@@ -98,6 +98,7 @@ const ACTION_CAPABILITY: Record<FinanceAction, keyof FinanceCapabilitySet> = {
   editItem: "draftBudgetItems",
   cancelItem: "draftBudgetItems",
   restoreItem: "draftBudgetItems",
+  ensureUnallocated: "draftBudgetItems",
   previewImport: "permittedImports",
   importItems: "permittedImports",
   checkPurchase: "registerActual",

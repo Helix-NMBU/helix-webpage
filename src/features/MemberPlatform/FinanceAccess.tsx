@@ -61,7 +61,7 @@ function errorStatus(error: unknown): number {
 
 function visibleBudgets(budgets: PublicBudgets | null, capabilities: FinanceCapabilitySet): PublicBudgets | null {
   if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems) return budgets;
-  return { ...budgets, departments: [] };
+  return { ...budgets, departments: [], choices: { systems: [], items: [] }, earmarkChoices: [] };
 }
 
 export function FinanceAccessProvider({ children, userId }: { children: ReactNode; userId: string }) {
