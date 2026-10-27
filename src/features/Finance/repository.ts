@@ -74,9 +74,14 @@ export function createFinanceApi(owner: { current: string | null }) {
   return {
     capabilities: () => local() ? Promise.resolve(localCapabilities()) : request<FinanceCapabilitiesResponse>("capabilities"),
     version: () => local() ? Promise.resolve({ viewVersion: 0 } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
-    recovery: () => local()
-      ? Promise.reject(new FinanceRequestError("Finance access is required.", 403))
-      : request<FinanceRecoveryView>("recovery"),
+    recovery: (deliveryAfter?: string, uploadAfter?: string) => {
+      if (local()) return Promise.reject(new FinanceRequestError("Finance access is required.", 403));
+      const params = new URLSearchParams();
+      if (deliveryAfter) params.set("deliveryAfter", deliveryAfter);
+      if (uploadAfter) params.set("uploadAfter", uploadAfter);
+      const suffix = params.toString();
+      return request<FinanceRecoveryView>(suffix ? `recovery&${suffix}` : "recovery");
+    },
     overview: () => local() ? Promise.resolve(localOverview()) : request<PublicOverview>("overview"),
     budgets: () => local() ? Promise.resolve(localBudgets()) : request<PublicBudgets>("budgets"),
     purchases: (requestRecordId?: string, unpaidOnly?: boolean) => {

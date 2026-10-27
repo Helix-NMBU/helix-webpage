@@ -25,8 +25,11 @@ export type DeliveryCaller = {
 };
 
 /** Finance can inspect bounded operational metadata, but never file keys, payloads or refund details. */
-export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller): Promise<FinanceRecoveryView> {
+export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller, page: { deliveryAfter?: string; uploadAfter?: string } = {}): Promise<FinanceRecoveryView> {
   if (!caller.capabilities.purchaseRegister) throw new FinanceError(403, "Finance access is required.");
+  if ((page.deliveryAfter !== undefined && !UUID.test(page.deliveryAfter)) || (page.uploadAfter !== undefined && !UUID.test(page.uploadAfter))) {
+    throw new FinanceError(400, "Invalid recovery page.");
+  }
   const deliveries = await db.query<{
     id: string; event_type: string; recipient: string | null; status: string; safe_error: string | null;
     attempt_count: number; updated_at: string; last_claimed_at: string | null; provider_message_id: string | null;
@@ -37,8 +40,8 @@ export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller
       left join identity.members m on m.id = o.recipient_member_id
       left join lateral (select claimed_at, provider_message_id from finance.outbox_attempts
                          where outbox_id = o.id order by attempt_no desc limit 1) a on true
-      where o.status in ('pending', 'failed', 'uncertain')
-      order by o.updated_at desc, o.id limit 50`);
+      where o.status in ('pending', 'failed', 'uncertain') and ($1::uuid is null or o.id > $1::uuid)
+      order by o.id limit 51`, [page.deliveryAfter ?? null]);
   const uploads = await db.query<{
     id: string; owner: string | null; status: string; commit_state: string; referenced: boolean; candidate_count: string; created_at: string; expires_at: string;
   }>(`select u.id::text, m.full_name as owner, u.status, u.commit_state,
@@ -52,14 +55,19 @@ export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller
           and not exists (select 1 from finance.uploads referenced_upload where referenced_upload.final_key = c.storage_key)
           and not exists (select 1 from finance.documents d where d.storage_key = c.storage_key)
       ) candidates
-      where u.commit_state = 'uncertain' or candidates.candidate_count > 0
-      order by u.created_at desc, u.id limit 50`);
+      where (u.commit_state = 'uncertain' or candidates.candidate_count > 0)
+        and ($1::uuid is null or u.id > $1::uuid)
+      order by u.id limit 51`, [page.uploadAfter ?? null]);
+  const deliveryRows = deliveries.rows.slice(0, 50);
+  const uploadRows = uploads.rows.slice(0, 50);
   return {
-    deliveries: deliveries.rows.map((r) => ({ id: r.id, eventType: r.event_type, recipient: r.recipient, status: r.status,
+    deliveries: deliveryRows.map((r) => ({ id: r.id, eventType: r.event_type, recipient: r.recipient, status: r.status,
       safeError: r.safe_error, attemptCount: Number(r.attempt_count), updatedAt: r.updated_at,
       lastClaimedAt: r.last_claimed_at, providerMessageId: r.provider_message_id })),
-    uploads: uploads.rows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state, referenced: r.referenced, candidateCount: Number(r.candidate_count),
+    uploads: uploadRows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state, referenced: r.referenced, candidateCount: Number(r.candidate_count),
       createdAt: r.created_at, expiresAt: r.expires_at })),
+    deliveryNextCursor: deliveries.rows.length > 50 ? deliveryRows[deliveryRows.length - 1].id : null,
+    uploadNextCursor: uploads.rows.length > 50 ? uploadRows[uploadRows.length - 1].id : null,
   };
 }
 

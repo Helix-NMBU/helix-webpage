@@ -326,6 +326,69 @@ describe("FIN-10 local delivery policy", () => {
 });
 
 describe("FIN-10-A01 outbox delivery", () => {
+  it("delivers more than one batch of request notifications without duplicating retries", async () => {
+    await seedSeason();
+    const additional = Array.from({ length: 30 }, (_, index) => `head${index}@example.test`);
+    for (const [index, email] of additional.entries()) {
+      const memberId = crypto.randomUUID();
+      await sql("insert into identity.members (id, google_sub, email, full_name) values ($1::uuid, $2, $3, $4)", [memberId, `batch-sub-${index}`, email, `Batch Head ${index}`]);
+      await sql("insert into finance.member_grants (member_id, profile, active, operator_member_id, reason) values ($1::uuid, 'head_of_finance', true, $2::uuid, 'Test')", [memberId, operatorId]);
+    }
+    env.WEBSITE_EMAIL_TEST_RECIPIENTS = [allowlist, ...additional.slice(0, -1)].join(",");
+    const normalSend = send;
+    send = async (message) => {
+      if (message.to === additional[10]) throw new Error("synthetic provider failure");
+      return normalSend(message);
+    };
+    wireServices({ autoDispatch: true });
+    const itemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-001'"))[0]!.id;
+    const request = { supplierName: "Example", justification: "Materials for the frame", plannedDate: thirdOsloDayFrom(osloToday()),
+      lines: [{ budgetItemId: itemId, description: "Tube", estimatedNok: "50.00" }] };
+    const saved = await call({ token: "requester", body: { action: "saveRequest", requestId: crypto.randomUUID(), request } });
+    const draft = saved.body as { id: string; revision: number };
+    const body = { action: "submitRequest", requestId: crypto.randomUUID(), requestRecordId: draft.id, expectedRevision: draft.revision, request };
+    const submitted = await call({ token: "requester", body });
+    expect(submitted.status).toBe(200);
+    expect(sent).toHaveLength(29);
+    expect(new Set(sent.map((message) => message.to)).size).toBe(29);
+    expect(sent.some((message) => message.to === additional[29])).toBe(false);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox where entity_id = $1::uuid and status = 'pending'", [draft.id]))[0].count).toBe("0");
+    expect((await sql<{ safe_error: string }>("select safe_error from finance.outbox where entity_id = $1::uuid and status = 'failed'", [draft.id]))[0].safe_error).toBe("recipient_not_allowlisted");
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox where entity_id = $1::uuid and status = 'uncertain'", [draft.id]))[0].count).toBe("1");
+    expect((await call({ token: "requester", body })).status).toBe(200);
+    expect(sent).toHaveLength(29);
+  });
+
+  it("paginates deliveries and uploads independently without exposing private fields", async () => {
+    await seedSeason();
+    await sql(`insert into finance.outbox (event_type, entity, entity_id, recipient_member_id, dedupe_key, status, safe_error)
+      select 'request.submitted', 'request', gen_random_uuid(), $1::uuid, 'page-' || n, 'uncertain', 'provider_unknown' from generate_series(1, 55) n`, [requesterId]);
+    await sql(`insert into finance.uploads (id, member_id, staging_key, status, byte_size, content_type, original_name, expires_at, commit_state)
+      select id, $1::uuid, id::text || '/private-key', 'pending', 8, 'application/pdf', 'private.pdf', now(), 'uncertain'
+      from (select gen_random_uuid() as id from generate_series(1, 55)) generated`, [requesterId]);
+    const first = await call({ token: "finance", query: { action: "recovery" } });
+    expect(first.status).toBe(200);
+    const page = first.body as { deliveries: { id: string }[]; uploads: { id: string }[]; deliveryNextCursor: string; uploadNextCursor: string };
+    expect(page.deliveries).toHaveLength(50);
+    expect(page.uploads).toHaveLength(50);
+    expect(page.deliveryNextCursor).toBeTruthy();
+    expect(page.uploadNextCursor).toBeTruthy();
+    const nextDeliveries = await call({ token: "finance", query: { action: "recovery", deliveryAfter: page.deliveryNextCursor } });
+    const next = nextDeliveries.body as { deliveries: { id: string }[]; uploads: { id: string }[]; deliveryNextCursor: string | null };
+    expect(next.deliveries).toHaveLength(5);
+    expect(next.uploads).toHaveLength(50);
+    expect(next.deliveryNextCursor).toBeNull();
+    expect(next.deliveries.some((row) => page.deliveries.some((firstRow) => firstRow.id === row.id))).toBe(false);
+    const nextUploads = await call({ token: "finance", query: { action: "recovery", uploadAfter: page.uploadNextCursor } });
+    const uploadPage = nextUploads.body as { deliveries: { id: string }[]; uploads: { id: string }[]; uploadNextCursor: string | null };
+    expect(uploadPage.deliveries).toHaveLength(50);
+    expect(uploadPage.uploads).toHaveLength(5);
+    expect(uploadPage.uploadNextCursor).toBeNull();
+    expect(uploadPage.uploads.some((row) => page.uploads.some((firstRow) => firstRow.id === row.id))).toBe(false);
+    expect(JSON.stringify([first.body, nextDeliveries.body, nextUploads.body])).not.toContain("private-key");
+    expect((await call({ token: "finance", query: { action: "recovery", deliveryAfter: "invalid" } })).status).toBe(400);
+    expect((await call({ token: "requester", query: { action: "recovery", uploadAfter: page.uploadNextCursor } })).status).toBe(403);
+  });
   it("automatically delivers a submitted request after commit and does not resend on replay", async () => {
     await seedSeason();
     wireServices({ autoDispatch: true });

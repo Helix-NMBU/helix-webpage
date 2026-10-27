@@ -84,3 +84,40 @@ it("offers candidate-only cleanup for a referenced purchase without exposing a s
   await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Clean up final objects")!.click());
   expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "cleanupUploads", uploadId: "saved-upload", candidateOnly: true }));
 });
+
+it("navigates delivery and upload pages independently", async () => {
+  const delivery = { id: "delivery-first", eventType: "request.submitted", recipient: "Head", status: "uncertain", safeError: "provider_unknown", attemptCount: 1, updatedAt: "2026-10-27", providerMessageId: null };
+  const upload = { id: "upload-first", owner: "Member", status: "pending", commitState: "uncertain", referenced: false, candidateCount: 0, createdAt: "2026-10-27", expiresAt: "2026-10-28" };
+  mocks.recovery.mockImplementation(async (deliveryAfter?: string, uploadAfter?: string) => ({
+    deliveries: [{ ...delivery, id: deliveryAfter ? "delivery-second" : "delivery-first" }],
+    uploads: [{ ...upload, id: uploadAfter ? "upload-second" : "upload-first" }],
+    deliveryNextCursor: deliveryAfter ? null : "delivery-cursor",
+    uploadNextCursor: uploadAfter ? null : "upload-cursor",
+  }));
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  const click = async (label: string) => {
+    await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === label)!.click());
+  };
+  await click("Next deliveries");
+  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", undefined);
+  expect(container.textContent).toContain("delivery-second");
+  expect(container.textContent).toContain("upload-first");
+  await click("Next uploads");
+  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", "upload-cursor");
+  expect(container.textContent).toContain("upload-second");
+  await click("Previous deliveries");
+  expect(mocks.recovery).toHaveBeenLastCalledWith(undefined, "upload-cursor");
+  expect(container.textContent).toContain("delivery-first");
+  expect(container.textContent).toContain("upload-second");
+});
+
+it("drops a late recovery page after access is revoked", async () => {
+  let resolvePage!: (value: unknown) => void;
+  const pending = new Promise((resolve) => { resolvePage = resolve; });
+  mocks.recovery.mockReturnValueOnce(pending);
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  mocks.allowed = false;
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  await act(async () => resolvePage({ deliveries: [{ id: "private-late" }], uploads: [], deliveryNextCursor: null, uploadNextCursor: null }));
+  expect(container.textContent).not.toContain("private-late");
+});

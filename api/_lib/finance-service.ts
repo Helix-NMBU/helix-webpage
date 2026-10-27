@@ -47,7 +47,7 @@ export interface FinanceServices {
   budgets(token: string, knownVersion?: number): Promise<PublicBudgets | FinanceUnchanged>;
   purchases(token: string, knownVersion?: number, requestRecordId?: string, unpaidOnly?: boolean): Promise<PurchasesView | FinanceUnchanged>;
   financing(token: string, knownVersion?: number): Promise<FinancingView | FinanceUnchanged>;
-  recovery(token: string): Promise<FinanceRecoveryView>;
+  recovery(token: string, deliveryAfter?: string, uploadAfter?: string): Promise<FinanceRecoveryView>;
   mutate(token: string, body: Record<string, unknown>): Promise<FinanceMutationResult>;
 }
 
@@ -74,12 +74,23 @@ export function createFinanceServices(deps: {
     if (!result.id || deps.financeDelivery?.autoDispatch === false || !deps.financeDelivery?.send ||
         deliveryEnv.WEBSITE_EMAIL_ENABLED !== "true" || !deliveryEnv.RESEND_API_KEY) return;
     try {
-      const waiting = await db.query<{ id: string }>(
-        "select id::text from finance.outbox where entity_id = $1::uuid and event_type = $2 and status = 'pending' order by created_at, id limit 25",
-        [result.id, eventType],
-      );
-      for (const row of waiting.rows) {
-        await deliverPending(db, { send: deliverySend, env: deliveryEnv, log: deps.financeDelivery?.log, outboxId: row.id });
+      let after: string | null = null;
+      for (;;) {
+        const waiting: { rows: { id: string }[] } = await db.query<{ id: string }>(
+          "select id::text from finance.outbox where entity_id = $1::uuid and event_type = $2 and status = 'pending' and ($3::uuid is null or id > $3::uuid) order by id limit 25",
+          [result.id, eventType, after],
+        );
+        if (!waiting.rows.length) break;
+        for (const row of waiting.rows) {
+          try {
+            await deliverPending(db, { send: deliverySend, env: deliveryEnv, log: deps.financeDelivery?.log, outboxId: row.id });
+          } catch {
+            // A concurrently claimed or failed row must not strand later recipients.
+            deps.financeDelivery?.log?.("finance_delivery_dispatch_failed");
+          }
+        }
+        after = waiting.rows[waiting.rows.length - 1].id;
+        if (waiting.rows.length < 25) break;
       }
     } catch {
       // Pending or uncertain rows remain visible in recovery for a Finance operator.
@@ -159,9 +170,9 @@ export function createFinanceServices(deps: {
   }
 
   return {
-    async recovery(token) {
+    async recovery(token, deliveryAfter, uploadAfter) {
       const current = await context(token);
-      return loadFinanceRecovery(db, current);
+      return loadFinanceRecovery(db, current, { deliveryAfter, uploadAfter });
     },
     async capabilities(token) {
       const current = await context(token);
