@@ -356,16 +356,54 @@ describe("internal member platform", () => {
     await act(async()=>router.navigate('/projects'));
     expect(container.querySelector('h1')?.textContent).toBe('Projects');
     expect(container.querySelector('table')?.textContent).toContain('Chassis & assembly');
-    expect([...container.querySelectorAll('button')].some(b=>b.textContent==='New project')).toBe(false);
+    expect([...container.querySelectorAll('button')].some(b=>b.textContent==='+ New project')).toBe(false);
     expect(container.querySelector('table')?.textContent).toContain('Department');
     expect(container.querySelector('table')?.textContent).not.toContain('Health');
+  });
+
+  it("switches the projects directory to a filtered timeline through the toolbar menu",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();const project=data.projects[0];
+    project.milestones=[{id:'first-goal',title:'Ready for assembly',deadline:project.deadline,priority:'high'},{id:'second-goal',title:'Manufacturing review',deadline:project.deadline,priority:'normal'}];
+    workspace.load.mockResolvedValue(data);
+    await open(`/projects?department=${data.departments.find(item=>project.departments.includes(item.name))!.id}`);
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project filters and view"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project layout"] button')].find(button=>button.textContent==='Timeline')!.click());
+    expect(router.state.location.search).toContain('view=timeline');expect(router.state.location.search).toContain('department=');
+    expect(container.querySelector('[aria-label="Project timeline"]')).not.toBeNull();
+    const goals=container.querySelectorAll<HTMLAnchorElement>('[aria-label^="Open milestone"]');
+    expect(goals).toHaveLength(2);expect(goals[0].style.top).not.toBe(goals[1].style.top);
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project layout"] button')].find(button=>button.textContent==='List')!.click());
+    expect(container.querySelector('table[aria-label="Projects list"]')).not.toBeNull();
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project display properties"] button')].find(button=>button.textContent==='Priority')!.click());
+    expect(container.querySelector('table thead')?.textContent).not.toContain('Priority');
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Reset view and filters')!.click());
+    expect(router.state.location.search).toBe('');expect(container.querySelector('table thead')?.textContent).toContain('Priority');
+  });
+
+  it("combines project menu filters and preserves them when switching views",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();data.projects[0].priority='urgent';workspace.load.mockResolvedValue(data);await open('/projects');
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project filters and view"]')!.click());
+    await act(async()=>document.getElementById('project-filter-priority')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==='Urgent')!.click());
+    expect(container.querySelectorAll('table tbody tr')).toHaveLength(1);expect(router.state.location.search).toContain('priority=urgent');
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project layout"] button')].find(button=>button.textContent==='Timeline')!.click());
+    expect(container.querySelectorAll('[aria-label^="Timeline for"]')).toHaveLength(1);expect(router.state.location.search).toContain('priority=urgent');
+  });
+
+  it("restores a timeline URL and opens its milestone in the project filter",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();const project=data.projects[0];
+    project.milestones=[{id:'first-goal',title:'Ready for assembly',deadline:project.deadline,priority:'high'}];workspace.load.mockResolvedValue(data);
+    await open('/projects?view=timeline&scale=month');
+    expect(container.querySelector('#project-timeline-scale')?.textContent).toBe('Month');
+    await act(async()=>container.querySelector<HTMLAnchorElement>('[aria-label="Open milestone Ready for assembly in Chassis & assembly"]')!.click());
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(`/projects/${project.id}?milestone=first-goal`);
   });
 
   it.each(['manager','lead'])("lets a %s open the project creation form",async role=>{
     session.landing.mockResolvedValue(signedIn);
     const data=directoryFixture();data.canAdmin=false;data.canManageProjects=role==='manager';workspace.load.mockResolvedValue(data);
     await open('/projects');
-    const create=[...container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='New project');
+    const create=[...container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='+ New project');
     expect(create).toBeDefined();await act(async()=>create!.click());
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('New project');
     expect(document.querySelector('#project-leads')).not.toBeNull();
