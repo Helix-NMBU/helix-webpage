@@ -102,7 +102,7 @@ it("discards the previous preview when a replacement file is too large", async (
   const input = container.querySelector('input[type="file"]') as HTMLInputElement;
   Object.defineProperty(input, "files", { configurable: true, value: [new File(["x".repeat(256 * 1024 + 1)], "too-large.csv")] });
   await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
-  expect(textarea.value).toBe("");
+  expect(textarea.value).toContain("Frame;900");
   expect(container.textContent).not.toContain("Import budget");
   expect(notify).toHaveBeenCalled();
 });

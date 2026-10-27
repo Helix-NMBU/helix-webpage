@@ -68,7 +68,7 @@ export function BudgetImport({ departments }: { departments: PublicDepartmentBud
           const input = event.currentTarget;
           const file = input.files?.[0];
           if (!file) return;
-          setCsv(""); setPreview(null);
+          setPreview(null);
           if (file.size > MAX_IMPORT_BYTES) { input.value = ""; fail(new Error("The CSV must be 256 KiB or smaller.")); return; }
           setBusy(true);
           void file.text().then(setCsv).catch((error: unknown) => { input.value = ""; fail(error); }).finally(() => setBusy(false));
