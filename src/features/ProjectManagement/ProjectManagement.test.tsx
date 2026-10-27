@@ -210,9 +210,48 @@ describe("project management interface", () => {
     await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "todo" }));
   });
+  it("excludes assigned milestones from personal task rows", async () => {
+    const workspace = initialLocalWorkspace();
+    workspace.tasks = workspace.tasks.map(task => task.kind === "milestone" ? { ...task, assigneeIds: [workspace.viewerId] } : task);
+    load.mockResolvedValue(workspace);
+    await open("overview", true);
+    for (const milestone of workspace.tasks.filter(task => task.kind === "milestone")) {
+      expect(button(milestone.title)).toBeUndefined();
+      expect(container.querySelector(`[aria-label="Change status for ${milestone.title}"]`)).toBeNull();
+    }
+    expect(button("Confirm material delivery")).toBeDefined();
+  });
+  it("toggles connected milestone properties and preserves preferences through task navigation", async () => {
+    const router = await open("overview", true);
+    expect([...container.querySelectorAll("th")].map(item => item.textContent)).not.toContain("Milestone");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Task filters and view"]')!.click());
+    const property = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task display properties"] button')].find(item => item.textContent === "Milestone")!;
+    expect(property.textContent).toBe("Milestone");
+    await act(async () => property.click());
+    expect(property.getAttribute("aria-pressed")).toBe("true");
+    expect([...container.querySelectorAll("th")].map(item => item.textContent)).toContain("Milestone");
+    expect(container.querySelector('td a[href*="?milestone="]')?.textContent).toBe("Chassis ready for assembly");
+    expect(new URLSearchParams(router.state.location.search).get("columns")).toContain("milestone");
+    await act(async()=>router.navigate(router.state.location.pathname+router.state.location.search));
+    expect([...container.querySelectorAll("th")].map(item => item.textContent)).toContain("Milestone");
+    await click("Confirm material delivery");
+    await act(async () => [...container.querySelectorAll<HTMLAnchorElement>("a")].find(link => link.textContent === "Back")!.click());
+    expect([...container.querySelectorAll("th")].map(item => item.textContent)).toContain("Milestone");
+  });
+  it("restores personal filters and clears them through Reset", async () => {
+    const router = await open("overview", true, "?status=blocked&group=status&columns=milestone");
+    expect(container.querySelector('tbody[aria-label="Blocked"]')).not.toBeNull();
+    expect(button("Complete chassis design review")).toBeUndefined();
+    expect([...container.querySelectorAll("th")].map(item => item.textContent)).toEqual(["Task", "Milestone"]);
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Task filters and view"]')!.click());
+    await click("Reset view and filters");
+    expect(router.state.location.search).toBe("");
+    expect(container.querySelector('tbody[aria-label="Completed"]')).not.toBeNull();
+    expect([...container.querySelectorAll("th")].map(item => item.textContent)).not.toContain("Milestone");
+  });
   it("can hide completed work through the personal view settings", async () => {
     await open("overview", true);
-    await click("View settings");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Task filters and view"]')!.click());
     await act(async () => document.getElementById("view-completed")!.click());
     expect(container.querySelector('tbody[aria-label="Completed"]')).toBeNull();
     expect(container.querySelector('tbody[aria-label="Upcoming"]')).not.toBeNull();
