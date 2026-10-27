@@ -525,6 +525,7 @@ describe("internal member platform", () => {
     expect(details.textContent).toContain('Properties');expect(details.textContent).toContain('Milestones');expect(details.textContent).toContain('Progress');
     expect(details.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
     expect(details.querySelector('[data-progress-deadline]')?.getAttribute('data-progress-deadline')).toBe(directoryFixture().projects[0].deadline);
+    expect(details.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe(directoryFixture().projects[0].startDate);
     await act(async()=>[...breadcrumb.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Projects')!.click());
     expect(router.state.location.pathname).toBe('/projects');
   });

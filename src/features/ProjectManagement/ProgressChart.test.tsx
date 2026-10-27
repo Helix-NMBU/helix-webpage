@@ -4,13 +4,13 @@ import { describe, expect, it } from "vitest";
 import { ProgressChart } from "./OverviewProgress";
 import { initialLocalWorkspace } from "./local-repository";
 import { addDays, osloDate } from "./model";
-import { chartDay, progressChartRange } from "./progress-chart";
+import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
 
 const today = osloDate();
-function render(deadline: string | null) {
+function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null } = {}) {
   const workspace = initialLocalWorkspace();
   const container = document.createElement("div");
-  container.innerHTML = renderToStaticMarkup(<ProgressChart workspace={workspace} deadline={deadline} compact={false} />);
+  container.innerHTML = renderToStaticMarkup(<ProgressChart workspace={workspace} deadline={deadline} compact={false} {...bounds} />);
   return container;
 }
 
@@ -48,4 +48,51 @@ describe("deadline progress charts", () => {
     expect(progressChartRange("2026-10-27", "2026-10-27", null)).toEqual({ start: "2026-10-20", end: "2026-11-03" });
     expect(progressChartRange("2026-10-01", "2026-10-27", null)).toEqual({ start: "2026-10-01", end: "2026-11-10" });
   });
+  it("uses the configured project start at the left edge regardless of observation dates", () => {
+    for (const startDate of [addDays(today, -60), today, addDays(today, 10)]) {
+      const deadline = addDays(startDate, 40);
+      const container = render(deadline, { startDate });
+      expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe(startDate);
+      expect(container.querySelector('[data-chart-boundary="start"] time')?.getAttribute('dateTime')).toBe(startDate);
+      expect(parseFloat(container.querySelector<HTMLElement>('[data-chart-boundary="start"]')!.style.left)).toBeCloseTo(22 / 640 * 100);
+      const range = progressChartRange(addDays(today,-7),today,deadline,{startDate});
+      const expectedX = 22 + (chartDay(deadline)-chartDay(startDate))/(chartDay(range.end)-chartDay(startDate))*596;
+      expect(Number(container.querySelector('[data-progress-deadline] line')?.getAttribute('x1'))).toBeCloseTo(expectedX);
+      expect(container.querySelector('tbody')?.innerHTML).toBe(render(deadline).querySelector('tbody')?.innerHTML);
+      expect(container.querySelector('g[clip-path]')).not.toBeNull();
+    }
+  });
+  it("keeps the full season window through July, including leap years", () => {
+    expect(seasonChartRange('S27')).toEqual({startDate:'2026-08-01',endDate:'2027-07-31'});
+    expect(seasonChartRange('S28')).toEqual({startDate:'2027-08-01',endDate:'2028-07-31'});
+    for (const date of ['2026-07-01','2026-10-27','2027-08-01']) {
+      expect(progressChartRange(date,date,'2028-01-01',seasonChartRange('S27'))).toEqual({start:'2026-08-01',end:'2027-07-31'});
+    }
+    const container=render('2026-11-30',seasonChartRange('S27'));
+    expect(container.querySelector('[data-chart-boundary="start"]')?.textContent).toBe('1 Aug');
+    expect(container.querySelector('[data-chart-boundary="end"]')?.textContent).toBe('31 Jul');
+  });
+  it("keeps future shading and deadline regions bounded when dates lie outside the window", () => {
+    for (const bounds of [seasonChartRange('S26'),seasonChartRange('S28')]) {
+      for (const deadline of ['2025-01-01','2029-01-01']) {
+        const container=render(deadline,bounds);
+        expect(container.querySelector('[data-progress-deadline] line')).toBeNull();
+        for (const rect of container.querySelectorAll('svg rect')) {
+          expect(Number(rect.getAttribute('width'))).toBeGreaterThanOrEqual(0);
+          expect(Number(rect.getAttribute('x'))).toBeGreaterThanOrEqual(22);
+          expect(Number(rect.getAttribute('x'))+Number(rect.getAttribute('width'))).toBeLessThanOrEqual(618);
+        }
+        expect(container.querySelectorAll('span[aria-hidden="true"]')).toHaveLength(0);
+      }
+    }
+  });
+  it("keeps valid bounds for future starts without a deadline and preserves a boundary deadline", () => {
+    const startDate=addDays(today,30);
+    const range=progressChartRange(today,today,null,{startDate});
+    expect(range.start).toBe(startDate);expect(range.end>startDate).toBe(true);
+    const container=render(startDate,{startDate});
+    expect(container.querySelector('[data-chart-boundary="start"]')?.textContent).not.toBe('');
+    expect(Number(container.querySelector('[data-progress-deadline] line')?.getAttribute('x1'))).toBe(22);
+  });
+
 });

@@ -301,7 +301,7 @@ export function ProjectSidebar({
           />
         </div>
         {chart ? (
-          <ProgressChart workspace={chart} compact={false} deadline={project.deadline} />
+          <ProgressChart workspace={chart} compact={false} deadline={project.deadline} startDate={project.startDate} />
         ) : (
           <p className="text-xs text-muted-foreground">
             Recorded history requires project task access.

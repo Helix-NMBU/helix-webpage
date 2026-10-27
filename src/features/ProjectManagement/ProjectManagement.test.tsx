@@ -234,6 +234,8 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed1");
     expect(container.querySelector('[aria-label="Chassis & assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(container.textContent).toContain("Shaded area: future");
+    expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
+    expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
     expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe(initialLocalWorkspace().projects.map(project => project.deadline).filter(Boolean).sort().pop());
     expect(button("Refresh")).toBeUndefined();
     expect(container.textContent).not.toContain("Completion by department");
