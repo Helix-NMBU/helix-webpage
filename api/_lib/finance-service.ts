@@ -7,6 +7,8 @@ import { isPurchaseMutation, performPurchaseMutation } from "./finance-purchases
 import { isProcessingMutation, performProcessingMutation } from "./finance-processing.js";
 import { loadPurchaseRegister } from "./finance-register.js";
 import { createFinanceStorage, type FinanceObjectStorage } from "./finance-storage.js";
+import { createLiveFinanceSender, type FinanceMailSender } from "./finance-mail.js";
+import { performDeliveryMutation } from "./finance-recovery.js";
 import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
 import { loadFundingRecords, loadPublicEarmarks } from "./finance-funding-read.js";
@@ -48,9 +50,18 @@ export function createFinanceServices(deps: {
   db: CvDatabase;
   authenticate: (token: string) => Promise<WorkspaceIdentity>;
   financeStorage?: FinanceObjectStorage | null;
+  financeDelivery?: {
+    send?: FinanceMailSender;
+    env?: NodeJS.ProcessEnv;
+    inlineLimit?: number;
+    log?: (line: string) => void;
+    now?: () => Date;
+  };
 }): FinanceServices {
   const { db } = deps;
   const financeStorage = deps.financeStorage === undefined ? null : deps.financeStorage;
+  const deliveryEnv = deps.financeDelivery?.env ?? { WEBSITE_EMAIL_ENABLED: "false", HELIX_ENVIRONMENT: "local" };
+  const deliverySend = deps.financeDelivery?.send ?? (async () => ({ outcome: "failed" as const, safeError: "delivery_disabled" as const }));
 
   async function rows<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     try {
@@ -247,6 +258,15 @@ export function createFinanceServices(deps: {
       if (isProcessingMutation(action)) {
         return performProcessingMutation(db, current, body);
       }
+      if (action === "exportPurchases" || action === "downloadExport" || action === "retryOutbox" || action === "cleanupUploads") {
+        return performDeliveryMutation(db, financeStorage, current, body, {
+          send: deliverySend,
+          env: deliveryEnv,
+          inlineLimit: deps.financeDelivery?.inlineLimit,
+          log: deps.financeDelivery?.log,
+          now: deps.financeDelivery?.now,
+        });
+      }
       throw new FinanceError(503, "This finance operation is not available yet.");
     },
   };
@@ -277,5 +297,10 @@ export function neonFinanceServices(): FinanceServices {
   } catch {
     financeStorage = null;
   }
-  return createFinanceServices({ db, authenticate: (token) => cv.authenticate(token), financeStorage });
+  return createFinanceServices({
+    db,
+    authenticate: (token) => cv.authenticate(token),
+    financeStorage,
+    financeDelivery: { send: createLiveFinanceSender(process.env), env: process.env },
+  });
 }

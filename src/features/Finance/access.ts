@@ -129,8 +129,10 @@ const ACTION_CAPABILITY: Record<FinanceAction, keyof FinanceCapabilitySet> = {
   decideRequest: "decideRequests",
   closeRequest: "ownRequests",
   downloadDocument: "filesAndRefunds",
+  downloadExport: "purchaseRegister",
   exportPurchases: "purchaseRegister",
   retryOutbox: "purchaseRegister",
+  cleanupUploads: "purchaseRegister",
 };
 
 export function mutationCapability(action: FinanceAction): keyof FinanceCapabilitySet {

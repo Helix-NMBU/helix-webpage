@@ -14,6 +14,7 @@ import { requiresLateReason } from "./request-domain";
 import type {
   BudgetChoiceItem,
   BudgetChoiceSystem,
+  FinanceExportFile,
   FinanceMutation,
   HeadDecisionQueueItem,
   OwnRequestSummary,
@@ -104,6 +105,7 @@ export function PurchasesBoard() {
   const today = session.today ?? new Date().toISOString().slice(0, 10);
   const canDecide = Boolean(session.capabilities?.decideRequests);
   const canRegister = Boolean(session.capabilities?.registerActual);
+  const canExport = Boolean(session.capabilities?.purchaseRegister);
   const budgetsLoaded = session.budgets?.budgetStatus === "approved";
   const systems = budgetChoices.systems.filter((row) => row.active);
   const choices = purchases.choices?.items ?? [];
@@ -154,6 +156,92 @@ export function PurchasesBoard() {
     } catch (error) {
       setUploads((current) => current.filter((row) => row !== entry));
       notify("Upload failed", error instanceof Error ? error.message : "Try again.", { id: "purchase-upload", variant: "error" });
+    }
+  }
+
+  function saveCsv(file: FinanceExportFile) {
+    if (!file.csv) return;
+    const url = URL.createObjectURL(new Blob([file.csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function downloadPrivateExport(exportId: string) {
+    const saved = await session.mutate({ action: "downloadExport", requestId: crypto.randomUUID(), exportId });
+    if (!saved.downloadUrl) throw new Error("The export download was not prepared.");
+    const link = document.createElement("a");
+    link.href = saved.downloadUrl;
+    link.rel = "noopener";
+    link.click();
+  }
+
+  async function exportRegister() {
+    try {
+      const saved = await session.mutate({ action: "exportPurchases", requestId: crypto.randomUUID() });
+      const file = saved.exportFile;
+      if (file?.delivery === "inline" && file.csv) {
+        notify("Purchase export ready", "The export is ready to save.", {
+          id: "finance-export",
+          variant: "success",
+          action: { label: "Save file", onClick: () => saveCsv(file) },
+        });
+        return;
+      }
+      if (file?.exportId) {
+        const exportId = file.exportId;
+        notify("Purchase export ready", "The export is in private storage. Download it while you are signed in.", {
+          id: "finance-export",
+          variant: "success",
+          action: { label: "Download", onClick: () => { void downloadPrivateExport(exportId).catch((error: unknown) => notify("Could not download export", error instanceof Error ? error.message : "Try again.", { id: "finance-export", variant: "error" })); } },
+        });
+        return;
+      }
+      notify("Purchase export ready", "The export completed.", { id: "finance-export", variant: "success" });
+    } catch (error) {
+      notify("Could not export purchases", error instanceof Error ? error.message : "Try again.", {
+        id: "finance-export",
+        variant: "error",
+        action: { label: "Try again", onClick: () => { void exportRegister(); } },
+      });
+    }
+  }
+
+  async function deliverNotifications() {
+    try {
+      const saved = await session.mutate({ action: "retryOutbox", requestId: crypto.randomUUID() });
+      const recovery = saved.recovery;
+      const uncertain = (recovery?.uncertain ?? 0) > 0;
+      notify(uncertain ? "Delivery needs reconciliation" : "Notification delivery finished", recovery?.message ?? "No finance notifications were waiting.", {
+        id: "finance-delivery",
+        variant: uncertain || (recovery?.failed ?? 0) > 0 ? "warning" : "success",
+      });
+    } catch (error) {
+      notify("Could not deliver notifications", error instanceof Error ? error.message : "Try again.", {
+        id: "finance-delivery",
+        variant: "error",
+        action: { label: "Try again", onClick: () => { void deliverNotifications(); } },
+      });
+    }
+  }
+
+  async function cleanUploads() {
+    try {
+      const saved = await session.mutate({ action: "cleanupUploads", requestId: crypto.randomUUID() });
+      const recovery = saved.recovery;
+      const uncertain = (recovery?.uncertain ?? 0) > 0;
+      notify(uncertain ? "Cleanup needs reconciliation" : "Upload cleanup finished", recovery?.message ?? "No expired uploads were ready for cleanup.", {
+        id: "finance-cleanup",
+        variant: uncertain ? "warning" : "success",
+      });
+    } catch (error) {
+      notify("Could not clean up uploads", error instanceof Error ? error.message : "Try again.", {
+        id: "finance-cleanup",
+        variant: "error",
+        action: { label: "Try again", onClick: () => { void cleanUploads(); } },
+      });
     }
   }
 
@@ -596,6 +684,16 @@ export function PurchasesBoard() {
         </Card>
       )}
       </div>
+      {canExport ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-medium">Finance tools</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void exportRegister()}>Export purchases</Button>
+            <Button type="button" variant="outline" onClick={() => void deliverNotifications()}>Deliver notifications</Button>
+            <Button type="button" variant="outline" onClick={() => void cleanUploads()}>Clean up expired uploads</Button>
+          </div>
+        </section>
+      ) : null}
       {session.capabilities?.purchaseRegister ? (
         <PurchaseRegister
           register={register}

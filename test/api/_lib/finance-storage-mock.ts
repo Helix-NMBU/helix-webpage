@@ -14,8 +14,17 @@ export function createMemoryFinanceStorage(): FinanceObjectStorage & { objects: 
     async presignPut(stagingKey) {
       return `memory://put/${stagingKey}`;
     },
+    exportKey(memberId, exportId) {
+      return `exports/${memberId}/${exportId}/${createHash("sha256").update(`${exportId}-export`).digest("hex").slice(0, 32)}`;
+    },
+    async putObject(key, bytes) {
+      objects.set(key, bytes);
+    },
+    async exists(key) {
+      return objects.has(key) ? "present" : "absent";
+    },
     async presignGet(storageKey) {
-      return `memory://get/${storageKey}`;
+      return `memory://get/${storageKey}?X-Amz-Signature=memory`;
     },
     async headObject(key) {
       const bytes = objects.get(key);
