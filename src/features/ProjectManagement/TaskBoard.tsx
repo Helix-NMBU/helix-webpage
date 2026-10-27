@@ -208,7 +208,7 @@ export function TaskBoard({
                           )}
                           {show("deadline") && (
                             <span
-                              className={`shrink-0 ${overdue ? "text-[oklch(0.577_0.245_27.325)]" : "text-muted-foreground"}`}
+                              className={`shrink-0 ${overdue ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}
                             >
                               {task.deadline ? (
                                 <TargetDate deadline={task.deadline} />

@@ -203,7 +203,7 @@ export function PersonalTasks({
                       </TableCell>
                       {show("deadline") && (
                         <TableCell
-                          className={`whitespace-nowrap ${!closed && task.deadline && task.deadline < today ? "text-[oklch(0.577_0.245_27.325)]" : "text-muted-foreground"}`}
+                          className={`whitespace-nowrap ${!closed && task.deadline && task.deadline < today ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}
                         >
                           {task.deadline
                             ? formatDate(task.deadline)
