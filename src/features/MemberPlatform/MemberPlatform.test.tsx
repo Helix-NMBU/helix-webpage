@@ -563,6 +563,36 @@ describe("internal member platform", () => {
     await act(async()=>noMilestone.click());expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Legacy inspection');expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Verify dimensions');
   });
 
+  it("switches project tasks to Board, preserves milestone filters and moves cards after a status change",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    const projectUrl='/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040';
+    await open(projectUrl);
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project task filters and view"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='Board')!.click());
+    expect(router.state.location.search).toContain('view=board');expect(router.state.location.search).toContain('milestone=');
+    const board=()=>container.querySelector('[aria-label="Task board"]')!;
+    expect(board().querySelectorAll('[role="article"]')).toHaveLength(1);
+    expect(board().textContent).toContain('Verify dimensions');expect(board().textContent).not.toContain('Confirm material delivery');
+    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Verify dimensions')!;task.status='done';task.revision++;
+    projectTasks.mutate.mockResolvedValue(next);
+    await act(async()=>board().querySelector<HTMLButtonElement>('[aria-label="Change status for Verify dimensions"]')!.click());
+    await act(async()=>document.querySelector<HTMLElement>('[role="option"][aria-label="Done"]')!.click());
+    expect(board().querySelector('[aria-label="Done column"] [role="article"]')?.getAttribute('aria-label')).toBe('Verify dimensions');
+    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('40');
+    await act(async()=>board().querySelector<HTMLButtonElement>('[role="article"] button:not([aria-label])')!.click());
+    expect(router.state.location.pathname).toBe(`/tasks/${task.id}`);
+    await act(async()=>[...container.querySelectorAll<HTMLAnchorElement>('a')].find(link=>link.textContent==='Back')!.click());
+    expect(container.querySelector('[aria-label="Task board"]')).not.toBeNull();
+    expect(router.state.location.search).toContain('view=board');
+  });
+  it("restores project Board filters and clears them while retaining the layout",async()=>{
+    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());
+    await open('/projects/00000000-0000-4000-8000-000000000100?view=board&status=blocked&priority=low');
+    expect(container.querySelectorAll('[aria-label="Task board"] [role="article"]')).toHaveLength(0);
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Clear filters')!.click());
+    expect(router.state.location.search).toBe('?view=board');
+    expect(container.querySelectorAll('[aria-label="Task board"] [role="article"]')).toHaveLength(5);
+  });
   it("updates task completion, milestone progress and project progress together",async()=>{
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
     await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');

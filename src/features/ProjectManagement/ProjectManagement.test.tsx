@@ -210,6 +210,21 @@ describe("project management interface", () => {
     await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "todo" }));
   });
+  it("switches My tasks to Board while retaining filters, properties and task-only assignment scope", async () => {
+    const router = await open("overview", true, "?status=blocked&columns=milestone&group=due");
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Task filters and view"]')!.click());
+    await click("Board");
+    expect(new URLSearchParams(router.state.location.search).get("view")).toBe("board");
+    const board = container.querySelector('[aria-label="Task board"]')!;
+    expect(board.querySelectorAll('[role="article"]')).toHaveLength(1);
+    expect(board.querySelector('[aria-label="Blocked column"]')?.textContent).toContain("Confirm material delivery");
+    expect(board.querySelector('a[href*="?milestone="]')).not.toBeNull();
+    expect(board.querySelector('[aria-label^="Assigned to"]')).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('#personal-group')?.disabled).toBe(true);
+    await click("List");
+    expect(container.querySelector('tbody[aria-label="Overdue"]')).not.toBeNull();
+    expect(new URLSearchParams(router.state.location.search).get("group")).toBe("due");
+  });
   it("excludes assigned milestones from personal task rows", async () => {
     const workspace = initialLocalWorkspace();
     workspace.tasks = workspace.tasks.map(task => task.kind === "milestone" ? { ...task, assigneeIds: [workspace.viewerId] } : task);

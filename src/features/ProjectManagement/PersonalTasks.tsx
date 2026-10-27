@@ -19,6 +19,7 @@ import { Badge } from "@libs/components/ui/badge";
 import { TaskStatusControl, type SaveTaskStatus } from "./TaskStatus";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { PriorityIndicator } from "./MilestoneTableControls";
+import { TaskBoard } from "./TaskBoard";
 import { PersonalTaskViewMenu } from "./PersonalTaskViewMenu";
 import {
   assignedTasks,
@@ -47,7 +48,11 @@ export function PersonalTasks({
   const options = personalTaskView(params);
   const today = osloDate();
   const assigned = assignedTasks(workspace);
-  const groups = personalTaskGroups(workspace, options, today);
+  const groups = personalTaskGroups(
+    workspace,
+    options.view === "board" ? { ...options, group: "status" } : options,
+    today,
+  );
   const projects = new Map(
     workspace.projects.map((project) => [project.id, project]),
   );
@@ -72,7 +77,7 @@ export function PersonalTasks({
   }
   return (
     <section
-      className="mx-auto w-full max-w-7xl py-5"
+      className={`mx-auto w-full py-5 ${options.view === "board" ? "min-w-0" : "max-w-7xl"}`}
       aria-labelledby="my-tasks-title"
       aria-busy={busy || loading}
     >
@@ -100,8 +105,23 @@ export function PersonalTasks({
           </Button>
         </div>
       </div>
-      <div className="overflow-hidden rounded-xl border bg-background">
-        {groups.length ? (
+      <div
+        className={
+          options.view === "board"
+            ? "min-w-0"
+            : "overflow-hidden rounded-xl border bg-background"
+        }
+      >
+        {options.view === "board" ? (
+          <TaskBoard
+            tasks={groups.flatMap((group) => group.tasks)}
+            workspace={workspace}
+            busy={busy || loading}
+            columns={options.columns}
+            onOpen={onOpen}
+            onStatusChange={onStatusChange}
+          />
+        ) : groups.length ? (
           <Table>
             <TableHeader>
               <TableRow>

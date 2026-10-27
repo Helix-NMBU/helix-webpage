@@ -1,7 +1,15 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { TaskBoard } from "../ProjectManagement/TaskBoard";
+import { ProjectTaskViewMenu } from "./ProjectTaskViewMenu";
+import { projectTaskView, visibleProjectTasks } from "./project-task-view";
 import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
-import { TaskStatusControl, TaskStatusIcon, type SaveTaskStatus } from "../ProjectManagement/TaskStatus";
+import {
+  TaskStatusControl,
+  TaskStatusIcon,
+  type SaveTaskStatus,
+} from "../ProjectManagement/TaskStatus";
 import { Input } from "@libs/components/ui/input";
 import {
   Empty,
@@ -45,11 +53,58 @@ export function ProjectTaskList({
 }) {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<string[]>([]);
-  const visible = tasks.filter((task) =>
-    `${task.title} ${task.description} ${task.partnerName}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  const [params, setParams] = useSearchParams();
+  const options = projectTaskView(params);
+  const visible = visibleProjectTasks(tasks, options, search);
+  function change(key: string, value: string) {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.set(key, value);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+  function resetFilters() {
+    setSearch("");
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const key of [
+          "status",
+          "priority",
+          "assignee",
+          "completed",
+          "cancelled",
+          "sort",
+        ])
+          next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  }
+  function clearAll() {
+    setSearch("");
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const key of [
+          "milestone",
+          "status",
+          "priority",
+          "assignee",
+          "completed",
+          "cancelled",
+          "sort",
+        ])
+          next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  }
   const hidden = allTasks.length - visible.length;
   return (
     <section aria-label="Project tasks" className="min-w-0 space-y-4">
@@ -60,16 +115,24 @@ export function ProjectTaskList({
             {allTasks.length}
           </span>
         </h2>
-        {canCreate && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={onCreate}
-          >
-            New task
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <ProjectTaskViewMenu
+            workspace={workspace}
+            options={options}
+            onChange={change}
+            onReset={resetFilters}
+          />
+          {canCreate && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={onCreate}
+            >
+              New task
+            </Button>
+          )}
+        </div>
       </div>
       <Input
         aria-label="Search project tasks"
@@ -87,82 +150,102 @@ export function ProjectTaskList({
           </Button>
         </div>
       )}
-      <div className="space-y-5">
-        {TASK_STATUSES.map((status) => {
-          const group = visible.filter((task) => task.status === status);
-          if (!group.length) return null;
-          const open = !collapsed.includes(status);
-          const total = allTasks.filter(
-            (task) => task.status === status,
-          ).length;
-          return (
-            <section key={status} aria-label={`${STATUS_LABELS[status]} tasks`}>
-              <button
-                type="button"
-                aria-expanded={open}
-                className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm font-medium"
-                onClick={() =>
-                  setCollapsed((values) =>
-                    values.includes(status)
-                      ? values.filter((value) => value !== status)
-                      : [...values, status],
-                  )
-                }
+      {options.view === "board" ? (
+        <TaskBoard
+          tasks={visible}
+          workspace={workspace}
+          busy={busy}
+          columns={["priority", "milestone", "assignee", "deadline"]}
+          onOpen={onOpen}
+          onStatusChange={onStatusChange}
+        />
+      ) : (
+        <div className="space-y-5">
+          {TASK_STATUSES.map((status) => {
+            const group = visible.filter((task) => task.status === status);
+            if (!group.length) return null;
+            const open = !collapsed.includes(status);
+            const total = allTasks.filter(
+              (task) => task.status === status,
+            ).length;
+            return (
+              <section
+                key={status}
+                aria-label={`${STATUS_LABELS[status]} tasks`}
               >
-                <IconChevronDown
-                  aria-hidden="true"
-                  className={`size-3.5 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-                />
-                <TaskStatusIcon status={status} />
-                {STATUS_LABELS[status]}
-                <span className="ml-1 text-xs tabular-nums text-muted-foreground">
-                  {group.length}
-                  {group.length !== total ? ` / ${total}` : ""}
-                </span>
-              </button>
-              {open && (
-                <ul className="divide-y divide-border/50">
-                  {group.map((task) => {
-                    return (
-                      <li
-                        key={task.id}
-                        className={`flex items-center gap-3 px-3 py-4 ${status === "done" || status === "cancelled" ? "text-muted-foreground" : ""}`}
-                      >
-                        <PriorityIndicator priority={task.priority} />
-                        <TaskStatusControl task={task} workspace={workspace} busy={busy} onSave={onStatusChange} />
-                        <div className="min-w-0 flex-1">
-                          <button
-                            type="button"
-                            className="block w-full text-left text-sm leading-5 hover:underline"
-                            onClick={() => onOpen(task)}
-                          >
-                            {task.title}
-                          </button>
-                          {task.status === "blocked" && task.blockedReason && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {task.blockedReason}
-                            </p>
-                          )}
-                        </div>
-                        <span className="shrink-0">
-                          <AssigneeAvatars
-                            assigneeIds={task.assigneeIds}
-                            members={workspace.members}
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm font-medium"
+                  onClick={() =>
+                    setCollapsed((values) =>
+                      values.includes(status)
+                        ? values.filter((value) => value !== status)
+                        : [...values, status],
+                    )
+                  }
+                >
+                  <IconChevronDown
+                    aria-hidden="true"
+                    className={`size-3.5 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+                  />
+                  <TaskStatusIcon status={status} />
+                  {STATUS_LABELS[status]}
+                  <span className="ml-1 text-xs tabular-nums text-muted-foreground">
+                    {group.length}
+                    {group.length !== total ? ` / ${total}` : ""}
+                  </span>
+                </button>
+                {open && (
+                  <ul className="divide-y divide-border/50">
+                    {group.map((task) => {
+                      return (
+                        <li
+                          key={task.id}
+                          className={`flex items-center gap-3 px-3 py-4 ${status === "done" || status === "cancelled" ? "text-muted-foreground" : ""}`}
+                        >
+                          <PriorityIndicator priority={task.priority} />
+                          <TaskStatusControl
+                            task={task}
+                            workspace={workspace}
+                            busy={busy}
+                            onSave={onStatusChange}
                           />
-                        </span>
-                        <span className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground sm:inline">
-                          <TargetDate deadline={task.deadline} />
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          );
-        })}
-      </div>
-      {!visible.length && (
+                          <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              className="block w-full text-left text-sm leading-5 hover:underline"
+                              onClick={() => onOpen(task)}
+                            >
+                              {task.title}
+                            </button>
+                            {task.status === "blocked" &&
+                              task.blockedReason && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {task.blockedReason}
+                                </p>
+                              )}
+                          </div>
+                          <span className="shrink-0">
+                            <AssigneeAvatars
+                              assigneeIds={task.assigneeIds}
+                              members={workspace.members}
+                            />
+                          </span>
+                          <span className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground sm:inline">
+                            <TargetDate deadline={task.deadline} />
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+      {!visible.length && options.view !== "board" && (
         <Empty className="min-h-48 border">
           <EmptyHeader>
             <EmptyTitle>
@@ -175,14 +258,7 @@ export function ProjectTaskList({
             </EmptyDescription>
           </EmptyHeader>
           {(filterLabel || search) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSearch("");
-                onClear();
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={clearAll}>
               Clear filters
             </Button>
           )}
@@ -193,14 +269,7 @@ export function ProjectTaskList({
           <span>
             {hidden} task{hidden === 1 ? "" : "s"} hidden by filters
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSearch("");
-              onClear();
-            }}
-          >
+          <Button variant="ghost" size="sm" onClick={clearAll}>
             Clear filters
           </Button>
         </div>

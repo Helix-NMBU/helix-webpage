@@ -26,6 +26,7 @@ const choice = (
 };
 export function personalTaskView(params: URLSearchParams) {
   return {
+    view: params.get("view") === "board" ? "board" : "list",
     area: params.get("area") ?? "all",
     status: choice(params, "status", ["all", ...TASK_STATUSES], "all"),
     project: params.get("project") ?? "all",

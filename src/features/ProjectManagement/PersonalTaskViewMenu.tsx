@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from "@libs/components/ui/popover";
 import { Switch } from "@libs/components/ui/switch";
+import { TaskLayoutSwitch } from "./TaskLayoutSwitch";
 import { Choice, Field } from "./TaskEditor";
 import {
   PERSONAL_TASK_COLUMNS,
@@ -64,12 +65,16 @@ export function PersonalTaskViewMenu({
         align="end"
         className="max-h-[min(80svh,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-2rem)] space-y-4 overflow-y-auto"
       >
-        <p className="text-sm font-medium">Task view</p>
+        <TaskLayoutSwitch
+          value={options.view}
+          onChange={(value) => onChange("view", value)}
+        />
         <div className="space-y-3 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Field id="personal-group" label="Grouping">
             <Choice
               id="personal-group"
-              value={options.group}
+              value={options.view === "board" ? "status" : options.group}
+              disabled={options.view === "board"}
               onChange={(value) => onChange("group", value)}
               options={[
                 { value: "due", label: "Due date" },
