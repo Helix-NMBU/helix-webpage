@@ -694,6 +694,58 @@ describe("finance access API", () => {
     expect((await call({ token: "stranger", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId: (otherAuth.body as { id?: string }).id } })).status).toBe(403);
   });
 
+  it("finalizes the verified byte snapshot and safely retries a lost response", async () => {
+    const { putMemoryPdf } = await import("./finance-storage-mock.js");
+    const auth = await call({ token: "member", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { stagingKey, id: uploadId } = auth.body as { stagingKey: string; id: string };
+    await putMemoryPdf(financeStorage, stagingKey);
+    const original = financeStorage.objects.get(stagingKey)?.slice();
+    const write = financeStorage.putFinalObject.bind(financeStorage);
+    const spy = vi.spyOn(financeStorage, "putFinalObject").mockImplementationOnce(async (key, bytes, type) => {
+      // A still-valid staging PUT replaces the source after the application read it.
+      financeStorage.objects.set(stagingKey, new Uint8Array([37, 80, 68, 70, 45, 57, 57, 57]));
+      await write(key, bytes, type);
+    });
+    const requestId = crypto.randomUUID();
+    try {
+      expect((await call({ token: "member", body: { action: "finalizeUpload", requestId, uploadId } })).status).toBe(200);
+      const saved = (await sql<{ final_key: string; content_sha256: string }>("select final_key, content_sha256 from finance.uploads where id = $1::uuid", [uploadId])).rows[0];
+      expect(financeStorage.objects.get(saved.final_key)).toEqual(original);
+      const digest = await import("node:crypto").then(({ createHash }) => createHash("sha256").update(original as Uint8Array).digest("hex"));
+      expect(saved.content_sha256).toBe(digest);
+      financeStorage.objects.delete(stagingKey);
+      expect((await call({ token: "member", body: { action: "finalizeUpload", requestId, uploadId } })).status).toBe(200);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("returns the single saved final object when finalize requests overlap", async () => {
+    const { putMemoryPdf } = await import("./finance-storage-mock.js");
+    const auth = await call({ token: "member", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { stagingKey, id: uploadId } = auth.body as { stagingKey: string; id: string };
+    await putMemoryPdf(financeStorage, stagingKey);
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => { release = resolve; });
+    let writers = 0;
+    const put = financeStorage.putFinalObject.bind(financeStorage);
+    const spy = vi.spyOn(financeStorage, "putFinalObject").mockImplementation(async (key, bytes, type) => {
+      await put(key, bytes, type);
+      writers += 1;
+      if (writers === 2) release();
+      await ready;
+    });
+    try {
+      const results = await Promise.all([1, 2].map(() => call({ token: "member", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } })));
+      expect(results.map((result) => result.status)).toEqual([200, 200]);
+      const saved = (await sql<{ final_key: string }>("select final_key from finance.uploads where id = $1::uuid", [uploadId])).rows[0];
+      expect([...financeStorage.objects.keys()].filter((key) => key.includes(`/final/${uploadId}/`))).toEqual([saved.final_key]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("enforces purchase upload limits at the API without writes or view bumps on rejection", async () => {
     await seedPrivateRows();
     await grant(memberId, "finance");
@@ -1160,7 +1212,7 @@ describe("finance snapshot", () => {
         query: async <T>(text: string) => {
           queries.push(text);
           if (text.includes("capability_flags") !== text.includes("finance.view_versions")) throw new Error("split snapshot");
-          if (text.includes("finance.budget_items") && text.includes("i.protected is not true")) {
+          if (text.includes("finance.budget_items") && (text.includes("i.protected is not true") || text.includes("finance.purchase_lines pl"))) {
             return { rows: [] as T[] };
           }
           if (text.includes("finance.budget_items")) throw new Error("draft items queried");

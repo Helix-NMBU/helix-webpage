@@ -85,7 +85,6 @@ const REVISION_ACTIONS = new Set<FinanceAction>([
   "unmarkRefundPaid",
   "markInvoicePaid",
   "unmarkInvoicePaid",
-  "reviewException",
   "editFunding",
   "deleteFunding",
   "restoreFunding",

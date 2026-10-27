@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Textarea } from "@libs/components/ui/textarea";
@@ -63,6 +64,7 @@ export function PurchaseRegister({
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [paidOn, setPaidOn] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
 
   async function run(key: string, fingerprint: string, action: FinanceMutation, success: string, failure: string) {
     setBusy(key);
@@ -166,7 +168,7 @@ export function PurchaseRegister({
                 <div key={review.id} className="space-y-2 rounded-md border p-3">
                   <p>{EXCEPTION_LABELS[review.kind]} · {review.reviewStatus === "reviewed" ? "Reviewed" : "Open"}</p>
                   {review.reason ? <p>{review.reason}</p> : null}
-                  {review.reviewStatus === "open" && canAct ? (
+                  {review.reviewStatus === "open" && canAct && row.status === "registered" ? (
                     <>
                       <Label htmlFor={`review-${review.id}`}>Review reason</Label>
                       <Textarea
@@ -183,7 +185,7 @@ export function PurchaseRegister({
                           void run(
                             `review-${review.id}`,
                             `${review.id}:${reason}`,
-                            { action: "reviewException", requestId: "", reviewId: review.id, reason, expectedRevision: row.revision },
+                            { action: "reviewException", requestId: "", reviewId: review.id, reason },
                             "Review recorded",
                             "Could not record the review",
                           );
@@ -225,24 +227,31 @@ export function PurchaseRegister({
                       value={voidReasons[row.id] ?? ""}
                       onChange={(event) => setVoidReasons((current) => ({ ...current, [row.id]: event.target.value }))}
                     />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy !== null}
-                      onClick={() => {
-                        const reason = voidReasons[row.id] ?? "";
-                        void run(
-                          `void-${row.id}`,
-                          reason,
-                          { action: "voidPurchase", requestId: "", purchaseId: row.id, reason, expectedRevision: row.revision },
-                          "Purchase voided",
-                          "Could not void the purchase",
-                        );
-                      }}
-                    >
-                      Void purchase
-                    </Button>
+                    <Dialog open={confirmVoidId === row.id} onOpenChange={(open) => setConfirmVoidId(open ? row.id : null)}>
+                      <DialogTrigger asChild>
+                        <Button type="button" size="sm" variant="outline" disabled={busy !== null}>Void purchase</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Void {row.publicRef}?</DialogTitle>
+                          <DialogDescription>The purchase will leave the actual and unpaid totals. Its record and files will remain available. This cannot be undone.</DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                          <Button type="button" onClick={() => {
+                            const reason = voidReasons[row.id] ?? "";
+                            setConfirmVoidId(null);
+                            void run(
+                              `void-${row.id}`,
+                              reason,
+                              { action: "voidPurchase", requestId: "", purchaseId: row.id, reason, expectedRevision: row.revision },
+                              "Purchase voided",
+                              "Could not void the purchase",
+                            );
+                          }}>Confirm void</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
               ) : null}

@@ -117,7 +117,7 @@ beforeAll(async () => {
     create role authenticated;
     create role anonymous;
   `);
-  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql"]) {
+  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -559,6 +559,20 @@ describe("FIN-10-A01 outbox delivery", () => {
 });
 
 describe("FIN-10-A03 and FIN-10-A04 export", () => {
+  it("exports literal field names in ordinary text without exposing refund values", async () => {
+    await seedSeason();
+    await insertPurchase({ ref: "2026-0041", method: "outlay", totalOre: "1500", refund: "account", description: "Check refund_account and refund_phone labels" });
+    const result = await call({ token: "finance", body: { action: "exportPurchases", requestId: crypto.randomUUID() } });
+    expect(result.status).toBe(200);
+    const csv = (result.body as { exportFile: { csv: string } }).exportFile.csv;
+    expect(csv).toContain("Check refund_account and refund_phone labels");
+    expect(csv).not.toContain(refundAccount);
+    expect(csv).not.toContain(refundPhone);
+    expect(csv.split("\r\n")[0]).not.toMatch(/refund_account|refund_phone/);
+    expect((await sql<{ safe: boolean }>("select finance.delivery_output_is_safe($1::jsonb) as safe", [JSON.stringify({ nested: { refundAccount: refundAccount } })]))[0]?.safe).toBe(false);
+    expect((await sql<{ safe: boolean }>("select finance.delivery_output_is_safe($1::jsonb) as safe", [JSON.stringify({ nested: { refund_phone: refundPhone } })]))[0]?.safe).toBe(false);
+  });
+
   it("exports a repeatable formula-safe manifest without refund numbers or permanent links, and denies a revoked grant", async () => {
     await seedSeason();
     await insertPurchase({ ref: "2026-0042", method: "invoice", totalOre: "650000", supplier: "=CMD()", description: "+SUM(A1)" });

@@ -23,7 +23,7 @@ import type {
   RequestDraftLine,
 } from "./types";
 
-type UploadState = { uploadId: string; name: string; status: "uploading" | "ready" | "failed" };
+type UploadState = { localId: string; uploadId: string; name: string; status: "uploading" | "ready" | "failed" };
 
 function emptyPurchaseLine(): PurchaseLineInput {
   return { systemId: "", description: "", quantity: "1", amountNok: "", unbudgeted: false };
@@ -66,6 +66,7 @@ export function PurchasesBoard() {
   const notify = useNotify();
   const purchases = session.purchases;
   const requests = useRequestIds();
+  const purchaseRequests = useRequestIds();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<{
@@ -135,7 +136,7 @@ export function PurchasesBoard() {
       notify("Too many files", "You can attach at most 15 files.", { id: "purchase-files", variant: "error" });
       return;
     }
-    const entry: UploadState = { uploadId: "", name: file.name, status: "uploading" };
+    const entry: UploadState = { localId: crypto.randomUUID(), uploadId: "", name: file.name, status: "uploading" };
     setUploads((current) => [...current, entry]);
     try {
       const authorized = await session.mutate({
@@ -149,12 +150,26 @@ export function PurchasesBoard() {
       if (!authorized.uploadUrl || !uploadId) throw new Error("Upload authorization failed.");
       const response = await fetch(authorized.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
       if (!response.ok) throw new Error("Upload failed.");
-      await session.mutate({ action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId });
-      setUploads((current) => current.map((row) => (row.name === file.name && row.status === "uploading" ? { uploadId, name: file.name, status: "ready" as const } : row)));
-      setPurchase((current) => ({ ...current, uploadIds: [...current.uploadIds, uploadId] }));
-      notify("File uploaded", `${file.name} is ready to submit.`, { id: "purchase-upload", variant: "success" });
+      setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, uploadId } : row));
+      const finalizeRequestId = crypto.randomUUID();
+      const finalize = async () => {
+        setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "uploading" } : row));
+        try {
+          await session.mutate({ action: "finalizeUpload", requestId: finalizeRequestId, uploadId });
+          setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "ready" } : row));
+          notify("File uploaded", `${file.name} is ready to submit.`, { id: `purchase-upload-${entry.localId}`, variant: "success" });
+        } catch (error) {
+          setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "failed" } : row));
+          notify("Could not finalize file", error instanceof Error ? error.message : "Try again.", {
+            id: `purchase-upload-${entry.localId}`,
+            variant: "error",
+            action: { label: "Try again", onClick: () => { void finalize(); } },
+          });
+        }
+      };
+      await finalize();
     } catch (error) {
-      setUploads((current) => current.filter((row) => row !== entry));
+      setUploads((current) => current.filter((row) => row.localId !== entry.localId));
       notify("Upload failed", error instanceof Error ? error.message : "Try again.", { id: "purchase-upload", variant: "error" });
     }
   }
@@ -263,10 +278,10 @@ export function PurchasesBoard() {
       for (const warning of check.warnings) notify("Purchase warning", warning.message, { id: `purchase-warning-${warning.message}`, variant: "warning" });
       const saved = await session.mutate({
         action: "registerPurchase",
-        requestId: requests.idFor("register"),
+        requestId: purchaseRequests.idFor(JSON.stringify(payload)),
         purchase: payload,
       });
-      requests.finish();
+      purchaseRequests.finish();
       for (const warning of saved.warnings) notify("Purchase saved", warning.message, { id: `purchase-saved-${warning.message}`, variant: "warning" });
       notify("Purchase registered", saved.id ? "Reference saved." : "Your purchase was saved.", { id: "purchase-saved", variant: "success" });
       setPurchase(emptyPurchase(session.today ?? "", purchase.buyerName));
@@ -274,7 +289,6 @@ export function PurchasesBoard() {
       await session.loadPage("purchases", purchaseLoadOptions(selectedId));
       if (!budgetsLoaded) await session.loadPage("budgets");
     } catch (error) {
-      requests.finish();
       notify("Could not register purchase", error instanceof Error ? error.message : "Please try again.", { id: "purchase-save", variant: "error" });
     } finally {
       setSaving(false);
@@ -441,7 +455,7 @@ export function PurchasesBoard() {
                 </SelectContent>
               </Select>
             </div>
-            {purchase.documentKind === "invoice" ? (
+            {purchase.documentKind === "invoice" || purchase.paymentMethod === "invoice" ? (
               <Field label="Invoice due date" type="date" value={purchase.invoiceDueDate ?? ""} onChange={(value) => setPurchase((current) => ({ ...current, invoiceDueDate: value }))} />
             ) : null}
             <Field label="Document number (optional)" value={purchase.documentNumber ?? ""} onChange={(value) => setPurchase((current) => ({ ...current, documentNumber: value }))} />
@@ -474,7 +488,7 @@ export function PurchasesBoard() {
             }} />
             {uploads.length ? (
               <ul className="text-sm text-muted-foreground">
-                {uploads.map((file) => <li key={`${file.name}-${file.uploadId}`}>{file.name} — {file.status}</li>)}
+                {uploads.map((file) => <li key={file.localId}>{file.name} — {file.status}</li>)}
               </ul>
             ) : null}
           </div>

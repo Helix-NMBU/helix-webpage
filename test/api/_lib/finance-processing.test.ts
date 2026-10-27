@@ -179,6 +179,7 @@ beforeAll(async () => {
     "015_finance_requests.sql",
     "016_finance_fulfillment.sql",
     "018_finance_unpaid_voids_reviews.sql",
+    "020_finance_processing_guards.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
@@ -253,6 +254,7 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
       expect(row?.requesterName).toBe("Member Example");
       expect(row?.justification).toContain("Workshop material");
       expect(row?.lines.length).toBeGreaterThan(0);
+      expect(row?.lines[0]?.itemName).toBe("Carbon tube stock");
       expect(row?.documents[0]?.originalName).toBe("evidence.pdf");
       expect(row?.refundAccount).toBe("10000000001");
       expect(row?.status).toBe("registered");
@@ -343,6 +345,9 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     const full = registerOf((await read("head")).body);
     expect(full.some((row) => row.id === purchaseId && row.status === "voided" && row.publicRef === kept[0]?.ref)).toBe(true);
     expect(registerOf((await read("head", { unpaid: "1" })).body).some((row) => row.id === purchaseId)).toBe(false);
+    const documentId = full.find((row) => row.id === purchaseId)?.documents[0]?.id;
+    expect((await call("finance", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(200);
+    expect((await call("member", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(403);
   });
 
   it("marks and undoes payment without changing actual or commitment, and rejects repeated, wrong, voided, and unauthorized calls", async () => {
@@ -733,6 +738,7 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     expect(settlement).not.toContain("from finance.requests");
 
     const review = sources.find((row) => row.proname === "review_purchase_exception")?.prosrc.toLowerCase() ?? "";
+    expect(review.indexOf("from finance.purchases where id = purchase_id for update")).toBeLessThan(review.indexOf("from finance.exception_reviews where id = p_review_id for update"));
     expect(review).toContain("from finance.exception_reviews where id = p_review_id for update");
     expect(review).not.toContain("update finance.purchases");
     expect(review).not.toContain("lock_current_budget");
@@ -755,13 +761,6 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     ))[0];
     expect(review?.kind).toBe("missing_approval");
     const facts = JSON.stringify(review?.facts);
-    await call("head", {
-      action: "voidPurchase",
-      requestId: requestId(),
-      purchaseId,
-      reason: "Keep the exception on the voided purchase",
-      expectedRevision: 0,
-    });
     const versionBefore = await version();
     const recorded = await call("finance", {
       action: "reviewException",
@@ -807,6 +806,31 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     });
     expect(same.status).toBe(200);
     expect(await version()).toBe(repeatVersion);
+  });
+
+  it("rejects review after void while retaining the original exception and evidence", async () => {
+    await seasonWithBudget();
+    const saved = await registerPurchase({}, "6000.00");
+    const purchaseId = saved.body.id ?? "";
+    const reviewId = (await sql<{ id: string }>("select id from finance.exception_reviews where purchase_id = $1::uuid", [purchaseId]))[0]?.id;
+    expect((await call("finance", { action: "voidPurchase", requestId: requestId(), purchaseId, reason: "Wrong item", expectedRevision: 0 })).status).toBe(200);
+    const before = await version();
+    const result = await call("finance", { action: "reviewException", requestId: requestId(), reviewId, reason: "Reviewed after void" });
+    expect(result.status).toBe(409);
+    expect(result.body.error).toBe("A voided purchase cannot be reviewed.");
+    expect(await version()).toBe(before);
+    expect((await sql<{ review_status: string }>("select review_status from finance.exception_reviews where id = $1::uuid", [reviewId]))[0]?.review_status).toBe("open");
+  });
+
+  it("requires a due date for invoice payment even with receipt evidence", async () => {
+    await seasonWithBudget();
+    const invalid = await registerPurchase({ paymentMethod: "invoice", documentKind: "receipt" });
+    expect(invalid.status).toBe(400);
+    const valid = await registerPurchase({ paymentMethod: "invoice", documentKind: "receipt", invoiceDueDate: "2026-11-15" });
+    expect(valid.status).toBe(200);
+    expect((await sql<{ due_date: string }>("select due_date::text as due_date from finance.invoice_obligations where purchase_id = $1::uuid", [valid.body.id]))[0]?.due_date).toBe("2026-11-15");
+    const receipt = await registerPurchase();
+    await expect(sql("insert into finance.invoice_obligations (purchase_id, due_date) values ($1::uuid, null)", [receipt.body.id])).rejects.toThrow(/Enter an invoice due date/);
   });
 
   async function reviewedException() {

@@ -138,7 +138,7 @@ export function normalizePurchaseInput(raw: PurchaseInput): { purchase: Normaliz
     errors.push(field("purchaseDate", "Enter a valid purchase date."));
   }
   let invoiceDueDate: string | null = null;
-  if (documentKind === "invoice") {
+  if (documentKind === "invoice" || paymentMethod === "invoice") {
     try {
       invoiceDueDate = parseIsoDate(typeof raw.invoiceDueDate === "string" ? raw.invoiceDueDate : "");
     } catch {

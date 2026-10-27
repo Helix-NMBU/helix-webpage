@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { FinanceObjectStorage } from "../../../api/_lib/finance-storage.js";
 
 export function createMemoryFinanceStorage(): FinanceObjectStorage & { objects: Map<string, Uint8Array> } {
@@ -9,7 +9,7 @@ export function createMemoryFinanceStorage(): FinanceObjectStorage & { objects: 
       return `${memberId}/staging/${uploadId}/${createHash("sha256").update(`${uploadId}-staging`).digest("hex").slice(0, 32)}`;
     },
     finalKey(memberId, uploadId) {
-      return `${memberId}/final/${uploadId}/${createHash("sha256").update(`${uploadId}-final`).digest("hex").slice(0, 32)}`;
+      return `${memberId}/final/${uploadId}/${randomBytes(16).toString("hex")}`;
     },
     async presignPut(stagingKey) {
       return `memory://put/${stagingKey}`;
@@ -37,12 +37,10 @@ export function createMemoryFinanceStorage(): FinanceObjectStorage & { objects: 
     async readObject(key, byteSize) {
       const bytes = objects.get(key);
       if (!bytes) throw new Error("missing");
-      return bytes.subarray(0, byteSize);
+      return bytes.subarray(0, byteSize + 1);
     },
-    async promoteStagingToFinal(stagingKey, finalKey) {
-      const bytes = objects.get(stagingKey);
-      if (!bytes) throw new Error("missing");
-      objects.set(finalKey, bytes);
+    async putFinalObject(finalKey, bytes) {
+      objects.set(finalKey, bytes.slice());
     },
     async remove(key) {
       objects.delete(key);

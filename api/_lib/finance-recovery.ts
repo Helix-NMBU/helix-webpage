@@ -168,7 +168,9 @@ async function exportPurchases(
   if (existing) return existing;
   if (!caller.seasonCode) throw new FinanceError(409, "An operator has not configured the current season.");
   const exported = await buildPurchaseExport(db, caller.seasonCode);
-  if (/refund_account|refund_phone|X-Amz-|AWSAccessKeyId=/i.test(exported.csv)) {
+  // The manifest is built from an explicit allowlist that excludes refund fields.
+  // Do not reject user-supplied text merely because it names those fields.
+  if (/X-Amz-|AWSAccessKeyId=/i.test(exported.csv)) {
     throw new FinanceError(400, "The export could not be prepared.");
   }
   if (exported.byteSize <= inlineLimit) {

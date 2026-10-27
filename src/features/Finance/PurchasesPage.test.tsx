@@ -49,6 +49,7 @@ describe("PurchasesPage", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     act(() => root.unmount());
     container.remove();
   });
@@ -61,6 +62,43 @@ describe("PurchasesPage", () => {
     expect(container.textContent).toContain("Line amount is the total in NOK");
     expect(container.textContent).not.toContain("Purchase register");
     expect(container.textContent).not.toContain("Finance tools");
+  });
+
+  it("keeps different upload IDs for files with the same name", async () => {
+    let count = 0;
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    session.mutate.mockImplementation(async (body: { action: string }) => {
+      if (body.action === "authorizeUpload") return { id: ids[count++], uploadUrl: "https://upload.test", ok: true, warnings: [], errors: [] };
+      if (body.action === "checkPurchase") return { ok: true, warnings: [], errors: [{ field: "purchase", message: "Stop before registration" }] };
+      return { ok: true, warnings: [], errors: [] };
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    await act(async () => { root.render(<PurchasesBoard />); });
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    for (let i = 0; i < 2; i += 1) {
+      const file = new File(["%PDF-1.4"], "receipt.pdf", { type: "application/pdf" });
+      Object.defineProperty(input, "files", { value: [file], configurable: true });
+      await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    }
+    expect([...container.querySelectorAll("li")].filter((item) => item.textContent === "receipt.pdf — ready")).toHaveLength(2);
+    await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    const check = session.mutate.mock.calls.find(([body]) => body.action === "checkPurchase")?.[0] as unknown as { purchase: { uploadIds: string[] } };
+    expect(check.purchase.uploadIds).toEqual(ids);
+  });
+
+  it("reuses the registration ID after a lost response", async () => {
+    let attempts = 0;
+    session.mutate.mockImplementation(async (body: { action: string }) => {
+      if (body.action === "registerPurchase" && attempts++ === 0) throw new Error("Response lost");
+      return { ok: true, warnings: [], errors: [], id: "saved" };
+    });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    for (let i = 0; i < 2; i += 1) {
+      await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    }
+    const calls = session.mutate.mock.calls.map(([body]) => body).filter((body) => body.action === "registerPurchase") as Array<{ requestId: string }>;
+    expect(calls).toHaveLength(2);
+    expect(calls[0].requestId).toBe(calls[1].requestId);
   });
 
   it("shows the unpaid register and payment, void, and review controls to finance", async () => {
@@ -164,6 +202,11 @@ describe("PurchasesPage", () => {
     const voidButton = [...container.querySelectorAll("button")].find((button) => button.textContent === "Void purchase");
     const reviewButton = [...container.querySelectorAll("button")].find((button) => button.textContent === "Record review");
     await act(async () => { voidButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(session.mutate).not.toHaveBeenCalled();
+    const confirmVoid = [...document.body.querySelectorAll("button")].find((button) => button.textContent === "Confirm void");
+    expect(confirmVoid).toBeDefined();
+    await act(async () => { confirmVoid?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(session.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "voidPurchase" }));
     await act(async () => { reviewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     expect((container.querySelector("#void-purchase-1") as HTMLTextAreaElement).value).toBe("Wrong supplier");
     expect((container.querySelector("#review-review-1") as HTMLTextAreaElement).value).toBe("Accepted late");

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FinanceError } from "./finance-error.js";
 
@@ -34,7 +34,7 @@ export interface FinanceObjectStorage {
   headObject(key: string): Promise<{ byteSize: number; contentType: string | undefined }>;
   readSignature(key: string, length: number): Promise<Uint8Array>;
   readObject(key: string, byteSize: number): Promise<Uint8Array>;
-  promoteStagingToFinal(stagingKey: string, finalKey: string, contentType: string, byteSize: number): Promise<void>;
+  putFinalObject(finalKey: string, bytes: Uint8Array, contentType: string): Promise<void>;
   remove(key: string): Promise<void>;
 }
 
@@ -134,21 +134,22 @@ export function createFinanceStorage(env: NodeJS.ProcessEnv = process.env): Fina
       const result = await client.send(new GetObjectCommand({
         Bucket: bucket,
         Key: key,
-        Range: byteSize > 0 ? `bytes=0-${byteSize - 1}` : undefined,
+        // Request one extra byte so a staging overwrite with a larger object is detected.
+        Range: byteSize > 0 ? `bytes=0-${byteSize}` : undefined,
       }));
       const body = result.Body;
       if (!body) throw new FinanceError(400, "Supporting file is missing or not finalized.", [{ field: "files", message: "Supporting file is missing or not finalized." }]);
       return body.transformToByteArray();
     },
-    async promoteStagingToFinal(stagingKey, finalKey, contentType, byteSize) {
-      if (!STAGING_KEY.test(stagingKey) || !FINAL_KEY.test(finalKey)) throw new FinanceError(400, "Invalid upload path.");
+    async putFinalObject(finalKey, bytes, contentType) {
+      if (!FINAL_KEY.test(finalKey)) throw new FinanceError(400, "Invalid upload path.");
+      if (bytes.byteLength <= 0 || bytes.byteLength > FINANCE_FILE_LIMIT_BYTES) throw new FinanceError(400, "Each file must be 10 MB or smaller.");
       try {
-        await client.send(new CopyObjectCommand({
+        await client.send(new PutObjectCommand({
           Bucket: bucket,
-          CopySource: `${bucket}/${stagingKey}`,
           Key: finalKey,
+          Body: bytes,
           ContentType: contentType,
-          MetadataDirective: "REPLACE",
         }));
       } catch {
         throw new FinanceError(503, "Could not finalize the upload. Try again.");

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
 import { FinanceError, type ReviewDecision } from "./finance-error.js";
 import { osloToday } from "./finance-money.js";
-import type { FinanceObjectStorage } from "./finance-storage.js";
+import { isOwnedFinalKey, type FinanceObjectStorage } from "./finance-storage.js";
 import { allowedUpload, verifyFileSignature } from "../../src/features/Finance/purchase-domain.js";
 import {
   MAX_PURCHASE_FILE_BYTES,
@@ -274,32 +274,56 @@ export async function performPurchaseMutation(
       original_name: string | null;
       status: string;
       member_id: string;
+      final_key: string | null;
+      content_sha256: string | null;
     }>(
-      "select staging_key, byte_size::text as byte_size, content_type, original_name, status, member_id::text as member_id from finance.uploads where id = $1::uuid",
+      "select staging_key, byte_size::text as byte_size, content_type, original_name, status, member_id::text as member_id, final_key, content_sha256 from finance.uploads where id = $1::uuid",
       [uploadId],
     );
     const upload = rows.rows[0];
     if (!upload || upload.member_id !== caller.memberId) throw new FinanceError(404, "Upload not found.");
+    if (upload.status === "finalized" && upload.final_key && upload.content_sha256 && isOwnedFinalKey(caller.memberId, upload.final_key)) {
+      const saved = await storage.headObject(upload.final_key);
+      if (saved.byteSize !== Number(upload.byte_size)) throw new FinanceError(409, "The finalized file is unavailable. Upload it again.");
+      return { ok: true, viewVersion: caller.viewVersion, id: uploadId, warnings: [], errors: [] };
+    }
     if (upload.status !== "pending") throw new FinanceError(409, "This upload has already been finalized.");
     const expectedSize = Number(upload.byte_size);
     const head = await storage.headObject(upload.staging_key);
     if (head.byteSize !== expectedSize) {
       throw new FinanceError(400, "Uploaded file size does not match.", [{ field: "files", message: "Uploaded file size does not match." }]);
     }
-    const signature = await storage.readSignature(upload.staging_key, 16);
     const fileName = upload.original_name ?? "upload.bin";
     const contentType = upload.content_type ?? head.contentType ?? "application/octet-stream";
-    if (!verifyFileSignature(signature, fileName, contentType)) {
+    // Validate, hash, and save the same snapshot of the bytes. The staging URL can
+    // remain writable until it expires, so a server-side copy is not safe here.
+    const bytes = Uint8Array.from(await storage.readObject(upload.staging_key, expectedSize));
+    if (bytes.byteLength !== expectedSize) {
+      throw new FinanceError(400, "Uploaded file size does not match.", [{ field: "files", message: "Uploaded file size does not match." }]);
+    }
+    if (!verifyFileSignature(bytes.subarray(0, 16), fileName, contentType)) {
       throw new FinanceError(400, "This file type is not supported.", [{ field: "files", message: "This file type is not supported." }]);
     }
-    const bytes = await storage.readObject(upload.staging_key, head.byteSize);
     const digest = createHash("sha256").update(bytes).digest("hex");
     const finalKey = storage.finalKey(caller.memberId, uploadId);
-    await storage.promoteStagingToFinal(upload.staging_key, finalKey, contentType, head.byteSize);
-    await db.query(
-      "select finance.complete_upload_finalize($1::uuid, $2::uuid, $3, $4, $5::bigint, $6)",
-      [caller.memberId, uploadId, finalKey, digest, head.byteSize, contentType],
-    );
+    await storage.putFinalObject(finalKey, bytes, contentType);
+    try {
+      await db.query(
+        "select finance.complete_upload_finalize($1::uuid, $2::uuid, $3, $4, $5::bigint, $6)",
+        [caller.memberId, uploadId, finalKey, digest, expectedSize, contentType],
+      );
+    } catch (error) {
+      // A concurrent or previously successful finalize may have won. Only clean
+      // up our own key after the stored winner is confirmed and is a different key.
+      const current = (await db.query<{ member_id: string; status: string; final_key: string | null; byte_size: string }>(
+        "select member_id::text as member_id, status, final_key, byte_size::text as byte_size from finance.uploads where id = $1::uuid",
+        [uploadId],
+      )).rows[0];
+      if (!current || current.member_id !== caller.memberId || current.status !== "finalized" || !current.final_key || !isOwnedFinalKey(caller.memberId, current.final_key)) throw error;
+      const saved = await storage.headObject(current.final_key);
+      if (saved.byteSize !== Number(current.byte_size)) throw error;
+      if (current.final_key !== finalKey) await storage.remove(finalKey).catch(() => undefined);
+    }
     return { ok: true, viewVersion: caller.viewVersion, id: uploadId, warnings: [], errors: [] };
   }
   if (action === "registerPurchase") {
@@ -332,7 +356,7 @@ export async function performPurchaseMutation(
       `select d.storage_key, d.original_name, d.content_type, d.purchase_id::text as purchase_id
        from finance.documents d
        join finance.purchases p on p.id = d.purchase_id
-       where d.id = $1::uuid and p.status = 'registered'`,
+       where d.id = $1::uuid`,
       [documentId],
     );
     const document = rows.rows[0];
