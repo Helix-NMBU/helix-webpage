@@ -10,6 +10,8 @@ import { createFinanceServices } from "../../../api/_lib/finance-service.js";
 import { FinanceStorageUncertainError, type FinanceObjectStorage } from "../../../api/_lib/finance-storage.js";
 import type { CvDatabase, WorkspaceIdentity } from "../../../api/_lib/member-cv-service.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
+import { thirdOsloDayFrom } from "../../../src/features/Finance/request-domain.js";
+import { osloToday } from "../../../src/features/Finance/money.js";
 
 const operatorId = "11111111-1111-4111-8111-111111111111";
 const financeId = "22222222-2222-4222-8222-222222222222";
@@ -131,7 +133,7 @@ beforeAll(async () => {
   wireServices();
 });
 
-function wireServices(overrides: { storage?: FinanceObjectStorage; inlineLimit?: number } = {}) {
+function wireServices(overrides: { storage?: FinanceObjectStorage; inlineLimit?: number; autoDispatch?: boolean } = {}) {
   services = createFinanceServices({
     db,
     financeStorage: overrides.storage ?? storage,
@@ -140,6 +142,7 @@ function wireServices(overrides: { storage?: FinanceObjectStorage; inlineLimit?:
       env,
       log: (line) => logs.push(line),
       inlineLimit: overrides.inlineLimit ?? 1_048_576,
+      autoDispatch: overrides.autoDispatch ?? false,
     },
     authenticate: async (token) => {
       const identity = identities[token];
@@ -323,6 +326,94 @@ describe("FIN-10 local delivery policy", () => {
 });
 
 describe("FIN-10-A01 outbox delivery", () => {
+  it("automatically delivers a submitted request after commit and does not resend on replay", async () => {
+    await seedSeason();
+    wireServices({ autoDispatch: true });
+    const itemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-001'"))[0]!.id;
+    const request = { supplierName: "Example", justification: "Materials for the frame", plannedDate: thirdOsloDayFrom(osloToday()),
+      lines: [{ budgetItemId: itemId, description: "Tube", estimatedNok: "50.00" }] };
+    const saved = await call({ token: "requester", body: { action: "saveRequest", requestId: crypto.randomUUID(), request } });
+    expect(saved.status).toBe(200);
+    const draft = saved.body as { id: string; revision: number };
+    const requestId = crypto.randomUUID();
+    const body = { action: "submitRequest", requestId, requestRecordId: draft.id, expectedRevision: draft.revision, request };
+    const submitted = await call({ token: "requester", body });
+    expect(submitted.status).toBe(200);
+    expect(sent.map((message) => message.to)).toEqual(["head.user@example.test"]);
+    expect((await sql<{ status: string }>("select status from finance.requests where id = $1::uuid", [draft.id]))[0]?.status).toBe("submitted");
+    expect((await call({ token: "requester", body })).status).toBe(200);
+    expect(sent).toHaveLength(1);
+    const revisionId = (await sql<{ id: string }>("select submitted_revision_id::text as id from finance.requests where id = $1::uuid", [draft.id]))[0]!.id;
+    const decision = await call({ token: "head", body: { action: "decideRequest", requestId: crypto.randomUUID(), requestRecordId: draft.id, revisionId, decision: "rejected", reason: "Not needed" } });
+    expect(decision.status).toBe(200);
+    expect(sent.map((message) => message.to)).toEqual(["head.user@example.test", "requester.user@example.test"]);
+  });
+
+  it("keeps a committed request and records an uncertain provider outcome", async () => {
+    await seedSeason();
+    wireServices({ autoDispatch: true });
+    send = async () => { throw new Error("synthetic provider failure"); };
+    const itemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-001'"))[0]!.id;
+    const request = { supplierName: "Example", justification: "Materials for the frame", plannedDate: thirdOsloDayFrom(osloToday()),
+      lines: [{ budgetItemId: itemId, description: "Tube", estimatedNok: "50.00" }] };
+    const saved = await call({ token: "requester", body: { action: "saveRequest", requestId: crypto.randomUUID(), request } });
+    const draft = saved.body as { id: string; revision: number };
+    const submitted = await call({ token: "requester", body: { action: "submitRequest", requestId: crypto.randomUUID(), requestRecordId: draft.id, expectedRevision: draft.revision, request } });
+    expect(submitted.status).toBe(200);
+    expect((await sql<{ status: string }>("select status from finance.requests where id = $1::uuid", [draft.id]))[0]?.status).toBe("submitted");
+    expect((await sql<{ status: string }>("select status from finance.outbox where entity_id = $1::uuid", [draft.id]))[0]?.status).toBe("uncertain");
+  });
+
+  it("automatically sends registration events to Finance after a purchase is saved", async () => {
+    await seedSeason();
+    wireServices({ autoDispatch: true });
+    const year = Number(osloToday().slice(0, 4));
+    await sql("select finance.configure_annual_reference_start($1::uuid, $2::integer, 1)", [operatorId, year]);
+    const systemId = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'"))[0]!.id;
+    const itemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-001'"))[0]!.id;
+    const auth = await call({ token: "requester", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    expect(auth.status).toBe(200);
+    const upload = auth.body as { id: string; stagingKey: string };
+    await putMemoryPdf(storage, upload.stagingKey);
+    expect((await call({ token: "requester", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId: upload.id } })).status).toBe(200);
+    const purchase = { buyerName: "Member", supplierName: "Example", paymentMethod: "team_account", purchaseDate: osloToday(),
+      justification: "Materials for the frame", documentKind: "receipt", uploadIds: [upload.id],
+      lines: [{ systemId, budgetItemId: itemId, description: "Tube", quantity: "1", amountNok: "50.00" }] };
+    const result = await call({ token: "requester", body: { action: "registerPurchase", requestId: crypto.randomUUID(), purchase } });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+    expect(sent.map((message) => message.to).sort()).toEqual(["finance.user@example.test", "head.user@example.test"]);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.purchases"))[0]?.count).toBe("1");
+  });
+
+  it("only lets Finance inspect safe actionable recovery metadata", async () => {
+    await seedSeason();
+    const purchaseId = await insertPurchase({ ref: "2026-0042", method: "invoice", totalOre: "1000" });
+    await sql("update finance.outbox set status = 'uncertain', safe_error = 'provider_unknown' where entity_id = $1::uuid", [purchaseId]);
+    const uploadId = crypto.randomUUID();
+    await sql(`insert into finance.uploads (id, member_id, staging_key, status, byte_size, content_type, original_name, expires_at, commit_state)
+      values ($1::uuid, $2::uuid, $3, 'pending', 8, 'application/pdf', 'private.pdf', now(), 'uncertain')`,
+    [uploadId, requesterId, `${requesterId}/staging/${uploadId}/${"a".repeat(32)}`]);
+    expect((await call({ token: "business", query: { action: "recovery" } })).status).toBe(403);
+    expect((await call({ token: "requester", query: { action: "recovery" } })).status).toBe(403);
+    const response = await call({ token: "finance", query: { action: "recovery" } });
+    expect(response.status).toBe(200);
+    const view = response.body as { deliveries: { id: string; status: string }[]; uploads: { id: string }[] };
+    expect(view.deliveries).toHaveLength(2);
+    expect(view.deliveries.every((row) => row.status === "uncertain")).toBe(true);
+    expect(view.uploads.map((row) => row.id)).toContain(uploadId);
+    const serialized = JSON.stringify(view);
+    expect(serialized).not.toContain("staging/");
+    expect(serialized).not.toContain("final/");
+    expect(serialized).not.toContain(refundAccount);
+    expect(serialized).not.toContain(refundPhone);
+    const record = view.deliveries[0]!;
+    const reconciled = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID(), outboxId: record.id, reconciliation: "not_sent" } });
+    expect(reconciled.status).toBe(200);
+    expect((await sql<{ status: string }>("select status from finance.outbox where id = $1::uuid", [record.id]))[0]?.status).toBe("failed");
+    const uploaded = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, reconciliation: "absent" } });
+    expect(uploaded.status).toBe(200);
+  });
+
   it("notifies active heads, the requester, and finance recipients once, and keeps a failed send off the business transaction", async () => {
     await seedSeason();
     const seasonId = (await sql<{ id: string }>("select id from finance.seasons"))[0]?.id;

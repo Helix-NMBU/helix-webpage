@@ -7,7 +7,7 @@ import { deliverPending, reconcileOutboxDelivery } from "./finance-outbox.js";
 import type { FinanceMailSender } from "./finance-mail.js";
 import type { FinanceLog } from "./finance-outbox.js";
 import { financeLogLine } from "../../src/features/Finance/export-text.js";
-import type { FinanceCapabilitySet, FinanceMutationResult } from "./finance-types.js";
+import type { FinanceCapabilitySet, FinanceMutationResult, FinanceRecoveryView } from "./finance-types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNAVAILABLE = "The finance service is temporarily unavailable. Please try again.";
@@ -23,6 +23,37 @@ export type DeliveryCaller = {
   seasonCode: string | null;
   capabilities: FinanceCapabilitySet;
 };
+
+/** Finance can inspect bounded operational metadata, but never file keys, payloads or refund details. */
+export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller): Promise<FinanceRecoveryView> {
+  if (!caller.capabilities.purchaseRegister) throw new FinanceError(403, "Finance access is required.");
+  const deliveries = await db.query<{
+    id: string; event_type: string; recipient: string | null; status: string; safe_error: string | null;
+    attempt_count: number; updated_at: string; last_claimed_at: string | null; provider_message_id: string | null;
+  }>(`select o.id::text, o.event_type, m.full_name as recipient, o.status, o.safe_error,
+             o.attempt_count, o.updated_at::text, a.claimed_at::text as last_claimed_at,
+             coalesce(o.provider_message_id, a.provider_message_id) as provider_message_id
+      from finance.outbox o
+      left join identity.members m on m.id = o.recipient_member_id
+      left join lateral (select claimed_at, provider_message_id from finance.outbox_attempts
+                         where outbox_id = o.id order by attempt_no desc limit 1) a on true
+      where o.status in ('pending', 'failed', 'uncertain')
+      order by o.updated_at desc, o.id limit 50`);
+  const uploads = await db.query<{
+    id: string; owner: string | null; status: string; commit_state: string; created_at: string; expires_at: string;
+  }>(`select u.id::text, m.full_name as owner, u.status, u.commit_state,
+             u.created_at::text, u.expires_at::text
+      from finance.uploads u join identity.members m on m.id = u.member_id
+      where u.commit_state = 'uncertain' and u.purchase_id is null
+      order by u.created_at desc, u.id limit 50`);
+  return {
+    deliveries: deliveries.rows.map((r) => ({ id: r.id, eventType: r.event_type, recipient: r.recipient, status: r.status,
+      safeError: r.safe_error, attemptCount: Number(r.attempt_count), updatedAt: r.updated_at,
+      lastClaimedAt: r.last_claimed_at, providerMessageId: r.provider_message_id })),
+    uploads: uploads.rows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state,
+      createdAt: r.created_at, expiresAt: r.expires_at })),
+  };
+}
 
 type QueryResult = { result?: FinanceMutationResult | string };
 

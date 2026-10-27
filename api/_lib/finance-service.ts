@@ -9,7 +9,8 @@ import { isProcessingMutation, performProcessingMutation } from "./finance-proce
 import { loadPurchaseRegister } from "./finance-register.js";
 import { createFinanceStorage, type FinanceObjectStorage } from "./finance-storage.js";
 import { createLiveFinanceSender, type FinanceMailSender } from "./finance-mail.js";
-import { performDeliveryMutation } from "./finance-recovery.js";
+import { loadFinanceRecovery, performDeliveryMutation } from "./finance-recovery.js";
+import { deliverPending } from "./finance-outbox.js";
 import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
 import { loadFundingRecords } from "./finance-funding-read.js";
@@ -24,6 +25,7 @@ import type {
   FinanceCapabilitiesResponse,
   FinanceCapabilitySet,
   FinanceMutationResult,
+  FinanceRecoveryView,
   FinanceProfile,
   FinanceUnchanged,
   FinancingView,
@@ -45,6 +47,7 @@ export interface FinanceServices {
   budgets(token: string, knownVersion?: number): Promise<PublicBudgets | FinanceUnchanged>;
   purchases(token: string, knownVersion?: number, requestRecordId?: string, unpaidOnly?: boolean): Promise<PurchasesView | FinanceUnchanged>;
   financing(token: string, knownVersion?: number): Promise<FinancingView | FinanceUnchanged>;
+  recovery(token: string): Promise<FinanceRecoveryView>;
   mutate(token: string, body: Record<string, unknown>): Promise<FinanceMutationResult>;
 }
 
@@ -58,12 +61,31 @@ export function createFinanceServices(deps: {
     inlineLimit?: number;
     log?: (line: string) => void;
     now?: () => Date;
+    autoDispatch?: boolean;
   };
 }): FinanceServices {
   const { db } = deps;
   const financeStorage = deps.financeStorage === undefined ? null : deps.financeStorage;
   const deliveryEnv = deps.financeDelivery?.env ?? { WEBSITE_EMAIL_ENABLED: "false", HELIX_ENVIRONMENT: "local" };
   const deliverySend = deps.financeDelivery?.send ?? (async () => ({ outcome: "failed" as const, safeError: "delivery_disabled" as const }));
+
+  // Called only after the business transaction returns. A provider failure must never undo it.
+  async function dispatchEvent(result: FinanceMutationResult, eventType: string): Promise<void> {
+    if (!result.id || deps.financeDelivery?.autoDispatch === false || !deps.financeDelivery?.send ||
+        deliveryEnv.WEBSITE_EMAIL_ENABLED !== "true" || !deliveryEnv.RESEND_API_KEY) return;
+    try {
+      const waiting = await db.query<{ id: string }>(
+        "select id::text from finance.outbox where entity_id = $1::uuid and event_type = $2 and status = 'pending' order by created_at, id limit 25",
+        [result.id, eventType],
+      );
+      for (const row of waiting.rows) {
+        await deliverPending(db, { send: deliverySend, env: deliveryEnv, log: deps.financeDelivery?.log, outboxId: row.id });
+      }
+    } catch {
+      // Pending or uncertain rows remain visible in recovery for a Finance operator.
+      deps.financeDelivery?.log?.("finance_delivery_dispatch_failed");
+    }
+  }
 
   async function rows<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     try {
@@ -137,6 +159,10 @@ export function createFinanceServices(deps: {
   }
 
   return {
+    async recovery(token) {
+      const current = await context(token);
+      return loadFinanceRecovery(db, current);
+    },
     async capabilities(token) {
       const current = await context(token);
       return {
@@ -257,9 +283,17 @@ export function createFinanceServices(deps: {
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
       if (action === "previewImport" || action === "importItems") return performBudgetImport(db, current, body);
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
-      if (isRequestAction(action)) return applyRequestMutation(db, current.memberId, body);
+      if (isRequestAction(action)) {
+        const result = await applyRequestMutation(db, current.memberId, body);
+        if (action === "submitRequest" || action === "decideRequest") {
+          await dispatchEvent(result, action === "submitRequest" ? "request.submitted" : "request.decided");
+        }
+        return result;
+      }
       if (isPurchaseMutation(action)) {
-        return performPurchaseMutation(db, financeStorage, current, body);
+        const result = await performPurchaseMutation(db, financeStorage, current, body);
+        if (action === "registerPurchase") await dispatchEvent(result, "purchase_registered");
+        return result;
       }
       if (isProcessingMutation(action)) {
         return performProcessingMutation(db, current, body);

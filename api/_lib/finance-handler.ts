@@ -44,6 +44,7 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
         const version = knownVersion(req.query.knownVersion);
         if (action === "capabilities") return res.status(200).json(await services.capabilities(token));
         if (action === "version") return res.status(200).json(await services.version(token, version));
+        if (action === "recovery") return res.status(200).json(await services.recovery(token));
         if (action === "overview") return res.status(200).json(await services.overview(token, version));
         if (action === "budgets") return res.status(200).json(await services.budgets(token, version));
         if (action === "purchases") {

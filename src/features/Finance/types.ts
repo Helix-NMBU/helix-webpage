@@ -652,5 +652,10 @@ export type FinanceMutationResult = {
   importPreview?: BudgetImportPreview;
 };
 
-export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing"] as const;
+export type FinanceRecoveryView = {
+  deliveries: { id: string; eventType: string; recipient: string | null; status: string; safeError: string | null; attemptCount: number; updatedAt: string; lastClaimedAt: string | null; providerMessageId: string | null }[];
+  uploads: { id: string; owner: string | null; status: string; commitState: string; createdAt: string; expiresAt: string }[];
+};
+
+export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery"] as const;
 export type FinanceReadAction = (typeof FINANCE_READ_ACTIONS)[number];
