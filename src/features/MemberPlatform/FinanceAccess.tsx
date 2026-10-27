@@ -122,7 +122,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   }, [api, applyCapabilities, attempt, fail, userId]);
   const revalidate = useCallback(() => {
     const current = generation.current;
-    void api.capabilities().then((body) => {
+    return api.capabilities().then((body) => {
       if (!active.current || generation.current !== current) return;
       applyCapabilities(body);
     }).catch((error: unknown) => {
@@ -140,10 +140,10 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     try {
       return await api.mutate(body);
     } catch (error) {
-      if (active.current && generation.current === current && (errorStatus(error) === 401 || errorStatus(error) === 403)) fail(error);
+      if (active.current && generation.current === current && (errorStatus(error) === 401 || errorStatus(error) === 403)) await revalidate();
       throw error;
     }
-  }, [api, fail]);
+  }, [api, revalidate]);
   const loadPage = useCallback(async (page: FinancePageId) => {
     const current = generation.current;
     const token = ++pageToken.current;

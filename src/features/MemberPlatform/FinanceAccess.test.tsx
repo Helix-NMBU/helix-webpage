@@ -80,6 +80,7 @@ beforeEach(() => {
   api.budgets.mockReset();
   api.purchases.mockReset().mockResolvedValue({ viewVersion: 1, ownRequests: [] });
   api.financing.mockReset().mockResolvedValue(financing);
+  api.mutate.mockReset();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -103,6 +104,37 @@ it("clears financing and refund details when a focused recheck loses the grant",
   expect(container.textContent).toContain("allowed:public:clear:");
   expect(container.textContent).not.toContain("12345678901");
   expect(container.textContent).not.toContain("Hidden Supplier");
+});
+
+it("keeps finance access when a mutation is refused by a budget rule", async () => {
+  api.capabilities.mockResolvedValue(financeCaps);
+  await mount("finance-member");
+  const rule = new FinanceRequestError("Only the Head of Finance can change an approved budget this way.", 403);
+  api.mutate.mockRejectedValueOnce(rule);
+  let caught: unknown;
+  await act(async () => {
+    await session.mutate({ action: "editItem", itemId: "item", patch: { plannedNok: "10.00" } }).catch((error: unknown) => { caught = error; });
+  });
+  expect(caught).toBe(rule);
+  expect(session.access).toBe("allowed");
+  expect(session.capabilities?.draftBudgetItems).toBe(true);
+  expect(api.capabilities).toHaveBeenCalledTimes(2);
+});
+
+it("denies finance access when a mutation 403 finds the grant has been revoked", async () => {
+  api.capabilities.mockResolvedValue(financeCaps);
+  await mount("finance-member");
+  const rule = new FinanceRequestError("Financing access is required.", 403);
+  api.mutate.mockRejectedValueOnce(rule);
+  api.capabilities.mockRejectedValueOnce(new FinanceRequestError("Finance access is required.", 401));
+  let caught: unknown;
+  await act(async () => {
+    await session.mutate({ action: "editFunding", fundingId: "funding", patch: { note: "Updated note" } }).catch((error: unknown) => { caught = error; });
+  });
+  expect(caught).toBe(rule);
+  expect(session.access).toBe("denied");
+  expect(session.capabilities).toBeNull();
+  expect(session.financing).toBeNull();
 });
 
 it("drops private state when focus reports that the account can no longer use finance", async () => {
