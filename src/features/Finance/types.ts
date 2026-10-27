@@ -214,10 +214,90 @@ export type FinancePurchaseSummary = {
   refundPhone: string | null;
 };
 
+export type RequestDraftLine = {
+  budgetItemId: string;
+  description: string;
+  estimatedNok: string;
+};
+
+export type RequestDecisionRecord = {
+  revisionId: string;
+  revisionNumber: number;
+  decision: RequestDecisionKind;
+  reason: string;
+  actorMemberId: string;
+  decidedAt: string;
+};
+
+export type RequestRevisionRecord = {
+  id: string;
+  revisionNumber: number;
+  supplierName: string;
+  justification: string;
+  plannedDate: string;
+  lateReason: string | null;
+  submittedAt: string;
+  lines: Array<{
+    id: string;
+    budgetItemId: string;
+    description: string;
+    estimatedNok: string;
+    approvedNok: string | null;
+  }>;
+  decision: RequestDecisionRecord | null;
+};
+
+export type OwnRequestDetail = {
+  id: string;
+  publicRef: string;
+  status: RequestStatus;
+  revision: number;
+  supplierName: string | null;
+  justification: string | null;
+  plannedDate: string | null;
+  lateReason: string | null;
+  closeReason: string | null;
+  releasedNok: string;
+  draftLines: RequestDraftLine[];
+  submittedRevisionId: string | null;
+  approvedRevisionId: string | null;
+  revisions: RequestRevisionRecord[];
+  approvedNok: string | null;
+  fulfilledNok: string;
+  remainingNok: string;
+};
+
+export type HeadDecisionQueueItem = {
+  id: string;
+  publicRef: string;
+  requesterMemberId: string;
+  revisionId: string;
+  revisionNumber: number;
+  supplierName: string;
+  justification: string;
+  plannedDate: string;
+  lateReason: string | null;
+  totalEstimatedNok: string;
+  submittedAt: string;
+};
+
+export type FinanceRequestContext = {
+  id: string;
+  publicRef: string;
+  status: RequestStatus;
+  supplierName: string | null;
+  plannedDate: string | null;
+  requesterMemberId: string;
+};
+
 export type PurchasesView = {
   viewVersion: number;
   ownRequests: OwnRequestSummary[];
   register?: FinancePurchaseSummary[];
+  detail?: OwnRequestDetail;
+  decisionQueue?: HeadDecisionQueueItem[];
+  requestContext?: FinanceRequestContext[];
+  choices?: BudgetChoices;
 };
 
 export type FundingRecord = {
@@ -400,13 +480,13 @@ export type FinanceMutation =
   | (MutationBase & { action: "restoreFunding"; fundingId: string })
   | (MutationBase & { action: "addEarmark"; part: FundingPartInput })
   | (MutationBase & { action: "editEarmark"; partId: string; patch: Partial<FundingPartInput> })
-  | (MutationBase & { action: "saveRequest"; requestIdToSave?: string; request: RequestInput })
+  | (MutationBase & { action: "saveRequest"; requestRecordId?: string; request: RequestInput })
   | (MutationBase & { action: "submitRequest"; requestRecordId: string; request: RequestInput })
   | (MutationBase & { action: "withdrawRequest"; requestRecordId: string })
   | (MutationBase & { action: "cancelRequest"; requestRecordId: string })
   | (MutationBase & { action: "reviseRequest"; requestRecordId: string; request: RequestInput })
   | (MutationBase & { action: "decideRequest"; requestRecordId: string; revisionId: string; decision: RequestDecisionKind; reason: string; approvedOreByLine?: Record<string, string> })
-  | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string })
+  | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string; releasedNok: string })
   | (MutationBase & { action: "downloadDocument"; documentId: string })
   | (MutationBase & { action: "exportPurchases" })
   | (MutationBase & { action: "retryOutbox"; outboxId?: string });

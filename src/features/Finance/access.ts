@@ -82,12 +82,10 @@ const REVISION_ACTIONS = new Set<FinanceAction>([
   "restoreFunding",
   "addEarmark",
   "editEarmark",
-  "saveRequest",
   "submitRequest",
   "withdrawRequest",
   "cancelRequest",
   "reviseRequest",
-  "decideRequest",
   "closeRequest",
 ]);
 
@@ -135,6 +133,11 @@ export function mutationCapability(action: FinanceAction): keyof FinanceCapabili
 
 export function mutationRequiresRevision(action: FinanceAction): boolean {
   return REVISION_ACTIONS.has(action);
+}
+
+export function mutationAllowed(action: FinanceAction, capabilities: FinanceCapabilitySet): boolean {
+  if (action === "closeRequest") return capabilities.ownRequests || capabilities.decideRequests;
+  return capabilities[mutationCapability(action)];
 }
 
 export function isFinanceAction(value: string): value is FinanceAction {

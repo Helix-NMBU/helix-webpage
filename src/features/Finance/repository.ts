@@ -73,7 +73,9 @@ export function createFinanceApi(owner: { current: string | null }) {
     capabilities: () => local() ? Promise.resolve(localCapabilities()) : request<FinanceCapabilitiesResponse>("capabilities"),
     overview: () => local() ? Promise.resolve(localOverview()) : request<PublicOverview>("overview"),
     budgets: () => local() ? Promise.resolve(localBudgets()) : request<PublicBudgets>("budgets"),
-    purchases: () => local() ? Promise.resolve(localPurchases()) : request<PurchasesView>("purchases"),
+    purchases: (requestRecordId?: string) => local()
+      ? Promise.resolve(localPurchases())
+      : request<PurchasesView>(requestRecordId ? `purchases&requestRecordId=${encodeURIComponent(requestRecordId)}` : "purchases"),
     financing: () => local()
       ? Promise.reject(new FinanceRequestError("Financing access is required.", 403))
       : request<FinancingView>("financing"),

@@ -34,7 +34,7 @@ type FinanceState = {
 };
 type FinanceSession = FinanceState & {
   retry: () => void;
-  loadPage: (page: FinancePageId) => Promise<void>;
+  loadPage: (page: FinancePageId, options?: { requestRecordId?: string }) => Promise<void>;
   mutate: (body: Record<string, unknown>) => Promise<FinanceMutationResult>;
 };
 
@@ -144,7 +144,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       throw error;
     }
   }, [api, revalidate]);
-  const loadPage = useCallback(async (page: FinancePageId) => {
+  const loadPage = useCallback(async (page: FinancePageId, options?: { requestRecordId?: string }) => {
     const current = generation.current;
     const token = ++pageToken.current;
     setState((value) => ({ ...value, pageLoading: true }));
@@ -159,7 +159,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
         return;
       }
       if (page === "purchases") {
-        const purchases = await api.purchases();
+        const purchases = await api.purchases(options?.requestRecordId);
         if (!active.current || generation.current !== current || pageToken.current !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };

@@ -22,7 +22,6 @@ function FinanceSection({ page }: { page: FinancePageId }) {
   const links = pages.filter((item) => item.id !== "financing" || session.capabilities?.financing);
   const current = pages.find((item) => item.id === page) ?? pages[0];
   const loaded = page === "overview" ? session.overview : page === "budgets" ? session.budgets : page === "purchases" ? session.purchases : session.financing;
-  const purchasesReady = page === "purchases" && Boolean(session.purchases);
   const loadedVersion = loaded?.viewVersion ?? null;
   useEffect(() => {
     if (session.access !== "allowed" || session.viewVersion === null || loadedVersion === session.viewVersion) return;
@@ -36,6 +35,13 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     (session.budgets?.departments.length ?? 0) > 0
     || session.budgets?.budgetStatus !== "absent"
     || Boolean(session.capabilities?.createBudget)
+  );
+  const purchasesReady = page === "purchases" && Boolean(session.purchases) && (
+    (session.purchases?.ownRequests.length ?? 0) > 0
+    || (session.purchases?.register?.length ?? 0) > 0
+    || (session.purchases?.decisionQueue?.length ?? 0) > 0
+    || Boolean(session.capabilities?.ownRequests)
+    || Boolean(session.capabilities?.registerActual)
   );
   const empty = !session.pageLoading && loaded && !budgetsReady && !purchasesReady && (
     page === "overview" ? session.overview?.departments.length === 0 && session.overview.publicEarmarks.length === 0 && session.overview.budgetStatus === "absent"

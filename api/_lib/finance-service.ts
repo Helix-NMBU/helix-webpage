@@ -1,5 +1,7 @@
 import pg from "pg";
-import { isFinanceAction, isFinanceProfile, mutationCapability, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
+import { isFinanceAction, isFinanceProfile, mutationAllowed, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
+import { applyRequestMutation } from "./finance-requests.js";
+import { loadDecisionQueue, loadFinanceRequestContext, loadOwnRequestDetail, loadRequestChoices, summarizeOwnRequests } from "./finance-requests-read.js";
 import { isBudgetMutation, loadBudgetHierarchy, performBudgetMutation } from "./finance-budgets.js";
 import { isPurchaseMutation, performPurchaseMutation } from "./finance-purchases.js";
 import { createFinanceStorage, type FinanceObjectStorage } from "./finance-storage.js";
@@ -8,6 +10,7 @@ import { applyFundingMutation } from "./finance-funding.js";
 import { loadFundingRecords, loadPublicEarmarks } from "./finance-funding-read.js";
 import { formatOre, osloToday } from "./finance-money.js";
 import { isFundingAction } from "../../src/features/Finance/funding.js";
+import { isRequestAction } from "../../src/features/Finance/requests.js";
 import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
 import { createCvServices } from "./member-cv-service.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
@@ -19,7 +22,6 @@ import type {
   FinancePurchaseSummary,
   FinanceUnchanged,
   FinancingView,
-  OwnRequestSummary,
   PublicBudgets,
   PublicOverview,
   PurchasesView,
@@ -36,7 +38,7 @@ export interface FinanceServices {
   version(token: string, knownVersion?: number): Promise<{ viewVersion: number; unchanged?: boolean }>;
   overview(token: string, knownVersion?: number): Promise<PublicOverview | FinanceUnchanged>;
   budgets(token: string, knownVersion?: number): Promise<PublicBudgets | FinanceUnchanged>;
-  purchases(token: string, knownVersion?: number): Promise<PurchasesView | FinanceUnchanged>;
+  purchases(token: string, knownVersion?: number, requestRecordId?: string): Promise<PurchasesView | FinanceUnchanged>;
   financing(token: string, knownVersion?: number): Promise<FinancingView | FinanceUnchanged>;
   mutate(token: string, body: Record<string, unknown>): Promise<FinanceMutationResult>;
 }
@@ -174,27 +176,27 @@ export function createFinanceServices(deps: {
       }
       return loadBudgetHierarchy(db, current, budget);
     },
-    async purchases(token, knownVersion) {
+    async purchases(token, knownVersion, requestRecordId) {
       const current = await context(token);
       const same = unchanged(current, knownVersion);
       if (same) return same;
-      const ownRequests = (await rows<{ id: string; public_ref: string; status: OwnRequestSummary["status"]; planned_date: string | null }>(
-        `select id, public_ref, status, planned_date::text as planned_date
-         from finance.requests
-         where requester_member_id = $1::uuid
-         order by public_ref`,
-        [current.memberId],
-      )).map((row): OwnRequestSummary => ({
-        id: row.id,
-        publicRef: row.public_ref,
-        status: row.status,
-        plannedDate: row.planned_date,
-        approvedNok: null,
-        fulfilledNok: formatOre(0n),
-        remainingNok: formatOre(0n),
-        releasedNok: formatOre(0n),
-      }));
+      const query = db.query.bind(db);
+      const ownRequests = await summarizeOwnRequests(query, current.memberId);
       const view: PurchasesView = { viewVersion: current.viewVersion, ownRequests };
+      if (current.seasonCode && current.capabilities.ownRequests) {
+        view.choices = await loadRequestChoices(db, current.seasonCode);
+      }
+      if (requestRecordId && UUID.test(requestRecordId)) {
+        const detail = await loadOwnRequestDetail(query, current.memberId, requestRecordId, current.capabilities);
+        if (detail) view.detail = detail;
+        else throw new FinanceError(404, "Request was not found.");
+      }
+      if (current.capabilities.decideRequests && current.seasonCode) {
+        view.decisionQueue = await loadDecisionQueue(query, current.seasonCode);
+      }
+      if (current.capabilities.purchaseRegister && current.seasonCode) {
+        view.requestContext = await loadFinanceRequestContext(query, current.seasonCode);
+      }
       if (current.capabilities.purchaseRegister) {
         view.register = current.seasonCode ? (await rows<{
           id: string; public_ref: string; status: FinancePurchaseSummary["status"]; buyer_name: string; supplier_name: string;
@@ -246,7 +248,7 @@ export function createFinanceServices(deps: {
       const current = await context(token);
       const action = body.action;
       if (typeof action !== "string" || !isFinanceAction(action)) throw new FinanceError(400, "Unknown request.");
-      if (!current.capabilities[mutationCapability(action)]) throw new FinanceError(403, "Finance access is required.");
+      if (!mutationAllowed(action, current.capabilities)) throw new FinanceError(403, "Finance access is required.");
       if (typeof body.requestId !== "string" || !UUID.test(body.requestId)) throw new FinanceError(400, "A valid request ID is required.");
       if (mutationRequiresRevision(action)) {
         const revision = body.expectedRevision;
@@ -256,6 +258,7 @@ export function createFinanceServices(deps: {
       }
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
+      if (isRequestAction(action)) return applyRequestMutation(db, current.memberId, body);
       if (isPurchaseMutation(action)) {
         return performPurchaseMutation(db, financeStorage, current, body);
       }

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
@@ -8,11 +9,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
-import type { BudgetChoiceItem, BudgetChoiceSystem, PurchaseInput, PurchaseLineInput } from "./types";
+import { requiresLateReason } from "./request-domain";
+import type {
+  BudgetChoiceItem,
+  BudgetChoiceSystem,
+  FinanceMutation,
+  HeadDecisionQueueItem,
+  OwnRequestSummary,
+  PurchaseInput,
+  PurchaseLineInput,
+  RequestDraftLine,
+} from "./types";
 
 type UploadState = { uploadId: string; name: string; status: "uploading" | "ready" | "failed" };
 
-function emptyLine(): PurchaseLineInput {
+function emptyPurchaseLine(): PurchaseLineInput {
   return { systemId: "", description: "", quantity: "1", amountNok: "", unbudgeted: false };
 }
 
@@ -28,7 +39,7 @@ function emptyPurchase(today: string, buyerName: string): PurchaseInput {
     invoiceDueDate: "",
     refundAccount: "",
     refundPhone: "",
-    lines: [emptyLine()],
+    lines: [emptyPurchaseLine()],
     uploadIds: [],
   };
 }
@@ -42,37 +53,56 @@ function useRequestIds() {
       pending.current = { key, id };
       return id;
     },
-    finish() {
-      pending.current = null;
-    },
+    finish() { pending.current = null; },
   };
 }
+
+const emptyRequestLine = (): RequestDraftLine => ({ budgetItemId: "", description: "", estimatedNok: "" });
 
 export function PurchasesBoard() {
   const session = useFinanceAccess();
   const notify = useNotify();
+  const purchases = session.purchases;
   const requests = useRequestIds();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editor, setEditor] = useState<{
+    requestRecordId?: string;
+    revision: number;
+    supplierName: string;
+    justification: string;
+    plannedDate: string;
+    lateReason: string;
+    lines: RequestDraftLine[];
+  } | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
+  const [closeReason, setCloseReason] = useState("");
+  const [releasedNok, setReleasedNok] = useState("0.00");
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const buyerDefault = "Member Example";
   const [purchase, setPurchase] = useState<PurchaseInput>(() => emptyPurchase(session.today ?? "", buyerDefault));
-  const budgetsLoaded = session.budgets?.budgetStatus === "approved";
-  const choices = session.budgets?.choices ?? { systems: [], items: [] };
-  const systems = choices.systems.filter((row) => row.active);
-  const canRegister = Boolean(session.capabilities?.registerActual);
-
+  const budgetChoices = session.budgets?.choices ?? { systems: [], items: [] };
   const itemsBySystem = useMemo(() => {
     const map = new Map<string, BudgetChoiceItem[]>();
-    for (const item of choices.items) {
+    for (const item of budgetChoices.items) {
       if (item.status === "cancelled") continue;
       const list = map.get(item.systemId) ?? [];
       list.push(item);
       map.set(item.systemId, list);
     }
     return map;
-  }, [choices.items]);
+  }, [budgetChoices.items]);
+  if (!purchases) return null;
+  const today = session.today ?? new Date().toISOString().slice(0, 10);
+  const detail = purchases.detail;
+  const canDecide = Boolean(session.capabilities?.decideRequests);
+  const canRegister = Boolean(session.capabilities?.registerActual);
+  const budgetsLoaded = session.budgets?.budgetStatus === "approved";
+  const systems = budgetChoices.systems.filter((row) => row.active);
+  const choices = purchases.choices?.items ?? [];
+  const register = purchases.register ?? [];
 
-  function updateLine(index: number, patch: Partial<PurchaseLineInput>) {
+  function updatePurchaseLine(index: number, patch: Partial<PurchaseLineInput>) {
     setPurchase((current) => {
       const lines = current.lines.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line));
       const next = lines[index];
@@ -112,7 +142,7 @@ export function PurchasesBoard() {
     }
   }
 
-  async function submit(event: FormEvent) {
+  async function registerPurchase(event: FormEvent) {
     event.preventDefault();
     if (!canRegister) return;
     setSaving(true);
@@ -134,10 +164,10 @@ export function PurchasesBoard() {
       });
       requests.finish();
       for (const warning of saved.warnings) notify("Purchase saved", warning.message, { id: `purchase-saved-${warning.message}`, variant: "warning" });
-      notify("Purchase registered", saved.id ? `Reference saved.` : "Your purchase was saved.", { id: "purchase-saved", variant: "success" });
+      notify("Purchase registered", saved.id ? "Reference saved." : "Your purchase was saved.", { id: "purchase-saved", variant: "success" });
       setPurchase(emptyPurchase(session.today ?? "", purchase.buyerName));
       setUploads([]);
-      await session.loadPage("purchases");
+      await session.loadPage("purchases", selectedId ? { requestRecordId: selectedId } : undefined);
       if (!budgetsLoaded) await session.loadPage("budgets");
     } catch (error) {
       requests.finish();
@@ -147,13 +177,124 @@ export function PurchasesBoard() {
     }
   }
 
-  const register = session.purchases?.register ?? [];
-  const ownRequests = session.purchases?.ownRequests ?? [];
+  function openNew() {
+    setSelectedId(null);
+    setEditor({
+      revision: 0,
+      supplierName: "",
+      justification: "",
+      plannedDate: today,
+      lateReason: "",
+      lines: [emptyRequestLine()],
+    });
+    void session.loadPage("purchases");
+  }
+
+  function openRequest(row: OwnRequestSummary) {
+    setSelectedId(row.id);
+    void session.loadPage("purchases", { requestRecordId: row.id }).then(() => {
+      const loaded = session.purchases?.detail;
+      if (!loaded) return;
+      setEditor({
+        requestRecordId: loaded.id,
+        revision: loaded.revision,
+        supplierName: loaded.supplierName ?? "",
+        justification: loaded.justification ?? "",
+        plannedDate: loaded.plannedDate ?? today,
+        lateReason: loaded.lateReason ?? "",
+        lines: loaded.draftLines.length ? loaded.draftLines : [emptyRequestLine()],
+      });
+    });
+  }
+
+  async function run(key: string, action: FinanceMutation, success: string) {
+    setSaving(true);
+    try {
+      await session.mutate({ ...action, requestId: requests.idFor(key) });
+      requests.finish();
+      notify("Request saved", success, { id: "request-saved", variant: "success" });
+      await session.loadPage("purchases", selectedId ? { requestRecordId: selectedId } : undefined);
+      return true;
+    } catch (error) {
+      requests.finish();
+      notify("Could not save the request", error instanceof Error ? error.message : "Please try again.", { id: "request-save", variant: "error" });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveDraft(event: FormEvent) {
+    event.preventDefault();
+    if (!editor) return;
+    const body = {
+      supplierName: editor.supplierName,
+      justification: editor.justification,
+      plannedDate: editor.plannedDate,
+      lateReason: editor.lateReason || null,
+      lines: editor.lines.filter((line) => line.budgetItemId && line.estimatedNok),
+    };
+    await run("save", {
+      action: "saveRequest",
+      requestId: requests.idFor("save"),
+      requestRecordId: editor.requestRecordId,
+      expectedRevision: editor.requestRecordId ? editor.revision : undefined,
+      request: body,
+    } as FinanceMutation, "The draft was saved.");
+  }
+
+  async function submitCurrent() {
+    if (!editor) return;
+    const body = {
+      supplierName: editor.supplierName,
+      justification: editor.justification,
+      plannedDate: editor.plannedDate,
+      lateReason: editor.lateReason || null,
+      lines: editor.lines.filter((line) => line.budgetItemId && line.estimatedNok),
+    };
+    if (!editor.requestRecordId) {
+      const saved = await run("save", {
+        action: "saveRequest",
+        requestId: requests.idFor("save"),
+        request: body,
+      } as FinanceMutation, "The draft was saved.");
+      if (!saved) return;
+      await session.loadPage("purchases");
+      const own = session.purchases?.ownRequests ?? [];
+      const created = own.length > 0 ? own[own.length - 1] : undefined;
+      if (!created) return;
+      editor.requestRecordId = created.id;
+      editor.revision = 0;
+    }
+    const action = detail?.status === "rejected" ? "reviseRequest" : "submitRequest";
+    await run("submit", {
+      action,
+      requestId: requests.idFor("submit"),
+      requestRecordId: editor.requestRecordId,
+      expectedRevision: editor.revision,
+      request: body,
+    } as FinanceMutation, "The request was submitted.");
+  }
+
+  async function decide(item: HeadDecisionQueueItem, decision: "approved" | "rejected") {
+    await run(`decide-${item.id}`, {
+      action: "decideRequest",
+      requestId: requests.idFor(`decide-${item.id}`),
+      requestRecordId: item.id,
+      revisionId: item.revisionId,
+      decision,
+      reason: decisionReason,
+    } as FinanceMutation, "The decision was recorded.");
+    setDecisionReason("");
+  }
+
+  const showEditor = editor && (!detail || ["draft", "rejected"].includes(detail.status));
+  const lateRequired = editor ? requiresLateReason(editor.plannedDate, today) : false;
 
   return (
     <div className="space-y-10">
       {canRegister ? (
-        <form className="space-y-6 rounded-lg border p-6" onSubmit={submit}>
+        <form className="space-y-6 rounded-lg border p-6" onSubmit={registerPurchase}>
           <div>
             <h2 className="text-xl font-medium">Register a purchase</h2>
             <p className="text-sm text-muted-foreground">Line amount is the total in NOK including VAT; quantity is descriptive only.</p>
@@ -204,7 +345,7 @@ export function PurchasesBoard() {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="font-medium">Lines</h3>
-              <Button type="button" variant="outline" size="sm" onClick={() => setPurchase((current) => ({ ...current, lines: [...current.lines, emptyLine()] }))}>Add line</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPurchase((current) => ({ ...current, lines: [...current.lines, emptyPurchaseLine()] }))}>Add line</Button>
             </div>
             {purchase.lines.map((line, index) => (
               <LineEditor
@@ -213,7 +354,7 @@ export function PurchasesBoard() {
                 line={line}
                 systems={systems}
                 items={line.systemId ? itemsBySystem.get(line.systemId) ?? [] : []}
-                onChange={(patch) => updateLine(index, patch)}
+                onChange={(patch) => updatePurchaseLine(index, patch)}
                 onRemove={() => setPurchase((current) => ({ ...current, lines: current.lines.filter((_, lineIndex) => lineIndex !== index) }))}
                 removable={purchase.lines.length > 1}
               />
@@ -235,24 +376,211 @@ export function PurchasesBoard() {
           <Button type="submit" disabled={saving || !budgetsLoaded}>{saving ? "Saving…" : "Register purchase"}</Button>
         </form>
       ) : null}
-      {ownRequests.length ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-medium">Your requests</h2>
+      <div className="space-y-8">
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={openNew}>New request</Button>
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Your requests</CardTitle>
+          <CardDescription>Track drafts, submissions and approvals for this season.</CardDescription>
+        </CardHeader>
+        <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Reference</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Reference</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Planned</TableHead>
+                <TableHead className="text-right">Remaining</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {ownRequests.map((row) => <TableRow key={row.id}><TableCell>{row.publicRef}</TableCell><TableCell>{row.status}</TableCell></TableRow>)}
+              {purchases.ownRequests.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    <Button type="button" variant="link" className="h-auto p-0" onClick={() => openRequest(row)}>{row.publicRef}</Button>
+                  </TableCell>
+                  <TableCell>{row.status}</TableCell>
+                  <TableCell>{row.plannedDate ?? "—"}</TableCell>
+                  <TableCell className="text-right">{row.remainingNok}</TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
-        </section>
-      ) : null}
-      {register.length ? (
+        </CardContent>
+      </Card>
+
+      {canDecide && (purchases.decisionQueue?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Head decision queue</CardTitle>
+            <CardDescription>Approve or reject the current submitted revision.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="decision-reason">Decision reason</Label>
+              <Textarea id="decision-reason" value={decisionReason} onChange={(event) => setDecisionReason(event.target.value)} rows={2} />
+            </div>
+            {purchases.decisionQueue?.map((item) => (
+              <div key={item.revisionId} className="rounded-md border p-4 space-y-2">
+                <p className="font-medium">{item.publicRef} · {item.supplierName}</p>
+                <p className="text-sm text-muted-foreground">{item.justification}</p>
+                <p className="text-sm">Planned {item.plannedDate} · estimated {item.totalEstimatedNok}</p>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" disabled={saving || decisionReason.trim().length < 3} onClick={() => decide(item, "approved")}>Approve</Button>
+                  <Button type="button" size="sm" variant="outline" disabled={saving || decisionReason.trim().length < 3} onClick={() => decide(item, "rejected")}>Reject</Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {detail && detail.status === "approved" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{detail.publicRef}</CardTitle>
+            <CardDescription>Open approval · remaining {detail.remainingNok}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="close-reason">Closure reason</Label>
+              <Textarea id="close-reason" value={closeReason} onChange={(event) => setCloseReason(event.target.value)} rows={2} />
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="released-nok">Released amount (NOK)</Label>
+              <Input id="released-nok" value={releasedNok} onChange={(event) => setReleasedNok(event.target.value)} />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving}
+              onClick={() => run("close", {
+                action: "closeRequest",
+                requestId: requests.idFor("close"),
+                requestRecordId: detail.id,
+                expectedRevision: detail.revision,
+                reason: closeReason,
+                releasedNok,
+              } as FinanceMutation, "The approval was closed.")}
+            >
+              Close approval
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {showEditor && editor && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{editor.requestRecordId ? "Edit request" : "New request"}</CardTitle>
+            <CardDescription>Link each line to an approved budget item. Receipts are not required before purchase.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={saveDraft}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="supplier">Supplier</Label>
+                  <Input id="supplier" value={editor.supplierName} onChange={(event) => setEditor({ ...editor, supplierName: event.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="planned">Planned purchase date</Label>
+                  <Input id="planned" type="date" value={editor.plannedDate} onChange={(event) => setEditor({ ...editor, plannedDate: event.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="justification">Justification</Label>
+                <Textarea id="justification" value={editor.justification} onChange={(event) => setEditor({ ...editor, justification: event.target.value })} rows={3} />
+              </div>
+              {lateRequired && (
+                <div className="space-y-2">
+                  <Label htmlFor="late-reason">Late reason</Label>
+                  <Textarea id="late-reason" value={editor.lateReason} onChange={(event) => setEditor({ ...editor, lateReason: event.target.value })} rows={2} />
+                </div>
+              )}
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Estimated lines</p>
+                {editor.lines.map((line, index) => (
+                  <div key={index} className="grid gap-2 sm:grid-cols-3">
+                    <Select value={line.budgetItemId} onValueChange={(value) => {
+                      const lines = [...editor.lines];
+                      lines[index] = { ...lines[index], budgetItemId: value };
+                      setEditor({ ...editor, lines });
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Budget item" /></SelectTrigger>
+                      <SelectContent>
+                        {choices.map((choice) => (
+                          <SelectItem key={choice.id} value={choice.id}>{choice.publicRef} · {choice.description}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input placeholder="Description" value={line.description} onChange={(event) => {
+                      const lines = [...editor.lines];
+                      lines[index] = { ...lines[index], description: event.target.value };
+                      setEditor({ ...editor, lines });
+                    }} />
+                    <Input placeholder="Amount NOK" value={line.estimatedNok} onChange={(event) => {
+                      const lines = [...editor.lines];
+                      lines[index] = { ...lines[index], estimatedNok: event.target.value };
+                      setEditor({ ...editor, lines });
+                    }} />
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => setEditor({ ...editor, lines: [...editor.lines, emptyRequestLine()] })}>Add line</Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" size="sm" disabled={saving}>Save draft</Button>
+                <Button type="button" size="sm" variant="secondary" disabled={saving} onClick={() => submitCurrent()}>Submit</Button>
+                {detail?.status === "submitted" && (
+                  <Button type="button" size="sm" variant="outline" disabled={saving} onClick={() => run("withdraw", {
+                    action: "withdrawRequest",
+                    requestId: requests.idFor("withdraw"),
+                    requestRecordId: detail.id,
+                    expectedRevision: detail.revision,
+                  } as FinanceMutation, "The request was withdrawn.")}>Withdraw</Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {detail && detail.revisions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Revision history</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            {detail.revisions.map((revision) => (
+              <div key={revision.id} className="rounded-md border p-3">
+                <p className="font-medium">Revision {revision.revisionNumber}</p>
+                {revision.decision && <p>Decision: {revision.decision.decision} — {revision.decision.reason}</p>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      </div>
+      {register.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-xl font-medium">Purchase register</h2>
           <Table>
-            <TableHeader><TableRow><TableHead>Reference</TableHead><TableHead>Supplier</TableHead><TableHead>Total</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Reference</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Total</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {register.map((row) => <TableRow key={row.id}><TableCell>{row.publicRef}</TableCell><TableCell>{row.supplierName}</TableCell><TableCell>{row.totalNok}</TableCell></TableRow>)}
+              {register.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.publicRef}</TableCell>
+                  <TableCell>{row.supplierName}</TableCell>
+                  <TableCell>{row.totalNok}</TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </section>

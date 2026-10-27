@@ -113,6 +113,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/013_finance_funding.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/014_finance_register_purchases.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
@@ -132,6 +133,7 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
       finance.allocations,
       finance.purchase_lines,
@@ -141,6 +143,7 @@ async function resetFinance() {
       finance.uploads,
       finance.exception_reviews,
       finance.purchases,
+      finance.request_draft_lines,
       finance.request_lines,
       finance.request_decisions,
       finance.request_revisions,
@@ -1155,6 +1158,9 @@ describe("finance snapshot", () => {
         query: async <T>(text: string) => {
           queries.push(text);
           if (text.includes("capability_flags") !== text.includes("finance.view_versions")) throw new Error("split snapshot");
+          if (text.includes("finance.budget_items") && text.includes("i.protected is not true")) {
+            return { rows: [] as T[] };
+          }
           if (text.includes("finance.budget_items")) throw new Error("draft items queried");
           if (text.includes("identity.members")) return { rows: [{ id: memberId }] as T[] };
           if (text.includes("capability_flags")) {
