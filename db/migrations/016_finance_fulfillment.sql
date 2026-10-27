@@ -3,7 +3,7 @@
 -- Lock order for linked registration (never invert 012 budget writers or 015 request writers):
 --   1. pg_advisory_xact_lock(hashtextextended(actor::text || ':' || idempotency_request_id::text, 0))
 --   2. finance.requests FOR UPDATE when linking (single request per purchase)
---   3. finance.budget_items FOR KEY SHARE, ordered by id (allocation targets + approved request line items)
+--   3. finance.budget_items FOR SHARE (or KEY SHARE), ordered by id (approved request line items + allocation targets)
 --   4. finance.lock_current_budget()
 --   5. purchase quota count (aggregate scan, no row lock)
 --   6. finance.uploads FOR UPDATE in upload id order
@@ -144,20 +144,11 @@ set search_path = pg_catalog, finance
 as $fn$
 declare
   req finance.requests%rowtype;
-  item_id uuid;
 begin
   select * into req from finance.requests where id = p_request_id for update;
   if not found then
     raise exception 'FINANCE|not_found|Request was not found.';
   end if;
-  for item_id in
-    select distinct rl.budget_item_id
-    from finance.request_lines rl
-    where rl.revision_id = req.approved_revision_id
-    order by 1
-  loop
-    perform 1 from finance.budget_items i where i.id = item_id for key share;
-  end loop;
   return req;
 end;
 $fn$;
@@ -297,29 +288,49 @@ begin
     linked_request := finance.lock_request_fulfillment(link_request_id);
   end if;
 
-  perform 1
-  from finance.budget_items i
-  where i.id in (
-      select (l ->> 'budgetItemId')::uuid
-      from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
-      where coalesce((l ->> 'unbudgeted')::boolean, false) is not true and nullif(l ->> 'budgetItemId', '') is not null
-      union
-      select rl.budget_item_id
-      from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
-      join finance.request_lines rl on rl.id = nullif(l ->> 'requestLineId', '')::uuid
-      where nullif(l ->> 'requestLineId', '') is not null
-    )
-    or (
-      i.protected
-      and i.budget_id = (select b.id from finance.budgets b join finance.seasons s on s.id = b.season_id join finance.settings st on st.setting_key = 'current_season' and s.code = st.setting_value #>> '{}')
-      and i.system_id in (
-        select (l ->> 'systemId')::uuid
+  for request_line_rec in
+    select i.id, i.status
+    from finance.budget_items i
+    where i.id in (
+        select (l ->> 'budgetItemId')::uuid
         from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
-        where coalesce((l ->> 'unbudgeted')::boolean, false)
+        where coalesce((l ->> 'unbudgeted')::boolean, false) is not true and nullif(l ->> 'budgetItemId', '') is not null
+        union
+        select rl.budget_item_id
+        from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
+        join finance.request_lines rl on rl.id = nullif(l ->> 'requestLineId', '')::uuid
+        where nullif(l ->> 'requestLineId', '') is not null
+        union
+        select rl.budget_item_id
+        from finance.request_lines rl
+        where link_request_id is not null
+          and rl.revision_id = linked_request.approved_revision_id
       )
-    )
-  order by i.id
-  for key share of i;
+      or (
+        i.protected
+        and i.budget_id = (select b.id from finance.budgets b join finance.seasons s on s.id = b.season_id join finance.settings st on st.setting_key = 'current_season' and s.code = st.setting_value #>> '{}')
+        and i.system_id in (
+          select (l ->> 'systemId')::uuid
+          from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
+          where coalesce((l ->> 'unbudgeted')::boolean, false)
+        )
+      )
+    order by i.id
+    for share of i
+  loop
+    if link_request_id is not null
+      and linked_request.approved_revision_id is not null
+      and exists (
+        select 1
+        from finance.request_lines rl
+        where rl.revision_id = linked_request.approved_revision_id
+          and rl.budget_item_id = request_line_rec.id
+      )
+      and request_line_rec.status = 'cancelled'
+    then
+      raise exception 'FINANCE|recover|A budget line on this approval was cancelled. Register the purchase directly and keep the request reference for Finance review.|requestRecordId';
+    end if;
+  end loop;
 
   current_budget := finance.lock_current_budget();
 
