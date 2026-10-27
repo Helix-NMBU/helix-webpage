@@ -237,6 +237,7 @@ describe("project management interface", () => {
     expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
     expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
     expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe("2027-07-31");
+    expect(container.querySelector("[data-progress-new-year]")?.getAttribute("data-progress-new-year")).toBe("2027-01-01");
     expect(button("Refresh")).toBeUndefined();
     expect(container.textContent).not.toContain("Completion by department");
     expect(container.textContent).not.toContain("View progress data");

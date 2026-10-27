@@ -25,3 +25,5 @@ Task titles in the project list and Activity now open the [task detail page](tas
 Project Properties and the project editor include the optional start date. It is independent of observed progress history and must not be after the target date. Editing either date updates the project timeline after saving.
 
 Progress chart bounds follow the project's configured Start date, when set. Recorded observations keep their actual dates, with no inferred history before the first record. A missing start uses the existing observed-history window. Target-date padding preserves the red after-deadline region. Season Overview charts instead span 1 August through 31 July of the named season (S27: August 2026–July 2027). Chart clipping contains older observations, shading and markers within these bounds.
+
+Season Overview also marks 1 January of the season's ending year with a vertical line and date label. The marker is white in the dark theme and adapts to the light theme for contrast. It is a calendar reference, with no effect on deadlines or recorded progress; project charts do not add this marker.

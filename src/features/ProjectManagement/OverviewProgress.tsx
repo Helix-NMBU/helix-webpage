@@ -18,13 +18,14 @@ const series = [
 ] as const;
 const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
 
-export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null, showDeadlineTail = false }: {
+export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null, showDeadlineTail = false, newYearDate = null }: {
   workspace: ProjectWorkspace;
   compact?: boolean;
   deadline?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   showDeadlineTail?: boolean;
+  newYearDate?: string | null;
 }) {
   const patternId = useId().replace(/:/g, "");
   const deadlinePatternId = `${patternId}-deadline`;
@@ -42,6 +43,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
   const line = (key: typeof series[number]["key"]) => progressStepPath(points, key, x, y);
   const boundedX = (date: string) => Math.max(22, Math.min(618, x(date)));
   const deadlineX = deadline && deadline >= start && deadline <= end ? x(deadline) : null;
+  const newYearX = newYearDate && newYearDate > start && newYearDate < end ? x(newYearDate) : null;
   const redStart = deadline ? boundedX(deadline) : 618;
   const currentVisible = current.date >= start && current.date <= end;
   const labelStyle = (position: number) => ({
@@ -59,6 +61,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
             Scope is non-cancelled tasks. Started includes in-progress, blocked and completed tasks.
             Lines show recorded daily states through today; shaded space is the future, without a forecast.
             Displayed range: {formatDate(start)} to {formatDate(end)}.
+            {newYearX !== null && newYearDate && ` The new year marker shows ${formatDate(newYearDate)}.`}
             {deadline && `${deadlineX !== null ? ` The red line marks the deadline on ${formatDate(deadline)}.` : ` The deadline on ${formatDate(deadline)} is outside the displayed range.`} Red hatching marks time after that deadline.`}
           </desc>
           <defs>
@@ -85,13 +88,18 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
           {series.map(item => <path key={item.key} d={line(item.key)} fill="none" stroke={item.color} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" strokeDasharray={item.key === "started" ? "4 3" : undefined} />)}
           {today >= start && today <= end && <line x1={x(today)} x2={x(today)} y1="20" y2="179" stroke="currentColor" strokeOpacity="0.18" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />}
           </g>
+          {newYearX !== null && newYearDate && <g data-progress-new-year={newYearDate}>
+            <title>{`New year: ${formatDate(newYearDate)}`}</title>
+            <line x1={newYearX} x2={newYearX} y1="20" y2="179" stroke="currentColor" strokeOpacity="0.8" className="text-foreground" vectorEffect="non-scaling-stroke" />
+          </g>}
           </g>
         </svg>
         {currentVisible && series.map(item => <span key={item.key} aria-hidden="true" className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${x(current.date) / 640 * 100}%`, top: `${y(current[item.key]) / 180 * 100}%`, background: item.color }} />)}
       </div>
       <div className="relative mt-1 h-4 text-[11px] text-muted-foreground [&>span]:whitespace-nowrap">
         <span className={`absolute ${deadline === start ? "text-destructive" : ""}`} data-chart-boundary="start" style={labelStyle(22)}><time dateTime={start}>{shortDate(start)}</time></span>
-        {x(today) - 22 > 120 && plotRight - x(today) > 120 && (deadlineX === null || Math.abs(deadlineX - x(today)) > 120) && <span className="absolute" style={labelStyle(x(today))}>Today</span>}
+        {x(today) - 22 > 120 && plotRight - x(today) > 120 && (deadlineX === null || Math.abs(deadlineX - x(today)) > 120) && (newYearX === null || Math.abs(newYearX - x(today)) > 60) && <span className="absolute" style={labelStyle(x(today))}>Today</span>}
+        {newYearX !== null && newYearDate && <span className="absolute text-foreground" title={`New year: ${formatDate(newYearDate)}`} style={labelStyle(newYearX)}><time dateTime={newYearDate}>1 Jan</time></span>}
         <span className={`absolute ${deadline === end ? "text-destructive" : ""}`} data-chart-boundary="end" style={labelStyle(plotRight)}><time dateTime={end}>{shortDate(end)}</time></span>
         {deadlineX !== null && deadline && deadline !== end && deadlineX - 22 > 120 && plotRight - deadlineX > 120 && <span className="absolute text-destructive" title={`Deadline: ${formatDate(deadline)}`} style={labelStyle(deadlineX)}>{shortDate(deadline)}</span>}
       </div>
@@ -133,7 +141,7 @@ export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrga
   const unallocatedTasks = workspace.tasks.filter(task => !task.projectId || !allocatedProjects.has(task.projectId));
   if (summarize(unallocatedTasks).total > 0) areaRows.push({ id: "unallocated", label: "No department", tasks: unallocatedTasks });
   return <div data-project-progress className="grid w-full grid-cols-1 gap-4">
-    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} deadline={seasonRange.endDate} {...seasonRange} showDeadlineTail /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3></div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
+    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} deadline={seasonRange.endDate} {...seasonRange} showDeadlineTail newYearDate={`${seasonRange.endDate.slice(0, 4)}-01-01`} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3></div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
     <section aria-labelledby="overview-projects-title" className="space-y-3"><div className="flex items-center justify-between"><h2 id="overview-projects-title" className="text-base font-medium">Projects <span className="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{projects.length}</span></h2>{workspace.canManage && <Button size="icon" variant="ghost" className="-my-2 size-7" disabled={busy} aria-label="Create project" onClick={onCreateProject}><IconPlus aria-hidden="true" className="size-4" /></Button>}</div><Card className="gap-3 py-2"><CardContent className="px-2">
       {projects.map(project => { const progress = summarize(workspace.tasks.filter(task => task.projectId === project.id)); return <div key={project.id} className="group flex items-center gap-1 rounded-md px-2 hover:bg-muted/50"><button className="flex min-w-0 flex-1 items-center gap-2 py-3 text-left" onClick={() => onSelectProject(project.id)} aria-label={`See tasks for project ${project.name}, ${progress.done} of ${progress.total} tasks complete, ${progress.percent}%`}><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1"><span className="block truncate text-sm">{project.name}</span><span className="mt-1 block text-xs text-muted-foreground">{project.departments.join(", ") || "No department"} · {formatDate(project.deadline)}</span></span><ProgressRing {...progress} label={project.name} /></button>{workspace.canManage && <Button size="icon" variant="ghost" className="size-7 shrink-0" disabled={busy} aria-label={`Edit project ${project.name}`} onClick={() => onOpenProject(project)}><IconDots aria-hidden="true" className="size-4" /></Button>}</div>; })}
       {!projects.length && <p className="px-3 py-4 text-sm text-muted-foreground">No projects yet. A project and milestone are needed before adding tasks.</p>}

@@ -7,7 +7,7 @@ import { addDays, osloDate } from "./model";
 import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
 
 const today = osloDate();
-function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null; showDeadlineTail?: boolean } = {}) {
+function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null; showDeadlineTail?: boolean; newYearDate?: string | null } = {}) {
   const workspace = initialLocalWorkspace();
   const container = document.createElement("div");
   container.innerHTML = renderToStaticMarkup(<ProgressChart workspace={workspace} deadline={deadline} compact={false} {...bounds} />);
@@ -109,6 +109,24 @@ describe("deadline progress charts", () => {
     expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
     expect(container.querySelector('[data-chart-boundary="end"]')?.textContent).toBe('31 Jul');
     expect(container.querySelector('[data-chart-boundary="end"]')?.getAttribute('class')).toContain('text-destructive');
+  });
+
+  it.each(['S27','S28'])("marks 1 January at its actual position in %s", season => {
+    const bounds=seasonChartRange(season);
+    const newYearDate=`${bounds.endDate.slice(0,4)}-01-01`;
+    const container=render(bounds.endDate,{...bounds,showDeadlineTail:true,newYearDate});
+    const marker=container.querySelector(`[data-progress-new-year="${newYearDate}"]`)!;
+    const expectedX=22+(chartDay(newYearDate)-chartDay(bounds.startDate))/(chartDay(bounds.endDate)-chartDay(bounds.startDate))*(570-22);
+    expect(Number(marker.querySelector('line')?.getAttribute('x1'))).toBeCloseTo(expectedX);
+    expect(marker.querySelector('line')?.getAttribute('x2')).toBe(marker.querySelector('line')?.getAttribute('x1'));
+    expect(marker.querySelector('line')?.classList.contains('text-foreground')).toBe(true);
+    expect(marker.querySelector('title')?.textContent).toBe(`New year: 1 Jan ${bounds.endDate.slice(0,4)}`);
+    expect(container.querySelector(`time[datetime="${newYearDate}"]`)?.textContent).toBe('1 Jan');
+    expect(container.querySelector('tbody')?.innerHTML).toBe(render(bounds.endDate,{...bounds,showDeadlineTail:true}).querySelector('tbody')?.innerHTML);
+  });
+  it("does not add a new year marker to project charts or outside the visible range", () => {
+    expect(render('2027-07-31').querySelector('[data-progress-new-year]')).toBeNull();
+    expect(render('2027-07-31',{...seasonChartRange('S27'),newYearDate:'2028-01-01'}).querySelector('[data-progress-new-year]')).toBeNull();
   });
 
 });
