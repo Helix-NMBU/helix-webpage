@@ -7,7 +7,7 @@ import { addDays, osloDate } from "./model";
 import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
 
 const today = osloDate();
-function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null } = {}) {
+function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null; showDeadlineTail?: boolean } = {}) {
   const workspace = initialLocalWorkspace();
   const container = document.createElement("div");
   container.innerHTML = renderToStaticMarkup(<ProgressChart workspace={workspace} deadline={deadline} compact={false} {...bounds} />);
@@ -93,6 +93,22 @@ describe("deadline progress charts", () => {
     const container=render(startDate,{startDate});
     expect(container.querySelector('[data-chart-boundary="start"]')?.textContent).not.toBe('');
     expect(Number(container.querySelector('[data-progress-deadline] line')?.getAttribute('x1'))).toBe(22);
+  });
+
+  it("starts the season red tail exactly at 31 July while retaining the season bounds", () => {
+    const bounds=seasonChartRange('S27');
+    const container=render(bounds.endDate,{...bounds,showDeadlineTail:true});
+    const marker=container.querySelector('[data-progress-deadline="2027-07-31"]')!;
+    const boundary=Number(marker.querySelector('line')?.getAttribute('x1'));
+    expect(boundary).toBe(570);
+    for(const rect of marker.querySelectorAll('rect')) {
+      expect(Number(rect.getAttribute('x'))).toBe(boundary);
+      expect(Number(rect.getAttribute('width'))).toBe(618-boundary);
+    }
+    expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
+    expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
+    expect(container.querySelector('[data-chart-boundary="end"]')?.textContent).toBe('31 Jul');
+    expect(container.querySelector('[data-chart-boundary="end"]')?.getAttribute('class')).toContain('text-destructive');
   });
 
 });

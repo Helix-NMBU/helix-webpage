@@ -18,22 +18,26 @@ const series = [
 ] as const;
 const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
 
-export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null }: {
+export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null, showDeadlineTail = false }: {
   workspace: ProjectWorkspace;
   compact?: boolean;
   deadline?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  showDeadlineTail?: boolean;
 }) {
   const patternId = useId().replace(/:/g, "");
   const deadlinePatternId = `${patternId}-deadline`;
   const clipId = `${patternId}-plot`;
+  const historyClipId = `${patternId}-history`;
   const today = osloDate();
   const points = progressSeries(workspace.progressEvents, workspace.tasks, today);
   const current = points[points.length - 1];
   const { start, end } = progressChartRange(points[0].date, today, deadline, { startDate, endDate });
   const maximum = Math.max(1, ...points.map(point => point.scope));
-  const x = (date: string) => 22 + (chartDay(date) - chartDay(start)) / (chartDay(end) - chartDay(start)) * 596;
+  // Reserve a visible post-deadline tail without changing the season's end date.
+  const plotRight = showDeadlineTail && deadline === end ? 570 : 618;
+  const x = (date: string) => 22 + (chartDay(date) - chartDay(start)) / (chartDay(end) - chartDay(start)) * (plotRight - 22);
   const y = (value: number) => 174 - value / maximum * 146;
   const line = (key: typeof series[number]["key"]) => progressStepPath(points, key, x, y);
   const boundedX = (date: string) => Math.max(22, Math.min(618, x(date)));
@@ -59,6 +63,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
           </desc>
           <defs>
             <clipPath id={clipId}><rect x="22" y="20" width="596" height="160" /></clipPath>
+            <clipPath id={historyClipId}><rect x="22" y="20" width={plotRight - 22} height="160" /></clipPath>
             <pattern id={patternId} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(30)">
               <line x1="0" y1="0" x2="0" y2="7" stroke="currentColor" strokeOpacity="0.1" strokeWidth="2" />
             </pattern>
@@ -75,18 +80,20 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
             <rect x={redStart} y="20" width={618 - redStart} height="154" fill={`url(#${deadlinePatternId})`} />
             {deadlineX !== null && <line x1={deadlineX} x2={deadlineX} y1="20" y2="179" stroke="var(--destructive)" strokeOpacity="0.85" vectorEffect="non-scaling-stroke" />}
           </g>}
+          <g clipPath={`url(#${historyClipId})`}>
           <path d={`${line("completed")} L${x(current.date)},174 L${x(points[0].date)},174 Z`} fill="var(--progress-completed)" fillOpacity="0.08" />
           {series.map(item => <path key={item.key} d={line(item.key)} fill="none" stroke={item.color} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" strokeDasharray={item.key === "started" ? "4 3" : undefined} />)}
           {today >= start && today <= end && <line x1={x(today)} x2={x(today)} y1="20" y2="179" stroke="currentColor" strokeOpacity="0.18" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />}
+          </g>
           </g>
         </svg>
         {currentVisible && series.map(item => <span key={item.key} aria-hidden="true" className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${x(current.date) / 640 * 100}%`, top: `${y(current[item.key]) / 180 * 100}%`, background: item.color }} />)}
       </div>
       <div className="relative mt-1 h-4 text-[11px] text-muted-foreground [&>span]:whitespace-nowrap">
         <span className={`absolute ${deadline === start ? "text-destructive" : ""}`} data-chart-boundary="start" style={labelStyle(22)}><time dateTime={start}>{shortDate(start)}</time></span>
-        {x(today) - 22 > 120 && 618 - x(today) > 120 && (deadlineX === null || Math.abs(deadlineX - x(today)) > 120) && <span className="absolute" style={labelStyle(x(today))}>Today</span>}
-        <span className={`absolute ${deadline === end ? "text-destructive" : ""}`} data-chart-boundary="end" style={labelStyle(618)}><time dateTime={end}>{shortDate(end)}</time></span>
-        {deadlineX !== null && deadline && deadlineX - 22 > 120 && 618 - deadlineX > 120 && <span className="absolute text-destructive" title={`Deadline: ${formatDate(deadline)}`} style={labelStyle(deadlineX)}>{shortDate(deadline)}</span>}
+        {x(today) - 22 > 120 && plotRight - x(today) > 120 && (deadlineX === null || Math.abs(deadlineX - x(today)) > 120) && <span className="absolute" style={labelStyle(x(today))}>Today</span>}
+        <span className={`absolute ${deadline === end ? "text-destructive" : ""}`} data-chart-boundary="end" style={labelStyle(plotRight)}><time dateTime={end}>{shortDate(end)}</time></span>
+        {deadlineX !== null && deadline && deadline !== end && deadlineX - 22 > 120 && plotRight - deadlineX > 120 && <span className="absolute text-destructive" title={`Deadline: ${formatDate(deadline)}`} style={labelStyle(deadlineX)}>{shortDate(deadline)}</span>}
       </div>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -114,7 +121,6 @@ export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrga
   workspace: ProjectWorkspace; busy: boolean; onSelectProject: (id: string) => void; onNeedsOrganization: () => void; onOpenProject: (project: Project) => void; onCreateProject: () => void; onEditDepartment: (department: ProjectDepartment) => void;
 }) {
   const projects = [...workspace.projects].sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.name.localeCompare(b.name));
-  const deadline = projects.reduce<string | null>((latest, project) => project.deadline && (!latest || project.deadline > latest) ? project.deadline : latest, null);
   const seasonRange = seasonChartRange(workspace.season);
   const unorganized = workspace.tasks.filter(task => !isOrganized(task, workspace));
   const configured = new Map((workspace.departments ?? []).map(department => [departmentKey(department.name), department]));
@@ -127,7 +133,7 @@ export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrga
   const unallocatedTasks = workspace.tasks.filter(task => !task.projectId || !allocatedProjects.has(task.projectId));
   if (summarize(unallocatedTasks).total > 0) areaRows.push({ id: "unallocated", label: "No department", tasks: unallocatedTasks });
   return <div data-project-progress className="grid w-full grid-cols-1 gap-4">
-    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} deadline={deadline} {...seasonRange} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3></div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
+    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} deadline={seasonRange.endDate} {...seasonRange} showDeadlineTail /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3></div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
     <section aria-labelledby="overview-projects-title" className="space-y-3"><div className="flex items-center justify-between"><h2 id="overview-projects-title" className="text-base font-medium">Projects <span className="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{projects.length}</span></h2>{workspace.canManage && <Button size="icon" variant="ghost" className="-my-2 size-7" disabled={busy} aria-label="Create project" onClick={onCreateProject}><IconPlus aria-hidden="true" className="size-4" /></Button>}</div><Card className="gap-3 py-2"><CardContent className="px-2">
       {projects.map(project => { const progress = summarize(workspace.tasks.filter(task => task.projectId === project.id)); return <div key={project.id} className="group flex items-center gap-1 rounded-md px-2 hover:bg-muted/50"><button className="flex min-w-0 flex-1 items-center gap-2 py-3 text-left" onClick={() => onSelectProject(project.id)} aria-label={`See tasks for project ${project.name}, ${progress.done} of ${progress.total} tasks complete, ${progress.percent}%`}><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1"><span className="block truncate text-sm">{project.name}</span><span className="mt-1 block text-xs text-muted-foreground">{project.departments.join(", ") || "No department"} · {formatDate(project.deadline)}</span></span><ProgressRing {...progress} label={project.name} /></button>{workspace.canManage && <Button size="icon" variant="ghost" className="size-7 shrink-0" disabled={busy} aria-label={`Edit project ${project.name}`} onClick={() => onOpenProject(project)}><IconDots aria-hidden="true" className="size-4" /></Button>}</div>; })}
       {!projects.length && <p className="px-3 py-4 text-sm text-muted-foreground">No projects yet. A project and milestone are needed before adding tasks.</p>}

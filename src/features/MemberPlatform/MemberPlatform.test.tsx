@@ -260,7 +260,7 @@ describe("internal member platform", () => {
     await open("/");
     expect(container.textContent).toContain("Workspace");
     expect(container.textContent).toContain("Your spaces");
-    expect(container.textContent).toContain("Project Overview");
+    expect(container.textContent).toContain("Season Overview");
     const mail = container.querySelector('[aria-label="Mail"]')!;
     const tasks = container.querySelector('[aria-label="Tasks"]')!;
     expect(mail.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -337,7 +337,7 @@ describe("internal member platform", () => {
     await open("/members");
     expect(container.querySelector('[data-sidebar="group-label"]')?.textContent).toBe("Workspace");
     expect(container.querySelector('[aria-label="Home"] svg')?.classList.contains('tabler-icon-smart-home')).toBe(true);
-    expect(container.querySelector('[aria-label="Project Overview"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Season Overview"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Mechanical & Production"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Electronics"]')).toBeNull();
     await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Toggle Workspace"]')?.click());

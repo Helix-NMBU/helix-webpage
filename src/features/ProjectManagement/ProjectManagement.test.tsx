@@ -236,7 +236,7 @@ describe("project management interface", () => {
     expect(container.textContent).toContain("Shaded area: future");
     expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
     expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
-    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe(initialLocalWorkspace().projects.map(project => project.deadline).filter(Boolean).sort().pop());
+    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe("2027-07-31");
     expect(button("Refresh")).toBeUndefined();
     expect(container.textContent).not.toContain("Completion by department");
     expect(container.textContent).not.toContain("View progress data");
@@ -248,21 +248,21 @@ describe("project management interface", () => {
     expect(tables[tables.length - 1].textContent).not.toContain("Publish workshop update");
     expect(tables[tables.length - 1].textContent).not.toContain("Submit competition registration");
   });
-  it("uses the latest project deadline for Overview rather than individual task deadlines", async () => {
+  it("uses the season deadline regardless of project and task deadlines", async () => {
     const workspace = initialLocalWorkspace();
     const latest = addDays(osloDate(), 45);
     workspace.projects = workspace.projects.map((project, index) => ({ ...project, deadline: index === 0 ? latest : index === 1 ? null : addDays(osloDate(), 5) }));
     workspace.tasks = workspace.tasks.map(task => ({ ...task, deadline: addDays(osloDate(), 80) }));
     load.mockResolvedValue(workspace);
     await open();
-    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe(latest);
+    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe("2027-07-31");
   });
-  it("omits the Overview deadline region when none of the projects has a deadline", async () => {
+  it("keeps the season deadline when projects have no deadlines", async () => {
     const workspace = initialLocalWorkspace();
     workspace.projects = workspace.projects.map(project => ({ ...project, deadline: null }));
     load.mockResolvedValue(workspace);
     await open();
-    expect(container.querySelector("[data-progress-deadline]")).toBeNull();
+    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe("2027-07-31");
   });
   it("reloads the workspace when entering Overview from another work area", async () => {
     const router = await open("production");

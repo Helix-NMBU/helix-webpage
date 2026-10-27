@@ -43,7 +43,7 @@ function Workspace({ children }: { children?: ReactNode }) {
   const department = directory?.departments.find(item => departmentPath(item.name) === location.pathname);
   const project = directory?.projects.find(item => location.pathname === `/projects/${item.id}`);
   const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department?.name ?? "Departments" : null;
-  const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Project Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
+  const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Season Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"

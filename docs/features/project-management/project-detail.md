@@ -18,7 +18,7 @@ New task opens the shared creation modal with an always-visible title and descri
 
 On desktop, the project view fits the viewport below the shell breadcrumb. Project content and the Properties/Milestones/Progress column scroll independently, with overscroll contained at each column’s edges. Both scroll regions can receive keyboard focus. Mobile retains a stacked, page-scrolling layout.
 
-Progress charts mark the stored project target date with a red vertical line and red hatching to its right. The date domain includes padding after the target so this region remains visible even for distant deadlines. An overdue deadline remains at its actual date; it is not moved to today. No red region is shown for an undated project. The overall Overview chart uses the latest project deadline. This shading indicates time after the deadline, not a forecast or a prediction of missed work.
+Progress charts mark the stored project target date with a red vertical line and red hatching to its right. The date domain includes padding after the target so this region remains visible even for distant deadlines. An overdue deadline remains at its actual date; it is not moved to today. No red region is shown for an undated project. The Season Overview chart uses the season end, 31 July, as its deadline. Its fixed 1 August–31 July window retains a small visual tail after 31 July so the red post-deadline region remains visible. This shading indicates time after the deadline, not a forecast or a prediction of missed work.
 
 Task titles in the project list and Activity now open the [task detail page](task-detail.md). Returning via Back preserves the project’s URL-based milestone filter.
 

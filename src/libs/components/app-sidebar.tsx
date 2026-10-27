@@ -47,7 +47,7 @@ export function AppSidebar({
     ...(workspace?.projectAccess
       ? [
           {
-            title: "Project Overview",
+            title: "Season Overview",
             url: "/project-management/overview",
             icon: IconLayoutKanban,
             isActive: location.pathname.startsWith("/project-management"),
