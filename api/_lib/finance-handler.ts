@@ -58,7 +58,10 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
     } catch (error) {
       if (error instanceof FinanceError || error instanceof MemberCvError) {
         const errors = error instanceof FinanceError ? error.errors : undefined;
-        return res.status(error.status).json(errors?.length ? { error: error.message, errors } : { error: error.message });
+        const recovery = error instanceof FinanceError ? error.recovery : undefined;
+        const payload: Record<string, unknown> = errors?.length ? { error: error.message, errors } : { error: error.message };
+        if (recovery) payload.recovery = recovery;
+        return res.status(error.status).json(payload);
       }
       return res.status(503).json({ error: "The finance service is temporarily unavailable. Please try again." });
     }

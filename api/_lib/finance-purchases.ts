@@ -69,11 +69,14 @@ function textOf(error: unknown): string {
 export function mapPurchaseError(error: unknown): FinanceError {
   if (error instanceof FinanceError) return error;
   const message = textOf(error);
-  const tagged = /FINANCE\|(conflict|denied|invalid|stale|not_found|quota)\|([^|]*)(?:\|([A-Za-z][A-Za-z0-9]*))?/.exec(message);
+  const tagged = /FINANCE\|(conflict|denied|invalid|stale|not_found|quota|recover)\|([^|]*)(?:\|([A-Za-z][A-Za-z0-9]*))?/.exec(message);
   if (tagged) {
     const kind = tagged[1];
     const text = tagged[2] || "Could not save the purchase.";
     const field = tagged[3];
+    if (kind === "recover") {
+      return new FinanceError(409, text, field ? [{ field, message: text }] : undefined, { action: "registerDirect", field });
+    }
     const status = kind === "denied" ? 403 : kind === "not_found" ? 404 : kind === "quota" ? 429 : kind === "invalid" ? 400 : 409;
     return new FinanceError(status, text, field ? [{ field, message: text }] : undefined);
   }
