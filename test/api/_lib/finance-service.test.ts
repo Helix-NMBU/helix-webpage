@@ -108,6 +108,7 @@ beforeAll(async () => {
     create role anonymous;
   `);
   await pg.exec(readFileSync(new URL("../../../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   services = createFinanceServices({
     db,
@@ -514,7 +515,11 @@ describe("finance access API", () => {
     expect(await counts()).toMatchObject({ purchases: before.purchases, audit_log: before.audit_log, idempotency_keys: 0 });
 
     await grant(adminId, "head_of_finance");
-    expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 503, body: { error: "This finance operation is not available yet." } });
+    const versionBefore = await sql<{ version: string }>("select version::text as version from finance.view_versions");
+    expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 409, body: { error: "A budget already exists for this season." } });
+    const versionAfter = await sql<{ version: string }>("select version::text as version from finance.view_versions");
+    expect(versionAfter.rows[0]?.version).toBe(versionBefore.rows[0]?.version);
+    expect(await call({ token: "admin", body: { action: "registerPurchase", requestId, purchase: {} } })).toMatchObject({ status: 503, body: { error: "This finance operation is not available yet." } });
   });
 
   it("hides draft budget items and limits the register to the current season", async () => {

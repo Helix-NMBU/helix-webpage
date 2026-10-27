@@ -1,5 +1,6 @@
 import pg from "pg";
 import { isFinanceAction, isFinanceProfile, mutationCapability, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
+import { isBudgetMutation, loadBudgetHierarchy, performBudgetMutation } from "./finance-budgets.js";
 import { FinanceError } from "./finance-error.js";
 import { formatOre, osloToday } from "./finance-money.js";
 import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
@@ -16,9 +17,7 @@ import type {
   FundingPartRecord,
   FundingRecord,
   OwnRequestSummary,
-  PublicBudgetItem,
   PublicBudgets,
-  PublicDepartmentBudget,
   PublicEarmarkSummary,
   PublicOverview,
   PurchasesView,
@@ -101,17 +100,17 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
     return { unchanged: true, viewVersion: current.viewVersion };
   }
 
-  async function budgetState(seasonCode: string | null): Promise<{ status: "absent" | "draft" | "approved"; approvedOn: string | null; budgetId: string | null }> {
-    if (!seasonCode) return { status: "absent", approvedOn: null, budgetId: null };
-    const [row] = await rows<{ status: "draft" | "approved" | null; approved_on: string | null; id: string | null }>(
-      `select b.status, b.approved_on::text as approved_on, b.id
+  async function budgetState(seasonCode: string | null): Promise<{ status: "absent" | "draft" | "approved"; approvedOn: string | null; budgetId: string | null; revision: number }> {
+    if (!seasonCode) return { status: "absent", approvedOn: null, budgetId: null, revision: 0 };
+    const [row] = await rows<{ status: "draft" | "approved" | null; approved_on: string | null; id: string | null; revision: number | null }>(
+      `select b.status, b.approved_on::text as approved_on, b.id, b.revision
        from finance.seasons s
        left join finance.budgets b on b.season_id = s.id
        where s.code = $1`,
       [seasonCode],
     );
-    if (!row?.status || !row.id) return { status: "absent", approvedOn: null, budgetId: null };
-    return { status: row.status, approvedOn: row.approved_on, budgetId: row.id };
+    if (!row?.status || !row.id) return { status: "absent", approvedOn: null, budgetId: null, revision: 0 };
+    return { status: row.status, approvedOn: row.approved_on, budgetId: row.id, revision: Number(row.revision ?? 0) };
   }
 
   return {
@@ -170,51 +169,18 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
       if (same) return same;
       const budget = await budgetState(current.seasonCode);
       const showItems = budget.status !== "draft" || current.capabilities.draftBudgetItems;
-      const items = budget.budgetId && showItems
-        ? await rows<{
-          id: string; public_ref: string; system_id: string; system_code: string; system_name: string; active: boolean;
-          department_key: string; department_name: string; description: string; category: string; planned_ore: string;
-          priority: PublicBudgetItem["priority"]; reuse_status: PublicBudgetItem["reuseStatus"];
-          expected_purchase_date: string | null; status: PublicBudgetItem["status"];
-        }>(
-          `select i.id, i.public_ref, i.system_id, sys.code as system_code, sys.name as system_name, sys.active,
-                  d.department_key, d.name as department_name, i.description, i.category, i.planned_ore::text as planned_ore,
-                  i.priority, i.reuse_status, i.expected_purchase_date::text as expected_purchase_date, i.status
-           from finance.budget_items i
-           join finance.systems sys on sys.id = i.system_id
-           join identity.departments d on d.department_key = sys.department_key
-           where i.budget_id = $1::uuid
-           order by d.sort_order, sys.name, i.public_ref`,
-          [budget.budgetId],
-        )
-        : [];
-      const departments: PublicDepartmentBudget[] = [];
-      for (const item of items) {
-        let department = departments.find((entry) => entry.departmentKey === item.department_key);
-        if (!department) {
-          department = { departmentKey: item.department_key, name: item.department_name, systems: [] };
-          departments.push(department);
-        }
-        let system = department.systems.find((entry) => entry.id === item.system_id);
-        if (!system) {
-          system = { id: item.system_id, code: item.system_code, name: item.system_name, active: item.active, items: [] };
-          department.systems.push(system);
-        }
-        system.items.push({
-          id: item.id,
-          publicRef: item.public_ref,
-          systemId: item.system_id,
-          systemCode: item.system_code,
-          description: item.description,
-          category: item.category,
-          plannedNok: formatOre(BigInt(item.planned_ore)),
-          priority: item.priority,
-          reuseStatus: item.reuse_status,
-          expectedPurchaseDate: item.expected_purchase_date,
-          status: item.status,
-        });
+      if (!budget.budgetId || !showItems) {
+        return {
+          viewVersion: current.viewVersion,
+          seasonCode: current.seasonCode,
+          budgetStatus: budget.status,
+          approvedOn: budget.approvedOn,
+          revision: budget.revision,
+          departments: [],
+          choices: { systems: [], items: [] },
+        };
       }
-      return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, budgetStatus: budget.status, departments };
+      return loadBudgetHierarchy(db, current, budget);
     },
     async purchases(token, knownVersion) {
       const current = await context(token);
@@ -343,7 +309,7 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
           throw new FinanceError(400, "A valid revision is required.");
         }
       }
-      // Later slices perform the write. This slice proves denial and leaves no side effects.
+      if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
       throw new FinanceError(503, "This finance operation is not available yet.");
     },
   };

@@ -94,10 +94,30 @@ export type PublicBudgetItem = {
   description: string;
   category: string;
   plannedNok: string;
+  effectivePlanNok: string;
+  actualNok: string;
+  differenceNok: string;
   priority: BudgetItemPriority;
   reuseStatus: BudgetItemReuse;
   expectedPurchaseDate: string | null;
   status: BudgetItemStatus;
+  revision: number;
+  earmarked: boolean;
+  earmarkPurpose: string | null;
+  earmarkAmountNok: string | null;
+  earmarkId?: string | null;
+  earmarkSourceName?: string | null;
+  earmarkConditions?: string | null;
+  note?: string | null;
+  ownerEmail?: string | null;
+};
+
+export type UnallocatedBudgetItem = {
+  id: string;
+  publicRef: string;
+  note: string | null;
+  revision: number;
+  actualNok: string;
 };
 
 export type PublicSystemBudget = {
@@ -105,20 +125,66 @@ export type PublicSystemBudget = {
   code: string;
   name: string;
   active: boolean;
+  plannedNok: string;
+  actualNok: string;
+  differenceNok: string;
+  unbudgetedNok: string;
+  unbudgetedItemId: string | null;
+  unbudgetedPublicRef: string | null;
+  unallocated?: UnallocatedBudgetItem;
   items: PublicBudgetItem[];
 };
 
 export type PublicDepartmentBudget = {
   departmentKey: string;
   name: string;
+  plannedNok: string;
+  actualNok: string;
+  differenceNok: string;
+  unbudgetedNok: string;
   systems: PublicSystemBudget[];
+};
+
+export type BudgetChoiceSystem = {
+  id: string;
+  code: string;
+  name: string;
+  departmentKey: string;
+  active: boolean;
+  unbudgetedItemId: string | null;
+  unbudgetedPublicRef: string | null;
+};
+
+export type BudgetChoiceItem = {
+  id: string;
+  publicRef: string;
+  description: string;
+  systemId: string;
+  status: BudgetItemStatus;
+};
+
+export type BudgetChoices = {
+  systems: BudgetChoiceSystem[];
+  items: BudgetChoiceItem[];
+};
+
+export type BudgetEarmarkChoice = {
+  id: string;
+  publicRef: string;
+  purpose: string;
+  amountNok: string;
+  sourceName: string;
 };
 
 export type PublicBudgets = {
   viewVersion: number;
   seasonCode: string | null;
   budgetStatus: "absent" | BudgetStatus;
+  approvedOn: string | null;
+  revision: number;
   departments: PublicDepartmentBudget[];
+  choices: BudgetChoices;
+  earmarkChoices?: BudgetEarmarkChoice[];
 };
 
 export type OwnRequestSummary = {
@@ -215,6 +281,8 @@ export type BudgetItemInput = {
   priority: BudgetItemPriority;
   reuseStatus: BudgetItemReuse;
   expectedPurchaseDate?: string | null;
+  ownerEmail?: string | null;
+  status?: BudgetItemStatus;
   note?: string | null;
   earmarkId?: string | null;
   reason?: string | null;
@@ -287,10 +355,11 @@ type MutationBase = { requestId: string; expectedRevision?: number };
 export type FinanceMutation =
   | (MutationBase & { action: "createBudget" })
   | (MutationBase & { action: "approveBudget"; reason?: string })
-  | (MutationBase & { action: "addItem"; item: BudgetItemInput })
+  | (MutationBase & { action: "addItem"; item: BudgetItemInput; reason?: string })
   | (MutationBase & { action: "editItem"; itemId: string; patch: Partial<BudgetItemInput>; reason?: string })
   | (MutationBase & { action: "cancelItem"; itemId: string; reason?: string })
   | (MutationBase & { action: "restoreItem"; itemId: string; reason?: string })
+  | (MutationBase & { action: "ensureUnallocated"; systemId: string })
   | (MutationBase & { action: "previewImport"; departmentKey: string; csv: string })
   | (MutationBase & { action: "importItems"; departmentKey: string; csv: string; reason?: string })
   | (MutationBase & { action: "checkPurchase"; purchase: PurchaseInput })
