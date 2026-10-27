@@ -305,6 +305,34 @@ describe("FIN-05 A02 decisions", () => {
     expect(await counts()).toEqual(before);
   });
 
+  it("returns conflict when approving after a budget line was cancelled, without writing a decision", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    const itemRevision = Number((await sql<{ revision: number }>("select revision from finance.budget_items where id = $1::uuid", [itemId]))[0]?.revision ?? 0);
+    expect((await call("head", {
+      action: "cancelItem",
+      requestId: requestId(),
+      expectedRevision: itemRevision,
+      itemId,
+      reason: "Line removed",
+    })).status).toBe(200);
+    const vBefore = await version();
+    const cBefore = await counts();
+    const decided = await call("head", {
+      action: "decideRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      revisionId,
+      decision: "approved",
+      reason: "Approved",
+    });
+    expect(decided.status).toBe(409);
+    expect((decided.body as { error?: string }).error).toMatch(/cancelled/i);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.request_decisions where revision_id = $1::uuid", [revisionId]))[0]?.count).toBe("0");
+    expect(await version()).toBe(vBefore);
+    expect(await counts()).toEqual(cBefore);
+  });
+
   it("leaves pending and rejected revisions without approved_ore commitments", async () => {
     await seasonWithBudget();
     const { recordId, revisionId } = await draftAndSubmit();
@@ -376,6 +404,42 @@ describe("FIN-05 A04 closure and commitments", () => {
     });
     const line = await sql<{ approved_ore: string }>("select approved_ore::text as approved_ore from finance.request_lines where revision_id = $1::uuid", [revisionId]);
     expect(BigInt(line[0]?.approved_ore ?? "0")).toBe(250000n);
+  });
+
+  it("rejects close when released amount exceeds approved total and allows closing at the exact approved sum", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved",
+    });
+    const openRevision = Number((await sql<{ revision: number }>("select revision from finance.requests where id = $1::uuid", [recordId]))[0]?.revision ?? 0);
+    const vBefore = await version();
+    const tooMuch = await call("member", {
+      action: "closeRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      expectedRevision: openRevision,
+      reason: "Too much release",
+      releasedNok: "2501.00",
+    });
+    expect(tooMuch.status).toBe(400);
+    expect((tooMuch.body as { errors?: { field?: string }[] }).errors?.[0]?.field).toBe("releasedOre");
+    expect((await sql<{ status: string; released_ore: string }>(
+      "select status, released_ore::text as released_ore from finance.requests where id = $1::uuid", [recordId],
+    ))[0]).toMatchObject({ status: "approved", released_ore: "0" });
+    expect(await version()).toBe(vBefore);
+    const exact = await call("member", {
+      action: "closeRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      expectedRevision: openRevision,
+      reason: "Full release",
+      releasedNok: "2500.00",
+    });
+    expect(exact.status).toBe(200);
+    expect((await sql<{ status: string; released_ore: string }>(
+      "select status, released_ore::text as released_ore from finance.requests where id = $1::uuid", [recordId],
+    ))[0]).toMatchObject({ status: "closed", released_ore: "250000" });
   });
 
   it("closes by requester with explicit zero release when fully consumed", async () => {

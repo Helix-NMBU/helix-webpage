@@ -702,6 +702,19 @@ begin
     end if;
 
     if decision_text = 'approved' then
+      -- Item locks FOR SHARE after the request row (same order as submit); a line whose item was cancelled since submission cannot be approved.
+      for line_rec in
+        select i.id, i.status
+        from finance.request_lines l
+        join finance.budget_items i on i.id = l.budget_item_id
+        where l.revision_id = revision_id
+        order by i.id
+        for share of i
+      loop
+        if line_rec.status = 'cancelled' then
+          raise exception 'FINANCE|conflict|A budget line on this request was cancelled. Ask the requester to revise it.';
+        end if;
+      end loop;
       for line_rec in
         select l.id,
                coalesce((approved_map->>(l.id::text))::bigint, l.estimated_ore) as amount
@@ -761,6 +774,9 @@ begin
     end if;
     if released_ore < 0 then
       raise exception 'FINANCE|invalid|Enter a valid released amount.|releasedOre';
+    end if;
+    if released_ore > coalesce((select sum(l.approved_ore) from finance.request_lines l where l.revision_id = req.approved_revision_id), 0) then
+      raise exception 'FINANCE|invalid|The released amount cannot exceed the approved amount.|releasedOre';
     end if;
     update finance.requests
       set status = 'closed',
