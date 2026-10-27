@@ -18,6 +18,7 @@ import {
   watchMemberSession,
   type MemberLanding,
 } from "../MemberCV/session";
+import { MemberViewportGate } from "./MemberViewportGate";
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
@@ -136,6 +137,7 @@ function LegacyMemberRedirect({ to }: { to: string }) {
 export default function MemberPlatform() {
   return (
     <MemberThemeProvider>
+      <MemberViewportGate>
       <TooltipProvider>
         <MemberNavigationProvider>
         <div className="member-platform portal-root">
@@ -176,6 +178,7 @@ export default function MemberPlatform() {
         </div>
         </MemberNavigationProvider>
       </TooltipProvider>
+      </MemberViewportGate>
     </MemberThemeProvider>
   );
 }

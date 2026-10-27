@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { usePortalContainer } from "./portal-container"
 import { cn } from "@libs/lib/utils"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
@@ -22,7 +23,8 @@ function DialogTrigger({
 function DialogPortal({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  const container = usePortalContainer()
+  return <DialogPrimitive.Portal container={container} data-slot="dialog-portal" {...props} />
 }
 
 function DialogClose({

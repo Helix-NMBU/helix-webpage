@@ -1,4 +1,5 @@
 import * as React from "react"
+import { usePortalContainer } from "./portal-container"
 import { cn } from "@libs/lib/utils"
 import { Select as SelectPrimitive } from "radix-ui"
 import { IconChevronDown, IconCheck, IconChevronUp } from "@tabler/icons-react"
@@ -61,8 +62,9 @@ function SelectContent({
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  const container = usePortalContainer()
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={container}>
       <SelectPrimitive.Content
         data-slot="select-content"
         data-align-trigger={position === "item-aligned"}

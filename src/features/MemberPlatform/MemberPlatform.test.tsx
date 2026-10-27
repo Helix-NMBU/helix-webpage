@@ -79,6 +79,16 @@ describe("internal member platform", () => {
     router = createMemoryRouter([{ path: "*", element: <MemberPlatform /> }], { initialEntries: [path] });
     await act(async () => root.render(<RouterProvider router={router} />));
   }
+  it.each(["/login", "/projects", "/tasks/00000000-0000-4000-8000-000000000010"])("blocks a narrow direct visit to %s before authentication or data loading",async path=>{
+    const width=window.innerWidth;
+    Object.defineProperty(window,"innerWidth",{configurable:true,value:390});
+    try {
+      await open(path);
+      expect(container.textContent).toContain("Increase your window size");
+      expect(session.landing).not.toHaveBeenCalled();expect(workspace.load).not.toHaveBeenCalled();expect(projectTasks.load).not.toHaveBeenCalled();
+    } finally {Object.defineProperty(window,"innerWidth",{configurable:true,value:width});}
+  });
+
   async function profileMenu() {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Profile menu"]')?.click());
   }
