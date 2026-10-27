@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { MAX_IMPORT_BYTES, MAX_IMPORT_ROWS } from "./budget-import";
 import type { BudgetImportPreview, PublicDepartmentBudget } from "./types";
 
 const FIELD_LABELS: Record<string, string> = {
@@ -30,6 +31,7 @@ export function BudgetImport({ departments }: { departments: PublicDepartmentBud
   }
   async function previewImport() {
     if (!department || !csv.trim()) { fail(new Error("Choose a department and enter CSV text.")); return; }
+    if (new TextEncoder().encode(csv).byteLength > MAX_IMPORT_BYTES) { fail(new Error("The CSV must be 256 KiB or smaller.")); return; }
     setBusy(true);
     try {
       const result = await session.mutate({ action: "previewImport", requestId: crypto.randomUUID(), departmentKey: department, csv });
@@ -54,6 +56,7 @@ export function BudgetImport({ departments }: { departments: PublicDepartmentBud
     <section className="space-y-4" aria-labelledby="budget-import-heading">
       <h2 id="budget-import-heading" className="text-lg font-medium">Import department budget</h2>
       <p className="text-sm text-muted-foreground">Import replaces the department's ordinary budget items. Descriptions identify items; changing one can add a new item and cancel the old one.</p>
+      <p className="text-sm text-muted-foreground">Use one file for the whole department, up to {MAX_IMPORT_ROWS} rows and 256 KiB.</p>
       <div className="grid max-w-xl gap-3">
         <Label htmlFor="budget-import-department">Department</Label>
         <Select disabled={busy} value={department || undefined} onValueChange={(value) => { setDepartment(value); setPreview(null); }}>
@@ -64,7 +67,7 @@ export function BudgetImport({ departments }: { departments: PublicDepartmentBud
         <Input id="budget-import-file" disabled={busy} type="file" accept=".csv,.txt,text/csv,text/plain" onChange={(event) => {
           const file = event.target.files?.[0];
           if (!file) return;
-          if (file.size > 1_500_000) { fail(new Error("The CSV is too large.")); return; }
+          if (file.size > MAX_IMPORT_BYTES) { fail(new Error("The CSV must be 256 KiB or smaller.")); return; }
           setBusy(true);
           void file.text().then((text) => { setCsv(text); setPreview(null); }).catch(fail).finally(() => setBusy(false));
         }} />

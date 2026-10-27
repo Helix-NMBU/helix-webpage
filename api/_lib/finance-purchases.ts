@@ -433,7 +433,7 @@ export async function performPurchaseMutation(
     } catch (error) {
       // Another identical request may have committed while evidence was checked.
       const concurrentReplay = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
-      if (concurrentReplay) return concurrentReplay;
+      if (concurrentReplay) return withPurchaseReference(db, caller.memberId, concurrentReplay);
       throw error;
     }
     const payload = serializePurchaseBody(validated.purchase, {
