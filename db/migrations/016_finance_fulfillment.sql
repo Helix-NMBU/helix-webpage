@@ -501,21 +501,24 @@ begin
           )
         );
       end if;
-      if approval_decided_at is not null and purchase_date < approval_decided_at::date then
-        perform finance.record_purchase_exception(
-          registered_purchase_id,
-          'dated_before_approval',
-          jsonb_build_object(
-            'requestId', link_request_id,
-            'requestLineId', request_line_id,
-            'purchaseDate', purchase_date::text,
-            'approvalDecidedAt', approval_decided_at::text,
-            'publicRef', purchase_ref
-          )
-        );
-      end if;
     end if;
   end loop;
+
+  if has_valid_link
+    and approval_decided_at is not null
+    and purchase_date < (approval_decided_at at time zone 'Europe/Oslo')::date
+  then
+    perform finance.record_purchase_exception(
+      registered_purchase_id,
+      'dated_before_approval',
+      jsonb_build_object(
+        'requestId', link_request_id,
+        'purchaseDate', purchase_date::text,
+        'approvalDecidedAt', approval_decided_at::text,
+        'publicRef', purchase_ref
+      )
+    );
+  end if;
 
   if force_direct and recovery_ctx is not null and recovery_ctx <> 'null'::jsonb then
     perform finance.record_purchase_exception(

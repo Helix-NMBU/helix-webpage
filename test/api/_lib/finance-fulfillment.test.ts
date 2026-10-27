@@ -428,6 +428,141 @@ describe("FIN-07 A04 immutable exception facts and threshold", () => {
     const missing = await sql<{ kind: string }>("select kind from finance.exception_reviews where kind = 'missing_approval'");
     expect(missing.length).toBe(1);
   });
+
+  it("uses Oslo calendar for dated_before_approval near midnight (session UTC)", async () => {
+    await sql("set time zone 'UTC'");
+    await seasonWithBudget();
+    const { recordId, lineId } = await approveRequest();
+    await sql(
+      `update finance.request_decisions
+       set decided_at = timestamptz '2026-10-26 23:30:00+00'
+       where revision_id = (select approved_revision_id from finance.requests where id = $1::uuid)`,
+      [recordId],
+    );
+    const beforeApproval = await registerLinked(recordId, lineId!, "100.00", "2026-10-26");
+    expect(beforeApproval.status).toBe(200);
+    const purchaseIdBefore = (beforeApproval.body as { id: string }).id;
+    const flagged = await sql<{ count: string }>(
+      `select count(*)::text as count
+       from finance.exception_reviews
+       where kind = 'dated_before_approval'
+         and purchase_id = $1::uuid`,
+      [purchaseIdBefore],
+    );
+    expect(Number(flagged[0]?.count ?? "0")).toBe(1);
+
+    const onApprovalDay = await registerLinked(recordId, lineId!, "50.00", "2026-10-27");
+    expect(onApprovalDay.status).toBe(200);
+    const purchaseIdOnDay = (onApprovalDay.body as { id: string }).id;
+    const notFlagged = await sql<{ count: string }>(
+      `select count(*)::text as count
+       from finance.exception_reviews
+       where kind = 'dated_before_approval'
+         and purchase_id = $1::uuid`,
+      [purchaseIdOnDay],
+    );
+    expect(Number(notFlagged[0]?.count ?? "0")).toBe(0);
+  });
+
+  it("records one dated_before_approval per purchase with multiple linked lines", async () => {
+    await seasonWithBudget();
+    await sql(
+      `insert into finance.budget_items (
+        budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,
+        created_by_member_id, updated_by_member_id
+      )
+      select b.id, s.id, 'BI-S27-011', 'Fasteners', 'material', 1000000, 'P3', 'new', 'planned', false,
+        $1::uuid, $1::uuid
+      from finance.budgets b cross join finance.systems s
+      where b.public_ref = 'B-S27' and s.code = 'SYS-FR'`,
+      [operatorId],
+    );
+    const secondItemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-011'"))[0]?.id ?? "";
+    const saved = await call("member", {
+      action: "saveRequest",
+      requestId: requestId(),
+      request: {
+        supplierName: "Nordic Parts AS",
+        justification: "Need material for frame assembly",
+        plannedDate: thirdOsloDayFrom(osloToday()),
+        lines: [
+          { budgetItemId: itemId, description: "Tube set", estimatedNok: "5000.00" },
+          { budgetItemId: secondItemId, description: "Bolts", estimatedNok: "5000.00" },
+        ],
+      },
+    });
+    const recordId = (saved.body as { id: string }).id;
+    const revision = Number((saved.body as { revision?: number }).revision ?? 0);
+    await call("member", {
+      action: "submitRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      expectedRevision: revision,
+      request: {
+        supplierName: "Nordic Parts AS",
+        justification: "Need material for frame assembly",
+        plannedDate: thirdOsloDayFrom(osloToday()),
+        lines: [
+          { budgetItemId: itemId, description: "Tube set", estimatedNok: "5000.00" },
+          { budgetItemId: secondItemId, description: "Bolts", estimatedNok: "5000.00" },
+        ],
+      },
+    });
+    const revisionId = (await sql<{ id: string }>("select submitted_revision_id as id from finance.requests where id = $1::uuid", [recordId]))[0]?.id;
+    const lineIds = await sql<{ id: string }>("select id from finance.request_lines where revision_id = $1::uuid order by ordinal", [revisionId]);
+    const oreByLine: Record<string, string> = {};
+    for (const row of lineIds) {
+      oreByLine[row.id] = "500000";
+    }
+    await call("head", {
+      action: "decideRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      revisionId,
+      decision: "approved",
+      reason: "Approved for test",
+      approvedOreByLine: oreByLine,
+    });
+    await sql(
+      `update finance.request_decisions
+       set decided_at = '2026-10-20T12:00:00Z'
+       where revision_id = (select approved_revision_id from finance.requests where id = $1::uuid)`,
+      [recordId],
+    );
+    const uploadId = await authorizeUpload();
+    const reg = await call("member", {
+      action: "registerPurchase",
+      requestId: requestId(),
+      purchase: {
+        buyerName: "Member Example",
+        supplierName: "Supplier Example",
+        paymentMethod: "team_account",
+        purchaseDate: "2026-10-19",
+        justification: "Workshop material for frame",
+        documentKind: "receipt",
+        requestRecordId: recordId,
+        lines: lineIds.map((row, index) => ({
+          systemId,
+          budgetItemId: index === 0 ? itemId : secondItemId,
+          requestLineId: row.id,
+          description: index === 0 ? "Line one" : "Line two",
+          quantity: "1",
+          amountNok: "100.00",
+        })),
+        uploadIds: [uploadId],
+      },
+    });
+    expect(reg.status).toBe(200);
+    const purchaseId = (reg.body as { id: string }).id;
+    const dated = await sql<{ count: string }>(
+      `select count(*)::text as count
+       from finance.exception_reviews
+       where kind = 'dated_before_approval'
+         and purchase_id = $1::uuid`,
+      [purchaseId],
+    );
+    expect(Number(dated[0]?.count ?? "0")).toBe(1);
+  });
 });
 
 describe("FIN-07 A05 closure and void hooks", () => {
