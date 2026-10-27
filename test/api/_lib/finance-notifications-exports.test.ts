@@ -769,6 +769,37 @@ describe("FIN-10-A03 and FIN-10-A04 export", () => {
 });
 
 describe("FIN-10-A05 cleanup and reconciliation", () => {
+  it("does not register a purchase if actual upload cleanup wins after evidence was read", async () => {
+    await seedSeason();
+    await sql("insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id) values ('purchase:2026', 2026, 1, $1::uuid)", [operatorId]);
+    const authorized = await call({ token: "requester", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { id: uploadId, stagingKey } = authorized.body as { id: string; stagingKey: string };
+    await putMemoryPdf(storage, stagingKey);
+    expect((await call({ token: "requester", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } })).status).toBe(200);
+    await sql("update finance.uploads set expires_at = clock_timestamp() - interval '3 days' where id = $1::uuid", [uploadId]);
+    let cleaned = false;
+    wireServices({ storage: {
+      ...storage,
+      readObject: async (key, size) => {
+        const bytes = Uint8Array.from(await storage.readObject(key, size));
+        const result = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId } });
+        cleaned = result.status === 200;
+        return bytes;
+      },
+    } });
+    const systemId = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'"))[0].id;
+    const itemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-001'"))[0].id;
+    const purchase = {
+      buyerName: "Buyer", supplierName: "Supplier", paymentMethod: "team_account", purchaseDate: "2026-10-01", justification: "Workshop frame supplies", documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Frame tube", quantity: "1", amountNok: "10.00" }], uploadIds: [uploadId],
+    };
+    const registered = await call({ token: "requester", body: { action: "registerPurchase", requestId: crypto.randomUUID(), purchase } });
+    expect(cleaned).toBe(true);
+    expect(registered.status).toBe(400);
+    expect((await sql<{ status: string }>("select status from finance.uploads where id = $1::uuid", [uploadId]))[0].status).toBe("abandoned");
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.purchases"))[0].count).toBe("0");
+  });
+
   it("records unknown final writes before I/O and safely re-sweeps a late write", async () => {
     await seedSeason();
     const authorized = await call({ token: "requester", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });

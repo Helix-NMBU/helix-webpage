@@ -224,6 +224,63 @@ async function validatePurchase(db: CvDatabase, caller: PurchaseCaller, purchase
   return { purchase: normalized.purchase, warnings: related.warnings, thresholdOre: context.thresholdOre, missingApproval };
 }
 
+async function verifyPurchaseEvidence(
+  db: CvDatabase,
+  storage: FinanceObjectStorage | null,
+  memberId: string,
+  uploadIds: string[],
+): Promise<void> {
+  if (!storage) throw new FinanceError(503, "Finance file storage is unavailable. Try again.");
+  const missing = () => new FinanceError(400, "A supporting file is missing or changed. Upload it again.", [
+    { field: "files", message: "A supporting file is missing or changed. Upload it again." },
+  ]);
+  const unavailable = () => new FinanceError(503, "Finance file storage is unavailable. Try again.");
+  if (new Set(uploadIds.map((id) => id.toLowerCase())).size !== uploadIds.length) throw missing();
+  const rows = (await db.query<{
+    id: string;
+    member_id: string;
+    status: string;
+    final_key: string | null;
+    byte_size: string;
+    content_sha256: string | null;
+    purchase_id: string | null;
+  }>(
+    `select id::text as id, member_id::text as member_id, status, final_key,
+            byte_size::text as byte_size, content_sha256, purchase_id::text as purchase_id
+     from finance.uploads where id = any($1::uuid[])`,
+    [uploadIds],
+  )).rows;
+  if (rows.length !== uploadIds.length) throw missing();
+  for (const row of rows) {
+    if (row.member_id !== memberId) throw new FinanceError(403, "Supporting file belongs to another member.");
+    if (row.purchase_id) throw new FinanceError(409, "Supporting file is already linked to a purchase.");
+    const size = Number(row.byte_size);
+    const key = row.final_key;
+    if (row.status !== "finalized" || !key || !isOwnedFinalKey(memberId, key)
+      || !key.startsWith(`${memberId}/final/${row.id}/`)
+      || !Number.isSafeInteger(size) || size < 1 || size > MAX_PURCHASE_FILE_BYTES
+      || !row.content_sha256 || !/^[0-9a-f]{64}$/.test(row.content_sha256)) throw missing();
+    let existence: "present" | "absent" | "uncertain";
+    try {
+      existence = await storage.exists(key);
+    } catch {
+      throw unavailable();
+    }
+    if (existence === "absent") throw missing();
+    if (existence !== "present") throw unavailable();
+    let bytes: Uint8Array;
+    try {
+      bytes = await storage.readObject(key, size);
+    } catch {
+      // A missing object and an unavailable provider need different recovery paths.
+      const after = await storage.exists(key).catch(() => "uncertain" as const);
+      if (after === "absent") throw missing();
+      throw unavailable();
+    }
+    if (bytes.byteLength !== size || createHash("sha256").update(bytes).digest("hex") !== row.content_sha256) throw missing();
+  }
+}
+
 export async function performPurchaseMutation(
   db: CvDatabase,
   storage: FinanceObjectStorage | null,
@@ -360,6 +417,14 @@ export async function performPurchaseMutation(
     const replayed = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
     if (replayed) return replayed;
     const validated = await validatePurchase(db, caller, parsePurchase(body));
+    try {
+      await verifyPurchaseEvidence(db, storage, caller.memberId, validated.purchase.uploadIds);
+    } catch (error) {
+      // Another identical request may have committed while evidence was checked.
+      const concurrentReplay = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
+      if (concurrentReplay) return concurrentReplay;
+      throw error;
+    }
     const payload = serializePurchaseBody(validated.purchase, {
       registrationYear: registrationYear(),
       thresholdOre: validated.thresholdOre,

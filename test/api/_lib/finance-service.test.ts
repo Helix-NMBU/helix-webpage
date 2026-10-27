@@ -696,6 +696,100 @@ describe("finance access API", () => {
     expect((await call({ token: "stranger", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId: (otherAuth.body as { id?: string }).id } })).status).toBe(403);
   });
 
+  it("rejects missing or changed finalized evidence and distinguishes storage outages", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    await sql("insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id) values ('purchase:2026', 2026, 40, $1::uuid)", [operatorId]);
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const uploadId = await authorizeAndFinalizeUpload(8);
+    const finalKey = (await sql<{ final_key: string }>("select final_key from finance.uploads where id = $1::uuid", [uploadId])).rows[0].final_key;
+    const original = financeStorage.objects.get(finalKey)?.slice() as Uint8Array;
+    const purchase = {
+      buyerName: "Buyer Example", supplierName: "Supplier Example", paymentMethod: "team_account", purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame", documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Tube stock", quantity: "1", amountNok: "10.00" }], uploadIds: [uploadId],
+    };
+    const request = { action: "registerPurchase", requestId: crypto.randomUUID(), purchase };
+    const before = { purchases: await tableCount("purchases"), documents: await tableCount("documents"), audits: await tableCount("audit_log"), version: await viewVersion() };
+    financeStorage.objects.delete(finalKey);
+    expect((await call({ token: "member", body: request })).status).toBe(400);
+    financeStorage.objects.set(finalKey, new Uint8Array([37, 80, 68, 70, 45, 57, 57, 57]));
+    expect((await call({ token: "member", body: request })).status).toBe(400);
+    financeStorage.objects.set(finalKey, original);
+    const unavailable = vi.spyOn(financeStorage, "exists").mockResolvedValue("uncertain");
+    try {
+      expect((await call({ token: "member", body: request })).status).toBe(503);
+    } finally { unavailable.mockRestore(); }
+    const failedRead = vi.spyOn(financeStorage, "readObject").mockRejectedValue(new Error("provider unavailable"));
+    try {
+      expect((await call({ token: "member", body: request })).status).toBe(503);
+    } finally { failedRead.mockRestore(); }
+    expect((await call({ token: "admin", body: { ...request, requestId: crypto.randomUUID() } })).status).toBe(403);
+    expect({ purchases: await tableCount("purchases"), documents: await tableCount("documents"), audits: await tableCount("audit_log"), version: await viewVersion() }).toEqual(before);
+    const saved = await call({ token: "member", body: request });
+    expect(saved.status).toBe(200);
+    financeStorage.objects.delete(finalKey);
+    const replay = await call({ token: "member", body: request });
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject(saved.body as Record<string, unknown>);
+    expect(await tableCount("purchases")).toBe(before.purchases + 1);
+  });
+
+  it("does not save when upload cleanup wins after the storage check", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    await sql("insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id) values ('purchase:2026', 2026, 40, $1::uuid)", [operatorId]);
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const uploadId = await authorizeAndFinalizeUpload(8);
+    const purchase = {
+      buyerName: "Buyer Example", supplierName: "Supplier Example", paymentMethod: "team_account", purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame", documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Tube stock", quantity: "1", amountNok: "10.00" }], uploadIds: [uploadId],
+    };
+    const read = financeStorage.readObject.bind(financeStorage);
+    const spy = vi.spyOn(financeStorage, "readObject").mockImplementationOnce(async (key, size) => {
+      const bytes = await read(key, size);
+      await sql("update finance.uploads set status = 'abandoned' where id = $1::uuid", [uploadId]);
+      return bytes;
+    });
+    const before = await tableCount("purchases");
+    try {
+      expect((await call({ token: "member", body: { action: "registerPurchase", requestId: crypto.randomUUID(), purchase } })).status).toBe(400);
+      expect(await tableCount("purchases")).toBe(before);
+    } finally { spy.mockRestore(); }
+  });
+
+  it("replays an identical concurrent registration if evidence disappears during the later check", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    await sql("insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id) values ('purchase:2026', 2026, 40, $1::uuid)", [operatorId]);
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const uploadId = await authorizeAndFinalizeUpload(8);
+    const purchase = {
+      buyerName: "Buyer Example", supplierName: "Supplier Example", paymentMethod: "team_account", purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame", documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Tube stock", quantity: "1", amountNok: "10.00" }], uploadIds: [uploadId],
+    };
+    const request = { action: "registerPurchase", requestId: crypto.randomUUID(), purchase };
+    let first: Awaited<ReturnType<typeof call>> | undefined;
+    const spy = vi.spyOn(financeStorage, "exists").mockImplementationOnce(async (key) => {
+      first = await call({ token: "member", body: request });
+      financeStorage.objects.delete(key);
+      return "absent";
+    });
+    const before = await tableCount("purchases");
+    try {
+      const replay = await call({ token: "member", body: request });
+      expect(first?.status).toBe(200);
+      expect(replay.status).toBe(200);
+      expect(replay.body).toMatchObject(first?.body as Record<string, unknown>);
+      expect(await tableCount("purchases")).toBe(before + 1);
+    } finally { spy.mockRestore(); }
+  });
+
   it("finalizes the verified byte snapshot and safely retries a lost response", async () => {
     const { putMemoryPdf } = await import("./finance-storage-mock.js");
     const auth = await call({ token: "member", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
