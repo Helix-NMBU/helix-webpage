@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@libs/components/ui/select";
 import { Textarea } from "@libs/components/ui/textarea";
+import { canChangeTaskStatus } from "./task-status-permissions";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import {
   STATUS_LABELS,
@@ -151,10 +152,7 @@ export function TaskStatusControl({
   const saving = useRef(false);
   const id = useId();
   const notify = useNotify();
-  const allowed =
-    workspace.canManage ||
-    workspace.taskLeadCategories.includes(task.category) ||
-    task.assigneeIds.includes(workspace.viewerId);
+  const allowed = canChangeTaskStatus(task, workspace);
   const disabled = busy || pending || !allowed;
   async function save(status: TaskStatus, blockedReason = "") {
     if (disabled || saving.current) return;

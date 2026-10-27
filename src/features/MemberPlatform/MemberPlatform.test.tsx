@@ -585,6 +585,28 @@ describe("internal member platform", () => {
     expect(container.querySelector('[aria-label="Task board"]')).not.toBeNull();
     expect(router.state.location.search).toContain('view=board');
   });
+  it("saves a dragged project task as Blocked only after receiving a reason",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    await open('/projects/00000000-0000-4000-8000-000000000100?view=board&milestone=00000000-0000-4000-8000-000000000040');
+    const card=container.querySelector('[role="article"][aria-label="Verify dimensions"]')!;
+    const target=container.querySelector('[aria-label="Blocked column"]')!;
+    const transfer={effectAllowed:'',dropEffect:'',setData:vi.fn()};
+    for(const [element,type] of [[card,'dragstart'],[target,'dragover'],[target,'drop'],[card,'dragend']] as const){
+      const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(event,'dataTransfer',{value:transfer});
+      await act(async()=>element.dispatchEvent(event));
+    }
+    expect(projectTasks.mutate).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Move task to Blocked');
+    const field=document.querySelector<HTMLTextAreaElement>('[aria-label="Blocked reason"]')!;
+    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(field,'Waiting for measurements');field.dispatchEvent(new Event('input',{bubbles:true}));});
+    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Verify dimensions')!;task.status='blocked';task.blockedReason='Waiting for measurements';task.revision++;
+    projectTasks.mutate.mockResolvedValue(next);
+    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+    expect(projectTasks.mutate).toHaveBeenCalledWith({action:'set_status',id:task.id,expectedRevision:1,status:'blocked',blockedReason:'Waiting for measurements'});
+    expect(container.querySelector('[aria-label="Blocked column"] [role="article"]')?.textContent).toContain('Waiting for measurements');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
+  });
   it("restores project Board filters and clears them while retaining the layout",async()=>{
     session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());
     await open('/projects/00000000-0000-4000-8000-000000000100?view=board&status=blocked&priority=low');

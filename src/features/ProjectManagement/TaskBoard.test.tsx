@@ -6,8 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TaskBoard } from "./TaskBoard";
 import { initialLocalWorkspace } from "./local-repository";
 import type { ProjectWorkspace } from "./types";
+const notify = vi.hoisted(() => vi.fn());
 vi.mock("../MemberPlatform/MemberNotifications", () => ({
-  useNotify: () => vi.fn(),
+  useNotify: () => notify,
 }));
 describe("shared task board", () => {
   let root: Root, container: HTMLDivElement;
@@ -19,7 +20,8 @@ describe("shared task board", () => {
     document.body.append(container);
     root = createRoot(container);
     onOpen.mockClear();
-    onSave.mockClear();
+    onSave.mockReset().mockResolvedValue(true);
+    notify.mockReset();
   });
   afterEach(async () => {
     await act(async () => root.unmount());
@@ -34,6 +36,7 @@ describe("shared task board", () => {
       "deadline",
       "priority",
     ],
+    busy = false,
   ) {
     await act(async () =>
       root.render(
@@ -41,7 +44,7 @@ describe("shared task board", () => {
           <TaskBoard
             tasks={data.tasks}
             workspace={data}
-            busy={false}
+            busy={busy}
             columns={columns}
             onOpen={onOpen}
             onStatusChange={onSave}
@@ -50,6 +53,208 @@ describe("shared task board", () => {
       ),
     );
   }
+  async function dragEvent(
+    target: Element,
+    type: string,
+    transfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() },
+  ) {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: transfer });
+    await act(async () => target.dispatchEvent(event));
+    return event;
+  }
+  async function dropTask(title: string, status: string) {
+    const card = container.querySelector(
+      `[role="article"][aria-label="${title}"]`,
+    )!;
+    const target = container.querySelector(`[aria-label="${status} column"]`)!;
+    const transfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
+    await dragEvent(card, "dragstart", transfer);
+    await dragEvent(target, "dragover", transfer);
+    await dragEvent(target, "drop", transfer);
+    await dragEvent(card, "dragend", transfer);
+  }
+  async function fillReason(value: string) {
+    const field = document.querySelector<HTMLTextAreaElement>(
+      '[aria-label="Blocked reason"]',
+    )!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value",
+      )!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  async function submitReason() {
+    await act(async () =>
+      document
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+    );
+  }
+  it("changes a dragged task through the existing save and clears its previous blocking reason", async () => {
+    const data = initialLocalWorkspace();
+    await render(data);
+    const task = data.tasks.find((task) => task.status === "blocked")!;
+    expect(
+      container
+        .querySelector(`[role="article"][aria-label="${task.title}"]`)
+        ?.getAttribute("draggable"),
+    ).toBe("true");
+    await dropTask(task.title, "In progress");
+    expect(onSave).toHaveBeenCalledWith(task, "in_progress", "");
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+  it("requires a blocked reason, retains it after failure and saves only after confirmation", async () => {
+    const data = initialLocalWorkspace();
+    await render(data);
+    const task = data.tasks.find(
+      (task) => task.kind === "task" && task.status === "todo",
+    )!;
+    onSave.mockResolvedValueOnce(false);
+    await dropTask(task.title, "Blocked");
+    expect(onSave).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "Move task to Blocked",
+    );
+    expect(
+      container.querySelector(
+        `[aria-label="Todo column"] [role="article"][aria-label="${task.title}"]`,
+      ),
+    ).not.toBeNull();
+    await fillReason("  ");
+    await submitReason();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalled();
+    await fillReason("  Waiting for material approval  ");
+    await submitReason();
+    expect(onSave).toHaveBeenLastCalledWith(
+      task,
+      "blocked",
+      "Waiting for material approval",
+    );
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        '[aria-label="Blocked reason"]',
+      )?.value,
+    ).toBe("  Waiting for material approval  ");
+    await submitReason();
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("cancels a blocked drop without changing the task", async () => {
+    const data = initialLocalWorkspace();
+    await render(data);
+    const task = data.tasks.find(
+      (task) => task.kind === "task" && task.status === "todo",
+    )!;
+    await dropTask(task.title, "Blocked");
+    await act(async () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="dialog"] button',
+        ),
+      ]
+        .find((button) => button.textContent === "Cancel")!
+        .click(),
+    );
+    expect(onSave).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("ignores external drops, same-column moves and drops into legacy Cancelled", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(
+      (task) => task.kind === "task" && task.status === "todo",
+    )!;
+    data.tasks.find(
+      (task) => task.kind === "task" && task.status === "done",
+    )!.status = "cancelled";
+    await render(data);
+    await dragEvent(
+      container.querySelector('[aria-label="Done column"]')!,
+      "drop",
+    );
+    await dropTask(task.title, "Todo");
+    await dropTask(task.title, "Cancelled");
+    expect(onSave).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("prevents duplicate drops while saving and suppresses clicks after a drag", async () => {
+    let finish!: (value: boolean) => void;
+    onSave.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const data = initialLocalWorkspace();
+    await render(data);
+    const task = data.tasks.find(
+      (task) => task.kind === "task" && task.status === "todo",
+    )!;
+    await dropTask(task.title, "Done");
+    await dropTask(task.title, "In progress");
+    expect(onSave).toHaveBeenCalledTimes(1);
+    await act(async () =>
+      [
+        ...container.querySelectorAll<HTMLButtonElement>(
+          '[role="article"] button',
+        ),
+      ]
+        .find((button) => button.textContent === task.title)!
+        .click(),
+    );
+    expect(onOpen).not.toHaveBeenCalled();
+    await act(async () => finish(false));
+    expect(
+      container.querySelector(
+        `[aria-label="Todo column"] [role="article"][aria-label="${task.title}"]`,
+      ),
+    ).not.toBeNull();
+  });
+  it("does not start drags for readers or while loading", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find((task) => task.kind === "task")!;
+    data.canManage = false;
+    data.taskLeadCategories = [];
+    data.viewerId = "reader";
+    await render(data);
+    expect(
+      container
+        .querySelector(`[role="article"][aria-label="${task.title}"]`)
+        ?.getAttribute("draggable"),
+    ).toBe("false");
+    await dropTask(task.title, "Backlog");
+    expect(onSave).not.toHaveBeenCalled();
+    data.canManage = true;
+    await render(data, [], true);
+    await dropTask(task.title, "Backlog");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+  it("keeps the reason when an unexpected save throws", async () => {
+    const data = initialLocalWorkspace();
+    await render(data);
+    const task = data.tasks.find(
+      (task) => task.kind === "task" && task.status === "todo",
+    )!;
+    onSave.mockRejectedValueOnce(new Error("Connection lost"));
+    await dropTask(task.title, "Blocked");
+    await fillReason("Supplier is delayed");
+    await submitReason();
+    expect(
+      document.querySelector<HTMLTextAreaElement>(
+        '[aria-label="Blocked reason"]',
+      )?.value,
+    ).toBe("Supplier is delayed");
+    expect(notify).toHaveBeenCalledWith(
+      "Could not change status",
+      "Connection lost",
+      expect.objectContaining({ variant: "error" }),
+    );
+  });
   it("shows five status columns, empty columns and task cards without milestone cards", async () => {
     const data = initialLocalWorkspace();
     await render(data);
