@@ -232,7 +232,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
           // Hide all previously granted controls and invalidate in-flight page
           // reads until the server returns a fresh capability snapshot.
           generation.current += 1;
-          setState(emptyState);
+          setState((value) => ({ ...emptyState, expanded: value.expanded }));
           await revalidate();
         } else fail(error);
         return;
