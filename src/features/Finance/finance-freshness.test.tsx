@@ -378,4 +378,68 @@ describe("FIN-09-A06 freshness", () => {
     expect(session.viewVersion).toBe(8);
     expect(session.expanded).toEqual({});
   });
+
+  it("refreshes cached overview and budgets after payment, void, and review updates", async () => {
+    const actions = [
+      "markInvoicePaid",
+      "unmarkInvoicePaid",
+      "markRefundPaid",
+      "unmarkRefundPaid",
+      "voidPurchase",
+      "reviewException",
+    ] as const;
+    api.budgets.mockResolvedValue({
+      viewVersion: 1,
+      seasonCode: "S27",
+      budgetStatus: "approved",
+      approvedOn: "2026-10-01",
+      revision: 1,
+      departments: [],
+      choices: { systems: [], items: [] },
+    });
+    function Harness() {
+      const [page, setPage] = useState<"overview" | "budgets">("overview");
+      return (
+        <FinanceAccessProvider userId="member">
+          <Probe />
+          <button type="button" onClick={() => setPage("budgets")}>Open budgets</button>
+          <FinanceEntry page={page} />
+        </FinanceAccessProvider>
+      );
+    }
+    const router = createMemoryRouter([{ path: "/finance", element: <Harness /> }], { initialEntries: ["/finance"] });
+    await act(async () => root.render(<RouterProvider router={router} />));
+    expect(container.textContent).toContain("Actual 19.00");
+    await act(async () => { await session.loadPage("budgets"); });
+    expect(session.budgets?.viewVersion).toBe(1);
+    expect(session.budgets?.approvedOn).toBe("2026-10-01");
+    const overviewCalls = api.overview.mock.calls.length;
+    let version = 1;
+    for (const action of actions) {
+      version += 1;
+      api.overview.mockResolvedValue(overview(`${version}.00`, version));
+      api.mutate.mockResolvedValueOnce({ ok: true, viewVersion: version, warnings: [], errors: [] });
+      await act(async () => { await session.mutate({ action, requestId: `request-${action}` }); });
+      expect(session.viewVersion).toBe(version);
+      expect(api.mutate.mock.calls.at(-1)?.[0]).toMatchObject({ action });
+    }
+    expect(api.overview.mock.calls.length).toBe(overviewCalls + actions.length);
+    expect(container.textContent).toContain("Actual 7.00");
+    expect(session.budgets?.viewVersion).toBe(1);
+    expect(router.state.location.pathname).toBe("/finance");
+    api.budgets.mockResolvedValue({
+      viewVersion: version,
+      seasonCode: "S27",
+      budgetStatus: "approved",
+      approvedOn: "2026-10-27",
+      revision: version,
+      departments: [],
+      choices: { systems: [], items: [] },
+    });
+    await act(async () => button("Open budgets")!.click());
+    expect(container.textContent).toContain("Approved 2026-10-27");
+    expect(container.textContent).not.toContain("Approved 2026-10-01");
+    expect(session.budgets?.viewVersion).toBe(version);
+    expect(session.overview?.viewVersion).toBe(version);
+  });
 });
