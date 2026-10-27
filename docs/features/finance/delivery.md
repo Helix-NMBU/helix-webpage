@@ -1,4 +1,14 @@
-# Finance access and contracts
+# Finance delivery record
+
+## Current integration status, 27 October 2026
+
+The approved specification is [HELIX-34](https://linear.app/helixnmbu/issue/HELIX-34/finance-member-budgets-purchases-approvals-and-financing), revision 1. The local integration branch is `feat/finance`, based on `main` at `f755d3105a4eec76c2ae54db1040a557e11fc26e`. PR #113 is merged locally at `b844ad2`; it has not been merged on GitHub. The work remains local, with no deployment or production database changes.
+
+FIN-04 was integrated at `437885e4`, with spending warnings at `b01913f`. Finance access, processing, notification, recovery and request-form fixes are integrated in subsequent commits. Partial approvals, candidate-file recovery, snapshot consistency and access-review fixes are integrated. Independent standards and specification review identified issues that were corrected and rechecked. Configured-service acceptance and generated-function verification remain open as detailed in `verification.md`. Ticket closure and release evidence must follow verified acceptance, not this interim record.
+
+An isolated PostgreSQL instance on loopback is used with synthetic data for multi-connection tests. The opt-in test creates and drops a randomly named test database; it rejects non-loopback endpoints. The earlier validation figures below describe older slices and are historical.
+
+## Historical access and contracts record
 
 ## Scope
 
@@ -28,8 +38,8 @@ Ordinary members receive public budget fields. An earmark's purpose and amount a
 
 Grants are not edited in the product UI and a member cannot grant themselves.
 
-- `finance.set_member_grant(operator, member, profile, active, reason)` grants or revokes one profile and writes an audit row. The operator must be an active platform administrator in `identity.member_roles`. A member still cannot grant or revoke their own profile.
-- `scripts/finance-grants.mjs` parses the same request. Without `--apply` it prints a dry run, states the administrator requirement, and does not connect. `--apply` calls the function with `DATABASE_URL`. The database check still rejects an operator who is not an active platform administrator.
+- `finance.set_member_grant(operator, member, profile, active, reason)` grants or revokes one profile and writes an audit row. The trusted operator must verify the administrator identity and account status; the database function checks the administrator role in `identity.member_roles` but does not independently verify account status. A member still cannot grant or revoke their own profile.
+- `scripts/finance-grants.mjs` parses the same request. Without `--apply` it prints a dry run, states the administrator requirement, and does not connect. `--apply` calls the function with `DATABASE_URL`. The database check rejects an operator without the administrator role; it does not independently verify account status.
 - `finance.configure_current_season`, `finance.configure_approval_threshold`, and `finance.configure_annual_reference_start` are the same kind of operator path.
 - The annual reference function stores the next unused value. It does not create a purchase and it does not return a formatted production reference. A later value cannot move backward or reuse an issued number.
 - The approval threshold is a positive integer number of ore. A later registration compares an amount as strictly greater than that stored value, with no tolerance.

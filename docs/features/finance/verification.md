@@ -2,6 +2,20 @@
 
 Finance is available from the member shell. Overview, Purchases, and Budgets load for every verified active member. Financing loads only for an active business, finance, or head profile. Signed-out visitors, banned sessions, partner-only identities, and unrelated identities are denied. A replaced Google account is denied even when the member id still exists.
 
+## Finance integration evidence, 27 October 2026
+
+FIN-04 import, purchase processing, approvals, notifications, recovery and the PR #113 overview and scenarios are integrated locally on `feat/finance`. Unit and database tests use synthetic data. Six opt-in multi-connection tests run against an isolated loopback PostgreSQL database with an in-memory object store; they cover idempotent retries, approval and void races, import concurrency, upload finalization and cleanup, and purchase quotas. The test database is created and dropped by the test. Scenario consistency is also tested with injected interleavings in PGlite; it depends on Finance mutations incrementing the view version transactionally.
+
+The serial Vitest run passed 1,287 tests (six opt-in PostgreSQL tests skipped), followed by three passing deployment guards. All three typechecks and lint passed.
+
+Browser inspection covered the real local member shell and, separately, synthetic finance-role fixtures for the import preview, partial approval, role navigation and a narrow viewport. These fixtures do not establish a complete provider-backed workflow.
+
+The configured-service acceptance gates remain open: isolated Neon object storage and upload CORS, actual 10 MiB boundary behavior, and mail delivery to authorized allowlisted test recipients have not been verified. A Vite build checks 11 source functions but does not generate `.vercel/output/functions`, so generated deployment functions remain unchecked. No hosted database migration, production send, or deployment was performed. The trusted database operator must verify an administrator's identity and account status before changing grants; the grant function checks the administrator role but does not independently check account status.
+
+## Historical access-slice evidence
+
+The following evidence describes the earlier access slice; statements about unavailable later mutations and the absence of browser inspection reflect that slice only.
+
 ## Local evidence
 
 - Injected-identity API tests cover a signed-out caller, a banned session, an unrelated identity, a replaced account, an ordinary member, a platform administrator with no finance profile, business, finance, and head grants, and a revoked grant.

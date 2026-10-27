@@ -1,6 +1,6 @@
 # Finance notifications, exports, and recovery
 
-Finance notifications, purchase exports, and upload cleanup are explicit member actions. They reuse the existing server mail switches and the private finance bucket. There is no Gmail mailbox connection, no standing schedule, and no extra hosting service. `api/finance.ts` remains the only finance function.
+Finance business events trigger notification delivery when configured. Authorized members can also run delivery, purchase exports, and upload cleanup from Finance tools. They reuse the existing server mail switches and the private finance bucket. There is no Gmail mailbox connection, no standing schedule, and no extra hosting service. `api/finance.ts` remains the only finance function.
 
 Migration `db/migrations/017_finance_notifications_exports.sql` adds delivery attempts, export object metadata, and upload commit state. It does not change earlier migrations. Dispatch, export, download, and cleanup do not bump `finance.view_versions`, because they do not change a budget, purchase, request, or financing view.
 
@@ -29,9 +29,9 @@ Statuses are `pending`, `sent`, `failed`, and `uncertain`.
 - A known local failure before the provider is called is `failed`. `delivery_disabled` and `recipient_not_allowlisted` do not use one of the five attempts, so a later dispatch can still deliver that row after mail is enabled or the recipient is allowlisted. `recipient_inactive`, `recipient_email_missing`, and `compose_failed` do use an attempt.
 - A provider error or an unknown result is `uncertain`.
 - `uncertain` is not claimed again. Reconcile it as `sent`, `not_sent`, or `still_unknown`. Reconcile is refused while the latest attempt is still `claimed` and less than five minutes old, so it cannot overwrite a send that is still in progress. After five minutes, or after that attempt has been recorded, reconcile proceeds. `sent` stays sent and is not sent again. `not_sent` becomes `failed` and a later explicit delivery may claim it. `still_unknown` stays `uncertain`.
-- Each row allows at most 5 attempts that reached the provider or failed for a recipient or composition reason. A disabled mail switch or a recipient outside the local allowlist does not consume an attempt. One delivery action claims at most 25 rows and does not loop.
+- Each row allows at most 5 attempts that reached the provider or failed for a recipient or composition reason. A disabled mail switch or a recipient outside the local allowlist does not consume an attempt. A delivery batch claims at most 25 rows. Automatic event dispatch processes bounded batches, and Finance tools can retry eligible rows.
 
-Finance tools in the purchase register run one delivery batch. The head of finance receives a submitted request. The requester receives a decision. Active finance and head profiles receive a registration. Business does not. Registration text includes the reference, lines, amounts, current budget status, approval warnings, and a sign-in path. It does not include a file link.
+Business mutations dispatch their notification event after saving. An interrupted dispatch can leave rows pending; Finance tools in the purchase register provide recovery. The head of finance receives a submitted request. The requester receives a decision. Active finance and head profiles receive a registration. Business does not. Registration text includes the reference, lines, amounts, current budget status, approval warnings, and a sign-in path. It does not include a file link.
 
 `scripts/finance-recovery.mjs` only prints this bound and the reconcile-before-retry rule. It does not open a database connection. Apply delivery, cleanup, and reconciliation from Finance tools while signed in with a finance or head profile.
 
@@ -45,7 +45,7 @@ The public budget read does not list documents or export objects.
 
 ## Upload cleanup
 
-Cleanup deletes only an expired upload that the member owns, that is not linked to a purchase, and whose storage key is not saved on a document.
+A durable candidate ledger records final-object attempts so Finance tools can reconcile and clean up interrupted uploads. Cleanup deletes only an expired upload that the member owns, that is not linked to a purchase, and whose storage key is not saved on a document.
 
 - A pending upload with no final key can be removed after `expires_at`.
 - A finalized upload waits until 24 hours after `expires_at`.
