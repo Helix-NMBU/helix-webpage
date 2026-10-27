@@ -57,6 +57,7 @@ import {
 import { WorkspaceRequestError } from "./repository";
 import type { WorkspaceDirectory } from "./types";
 import { monthDate } from "./DirectoryComponents";
+import { departmentPath } from "./types";
 
 function DepartmentSettings({
   home,
@@ -66,10 +67,9 @@ function DepartmentSettings({
 }: {
   home: DepartmentHome;
   busy: boolean;
-  onSave: (change: DepartmentHomeChange) => Promise<void>;
+  onSave: (change: DepartmentHomeChange) => Promise<boolean>;
   onClose: () => void;
 }) {
-  const [description, setDescription] = useState(home.description);
   const [folder, setFolder] = useState(home.driveFolderUrl ?? "");
   const notify = useNotify();
   async function submit(event: FormEvent) {
@@ -81,7 +81,7 @@ function DepartmentSettings({
         action: "save_department_home",
         departmentId: home.departmentId,
         expectedRevision: home.revision,
-        description,
+        description: home.description,
         driveFolderUrl,
       });
     } catch (error) {
@@ -105,22 +105,11 @@ function DepartmentSettings({
         <DialogHeader>
           <DialogTitle>Department settings</DialogTitle>
           <DialogDescription>
-            Add a description and the department’s shared Google Drive folder.
+            Manage the department’s shared Google Drive folder.
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-5" onSubmit={(event) => void submit(event)}>
           <fieldset disabled={busy} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="department-description">Description</Label>
-              <Textarea
-                autoFocus
-                id="department-description"
-                rows={4}
-                maxLength={2000}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="department-drive-folder">
                 Shared Google Drive folder
@@ -215,6 +204,8 @@ export function DepartmentWorkspace({
   const [home, setHome] = useState<DepartmentHome | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [descriptionEditing, setDescriptionEditing] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const repository = useRef<Promise<DepartmentHomeRepository> | null>(null);
   const generation = useRef(0);
@@ -222,8 +213,7 @@ export function DepartmentWorkspace({
   const saving = useRef(false);
   const [params, setParams] = useSearchParams();
   const selected = params.get("tab");
-  const tab =
-    selected === "documents" || selected === "members" ? selected : "overview";
+  const tab = selected === "documents" || selected === "members" ? selected : "overview";
   const notify = useNotify();
   const navigate = useNavigate();
   const DepartmentIcon = getDepartmentIcon(department.name);
@@ -233,6 +223,10 @@ export function DepartmentWorkspace({
   const projects = data.projects.filter((project) =>
     project.departments.includes(department.name),
   );
+  const taskCount = projects.reduce((total, project) => total + project.total, 0);
+  useEffect(() => {
+    if (!descriptionEditing) setDescriptionDraft(home?.description ?? "");
+  }, [descriptionEditing, home?.description]);
   const getRepository = useCallback(
     () => (repository.current ??= departmentHomeRepository()),
     [],
@@ -281,21 +275,22 @@ export function DepartmentWorkspace({
     else next.set("tab", value);
     setParams(next);
   }
-  async function save(change: DepartmentHomeChange) {
-    if (saving.current) return;
+  async function save(change: DepartmentHomeChange): Promise<boolean> {
+    if (saving.current) return false;
     saving.current = true;
     setBusy(true);
     const current = ++generation.current;
     try {
       const next = await (await getRepository()).save(change);
-      if (!alive.current || generation.current !== current) return;
+      if (!alive.current || generation.current !== current) return false;
       setHome(next);
       setEditing(false);
       notify(
-        "Department settings saved",
-        "The description and shared Drive folder have been updated.",
+        "Department updated",
+        "Department details have been saved.",
         { variant: "success", href: null },
       );
+      return true;
     } catch (error) {
       if (alive.current) {
         notify(
@@ -316,6 +311,7 @@ export function DepartmentWorkspace({
           });
         }
       }
+      return false;
     } finally {
       saving.current = false;
       if (alive.current) {
@@ -338,7 +334,7 @@ export function DepartmentWorkspace({
             value="overview"
             className="rounded-full border bg-muted/40 px-4 py-2 data-[state=active]:bg-muted data-[state=active]:text-foreground"
           >
-            Overview
+            Home
           </TabsTrigger>
           <TabsTrigger
             value="documents"
@@ -354,7 +350,7 @@ export function DepartmentWorkspace({
           </TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="mt-7">
-          <div className="mx-auto grid max-w-6xl gap-10 px-1 py-2 md:grid-cols-[minmax(0,1fr)_13rem] md:gap-12 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
             <div className="min-w-0 space-y-10">
               <div className="space-y-5">
                 <div className="flex items-center gap-4">
@@ -365,15 +361,69 @@ export function DepartmentWorkspace({
                     {department.name}
                   </h1>
                 </div>
-                {home?.description ? (
+                {descriptionEditing && home?.canEdit ? (
+                  <div className="max-w-3xl space-y-2">
+                    <Textarea
+                      autoFocus
+                      aria-label="Department description"
+                      rows={3}
+                      maxLength={2000}
+                      value={descriptionDraft}
+                      disabled={busy}
+                      onChange={(event) => setDescriptionDraft(event.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={busy || descriptionDraft.trim() === home.description}
+                        onClick={() => {
+                          const driveFolderUrl = home.driveFolderUrl;
+                          void save({
+                            action: "save_department_home",
+                            departmentId: home.departmentId,
+                            expectedRevision: home.revision,
+                            description: descriptionDraft,
+                            driveFolderUrl,
+                          }).then((saved) => {
+                            if (saved) setDescriptionEditing(false);
+                          });
+                        }}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => {
+                          setDescriptionDraft(home.description);
+                          setDescriptionEditing(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : home?.description ? (
+                  home.canEdit ? (
+                    <button
+                      type="button"
+                      className="max-w-3xl whitespace-pre-wrap text-left text-sm leading-relaxed text-muted-foreground hover:text-foreground"
+                      aria-label="Edit department description"
+                      onClick={() => setDescriptionEditing(true)}
+                    >
+                      {home.description}
+                    </button>
+                  ) : (
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                     {home.description}
                   </p>
+                  )
                 ) : home?.canEdit ? (
                   <button
                     type="button"
                     className="text-sm text-muted-foreground hover:text-foreground"
-                    onClick={() => setEditing(true)}
+                    onClick={() => setDescriptionEditing(true)}
                   >
                     Add a description…
                   </button>
@@ -450,6 +500,7 @@ export function DepartmentWorkspace({
                   members={data.members}
                   assignmentRole="lead"
                   showNames
+                  showNamesAtAllSizes
                 />
               </div>
               <nav aria-label="Department quick links" className="space-y-1">
@@ -457,7 +508,7 @@ export function DepartmentWorkspace({
                   Go to
                 </h2>
                 <Button
-                  className="w-full justify-start gap-2 px-0 font-normal"
+                  className="w-full justify-start gap-2 px-2 font-normal"
                   variant="ghost"
                   onClick={() => selectTab("documents")}
                 >
@@ -465,7 +516,7 @@ export function DepartmentWorkspace({
                   Documents
                 </Button>
                 <Button
-                  className="w-full justify-start gap-2 px-0 font-normal"
+                  className="w-full justify-start gap-2 px-2 font-normal"
                   variant="ghost"
                   onClick={() => selectTab("members")}
                 >
@@ -473,12 +524,10 @@ export function DepartmentWorkspace({
                   Members
                 </Button>
                 <Button
-                  className="w-full justify-start gap-2 px-0 font-normal"
+                  className="w-full justify-start gap-2 px-2 font-normal"
                   variant="ghost"
                   onClick={() =>
-                    navigate(
-                      `/projects?department=${encodeURIComponent(department.id)}`,
-                    )
+                    navigate(`${departmentPath(department.name)}/projects`)
                   }
                 >
                   <IconCube aria-hidden="true" className="size-4" />
@@ -487,14 +536,25 @@ export function DepartmentWorkspace({
                     {projects.length}
                   </span>
                 </Button>
+                <Button
+                  className="w-full justify-start gap-2 px-2 font-normal"
+                  variant="ghost"
+                  onClick={() => navigate(`${departmentPath(department.name)}/tasks`)}
+                >
+                  <IconUserSquare aria-hidden="true" className="size-4" />
+                  Tasks
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {taskCount}
+                  </span>
+                </Button>
                 {home?.canEdit && (
                   <Button
-                    className="w-full justify-start gap-2 px-0 font-normal"
+                    className="w-full justify-start gap-2 px-2 font-normal"
                     variant="ghost"
                     onClick={() => setEditing(true)}
                   >
                     <IconSettings aria-hidden="true" className="size-4" />
-                    Department settings
+                    Settings
                   </Button>
                 )}
               </nav>

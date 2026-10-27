@@ -301,7 +301,7 @@ export function PersonalTasks({
       {options.view !== "board" && (
         <p className="mt-3 text-xs text-muted-foreground">
           Select a status icon to update a task for all its assignees.
-          Department Leads create and assign work in Project Management.
+          Department Leads create and assign tasks within projects.
         </p>
       )}
     </section>

@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { IconChevronDown, IconDiamonds, IconPlus } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
+import { Checkbox } from "@libs/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@libs/components/ui/collapsible";
-import { AssigneeAvatars } from "../ProjectManagement/TaskAssignees";
+import { AssigneeAvatars, AssigneePicker } from "../ProjectManagement/TaskAssignees";
 import { ProgressRing } from "../ProjectManagement/ProgressRing";
 import { ProgressChart } from "../ProjectManagement/OverviewProgress";
 import {
@@ -15,6 +17,10 @@ import {
 } from "../ProjectManagement/MilestoneTableControls";
 import {
   CATEGORY_LABELS,
+  ORGANIZATION_DEPARTMENTS,
+  TASK_CATEGORIES,
+  TASK_PRIORITIES,
+  type ProjectInput,
   type ProjectWorkspace,
   type Task,
 } from "../ProjectManagement/types";
@@ -25,6 +31,10 @@ import {
 } from "../ProjectManagement/progress";
 import { getDepartmentIcon } from "./department-icons";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
+import { ProjectDatePicker } from "../ProjectManagement/ProjectDatePicker";
+import { PriorityGlyph } from "../ProjectManagement/PriorityGlyph";
+import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 function Widget({
   title,
   children,
@@ -61,6 +71,12 @@ function Property({ label, children }: { label: string; children: ReactNode }) {
     </div>
   );
 }
+function DepartmentNames({ names }: { names: string[] }) {
+  return names.length ? <span className="inline-flex flex-col gap-2">{names.map(name => {
+    const Icon = getDepartmentIcon(name);
+    return <span key={name} className="inline-flex items-center gap-2 text-sm"><Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />{name}</span>;
+  })}</span> : <span className="text-muted-foreground">No department</span>;
+}
 export function ProjectSidebar({
   project,
   directory,
@@ -69,7 +85,7 @@ export function ProjectSidebar({
   milestones,
   selectedMilestone,
   onSelect,
-  onEdit,
+  onSaveProject,
   canEdit,
   canCreate,
   busy,
@@ -82,12 +98,15 @@ export function ProjectSidebar({
   milestones: Task[];
   selectedMilestone: string | null;
   onSelect: (id: string) => void;
-  onEdit: () => void;
+  onSaveProject: (changes: Partial<ProjectInput>) => Promise<boolean>;
   canEdit: boolean;
   canCreate: boolean;
   busy: boolean;
   onCreateMilestone: () => void;
 }) {
+  const [leadDraft, setLeadDraft] = useState(project.leadIds ?? []);
+  const [departmentDraft, setDepartmentDraft] = useState(project.departments);
+  const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const counts = progressCounts(tasks);
   const progress = workspace
     ? summarize(tasks)
@@ -132,39 +151,19 @@ export function ProjectSidebar({
     >
       <Widget
         title="Properties"
-        action={
-          canEdit ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              disabled={busy}
-              onClick={onEdit}
-            >
-              Edit
-            </Button>
-          ) : undefined
-        }
       >
         <dl className="space-y-5">
           <Property label="Status">
             <span title="Based on project task status">{status}</span>
           </Property>
           <Property label="Priority">
-            <span className="inline-flex items-center gap-2">
-              <PriorityIndicator priority={project.priority ?? "normal"} />
-              {project.priority === "normal" || !project.priority
-                ? "Medium"
-                : project.priority[0].toUpperCase() + project.priority.slice(1)}
-            </span>
+            {canEdit ? <Select value={project.priority ?? "normal"} disabled={busy} onValueChange={value => void onSaveProject({ priority: value as ProjectInput["priority"] })}>
+              <SelectTrigger aria-label="Project priority" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted [&>svg:last-child]:opacity-0"><PriorityGlyph priority={project.priority ?? "normal"} /><SelectValue /></SelectTrigger>
+              <SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority === "normal" ? "Medium" : priority[0].toUpperCase() + priority.slice(1)}</SelectItem>)}</SelectContent>
+            </Select> : <span className="inline-flex items-center gap-2"><PriorityIndicator priority={project.priority ?? "normal"} />{project.priority === "normal" || !project.priority ? "Medium" : project.priority[0].toUpperCase() + project.priority.slice(1)}</span>}
           </Property>
           <Property label="Leads">
-            <AssigneeAvatars
-              assigneeIds={project.leadIds ?? []}
-              members={directory.members}
-              assignmentRole="lead"
-              showNames
-            />
+            {canEdit ? <AssigneePicker id={`project-leads-${project.id}`} assignmentRole="lead" members={directory.members} value={leadDraft} onChange={setLeadDraft} disabled={busy} inline inlineShowNames triggerLabel="Edit project leads" onOpenChange={() => setLeadDraft(project.leadIds ?? [])} onCommit={leadIds => onSaveProject({ leadIds })} /> : <AssigneeAvatars assigneeIds={project.leadIds ?? []} members={directory.members} assignmentRole="lead" showNames />}
           </Property>
           <Property label="Assignees">
             <AssigneeAvatars
@@ -173,34 +172,21 @@ export function ProjectSidebar({
               showNames
             />
           </Property>
-          <Property label="Start date">{project.startDate ? <TargetDate deadline={project.startDate} /> : <span className="text-muted-foreground">Not set</span>}</Property>
+          <Property label="Start date">
+            {canEdit ? <ProjectDatePicker id={`project-start-${project.id}`} label="Set start date" value={project.startDate ?? null} minimum="2000-01-01" maximum={project.deadline ?? "2100-12-31"} disabled={busy} inline onChange={startDate => void onSaveProject({ startDate })} /> : project.startDate ? <TargetDate deadline={project.startDate} /> : <span className="text-muted-foreground">Not set</span>}
+          </Property>
           <Property label="Target date">
-            <TargetDate deadline={project.deadline} />
+            {canEdit ? <ProjectDatePicker id={`project-deadline-${project.id}`} label="Set target date" value={project.deadline} minimum={project.startDate ?? "2000-01-01"} disabled={busy} inline onChange={deadline => void onSaveProject({ deadline })} /> : <TargetDate deadline={project.deadline} />}
           </Property>
           <Property label="Department">
-            <div className="space-y-2">
-              {project.departments.length ? (
-                project.departments.map((name) => {
-                  const Icon = getDepartmentIcon(name);
-                  return (
-                    <span
-                      key={name}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <Icon
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                      />
-                      {name}
-                    </span>
-                  );
-                })
-              ) : (
-                <span className="text-muted-foreground">No department</span>
-              )}
-            </div>
+            {canEdit ? <Popover open={departmentsOpen} onOpenChange={open => { setDepartmentsOpen(open); setDepartmentDraft(project.departments); }}>
+              <PopoverTrigger asChild><Button type="button" variant="ghost" className="-mx-2 h-auto justify-start px-2 py-1 font-normal" disabled={busy} aria-label="Edit project departments"><DepartmentNames names={project.departments} /></Button></PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-2"><div role="group" aria-label="Project departments">{ORGANIZATION_DEPARTMENTS.map(name => <label key={name} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"><Checkbox checked={departmentDraft.includes(name)} disabled={busy} aria-label={name} onCheckedChange={checked => setDepartmentDraft(values => checked === true ? [...values, name] : values.filter(value => value !== name))} />{name}</label>)}</div><div className="mt-2 flex justify-end gap-2 border-t pt-2"><Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setDepartmentDraft(project.departments); setDepartmentsOpen(false); }}>Cancel</Button><Button type="button" size="sm" disabled={busy} onClick={() => void onSaveProject({ departments: departmentDraft }).then(saved => { if (saved) setDepartmentsOpen(false); })}>Save</Button></div></PopoverContent>
+            </Popover> : <DepartmentNames names={project.departments} />}
           </Property>
-          <Property label="Area">{CATEGORY_LABELS[project.category]}</Property>
+          <Property label="Area">
+            {canEdit ? <Select value={project.category} disabled={busy} onValueChange={value => void onSaveProject({ category: value as ProjectInput["category"] })}><SelectTrigger aria-label="Project area" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted [&>svg:last-child]:opacity-0"><SelectValue /></SelectTrigger><SelectContent>{TASK_CATEGORIES.map(category => <SelectItem key={category} value={category}>{CATEGORY_LABELS[category]}</SelectItem>)}</SelectContent></Select> : CATEGORY_LABELS[project.category]}
+          </Property>
           <Property label="Season">{project.season}</Property>
         </dl>
       </Widget>

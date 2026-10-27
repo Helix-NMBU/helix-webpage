@@ -35,6 +35,14 @@
       "destination": "/api/gmail?action=disconnect"
     },
     {
+      "source": "/api/reject",
+      "destination": "/api/website?action=reject"
+    },
+    {
+      "source": "/api/apply-confirmation",
+      "destination": "/api/website?action=confirmation"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -95,7 +95,7 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   const project = workspace.projects.find(item => item.id === task.projectId);
   const milestone = workspace.tasks.find(item => item.kind === "milestone" && item.id === task.milestoneId && item.projectId === task.projectId);
   const members = directory?.data?.members ?? workspace.members;
-  const backTo = typeof from === "string" && /^\/(?:tasks(?:\?|$)|projects(?:\/|\?|$)|project-management\/)/.test(from) ? from : "/tasks";
+  const backTo = typeof from === "string" && /^\/(?:tasks(?:\?|$)|projects(?:\/|\?|$)|season-overview(?:\?|$)|project-management\/)/.test(from) ? from : "/tasks";
   return <section aria-label="Task details" aria-busy={busy} className="flex min-h-0 min-w-0 flex-1 flex-col">
     <div className="flex shrink-0 items-center justify-between gap-3 pb-4">
       <Button variant="ghost" size="sm" asChild><Link to={backTo}>Back</Link></Button>

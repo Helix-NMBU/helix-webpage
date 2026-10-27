@@ -18,11 +18,17 @@ describe("project creation composer", () => {
     container=document.createElement("div");document.body.append(container);root=createRoot(container);
   });
   afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();});
-  async function open(categories: TaskCategory[] = [...TASK_CATEGORIES]) {
+  async function open(categories: TaskCategory[] = [...TASK_CATEGORIES], assignDefaultLead = true) {
     await act(async()=>root.render(<ProjectComposer category="production" members={[{id:"00000000-0000-4000-8000-000000000001",name:"Alex Example"}]} taskLeadCategories={categories} busy={false} onSave={save} onClose={close} />));
+    if (assignDefaultLead) await assignLead();
   }
   const button=(text:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===text)!;
   async function click(text:string){await act(async()=>button(text).click());}
+  async function assignLead(){
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Choose project leads"]')!.click());
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Assign Alex Example as lead"]')!.click());
+    await click("Done");
+  }
   async function field(id:string,value:string){
     const input=document.getElementById(id) as HTMLInputElement|HTMLTextAreaElement;
     const prototype=input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
@@ -69,6 +75,10 @@ describe("project creation composer", () => {
     await open([]);await field("project-name","Manager project");await click("Milestones");
     expect(button("Add milestone")).toBeUndefined();expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Department Lead");
     await click("Create project");expect(save).toHaveBeenCalledWith(expect.objectContaining({project:expect.objectContaining({name:"Manager project"})}));
+  });
+  it("requires a project Lead before saving",async()=>{
+    await open([...TASK_CATEGORIES],false);await field("project-name","Unassigned project");await click("Create project");
+    expect(save).not.toHaveBeenCalled();expect(notify.mock.calls.at(-1)?.[1]).toContain("at least one project Lead");
   });
   it("preserves milestones when changing area and requires a scoped Lead or their removal",async()=>{
     await open(["production"]);await field("project-name","Build");await click("Milestones");await milestone("Review");

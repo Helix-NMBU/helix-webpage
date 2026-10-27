@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -18,7 +17,7 @@ import {
 } from "./DirectoryComponents";
 import { useEffect } from "react";
 import { IconCheck, IconCube } from "@tabler/icons-react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
 import { ORGANIZATION_DEPARTMENTS } from "../ProjectManagement/types";
 import { getDepartmentIcon } from "./department-icons";
@@ -28,7 +27,14 @@ export function DepartmentsPage() {
   const workspace = useWorkspace();
   const data = workspace?.data;
   const { departmentId } = useParams();
-  const [search, setSearch] = useState("");
+  const [params, setParams] = useSearchParams();
+  const search = params.get("search") ?? "";
+  function setSearch(value: string) {
+    const next = new URLSearchParams(params);
+    if (value) next.set("search", value);
+    else next.delete("search");
+    setParams(next, { replace: true });
+  }
   const navigate = useNavigate();
   const notify = useNotify();
   const selected = data?.departments.find(

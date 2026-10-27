@@ -1,6 +1,6 @@
 /** Only established internal task/project routes are safe sign-in destinations. */
 export function isProjectTaskPath(path: string): boolean {
-  return /^\/(?:tasks|project-management(?:\/(?:overview|production|partnership-deliverables|marketing|operations))?)$/.test(path.split(/[?#]/)[0]);
+  return /^\/(?:tasks|season-overview|project-management(?:\/(?:overview|production|partnership-deliverables|marketing|operations))?)$/.test(path.split(/[?#]/)[0]);
 }
 
 /** Workspace slugs are generated from the fixed department catalog. */

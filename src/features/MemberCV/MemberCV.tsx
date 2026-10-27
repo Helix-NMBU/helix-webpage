@@ -46,6 +46,7 @@ import {
   languageLevels,
 } from "./profile-inputs";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
+import { avatarFallbackStyle } from "@libs/components/avatar-colors";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import {
   Dialog,
@@ -1021,7 +1022,7 @@ export default function MemberCV() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
                 <Avatar className="size-16 rounded-xl">
-                  <AvatarFallback className="rounded-xl text-xl">
+                  <AvatarFallback className="rounded-xl text-xl" style={avatarFallbackStyle(account?.email || envelope?.identity.email || memberName)}>
                     {accountInitials(memberName)}
                   </AvatarFallback>
                 </Avatar>

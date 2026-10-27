@@ -23,7 +23,7 @@ import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { departmentPath } from "../Workspace/types";
-import { CATEGORY_LABELS, type TaskCategory } from "../ProjectManagement/types";
+import { MemberPagePreferences } from "./MemberPagePreferences";
 
 function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
@@ -39,13 +39,15 @@ function Workspace({ children }: { children?: ReactNode }) {
   const projectDetail = /^\/projects\/[^/]+\/?$/.test(location.pathname);
   const bounded = projectDetail || taskDetail || taskBoard;
   const page = previewPage(location.pathname);
-  const projectManagement = location.pathname.startsWith("/project-management");
-  const projectSection = location.pathname.split("/")[2];
+  const seasonOverview = location.pathname === "/season-overview" || location.pathname.startsWith("/project-management");
   const directory = useWorkspace()?.data;
-  const department = directory?.departments.find(item => departmentPath(item.name) === location.pathname);
+  const department = directory?.departments.find(item => location.pathname === departmentPath(item.name) || location.pathname.startsWith(`${departmentPath(item.name)}/`));
   const project = directory?.projects.find(item => location.pathname === `/projects/${item.id}`);
-  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department?.name ?? "Departments" : null;
-  const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Season Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
+  const departmentSubpage = department && location.pathname !== departmentPath(department.name)
+    ? location.pathname.slice(departmentPath(department.name).length + 1).split("/")[0]
+    : null;
+  const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department ? departmentSubpage ? departmentSubpage[0].toUpperCase() + departmentSubpage.slice(1) : department.name : "Departments" : null;
+  const pageTitle = workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
@@ -85,6 +87,7 @@ function Workspace({ children }: { children?: ReactNode }) {
 
   return (
     <>
+      <MemberPagePreferences />
       <AppSidebar
         onNavigate={go}
         onSignOut={() => void logout()}
@@ -115,10 +118,10 @@ function Workspace({ children }: { children?: ReactNode }) {
                       </BreadcrumbLink>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator className="hidden md:block" />
-                    {(page || projectManagement) && (
+                    {page && (
                       <>
                         <BreadcrumbItem className="hidden lg:block">
-                          {projectManagement ? "Project Management" : page?.team.title}
+                          {page.team.title}
                         </BreadcrumbItem>
                         <BreadcrumbSeparator className="hidden lg:block" />
                       </>
@@ -131,6 +134,14 @@ function Workspace({ children }: { children?: ReactNode }) {
                       <BreadcrumbItem>
                         <BreadcrumbLink asChild>
                           <button type="button" disabled={disabled} onClick={event => go("/projects", event.currentTarget)}>Projects</button>
+                        </BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>}
+                    {department && departmentSubpage && <>
+                      <BreadcrumbItem>
+                        <BreadcrumbLink asChild>
+                          <button type="button" disabled={disabled} onClick={event => go(departmentPath(department.name), event.currentTarget)}>{department.name}</button>
                         </BreadcrumbLink>
                       </BreadcrumbItem>
                       <BreadcrumbSeparator />

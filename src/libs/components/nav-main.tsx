@@ -39,9 +39,11 @@ export function NavMain({
     icon?: TablerIcon;
     isActive?: boolean;
     badge?: number;
+    subMenuClassName?: string;
     items?: {
       title: string;
       url: string;
+      icon?: TablerIcon;
     }[];
   }[];
 }) {
@@ -71,30 +73,41 @@ export function NavMain({
           </SidebarMenuItem>
         ) : (
           <Collapsible
-            key={item.title}
+            key={`${item.title}:${item.isActive ? "active" : "idle"}`}
             asChild
             defaultOpen={item.isActive}
             className="group/collapsible"
           >
             <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
+              <div className="flex min-w-0 items-center rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                 <SidebarMenuButton
                   tooltip={item.title}
                   disabled={disabled}
-                  onClick={() => {
-                    if (state === "collapsed") setOpen(true);
-                  }}
+                  className="min-w-0 flex-1 bg-transparent hover:bg-transparent hover:text-sidebar-accent-foreground active:bg-transparent"
+                  onClick={(event) => onNavigate(item.url, event.currentTarget)}
                 >
                   {item.icon && <item.icon aria-hidden="true" />}
                   <span>{item.title}</span>
-                  <IconChevronRight
-                    aria-hidden="true"
-                    className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
-                  />
                 </SidebarMenuButton>
-              </CollapsibleTrigger>
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Toggle ${item.title} pages`}
+                    disabled={disabled}
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md bg-transparent text-sidebar-foreground/70 outline-none transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:pointer-events-none disabled:opacity-50"
+                    onClick={() => {
+                      if (state === "collapsed") setOpen(true);
+                    }}
+                  >
+                    <IconChevronRight
+                      aria-hidden="true"
+                      className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                    />
+                  </button>
+                </CollapsibleTrigger>
+              </div>
               <CollapsibleContent>
-                <SidebarMenuSub>
+                <SidebarMenuSub className={`mr-0 pr-0 ${item.subMenuClassName ?? ""}`}>
                   {item.items?.map((subItem) => (
                     <SidebarMenuSubItem key={subItem.title}>
                       <SidebarMenuSubButton
@@ -118,6 +131,7 @@ export function NavMain({
                               onNavigate(subItem.url, event.currentTarget);
                           }}
                         >
+                          {subItem.icon && <subItem.icon aria-hidden="true" />}
                           <span>{subItem.title}</span>
                         </a>
                       </SidebarMenuSubButton>

@@ -24,7 +24,7 @@ async function render(positions = [position], loading = false) {
   await act(async () => root.render(<PositionsPanel positions={positions} loading={loading} onSave={save} onDelete={remove} />));
 }
 async function click(text: string) {
-  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === text);
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === text || item.getAttribute("aria-label")?.startsWith(`${text} `));
   expect(button, `Button ${text}`).toBeDefined();
   await act(async () => button!.click());
 }
@@ -83,6 +83,32 @@ describe("recruitment position editor", () => {
     expect(document.querySelector('[data-slot="dialog-close"]')).toBeNull();
     await act(async () => finish());
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("saves visibility directly from the position entry and blocks duplicate changes", async () => {
+    let finish!: () => void;
+    save.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    await render();
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!;
+    expect(toggle.getAttribute("aria-label")).toBe("Show Open Application on the website");
+    await act(async () => { toggle.click(); toggle.click(); });
+    expect(save).toHaveBeenCalledExactlyOnceWith({ ...position, visible: false });
+    expect(toggle.disabled).toBe(true);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => finish());
+    await render([{ ...position, visible: false }]);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    expect(toggle.disabled).toBe(false);
+  });
+  it("keeps the saved visibility and permits retry after a failed row change", async () => {
+    save.mockRejectedValueOnce(new Error("Unavailable"));
+    await render();
+    const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!;
+    await act(async () => toggle.click());
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(toggle.disabled).toBe(false);
+    expect(container.textContent).not.toContain("Unavailable");
+    await act(async () => toggle.click());
+    expect(save).toHaveBeenCalledTimes(2);
   });
   it("requires deletion confirmation, retains failed selections, and prevents duplicate deletion", async () => {
     remove.mockRejectedValueOnce(new Error("Unavailable"));

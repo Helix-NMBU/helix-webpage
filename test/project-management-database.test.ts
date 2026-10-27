@@ -61,6 +61,8 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/017_workspace_directory.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/020_project_start_dates.sql", import.meta.url), "utf8"));
+    await db.query("update project_management.projects set lead_ids=array[$1::uuid]", [manager.userId]);
+    await db.exec(readFileSync(new URL("../db/migrations/023_project_requires_lead.sql", import.meta.url), "utf8"));
 
   }, 60000);
   afterAll(async () => { await db?.close(); });
@@ -94,7 +96,7 @@ describe("project management database and authorization", () => {
   });
   it("persists department-spanning subprojects and complete tasks in the shared season", async () => {
     await service().mutate("verified", { action: "save_project", id: id(20), expectedRevision: 0,
-      project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical & Production", "Electronics"], deadline: "2026-12-10" } });
+      project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical & Production", "Electronics"], leadIds: [manager.userId], deadline: "2026-12-10" } });
     await save(960, task({ kind: "milestone", projectId: id(20) }));
     const workspace = await save(10, task({ projectId: id(20), milestoneId: id(960) }));
     expect(workspace.projects.find(item => item.id === id(20))).toMatchObject({ id: id(20), departments: ["Mechanical & Production", "Electronics"], deadline: "2026-12-10", revision: 1 });
@@ -134,7 +136,7 @@ describe("project management database and authorization", () => {
   it("enforces same-category project references and preserves the category of a populated project", async () => {
     await expect(save(12, task({ category: "marketing", projectId: id(20) }))).rejects.toMatchObject({ status: 400 });
     await expect(service().mutate("verified", { action: "save_project", id: id(20), expectedRevision: 1,
-      project: { name: "Suspension", description: "", category: "operations", departments: [], deadline: null } })).rejects.toMatchObject({ status: 400 });
+      project: { name: "Suspension", description: "", category: "operations", departments: [], leadIds: [manager.userId], deadline: null } })).rejects.toMatchObject({ status: 400 });
     await expect(save(12, task({ projectId: id(999) }))).rejects.toMatchObject({ status: 400 });
     await expect(save(12, task({ assigneeIds: [outsider.userId] }))).rejects.toMatchObject({ status: 400 });
   });
@@ -212,7 +214,7 @@ describe("project management database and authorization", () => {
     await save(210, task({ kind: "milestone" }));
     await save(211, task({ milestoneId: id(210) }));
     await service().mutate("verified", { action: "save_project", id: id(21), expectedRevision: 0,
-      project: { name: "Second project", description: "", category: "production", departments: [], deadline: null } });
+      project: { name: "Second project", description: "", category: "production", departments: [], leadIds: [manager.userId], deadline: null } });
     for (const patch of [
       { projectId: null }, { milestoneId: null }, { milestoneId: id(9999) }, { milestoneId: id(202) }, { milestoneId: id(212) },
       { milestoneId: id(200), projectId: id(21) }, { milestoneId: id(200), projectId: null },

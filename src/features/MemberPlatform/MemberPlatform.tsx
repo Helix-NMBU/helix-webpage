@@ -30,6 +30,7 @@ import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
 import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
 import { MembersPage, ProjectsPage, DepartmentsPage } from "../Workspace/WorkspacePages";
+import { DepartmentProjectsPage, DepartmentTasksPage } from "../Workspace/DepartmentViews";
 import ProjectManagement from "../ProjectManagement/ProjectManagement";
 import TaskDetailPage from "../ProjectManagement/TaskDetail";
 import {
@@ -154,12 +155,15 @@ export default function MemberPlatform() {
                 <Route path="projects" element={<ProjectsPage />} />
                 <Route path="projects/:projectId" element={<ProjectsPage />} />
                 <Route path="departments" element={<DepartmentsPage />} />
+                <Route path="departments/:departmentId/tasks" element={<DepartmentTasksPage />} />
+                <Route path="departments/:departmentId/projects" element={<DepartmentProjectsPage />} />
                 <Route path="departments/:departmentId" element={<DepartmentsPage />} />
                 <Route path="tasks" element={<ProjectManagement personal />} />
                 <Route path="tasks/:taskId" element={<TaskDetailPage />} />
-                <Route path="project-management" element={<Navigate to="/project-management/overview" replace />} />
-                <Route path="project-management/:section" element={<ProjectManagement />} />
-                <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/project-management/production" />} />
+                <Route path="season-overview" element={<ProjectManagement />} />
+                <Route path="project-management" element={<LegacyMemberRedirect to="/season-overview" />} />
+                <Route path="project-management/*" element={<LegacyMemberRedirect to="/season-overview" />} />
+                <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/departments/mechanical-and-production" />} />
                 <Route path="settings" element={<MemberSettingsPreview />} />
                 <Route path="teams/:teamId/:sectionId" element={<LegacyMemberRedirect to="/departments" />} />
               </Route>

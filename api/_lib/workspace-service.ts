@@ -173,6 +173,11 @@ export function createWorkspaceServices(deps: {
             409,
             "This department already has a Lead. Remove their Lead assignment before assigning another member.",
           );
+        if (/projects_require_lead/.test(message))
+          throw new MemberCvError(
+            400,
+            "Assign at least one project Lead before saving.",
+          );
         if (/conflict/.test(message) || code === "23505")
           throw new MemberCvError(
             409,

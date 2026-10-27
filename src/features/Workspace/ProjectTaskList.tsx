@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { TaskBoard } from "../ProjectManagement/TaskBoard";
 import { ProjectTaskViewMenu } from "./ProjectTaskViewMenu";
@@ -43,6 +42,9 @@ export function ProjectTaskList({
   onOpen,
   onStatusChange,
   onCreate,
+  boardKind = "milestone",
+  heading,
+  filterLabelText = "Milestone:",
 }: {
   tasks: Task[];
   allTasks: Task[];
@@ -58,15 +60,22 @@ export function ProjectTaskList({
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
   onCreate: () => void;
+  boardKind?: "task" | "milestone";
+  heading?: string;
+  filterLabelText?: string;
 }) {
-  const [search, setSearch] = useState("");
-  const [collapsed, setCollapsed] = useState<string[]>([]);
   const [params, setParams] = useSearchParams();
+  const search = params.get("search") ?? "";
+  const collapsed = (params.get("collapsed") ?? "").split(",").filter(Boolean);
   const options = projectTaskView(params);
   const board = options.view === "board";
-  const allRecords = board ? milestones : allTasks;
+  const allRecords = board
+    ? boardKind === "task"
+      ? allTasks
+      : milestones
+    : allTasks;
   const records = board
-    ? milestones.filter(
+    ? allRecords.filter(
         (item) => !selectedMilestone || item.id === selectedMilestone,
       )
     : tasks;
@@ -74,7 +83,7 @@ export function ProjectTaskList({
     records,
     options,
     search,
-    board ? "milestone" : "task",
+    board ? boardKind : "task",
   );
   function change(key: string, value: string) {
     setParams(
@@ -87,8 +96,25 @@ export function ProjectTaskList({
       { replace: true },
     );
   }
+  function setSearch(value: string) {
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      if (value) next.set("search", value);
+      else next.delete("search");
+      return next;
+    }, { replace: true });
+  }
+  function toggleCollapsed(status: string) {
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      const values = (current.get("collapsed") ?? "").split(",").filter(Boolean);
+      const updated = values.includes(status) ? values.filter(value => value !== status) : [...values, status];
+      if (updated.length) next.set("collapsed", updated.join(","));
+      else next.delete("collapsed");
+      return next;
+    }, { replace: true });
+  }
   function resetFilters() {
-    setSearch("");
     setParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -100,6 +126,8 @@ export function ProjectTaskList({
           "cancelled",
           "sort",
           "group",
+          "search",
+          "collapsed",
         ])
           next.delete(key);
         return next;
@@ -108,7 +136,6 @@ export function ProjectTaskList({
     );
   }
   function clearAll() {
-    setSearch("");
     setParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -120,6 +147,8 @@ export function ProjectTaskList({
           "completed",
           "cancelled",
           "sort",
+          "search",
+          "collapsed",
         ])
           next.delete(key);
         return next;
@@ -139,7 +168,7 @@ export function ProjectTaskList({
     >
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-medium">
-          {board ? "Milestones" : "Tasks"}{" "}
+          {heading ?? (board && boardKind === "milestone" ? "Milestones" : "Tasks")}{" "}
           <span className="ml-1 text-sm text-muted-foreground">
             {allRecords.length}
           </span>
@@ -174,7 +203,7 @@ export function ProjectTaskList({
       />
       {filterLabel && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Milestone:</span>
+          <span className="text-muted-foreground">{filterLabelText}</span>
           <span>{filterLabel}</span>
           <Button variant="ghost" size="sm" onClick={onClear}>
             Clear milestone filter
@@ -184,11 +213,11 @@ export function ProjectTaskList({
       {options.view === "board" ? (
         <TaskBoard
           tasks={visible}
-          kind="milestone"
+          kind={boardKind}
           workspace={workspace}
           busy={busy}
           columns={["priority", "milestone", "assignee", "deadline"]}
-          onOpen={onOpenMilestone}
+          onOpen={boardKind === "milestone" ? onOpenMilestone : onOpen}
           onStatusChange={onStatusChange}
         />
       ) : (
@@ -214,13 +243,7 @@ export function ProjectTaskList({
                     type="button"
                     aria-expanded={open}
                     className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm font-medium"
-                    onClick={() =>
-                      setCollapsed((values) =>
-                        values.includes(status)
-                          ? values.filter((value) => value !== status)
-                          : [...values, status],
-                      )
-                    }
+                    onClick={() => toggleCollapsed(status)}
                   >
                     <IconChevronDown
                       aria-hidden="true"

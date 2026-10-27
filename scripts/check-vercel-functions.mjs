@@ -1,7 +1,8 @@
 import { access, readdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
-const limit = 12;
+const hobbyCap = 12;
+const target = hobbyCap - 1;
 const apiRoot = resolve('api');
 const generatedFunctionsRoot = resolve('.vercel/output/functions');
 const supportedExtensions = new Set(['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.py', '.go', '.rs']);
@@ -25,11 +26,11 @@ async function visit(directory) {
 
 await visit(apiRoot);
 routes.sort();
-console.log(`Vercel Serverless Functions: ${routes.length} / ${limit}`);
+console.log(`Vercel Serverless Functions: ${routes.length} / ${target} (Hobby cap: ${hobbyCap})`);
 for (const route of routes) console.log(`  api/${route}`);
 
-if (routes.length > limit) {
-  console.error(`Function limit exceeded by ${routes.length - limit}. Consolidate API endpoints before deployment.`);
+if (routes.length > target) {
+  console.error(`Function target exceeded by ${routes.length - target}. Keep Hobby deployments below the ${hobbyCap}-function cap.`);
   process.exitCode = 1;
 }
 
@@ -45,13 +46,13 @@ try {
   }
   await visitGenerated(generatedFunctionsRoot);
   generatedFunctions.sort();
-  console.log(`Generated Vercel functions: ${generatedFunctions.length} / ${limit}`);
+  console.log(`Generated Vercel functions: ${generatedFunctions.length} / ${target} (Hobby cap: ${hobbyCap})`);
   if (generatedFunctions.length !== routes.length) {
     console.error(`Generated function count (${generatedFunctions.length}) does not match API route count (${routes.length}).`);
     process.exitCode = 1;
   }
-  if (generatedFunctions.length > limit) {
-    console.error(`Generated function limit exceeded by ${generatedFunctions.length - limit}.`);
+  if (generatedFunctions.length > target) {
+    console.error(`Generated function target exceeded by ${generatedFunctions.length - target}. Keep Hobby deployments below the ${hobbyCap}-function cap.`);
     process.exitCode = 1;
   }
 } catch (error) {

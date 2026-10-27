@@ -27,8 +27,8 @@ export function initialLocalWorkspace(): ProjectWorkspace {
   return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
     departments: fixedDepartmentRecords([{ id: id(300), season: "S27", revision: 1, name: "Mechanical & Production", memberIds: [id(1), id(2)], leadId: id(1) }, { id: id(301), season: "S27", revision: 1, name: "Electronics", memberIds: [id(2)], leadId: id(2) }]),
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
-    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical & Production", "Electronics"], startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 },
-      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: fixedProjectDepartments([name]), startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 })),
+    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical & Production", "Electronics"], leadIds: [id(1)], startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 },
+      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: fixedProjectDepartments([name]), leadIds: [id(1)], startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 })),
     ],
     tasks,
     progressEvents: [

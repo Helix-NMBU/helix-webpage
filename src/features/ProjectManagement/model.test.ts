@@ -4,7 +4,7 @@ import { addDays, osloDate, summarize, taskUrgency, validateProject, validateTas
 
 describe("project progress and deadlines", () => {
   it("validates optional project starts and their order against deadlines", () => {
-    const project = { name:"Build",description:"",category:"production" as const,departments:["Mechanical & Production"],deadline:"2026-12-01" };
+    const project = { name:"Build",description:"",category:"production" as const,departments:["Mechanical & Production"],leadIds:[initialLocalWorkspace().viewerId],deadline:"2026-12-01" };
     expect(validateProject(project).startDate).toBeNull();
     expect(validateProject({...project,startDate:"2026-12-01"}).startDate).toBe("2026-12-01");
     expect(validateProject({...project,startDate:"2026-10-01",deadline:null}).startDate).toBe("2026-10-01");
@@ -37,7 +37,8 @@ describe("project progress and deadlines", () => {
     expect(() => validateTask({ ...base, blockedReason: "" })).toThrow("blocking");
     expect(() => validateTask({ ...base, kind: "milestone", milestoneId: null, deadline: null })).toThrow("deadline");
     expect(() => validateTask({ ...base, category: "partnership-deliverables", partnerName: "" })).toThrow("partner");
-    expect(validateProject({ name: " Shared project ", description: "", departments: ["Mechanical & Production", "Electronics", "Mechanical & Production"], category: "production", deadline: null }).departments).toEqual(["Mechanical & Production", "Electronics"]);
+    expect(validateProject({ name: " Shared project ", description: "", departments: ["Mechanical & Production", "Electronics", "Mechanical & Production"], leadIds: [initialLocalWorkspace().viewerId], category: "production", deadline: null }).departments).toEqual(["Mechanical & Production", "Electronics"]);
+    expect(() => validateProject({ name: "No lead", description: "", departments: [], category: "production", deadline: null })).toThrow("at least one project Lead");
   });
   it("accepts several unique assignees and rejects malformed assignment lists", () => {
     const base = initialLocalWorkspace().tasks[0];

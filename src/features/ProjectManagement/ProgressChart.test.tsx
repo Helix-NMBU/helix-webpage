@@ -7,7 +7,7 @@ import { addDays, osloDate } from "./model";
 import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
 
 const today = osloDate();
-function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null; showDeadlineTail?: boolean; newYearDate?: string | null } = {}) {
+function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null; showDeadlineTail?: boolean; events?: { value: "production-start"; label: string; date: string }[]; visibleEventIds?: string[]; startEventId?: "season-start" | "concept" | "design" | "production-start" | "car-unveiling" | "season-end"; endEventId?: "season-start" | "concept" | "design" | "production-start" | "car-unveiling" | "season-end" } = {}) {
   const workspace = initialLocalWorkspace();
   const container = document.createElement("div");
   container.innerHTML = renderToStaticMarkup(<ProgressChart workspace={workspace} deadline={deadline} compact={false} {...bounds} />);
@@ -72,7 +72,7 @@ describe("deadline progress charts", () => {
     expect(container.querySelector('[data-chart-boundary="start"]')?.textContent).toBe('1 Aug');
     expect(container.querySelector('[data-chart-boundary="end"]')?.textContent).toBe('31 Jul');
   });
-  it("keeps future shading and deadline regions bounded when dates lie outside the window", () => {
+  it("keeps the scope area and deadline regions bounded when dates lie outside the window", () => {
     for (const bounds of [seasonChartRange('S26'),seasonChartRange('S28')]) {
       for (const deadline of ['2025-01-01','2029-01-01']) {
         const container=render(deadline,bounds);
@@ -111,22 +111,24 @@ describe("deadline progress charts", () => {
     expect(container.querySelector('[data-chart-boundary="end"]')?.getAttribute('class')).toContain('text-destructive');
   });
 
-  it.each(['S27','S28'])("marks 1 January at its actual position in %s", season => {
+  it.each(['S27','S28'])("marks Production start at its actual position in %s", season => {
     const bounds=seasonChartRange(season);
-    const newYearDate=`${bounds.endDate.slice(0,4)}-01-01`;
-    const container=render(bounds.endDate,{...bounds,showDeadlineTail:true,newYearDate});
-    const marker=container.querySelector(`[data-progress-new-year="${newYearDate}"]`)!;
-    const expectedX=22+(chartDay(newYearDate)-chartDay(bounds.startDate))/(chartDay(bounds.endDate)-chartDay(bounds.startDate))*(570-22);
+    const productionStartDate=`${bounds.endDate.slice(0,4)}-01-04`;
+    const productionEvent={value:"production-start" as const,label:"Production start",date:productionStartDate};
+    const container=render(bounds.endDate,{...bounds,showDeadlineTail:true,events:[productionEvent],visibleEventIds:[productionEvent.value]});
+    const marker=container.querySelector(`[data-progress-event="${productionEvent.value}"]`)!;
+    const expectedX=22+(chartDay(productionStartDate)-chartDay(bounds.startDate))/(chartDay(bounds.endDate)-chartDay(bounds.startDate))*(570-22);
     expect(Number(marker.querySelector('line')?.getAttribute('x1'))).toBeCloseTo(expectedX);
     expect(marker.querySelector('line')?.getAttribute('x2')).toBe(marker.querySelector('line')?.getAttribute('x1'));
     expect(marker.querySelector('line')?.classList.contains('text-foreground')).toBe(true);
-    expect(marker.querySelector('title')?.textContent).toBe(`New year: 1 Jan ${bounds.endDate.slice(0,4)}`);
-    expect(container.querySelector(`time[datetime="${newYearDate}"]`)?.textContent).toBe('1 Jan');
+    expect(marker.querySelector('title')?.textContent).toBe(`Production start: 4 Jan ${bounds.endDate.slice(0,4)}`);
+    expect(container.querySelector(`time[datetime="${productionStartDate}"]`)?.textContent).toBe('4 Jan');
     expect(container.querySelector('tbody')?.innerHTML).toBe(render(bounds.endDate,{...bounds,showDeadlineTail:true}).querySelector('tbody')?.innerHTML);
   });
-  it("does not add a new year marker to project charts or outside the visible range", () => {
-    expect(render('2027-07-31').querySelector('[data-progress-new-year]')).toBeNull();
-    expect(render('2027-07-31',{...seasonChartRange('S27'),newYearDate:'2028-01-01'}).querySelector('[data-progress-new-year]')).toBeNull();
+  it("does not add season event markers to project charts or outside the visible range", () => {
+    const productionEvent={value:"production-start" as const,label:"Production start",date:"2027-01-04"};
+    expect(render('2027-07-31').querySelector('[data-progress-event]')).toBeNull();
+    expect(render('2027-07-31',{...seasonChartRange('S27'),events:[{...productionEvent,date:'2028-01-04'}],visibleEventIds:[productionEvent.value]}).querySelector('[data-event-label]')).toBeNull();
   });
 
 });

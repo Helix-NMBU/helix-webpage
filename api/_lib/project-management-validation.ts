@@ -49,7 +49,8 @@ function project(value: unknown): ProjectInput {
   const body = object(value);
   if (!Array.isArray(body.departments) || body.departments.length > 10) return invalid("Choose at most 10 departments.");
   if (body.departments.some(name => typeof name !== "string" || !ORGANIZATION_DEPARTMENTS.includes(name.trim() as typeof ORGANIZATION_DEPARTMENTS[number]))) return invalid("Choose departments from the organization list.");
-  if (body.leadIds !== undefined && (!Array.isArray(body.leadIds) || body.leadIds.length > MAX_TASK_ASSIGNEES)) return invalid("Choose up to 20 project Leads.");
+  if (!Array.isArray(body.leadIds) || body.leadIds.length === 0) return invalid("Assign at least one project Lead.");
+  if (body.leadIds.length > MAX_TASK_ASSIGNEES) return invalid("Choose up to 20 project Leads.");
   const startDate = body.startDate === undefined ? undefined : date(body.startDate);
   const deadline = date(body.deadline);
   if (startDate && deadline && startDate > deadline) return invalid("The start date must be on or before the deadline.");

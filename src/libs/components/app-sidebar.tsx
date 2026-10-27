@@ -48,9 +48,9 @@ export function AppSidebar({
       ? [
           {
             title: "Season Overview",
-            url: "/project-management/overview",
+            url: "/season-overview",
             icon: IconLayoutKanban,
-            isActive: location.pathname.startsWith("/project-management"),
+            isActive: location.pathname === "/season-overview",
           },
         ]
       : []),
@@ -66,12 +66,21 @@ export function AppSidebar({
       : []),
     ...(workspace?.departments
       .filter((department) => department.memberIds.includes(workspace.viewerId))
-      .map((department) => ({
-        title: department.name,
-        url: departmentPath(department.name),
-        icon: getDepartmentIcon(department.name),
-        isActive: location.pathname === departmentPath(department.name),
-      })) ?? []),
+      .map((department) => {
+        const url = departmentPath(department.name);
+        return {
+          title: department.name,
+          url,
+          icon: getDepartmentIcon(department.name),
+          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`),
+          subMenuClassName: "border-l-0",
+          items: [
+            { title: "Home", url, icon: IconSmartHome },
+            { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
+            { title: "Projects", url: `${url}/projects`, icon: IconCube },
+          ],
+        };
+      }) ?? []),
   ];
   return (
     <Sidebar collapsible="icon" {...props}>

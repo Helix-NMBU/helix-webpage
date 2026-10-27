@@ -15,6 +15,7 @@ import {
 } from "@libs/components/ui/sidebar";
 import { TooltipProvider } from "@libs/components/ui/tooltip";
 import { accountInitials } from "../MemberPlatform/account";
+import { avatarFallbackStyle } from "@libs/components/avatar-colors";
 import { useMemberTheme, type MemberTheme } from "../MemberPlatform/MemberTheme";
 import type { SponsorContext } from "./types";
 
@@ -42,7 +43,7 @@ function AccountMenu({ context, signingOut, onSignOut }: Pick<ShellProps, "conte
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <SidebarMenuButton size="lg" aria-label="Sponsor account menu" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-          <Avatar className="size-8 rounded-lg"><AvatarFallback className="rounded-lg">{accountInitials(name)}</AvatarFallback></Avatar>
+          <Avatar className="size-8 rounded-lg"><AvatarFallback className="rounded-lg" style={avatarFallbackStyle(context.email)}>{accountInitials(name)}</AvatarFallback></Avatar>
           <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
             <span className="truncate font-medium" title={name}>{name}</span>
             <span className="truncate text-xs">{roleTitles[context.role]}</span>

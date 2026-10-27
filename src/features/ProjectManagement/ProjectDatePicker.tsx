@@ -42,6 +42,7 @@ export function ProjectDatePicker({
   maximum = "2100-12-31",
   disabled = false,
   required = false,
+  inline = false,
 }: {
   id: string;
   label: string;
@@ -51,6 +52,7 @@ export function ProjectDatePicker({
   maximum?: string;
   disabled?: boolean;
   required?: boolean;
+  inline?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const today = osloDate();
@@ -99,10 +101,10 @@ export function ProjectDatePicker({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant={inline ? "ghost" : "outline"}
           disabled={disabled}
           aria-label={label}
-          className="h-8 gap-2 rounded-full bg-muted/40 px-3 font-normal shadow-none"
+          className={inline ? "-mx-2 h-8 gap-2 px-2 font-normal" : "h-8 gap-2 rounded-full bg-muted/40 px-3 font-normal shadow-none"}
         >
           <IconCalendar className="size-3.5 text-muted-foreground" aria-hidden="true" />
           {value ? shortDate.format(dayDate(value)) : label}

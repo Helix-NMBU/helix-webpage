@@ -28,6 +28,7 @@ import {
 } from "@/features/MemberPlatform/MemberTheme";
 import { useMemberAccount } from "@/features/MemberPlatform/MemberAccountContext";
 import { accountInitials } from "@/features/MemberPlatform/account";
+import { avatarFallbackStyle } from "./avatar-colors";
 
 export function NavUser({
   onNavigate,
@@ -56,7 +57,7 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">
+                <AvatarFallback className="rounded-lg" style={avatarFallbackStyle(account?.email || name)}>
                   {initials}
                 </AvatarFallback>
               </Avatar>

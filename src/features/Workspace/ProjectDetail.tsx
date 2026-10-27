@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
+import { Input } from "@libs/components/ui/input";
 import { Skeleton } from "@libs/components/ui/skeleton";
+import { Textarea } from "@libs/components/ui/textarea";
 import {
   Tabs,
   TabsContent,
@@ -24,18 +26,88 @@ import type {
   ProjectMutation,
   ProjectRepository,
   ProjectWorkspace,
+  ProjectInput,
   Task,
   TaskInput,
 } from "../ProjectManagement/types";
 import { STATUS_LABELS } from "../ProjectManagement/types";
-import { ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { TaskComposer } from "../ProjectManagement/TaskComposer";
-import { summarize } from "../ProjectManagement/model";
+import { summarize, validateProject } from "../ProjectManagement/model";
 import { useWorkspace } from "./WorkspaceContext";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
 import { type TaskStatus } from "../ProjectManagement/types";
 import { ProjectTaskList } from "./ProjectTaskList";
 import { ProjectSidebar } from "./ProjectSidebar";
+
+function InlineProjectField({
+  label,
+  value,
+  placeholder,
+  multiline = false,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  multiline?: boolean;
+  disabled: boolean;
+  onSave: (value: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [editing, value]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        disabled={disabled}
+        aria-label={`Edit project ${label.toLowerCase()}`}
+        onClick={() => setEditing(true)}
+      >
+        {value || <span className="text-muted-foreground">{placeholder}</span>}
+      </button>
+    );
+  }
+
+  const Field = multiline ? Textarea : Input;
+  return (
+    <div className="space-y-2">
+      <Field
+        autoFocus
+        aria-label={`Project ${label.toLowerCase()}`}
+        value={draft}
+        maxLength={multiline ? 2000 : 200}
+        rows={multiline ? 3 : undefined}
+        disabled={disabled}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={disabled || (!multiline && !draft.trim()) || draft === value}
+          onClick={() => void onSave(draft).then(saved => { if (saved) setEditing(false); })}
+        >
+          Save
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          onClick={() => { setDraft(value); setEditing(false); }}
+        >
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function ProjectDetail({
   project,
@@ -48,7 +120,6 @@ export function ProjectDetail({
   const [loading, setLoading] = useState(directory.projectAccess);
   const [denied, setDenied] = useState(!directory.projectAccess);
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [composer, setComposer] = useState<TaskInput["kind"] | null>(null);
   const repository = useRef<Promise<ProjectRepository> | null>(null);
   const generation = useRef(0);
@@ -148,6 +219,7 @@ export function ProjectDetail({
   );
   const canCreate = !!workspace?.taskLeadCategories.includes(project.category);
   const canEdit =
+    directory.canAdmin ||
     directory.canManageProjects ||
     directory.departments.some(
       (department) =>
@@ -194,7 +266,6 @@ export function ProjectDetail({
         setWorkspace((value) =>
           value ? { ...value, projects: next.projects } : value,
         );
-        setEditing(false);
       } else {
         const next = await (await getRepository()).mutate(change);
         if (!alive.current || generation.current !== current) return false;
@@ -237,6 +308,25 @@ export function ProjectDetail({
         setBusy(false);
         setLoading(false);
       }
+    }
+  }
+  async function saveProjectProperties(changes: Partial<ProjectInput>) {
+    try {
+      return await save({
+        action: "save_project",
+        id: project.id,
+        expectedRevision: project.revision,
+        project: validateProject({ ...project, ...changes }),
+      });
+    } catch (error) {
+      notify(
+        "Could not save project",
+        error instanceof Error
+          ? error.message
+          : "Check the project details and try again.",
+        { variant: "error", href: null },
+      );
+      return false;
     }
   }
   function openTask(id: string) {
@@ -318,11 +408,11 @@ export function ProjectDetail({
                   className="space-y-6 py-2"
                 >
                   <h2 className="text-2xl font-semibold tracking-tight">
-                    {project.name}
+                    {canEdit ? <InlineProjectField label="name" value={project.name} placeholder="Project name" disabled={busy} onSave={value => saveProjectProperties({ name: value })} /> : project.name}
                   </h2>
-                  <p className="max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-                    {project.description || "No project description yet."}
-                  </p>
+                  <div className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+                    {canEdit ? <InlineProjectField label="description" value={project.description} placeholder="Add a project description…" multiline disabled={busy} onSave={value => saveProjectProperties({ description: value })} /> : <p className="whitespace-pre-wrap">{project.description || "No project description yet."}</p>}
+                  </div>
                   <dl className="grid max-w-2xl grid-cols-3 gap-5 border-y py-5">
                     <div>
                       <dt className="text-xs text-muted-foreground">Tasks</dt>
@@ -445,7 +535,7 @@ export function ProjectDetail({
               milestones={milestones}
               selectedMilestone={selectedMilestone}
               onSelect={selectMilestone}
-              onEdit={() => setEditing(true)}
+              onSaveProject={saveProjectProperties}
               canEdit={canEdit}
               canCreate={canCreate}
               busy={busy}
@@ -454,17 +544,6 @@ export function ProjectDetail({
           </div>
         </TabsContent>
       </Tabs>
-      {editing && canEdit && (
-        <ProjectEditor
-          key={project.revision}
-          project={project}
-          category={project.category}
-          members={directory.members}
-          busy={busy}
-          onSave={save}
-          onClose={() => setEditing(false)}
-        />
-      )}
       {composer && workspace && canCreate && (
         <TaskComposer
           initialKind={composer}

@@ -24,7 +24,7 @@ export function createProjectRepository(token?: () => Promise<string>, request: 
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = typeof data.error === "string" ? data.error : "Could not load project management. Please try again.";
+      const message = typeof data.error === "string" ? data.error : "Could not load season work. Please try again.";
       // A server-rejected JWT must also invalidate the cached signed-in landing,
       // or /login would redirect straight back into the same rejected session.
       if (response.status === 401) memberLoadFailure(new CvRequestError(message, 401));

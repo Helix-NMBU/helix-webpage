@@ -1,4 +1,4 @@
-import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
+import { IconFilter2 } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Label } from "@libs/components/ui/label";
 import {
@@ -52,7 +52,7 @@ export function PersonalTaskViewMenu({
           aria-label="Task filters and view"
           title="Task filters and view"
         >
-          <IconAdjustmentsHorizontal aria-hidden="true" className="size-4" />
+          <IconFilter2 aria-hidden="true" className="size-4" />
           {active && (
             <span
               aria-label="Filters active"

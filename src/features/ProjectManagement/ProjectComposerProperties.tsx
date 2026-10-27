@@ -91,19 +91,17 @@ export function ProjectComposerProperties({
           })
         }
       />
-      {members.length > 0 && (
-        <div className="max-w-56 [&>button]:h-8 [&>button]:w-auto [&>button]:rounded-full [&>button]:bg-muted/40">
-          <AssigneePicker
-            id="project-leads"
-            triggerLabel="Choose project leads"
-            assignmentRole="lead"
-            members={members}
-            value={draft.leadIds ?? []}
-            disabled={busy}
-            onChange={(leadIds) => setDraft({ ...draft, leadIds })}
-          />
-        </div>
-      )}
+      <div className="max-w-56 [&>button]:h-8 [&>button]:w-auto [&>button]:rounded-full [&>button]:bg-muted/40">
+        <AssigneePicker
+          id="project-leads"
+          triggerLabel="Choose project leads"
+          assignmentRole="lead"
+          members={members}
+          value={draft.leadIds ?? []}
+          disabled={busy || members.length === 0}
+          onChange={(leadIds) => setDraft({ ...draft, leadIds })}
+        />
+      </div>
       <PropertyChoice
         id="project-category"
         label="Area"

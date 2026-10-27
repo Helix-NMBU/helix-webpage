@@ -9,6 +9,7 @@
 ## Local validation and delivery
 
 - Validate changes locally using an untracked `.env` or `.env.local` file. Hosted staging is no longer part of the delivery workflow.
+- Keep Hobby deployments below Vercel's 12-function cap: target at most 11 functions and consolidate API entrypoints before adding another. `scripts/check-vercel-functions.mjs` enforces this budget against both source routes and generated deployment functions.
 - Use Neon for application data, authentication, and object storage. Do not add Supabase dependencies or import legacy Supabase records.
 - Keep partner email OTP access separate from Google Workspace member authorization. A valid authentication session alone does not grant partner, recruiter, or administrator permissions.
 - Run relevant checks and inspect changed interfaces locally before a production release. Publishing and deploying require the user's authorization.

@@ -128,13 +128,13 @@ export function ProjectRows({
     </Table>
   );
 }
-export function ProjectsPage() {
+export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string } = {}) {
   const workspace = useWorkspace();
   const data = workspace?.data;
   const { projectId } = useParams();
   const [params, setParams] = useSearchParams();
   const notify = useNotify();
-  const [search, setSearch] = useState("");
+  const search = params.get("search") ?? "";
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   if (!data) return <LoadDirectory />;
@@ -145,13 +145,25 @@ export function ProjectsPage() {
   const leadDepartments = data.departments
     .filter((d) => d.leadId === data.viewerId)
     .map((d) => d.name);
-  const canCreate = data.canManageProjects || leadDepartments.length > 0;
   const options = projectView(params);
-  const departmentId = options.department === "all" ? null : options.department;
+  const scopedOptions = departmentIdScope
+    ? { ...options, department: departmentIdScope }
+    : options;
+  const departmentId = departmentIdScope ?? (options.department === "all" ? null : options.department);
   const department = data.departments.find((item) => item.id === departmentId);
-  const projects = visibleProjects(data, options, search);
-  const groups = projectGroups(projects, data, options.group);
+  const canCreate = departmentIdScope
+    ? data.canManageProjects || department?.leadId === data.viewerId
+    : data.canManageProjects || leadDepartments.length > 0;
+  const projects = visibleProjects(data, scopedOptions, search);
+  const groups = projectGroups(projects, data, scopedOptions.group);
+  function setSearch(value: string) {
+    const next = new URLSearchParams(params);
+    if (value) next.set("search", value);
+    else next.delete("search");
+    setParams(next, { replace: true });
+  }
   function change(key: string, value: string) {
+    if (departmentIdScope && key === "department") return;
     const next = new URLSearchParams(params);
     const defaults: Record<string, string> = { view: "list", department: "all", lead: "all", priority: "all", completion: "all", sort: "deadline", group: "none", scale: "year" };
     if (value === defaults[key]) next.delete(key);
@@ -160,8 +172,7 @@ export function ProjectsPage() {
   }
   function reset() {
     const next = new URLSearchParams(params);
-    for (const key of ["view", "department", "lead", "priority", "completion", "sort", "group", "scale", "columns"]) next.delete(key);
-    setSearch("");
+    for (const key of ["view", "department", "lead", "priority", "completion", "sort", "group", "scale", "columns", "search"]) next.delete(key);
     setParams(next);
   }
   async function save(change: ProjectMutation) {
@@ -194,7 +205,7 @@ export function ProjectsPage() {
       <Directory
         title="Projects"
         action={<div className="flex items-center gap-2">
-          <ProjectViewMenu data={data} options={options} onChange={change} onReset={reset} />
+          <ProjectViewMenu data={data} options={scopedOptions} onChange={change} onReset={reset} hideDepartmentFilter={Boolean(departmentIdScope)} />
           {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
         </div>}
       >
@@ -202,7 +213,7 @@ export function ProjectsPage() {
           {departmentId && (
             <div className="flex items-center justify-between gap-3 border-b px-4 py-3 text-sm">
               <span>{department?.name ?? "Unknown department"}</span>
-              <Button
+              {!departmentIdScope && <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
@@ -212,13 +223,13 @@ export function ProjectsPage() {
                 }}
               >
                 All projects
-              </Button>
+              </Button>}
             </div>
           )}
           <Search label="Find projects" value={search} onChange={setSearch} />
-          {options.view === "timeline" ? <ProjectTimeline projects={projects} groups={groups} scale={options.scale} onScale={value => change("scale", value)} /> : (groups.length ? groups : [{ id: "all", name: "", projects: [] }]).map(group => <section key={group.id} aria-label={group.name ? `Projects in ${group.name}` : "Projects list view"}>
+          {scopedOptions.view === "timeline" ? <ProjectTimeline projects={projects} groups={groups} scale={scopedOptions.scale} onScale={value => change("scale", value)} /> : (groups.length ? groups : [{ id: "all", name: "", projects: [] }]).map(group => <section key={group.id} aria-label={group.name ? `Projects in ${group.name}` : "Projects list view"}>
             {group.name && <h2 className="border-y bg-muted/40 px-4 py-2 text-sm font-medium">{group.name} <span className="ml-2 text-xs text-muted-foreground">{group.projects.length}</span></h2>}
-            <ProjectRows data={data} projects={group.projects} columns={options.columns} />
+            <ProjectRows data={data} projects={group.projects} columns={scopedOptions.columns} />
           </section>)}
         </>
       </Directory>
@@ -228,6 +239,7 @@ export function ProjectsPage() {
           category="production"
           members={data.members}
           taskLeadCategories={data.taskLeadCategories ?? []}
+          initialDepartments={departmentIdScope && department ? [department.name] : []}
           busy={busy}
           onSave={save}
           onClose={() => setEditing(false)}

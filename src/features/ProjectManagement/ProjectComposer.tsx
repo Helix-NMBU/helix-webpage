@@ -41,6 +41,7 @@ export function ProjectComposer({
   category,
   members,
   taskLeadCategories,
+  initialDepartments = [],
   busy,
   onSave,
   onClose,
@@ -48,6 +49,7 @@ export function ProjectComposer({
   category: TaskCategory;
   members: ProjectWorkspace["members"];
   taskLeadCategories: TaskCategory[];
+  initialDepartments?: string[];
   busy: boolean;
   onSave: (mutation: ProjectMutation) => Promise<unknown>;
   onClose: () => void;
@@ -57,7 +59,7 @@ export function ProjectComposer({
     name: "",
     description: "",
     category,
-    departments: [],
+    departments: initialDepartments,
     priority: "normal",
     leadIds: [],
     startDate: null,

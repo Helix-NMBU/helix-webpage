@@ -33,7 +33,7 @@ describe("project management interface", () => {
     await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.getAttribute('aria-label')===label)!.click());
   }
   async function open(section = "overview", personal = false, query = "") {
-    const router = createMemoryRouter([{ path: personal ? "/tasks" : "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }, { path: "/tasks/:taskId", element: <MemberThemeProvider><MemberNotificationsProvider><TaskDetailPage repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [personal ? `/tasks${query}` : `/project-management/${section}${query}`] });
+    const router = createMemoryRouter([{ path: personal ? "/tasks" : "/season-overview", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }, { path: "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }, { path: "/tasks/:taskId", element: <MemberThemeProvider><MemberNotificationsProvider><TaskDetailPage repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [personal ? `/tasks${query}` : section === "overview" ? `/season-overview${query}` : `/project-management/${section}${query}`] });
     await act(async () => root.render(<RouterProvider key={`${section}-${personal}`} router={router} />));
     return router;
   }
@@ -291,11 +291,11 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label="Task progress over time"]')).not.toBeNull();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed1");
     expect(container.querySelector('[aria-label="Chassis & assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
-    expect(container.textContent).toContain("Shaded area: future");
+    expect(container.querySelector("[data-scope-area]")).not.toBeNull();
     expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
     expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
     expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe("2027-07-31");
-    expect(container.querySelector("[data-progress-new-year]")?.getAttribute("data-progress-new-year")).toBe("2027-01-01");
+    expect(container.querySelector('[data-event-label="production-start"] time')?.getAttribute("datetime")).toBe("2027-01-04");
     expect(button("Refresh")).toBeUndefined();
     expect(container.textContent).not.toContain("Completion by department");
     expect(container.textContent).not.toContain("View progress data");
@@ -328,7 +328,7 @@ describe("project management interface", () => {
     const next = initialLocalWorkspace();
     next.projects[0].name = "Updated project";
     load.mockResolvedValueOnce(next);
-    await act(async () => router.navigate("/project-management/overview"));
+    await act(async () => router.navigate("/season-overview"));
     expect(load).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[aria-label^="See tasks for project Updated project,"]')).not.toBeNull();
   });
@@ -341,7 +341,7 @@ describe("project management interface", () => {
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === "Done")!.click());
     await click("Save task");
     load.mockResolvedValueOnce(next);
-    await act(async () => router.navigate("/project-management/overview"));
+    await act(async () => router.navigate("/season-overview"));
     expect(container.querySelector('[aria-label="Chassis & assembly: 2 of 3 tasks complete, 67%"]')).not.toBeNull();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed2");
     expect(load).toHaveBeenCalledTimes(3);
