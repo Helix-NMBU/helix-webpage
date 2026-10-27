@@ -10,6 +10,7 @@ import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { CommitmentUse } from "./budget-summary";
+import { BudgetImport } from "./BudgetImport";
 import { BUDGET_ITEM_CATEGORIES, MANUAL_ITEM_DEFAULTS } from "./budget-domain";
 import type { BudgetChoiceSystem, BudgetEarmarkChoice, BudgetItemInput, BudgetItemPriority, BudgetItemReuse, FinanceMutation, PublicBudgetItem, PublicSystemBudget } from "./types";
 
@@ -134,6 +135,7 @@ export function BudgetsBoard() {
           ))}
         </>
       ) : null}
+      {canEdit && session.capabilities?.permittedImports ? <BudgetImport departments={budgets.departments} /> : null}
       {canEdit ? (
         <ItemForm
           key="add-item"

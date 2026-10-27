@@ -565,7 +565,7 @@ export type FinanceMutation =
   | (MutationBase & { action: "restoreItem"; itemId: string; reason?: string })
   | (MutationBase & { action: "ensureUnallocated"; systemId: string })
   | (MutationBase & { action: "previewImport"; departmentKey: string; csv: string })
-  | (MutationBase & { action: "importItems"; departmentKey: string; csv: string; reason?: string })
+  | (MutationBase & { action: "importItems"; departmentKey: string; csv: string; previewToken: string; reason?: string })
   | (MutationBase & { action: "checkPurchase"; purchase: PurchaseInput })
   | (MutationBase & { action: "authorizeUpload"; fileName: string; contentType: string; byteSize: number })
   | (MutationBase & { action: "finalizeUpload"; uploadId: string })
@@ -615,6 +615,27 @@ export type FinanceRecoverySummary = {
   message: string;
 };
 
+export type BudgetImportRow = {
+  line: number | null;
+  systemCode: string;
+  systemName: string;
+  kind: "added" | "changed" | "unchanged" | "removed";
+  before: Record<string, string | null> | null;
+  after: Record<string, string | null> | null;
+  actualNok: string;
+};
+export type BudgetImportPreview = {
+  previewToken: string;
+  viewVersion: number;
+  departmentKey: string;
+  rows: BudgetImportRow[];
+  counts: Record<BudgetImportRow["kind"], number>;
+  subtotals: { systemCode: string; systemName: string; plannedNok: string }[];
+  totalNok: string;
+  warnings: string[];
+  errors: FinanceFieldError[];
+};
+
 export type FinanceMutationResult = {
   ok: true;
   viewVersion: number;
@@ -628,6 +649,7 @@ export type FinanceMutationResult = {
   downloadUrl?: string;
   exportFile?: FinanceExportFile;
   recovery?: FinanceRecoverySummary;
+  importPreview?: BudgetImportPreview;
 };
 
 export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing"] as const;

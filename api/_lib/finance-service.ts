@@ -1,3 +1,4 @@
+import { performBudgetImport } from "./finance-budget-import.js";
 import pg from "pg";
 import { isFinanceAction, isFinanceProfile, mutationAllowed, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
 import { applyRequestMutation } from "./finance-requests.js";
@@ -254,6 +255,7 @@ export function createFinanceServices(deps: {
         }
       }
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
+      if (action === "previewImport" || action === "importItems") return performBudgetImport(db, current, body);
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
       if (isRequestAction(action)) return applyRequestMutation(db, current.memberId, body);
       if (isPurchaseMutation(action)) {
