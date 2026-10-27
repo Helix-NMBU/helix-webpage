@@ -1,5 +1,5 @@
-import { addCalendarDays, parseIsoDate, parseNokToOre } from "./money";
-import type { FinanceFieldError, RequestInput, RequestLineInput } from "./types";
+import { addCalendarDays, parseIsoDate, parseNokToOre } from "./money.js";
+import type { FinanceFieldError, RequestInput, RequestLineInput } from "./types.js";
 
 export const LATE_REASON_MIN = 3;
 
@@ -36,7 +36,7 @@ export function normalizeRequestInput(input: RequestInput, todayOslo: string): {
     errors.push({ field: "lateReason", message: "Explain why this purchase is planned within three calendar days." });
   }
   const lines: NormalizedRequestLine[] = [];
-  input.lines.forEach((line, index) => {
+  input.lines.forEach((line: RequestLineInput, index: number) => {
     const normalized = normalizeLine(line, index + 1);
     if (!normalized.ok) errors.push(...normalized.errors);
     else lines.push(normalized.value);

@@ -1,10 +1,10 @@
 -- Purchase requests and Head of Finance decisions. Additive only.
--- Lock order (never invert between writers):
+-- Lock order (never invert budget writers such as edit_budget_item, which lock budget_items FOR UPDATE then budgets FOR UPDATE):
 --   1. finance.requests FOR UPDATE when the row exists
---   2. finance.budgets FOR SHARE (current season approved budget)
---   3. finance.budget_items FOR SHARE when validating allocation lines
--- New requests lock (2) then (3) before inserting the request row.
--- Idempotency: finance.begin_request_mutation / finance.replay_request_mutation (distinct from budget and funding helpers).
+--   2. referenced finance.budget_items FOR SHARE (or FOR KEY SHARE), ordered by budget_item id
+--   3. finance.budgets FOR SHARE for the current season approved budget
+-- New drafts without a request row: (2) then (3) then insert the request. Never lock finance.systems FOR UPDATE.
+-- Idempotency: pg_advisory_xact_lock(actor:requestId) before finance.begin_request_mutation; finance.replay_request_mutation on races.
 
 begin;
 
@@ -294,7 +294,7 @@ begin
 end;
 $fn$;
 
-create or replace function finance.load_current_season_budget(p_season_code text)
+create or replace function finance.fetch_current_season_budget_row(p_season_code text)
 returns finance.budgets
 language plpgsql
 security invoker
@@ -306,8 +306,7 @@ begin
   select b.* into budget_row
   from finance.seasons s
   join finance.budgets b on b.season_id = s.id
-  where s.code = p_season_code
-  for share;
+  where s.code = p_season_code;
   if not found then
     raise exception 'FINANCE|conflict|Create and approve a season budget first.';
   end if;
@@ -315,6 +314,51 @@ begin
     raise exception 'FINANCE|conflict|The season budget must be approved before submitting requests.';
   end if;
   return budget_row;
+end;
+$fn$;
+
+create or replace function finance.lock_request_line_items_share(p_lines jsonb, p_budget_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = pg_catalog, finance
+as $fn$
+declare
+  item_id uuid;
+begin
+  if p_lines is null or jsonb_array_length(p_lines) = 0 then
+    return;
+  end if;
+  for item_id in
+    select distinct (elem->>'budgetItemId')::uuid
+    from jsonb_array_elements(p_lines) as elem
+    where elem->>'budgetItemId' is not null
+    order by 1
+  loop
+    perform 1
+    from finance.budget_items i
+    where i.id = item_id
+      and i.budget_id = p_budget_id
+      and i.status <> 'cancelled'
+    for share;
+    if not found then
+      raise exception 'FINANCE|invalid|Choose valid budget lines with positive estimates.|lines';
+    end if;
+  end loop;
+end;
+$fn$;
+
+create or replace function finance.lock_budget_share(p_budget_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = pg_catalog, finance
+as $fn$
+begin
+  perform 1 from finance.budgets where id = p_budget_id for share;
+  if not found then
+    raise exception 'FINANCE|conflict|Create and approve a season budget first.';
+  end if;
 end;
 $fn$;
 
@@ -378,6 +422,7 @@ language plpgsql
 security invoker
 set search_path = pg_catalog, finance, identity
 as $fn$
+#variable_conflict use_variable
 declare
   action_name text := coalesce(p_command->>'action', '');
   replay jsonb;
@@ -414,11 +459,12 @@ begin
     raise exception 'FINANCE|invalid|A valid request ID is required.';
   end if;
 
-  select setting_value #>> '{}' into season_code from finance.settings where setting_key = 'current_season';
-  if season_code is null then
-    raise exception 'FINANCE|conflict|An operator has not configured the current season.';
+  action_name := coalesce(p_command->>'action', '');
+  if action_name = '' then
+    raise exception 'FINANCE|invalid|Unknown request.';
   end if;
-  select id into season_id from finance.seasons where code = season_code;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_actor_member_id::text || ':' || p_request_id::text, 0));
 
   if action_name in ('saveRequest', 'submitRequest', 'reviseRequest') then
     replay := finance.begin_request_mutation(p_actor_member_id, p_request_id, action_name, p_payload_hash, 'ownRequests');
@@ -441,6 +487,12 @@ begin
     return replay;
   end if;
 
+  select setting_value #>> '{}' into season_code from finance.settings where setting_key = 'current_season';
+  if season_code is null then
+    raise exception 'FINANCE|conflict|An operator has not configured the current season.';
+  end if;
+  select id into season_id from finance.seasons where code = season_code;
+
   record_id := nullif(p_command->>'requestRecordId', '')::uuid;
   expected_revision := nullif(p_command->>'expectedRevision', '')::integer;
 
@@ -450,8 +502,7 @@ begin
     planned := (p_command #>> '{request,plannedDate}')::date;
     late_reason := nullif(btrim(coalesce(p_command #>> '{request,lateReason}', '')), '');
     payload_lines := coalesce(p_command #> '{request,lines}', '[]'::jsonb);
-
-    budget_row := finance.load_current_season_budget(season_code);
+    budget_row := finance.fetch_current_season_budget_row(season_code);
 
     if record_id is not null then
       select * into req from finance.requests where id = record_id for update;
@@ -462,7 +513,7 @@ begin
         raise exception 'FINANCE|denied|Finance access is required.';
       end if;
       if req.status not in ('draft', 'rejected') then
-        raise exception 'FINANCE|conflict|This request cannot be edited.';
+        raise exception 'FINANCE|invalid|This request cannot be edited.';
       end if;
       if expected_revision is null or expected_revision <> req.revision then
         raise exception 'FINANCE|stale|This record changed before it could be saved. Review the latest values and try again.';
@@ -475,17 +526,20 @@ begin
       if no_change then
         return finance.store_request_mutation(p_actor_member_id, p_request_id, action_name, p_payload_hash, record_id, req.revision);
       end if;
+      perform finance.lock_request_line_items_share(payload_lines, budget_row.id);
+      perform finance.lock_budget_share(budget_row.id);
       update finance.requests
         set supplier_name = supplier,
             justification = justification,
             planned_date = planned,
             late_reason = late_reason,
-            revision = revision + 1,
+            revision = finance.requests.revision + 1,
             updated_at = clock_timestamp()
         where id = record_id
         returning * into req;
     else
-      perform 1 from finance.budgets where id = budget_row.id for share;
+      perform finance.lock_request_line_items_share(payload_lines, budget_row.id);
+      perform finance.lock_budget_share(budget_row.id);
       public_ref := finance.request_public_ref(season_code, finance.issue_request_ordinal(p_actor_member_id, season_code));
       insert into finance.requests (
         season_id, requester_member_id, public_ref, status,
@@ -526,11 +580,12 @@ begin
     planned := coalesce((p_command #>> '{request,plannedDate}')::date, req.planned_date);
     late_reason := nullif(btrim(coalesce(p_command #>> '{request,lateReason}', coalesce(req.late_reason, ''))), '');
     payload_lines := coalesce(p_command #> '{request,lines}', '[]'::jsonb);
+    budget_row := finance.fetch_current_season_budget_row(season_code);
+    perform finance.lock_request_line_items_share(payload_lines, budget_row.id);
+    perform finance.lock_budget_share(budget_row.id);
 
-    budget_row := finance.load_current_season_budget(season_code);
-
-    select coalesce(max(revision_number), 0) + 1 into revision_number
-    from finance.request_revisions where request_id = record_id;
+    select coalesce(max(r.revision_number), 0) + 1 into revision_number
+    from finance.request_revisions r where r.request_id = record_id;
 
     insert into finance.request_revisions (request_id, revision_number, supplier_name, justification, planned_date, late_reason)
     values (record_id, revision_number, supplier, justification, planned, late_reason)
@@ -575,7 +630,7 @@ begin
           late_reason = late_reason,
           submitted_revision_id = revision_id,
           approved_revision_id = null,
-          revision = revision + 1,
+          revision = finance.requests.revision + 1,
           updated_at = clock_timestamp()
       where id = record_id
       returning * into req;
@@ -597,7 +652,7 @@ begin
     update finance.requests
       set status = 'draft',
           submitted_revision_id = null,
-          revision = revision + 1,
+          revision = finance.requests.revision + 1,
           updated_at = clock_timestamp()
       where id = record_id
       returning * into req;
@@ -617,7 +672,7 @@ begin
     update finance.requests
       set status = 'cancelled',
           submitted_revision_id = null,
-          revision = revision + 1,
+          revision = finance.requests.revision + 1,
           updated_at = clock_timestamp()
       where id = record_id
       returning * into req;
@@ -636,7 +691,7 @@ begin
     if req.status <> 'submitted' or req.submitted_revision_id is distinct from revision_id then
       raise exception 'FINANCE|conflict|This decision no longer applies to the submitted revision.';
     end if;
-    if exists (select 1 from finance.request_decisions where revision_id = revision_id) then
+    if exists (select 1 from finance.request_decisions d where d.revision_id = revision_id) then
       raise exception 'FINANCE|conflict|This revision already has a decision.';
     end if;
     if char_length(reason_text) < 3 then
@@ -668,7 +723,7 @@ begin
       update finance.requests
         set status = 'approved',
             approved_revision_id = revision_id,
-            revision = revision + 1,
+            revision = finance.requests.revision + 1,
             updated_at = clock_timestamp()
         where id = record_id
         returning * into req;
@@ -678,7 +733,7 @@ begin
       update finance.requests
         set status = 'rejected',
             submitted_revision_id = null,
-            revision = revision + 1,
+            revision = finance.requests.revision + 1,
             updated_at = clock_timestamp()
         where id = record_id
         returning * into req;
@@ -713,7 +768,7 @@ begin
           released_ore = released_ore,
           closed_at = clock_timestamp(),
           closed_by_member_id = p_actor_member_id,
-          revision = revision + 1,
+          revision = finance.requests.revision + 1,
           updated_at = clock_timestamp()
       where id = record_id
       returning * into req;
@@ -724,23 +779,23 @@ begin
   raise exception 'FINANCE|invalid|Unknown request.';
 exception
   when unique_violation then
-    get stacked diagnostics constraint_name = CONSTRAINT_NAME;
-    if constraint_name = 'idempotency_keys_pkey' then
-      stored := finance.replay_request_mutation(
-        p_actor_member_id,
-        p_request_id,
-        action_name,
-        p_payload_hash
-      );
-      if stored is not null then
-        return stored;
-      end if;
-      raise exception 'FINANCE|conflict|This request ID was already used for a different change.';
+    stored := finance.replay_request_mutation(
+      p_actor_member_id,
+      p_request_id,
+      action_name,
+      p_payload_hash
+    );
+    if stored is not null then
+      return stored;
     end if;
-    if constraint_name = 'request_decisions_revision_id_key' then
+    if exists (
+      select 1
+      from finance.request_decisions d
+      where d.revision_id = revision_id
+    ) then
       raise exception 'FINANCE|conflict|This revision already has a decision.';
     end if;
-    raise;
+    raise exception 'FINANCE|conflict|This request ID was already used for a different change.';
 end;
 $fn$;
 

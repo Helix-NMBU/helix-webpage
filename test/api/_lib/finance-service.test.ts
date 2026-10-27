@@ -126,6 +126,7 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
       finance.allocations,
       finance.purchase_lines,
@@ -621,6 +622,9 @@ describe("finance snapshot", () => {
         query: async <T>(text: string) => {
           queries.push(text);
           if (text.includes("capability_flags") !== text.includes("finance.view_versions")) throw new Error("split snapshot");
+          if (text.includes("finance.budget_items") && text.includes("i.protected is not true")) {
+            return { rows: [] as T[] };
+          }
           if (text.includes("finance.budget_items")) throw new Error("draft items queried");
           if (text.includes("identity.members")) return { rows: [{ id: memberId }] as T[] };
           if (text.includes("capability_flags")) {

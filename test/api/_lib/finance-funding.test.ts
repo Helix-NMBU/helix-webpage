@@ -143,6 +143,7 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
       finance.allocations,
       finance.purchase_lines,
@@ -152,6 +153,7 @@ async function resetFinance() {
       finance.uploads,
       finance.exception_reviews,
       finance.purchases,
+      finance.request_draft_lines,
       finance.request_lines,
       finance.request_decisions,
       finance.request_revisions,

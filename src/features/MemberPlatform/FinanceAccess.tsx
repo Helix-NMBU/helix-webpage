@@ -34,7 +34,7 @@ type FinanceState = {
 };
 type FinanceSession = FinanceState & {
   retry: () => void;
-  loadPage: (page: FinancePageId) => Promise<void>;
+  loadPage: (page: FinancePageId, options?: { requestRecordId?: string }) => Promise<void>;
   mutate: (body: Record<string, unknown>) => Promise<FinanceMutationResult>;
 };
 

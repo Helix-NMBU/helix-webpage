@@ -82,12 +82,10 @@ const REVISION_ACTIONS = new Set<FinanceAction>([
   "restoreFunding",
   "addEarmark",
   "editEarmark",
-  "saveRequest",
   "submitRequest",
   "withdrawRequest",
   "cancelRequest",
   "reviseRequest",
-  "decideRequest",
   "closeRequest",
 ]);
 

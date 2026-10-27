@@ -9,7 +9,7 @@ import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { requiresLateReason } from "./request-domain";
-import type { FinanceMutation, HeadDecisionQueueItem, OwnRequestDetail, OwnRequestSummary, RequestDraftLine } from "./types";
+import type { FinanceMutation, HeadDecisionQueueItem, OwnRequestSummary, RequestDraftLine } from "./types";
 
 function useRequestIds() {
   const pending = useRef<{ key: string; id: string } | null>(null);
@@ -114,7 +114,7 @@ export function PurchasesBoard() {
       requestRecordId: editor.requestRecordId,
       expectedRevision: editor.requestRecordId ? editor.revision : undefined,
       request: body,
-    } as FinanceMutation);
+    } as FinanceMutation, "The draft was saved.");
   }
 
   async function submitCurrent() {
@@ -131,10 +131,11 @@ export function PurchasesBoard() {
         action: "saveRequest",
         requestId: requests.idFor("save"),
         request: body,
-      } as FinanceMutation);
+      } as FinanceMutation, "The draft was saved.");
       if (!saved) return;
       await session.loadPage("purchases");
-      const created = session.purchases?.ownRequests.at(-1);
+      const own = session.purchases?.ownRequests ?? [];
+      const created = own.length > 0 ? own[own.length - 1] : undefined;
       if (!created) return;
       editor.requestRecordId = created.id;
       editor.revision = 0;
@@ -146,7 +147,7 @@ export function PurchasesBoard() {
       requestRecordId: editor.requestRecordId,
       expectedRevision: editor.revision,
       request: body,
-    } as FinanceMutation);
+    } as FinanceMutation, "The request was submitted.");
   }
 
   async function decide(item: HeadDecisionQueueItem, decision: "approved" | "rejected") {
@@ -157,7 +158,7 @@ export function PurchasesBoard() {
       revisionId: item.revisionId,
       decision,
       reason: decisionReason,
-    } as FinanceMutation);
+    } as FinanceMutation, "The decision was recorded.");
     setDecisionReason("");
   }
 
@@ -252,7 +253,7 @@ export function PurchasesBoard() {
                 expectedRevision: detail.revision,
                 reason: closeReason,
                 releasedNok,
-              } as FinanceMutation)}
+              } as FinanceMutation, "The approval was closed.")}
             >
               Close approval
             </Button>
@@ -327,7 +328,7 @@ export function PurchasesBoard() {
                     requestId: requests.idFor("withdraw"),
                     requestRecordId: detail.id,
                     expectedRevision: detail.revision,
-                  } as FinanceMutation)}>Withdraw</Button>
+                  } as FinanceMutation, "The request was withdrawn.")}>Withdraw</Button>
                 )}
               </div>
             </form>

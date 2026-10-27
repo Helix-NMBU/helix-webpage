@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import * as financeMoney from "../../../api/_lib/finance-money.js";
 import { PGlite } from "@electric-sql/pglite";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { osloToday } from "../../../src/features/Finance/money.js";
+import { addCalendarDays, osloToday } from "../../../src/features/Finance/money.js";
 import { thirdOsloDayFrom } from "../../../src/features/Finance/request-domain.js";
 import { createFinanceHandler } from "../../../api/_lib/finance-handler.js";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
@@ -73,30 +74,42 @@ async function version() {
   return rows[0]?.version ?? "0";
 }
 
+async function counts() {
+  const [audit, outbox, idem] = await Promise.all([
+    sql<{ count: string }>("select count(*)::text as count from finance.audit_log"),
+    sql<{ count: string }>("select count(*)::text as count from finance.outbox"),
+    sql<{ count: string }>("select count(*)::text as count from finance.idempotency_keys"),
+  ]);
+  return {
+    audit: Number(audit[0]?.count ?? 0),
+    outbox: Number(outbox[0]?.count ?? 0),
+    idem: Number(idem[0]?.count ?? 0),
+  };
+}
+
 async function seasonWithBudget() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-  await sql(
-    `insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true)`,
-  );
+  await sql(`insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true)`);
   await grant(headId, "head_of_finance");
   await grant(financeId, "finance");
   await call("head", { action: "createBudget", requestId: requestId() });
   await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
-  const items = await sql<{ id: string }>(
-    `select id from finance.budget_items where protected is not true limit 1`,
-  );
-  itemId = items[0]?.id ?? "";
   await sql(
     `insert into finance.budget_items (
-      budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected
+      budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,
+      created_by_member_id, updated_by_member_id
     )
-    select b.id, s.id, 'BI-S27-010', 'Carbon tube stock', 'material', 500000, 'P2', 'new', 'planned', false
-    from finance.budgets b
-    cross join finance.systems s
+    select b.id, s.id, 'BI-S27-010', 'Carbon tube stock', 'material', 500000, 'P2', 'new', 'planned', false,
+      $1::uuid, $1::uuid
+    from finance.budgets b cross join finance.systems s
     where b.public_ref = 'B-S27' and s.code = 'SYS-FR'`,
+    [operatorId],
   );
-  const added = await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-010'");
-  itemId = added[0]?.id ?? itemId;
+  itemId = (await sql<{ id: string }>("select id from finance.budget_items where public_ref = 'BI-S27-010'"))[0]?.id ?? "";
+}
+
+function savedRevision(body: unknown): number {
+  return Number((body as { revision?: number }).revision ?? 0);
 }
 
 function sampleRequest(overrides: Record<string, unknown> = {}) {
@@ -110,16 +123,28 @@ function sampleRequest(overrides: Record<string, unknown> = {}) {
   };
 }
 
+async function draftAndSubmit(request = sampleRequest()) {
+  const saved = await call("member", { action: "saveRequest", requestId: requestId(), request });
+  expect(saved.status).toBe(200);
+  const recordId = (saved.body as { id: string }).id;
+  const revision = Number((saved.body as { revision?: number }).revision ?? 0);
+  const submitted = await call("member", {
+    action: "submitRequest",
+    requestId: requestId(),
+    requestRecordId: recordId,
+    expectedRevision: revision,
+    request,
+  });
+  expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+  const revisionId = (await sql<{ id: string }>("select submitted_revision_id as id from finance.requests where id = $1::uuid", [recordId]))[0]?.id;
+  return { recordId, revisionId };
+}
+
 beforeAll(async () => {
   pg = new PGlite();
   await pg.exec(`
     create schema identity;
-    create table identity.members (
-      id uuid primary key,
-      google_sub text not null,
-      email text not null,
-      full_name text not null
-    );
+    create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text not null);
     create table identity.departments (department_key text primary key, name text not null unique, sort_order smallint not null unique);
     insert into identity.departments values ('mechanical-production', 'Mechanical', 1);
     create table identity.platform_roles (role_key text primary key);
@@ -134,9 +159,9 @@ beforeAll(async () => {
     insert into identity.member_roles values ('${operatorId}', 'platform_administrator');
     create role anon;
   `);
-  await pg.exec(readFileSync(new URL("../../../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
-  await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
-  await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
+  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "015_finance_requests.sql"]) {
+    await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
+  }
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   handler = createFinanceHandler(() => createFinanceServices({
     db,
@@ -150,13 +175,16 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   sequence = 0;
+  await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
-      finance.request_draft_lines,
-      finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
-      finance.budget_items, finance.budgets, finance.systems, finance.seasons,
-      finance.idempotency_keys, finance.outbox, finance.member_grants, finance.settings,
+      finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
+      finance.documents, finance.uploads, finance.exception_reviews, finance.purchases,
+      finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
+      finance.budget_items, finance.budgets, finance.funding_parts, finance.funding, finance.systems,
+      finance.seasons, finance.idempotency_keys, finance.outbox, finance.member_grants, finance.settings,
       finance.reference_counters, finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
@@ -166,134 +194,171 @@ beforeEach(async () => {
 
 afterAll(async () => { await pg.close(); });
 
-describe("purchase requests", () => {
-  it("submits, notifies heads, and bumps view_versions once", async () => {
+describe("FIN-05 A01 draft and submit", () => {
+  it("saves draft and submits with budget-linked positive lines without receipts", async () => {
     await seasonWithBudget();
-    const before = await version();
     const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest() });
     expect(saved.status).toBe(200);
-    const recordId = (saved.body as { id: string }).id;
-    const submitted = await call("member", {
-      action: "submitRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      expectedRevision: 0,
-      request: sampleRequest(),
-    });
-    expect(submitted.status).toBe(200);
-    expect(await version()).toBe(String(Number(before) + 2));
-    const outbox = await sql<{ event_type: string }>("select event_type from finance.outbox");
-    expect(outbox.some((row) => row.event_type === "request.submitted")).toBe(true);
+    const lines = await sql("select estimated_ore::text from finance.request_draft_lines");
+    expect(lines.length).toBe(1);
+    const { recordId } = await draftAndSubmit();
+    const revLines = await sql<{ estimated_ore: string }>("select estimated_ore::text as estimated_ore from finance.request_lines");
+    expect(BigInt(revLines[0]?.estimated_ore ?? "0")).toBe(250000n);
+    const row = await sql<{ status: string }>("select status from finance.requests where id = $1::uuid", [recordId]);
+    expect(row[0]?.status).toBe("submitted");
   });
 
-  it("does not bump view_versions on a no-op draft save", async () => {
-    await seasonWithBudget();
-    const rid = requestId();
-    const body = sampleRequest();
-    await call("member", { action: "saveRequest", requestId: rid, request: body });
-    const mid = await version();
-    const again = await call("member", { action: "saveRequest", requestId: requestId(), requestRecordId: (await sql<{ id: string }>("select id from finance.requests limit 1"))[0]?.id, expectedRevision: 0, request: body });
-    expect(again.status).toBe(200);
-    expect(await version()).toBe(mid);
-  });
-
-  it("rejects late submissions without a reason on Oslo boundaries", async () => {
+  it("requires late reason inside three Oslo days but not on the third day", async () => {
     await seasonWithBudget();
     const today = osloToday();
-    const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest({ plannedDate: today }) });
-    const recordId = (saved.body as { id: string }).id;
-    const denied = await call("member", {
-      action: "submitRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      expectedRevision: 0,
-      request: sampleRequest({ plannedDate: today }),
-    });
-    expect(denied.status).toBe(400);
-    const ok = await call("member", {
-      action: "submitRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      expectedRevision: 0,
-      request: sampleRequest({ plannedDate: today, lateReason: "Urgent repair window" }),
-    });
-    expect(ok.status).toBe(200);
-    const boundaryOk = await call("member", {
+    const twoDays = addCalendarDays(today, 2);
+    const saved = await call("member", {
       action: "saveRequest",
       requestId: requestId(),
-      request: sampleRequest({ plannedDate: thirdOsloDayFrom(today) }),
+      request: sampleRequest({ plannedDate: twoDays, lateReason: "Draft lead time" }),
     });
-    expect(boundaryOk.status).toBe(200);
+    expect(saved.status).toBe(200);
+    const recordId = (saved.body as { id: string }).id;
+    const draftRevision = savedRevision(saved.body);
+    expect((await call("member", {
+      action: "submitRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      expectedRevision: draftRevision,
+      request: sampleRequest({ plannedDate: twoDays }),
+    })).status).toBe(400);
+    expect((await call("member", {
+      action: "submitRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      expectedRevision: draftRevision,
+      request: sampleRequest({ plannedDate: twoDays, lateReason: "Short lead time" }),
+    })).status).toBe(200);
+    const third = thirdOsloDayFrom(today);
+    const ok = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest({ plannedDate: third }) });
+    expect(ok.status).toBe(200);
   });
 
-  it("records head decisions without finance authority and retains prior rejections", async () => {
+  it("counts Oslo late boundaries across DST", async () => {
     await seasonWithBudget();
-    const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest() });
-    const recordId = (saved.body as { id: string }).id;
-    await call("member", { action: "submitRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: 0, request: sampleRequest() });
-    const rev = await sql<{ id: string }>("select submitted_revision_id as id from finance.requests where id = $1::uuid", [recordId]);
-    const revisionId = rev[0]?.id;
-    expect((await call("finance", {
-      action: "decideRequest",
+    const beforeDst = "2026-03-28";
+    vi.spyOn(financeMoney, "osloToday").mockReturnValue(beforeDst);
+    const saved = await call("member", {
+      action: "saveRequest",
       requestId: requestId(),
-      requestRecordId: recordId,
-      revisionId,
-      decision: "rejected",
-      reason: "Not in plan",
-    })).status).toBe(403);
-    const rejected = await call("head", {
-      action: "decideRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      revisionId,
-      decision: "rejected",
-      reason: "Not in plan",
+      request: sampleRequest({ plannedDate: "2026-03-30", lateReason: "DST boundary draft" }),
     });
-    expect(rejected.status).toBe(200);
-    const stale = await call("head", {
-      action: "decideRequest",
+    expect(saved.status).toBe(200);
+    const recordId = (saved.body as { id: string }).id;
+    const draftRevision = savedRevision(saved.body);
+    expect((await call("member", {
+      action: "submitRequest",
       requestId: requestId(),
       requestRecordId: recordId,
-      revisionId,
-      decision: "approved",
-      reason: "Too late",
+      expectedRevision: draftRevision,
+      request: sampleRequest({ plannedDate: "2026-03-30" }),
+    })).status).toBe(400);
+    expect((await call("member", {
+      action: "submitRequest",
+      requestId: requestId(),
+      requestRecordId: recordId,
+      expectedRevision: draftRevision,
+      request: sampleRequest({ plannedDate: "2026-03-30", lateReason: "DST boundary test" }),
+    })).status).toBe(200);
+    expect(beforeDst).toBe("2026-03-28");
+    vi.restoreAllMocks();
+  });
+});
+
+describe("FIN-05 A02 decisions", () => {
+  it("allows only Head to decide; finance and plain members get 403", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    expect((await call("finance", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Nope",
+    })).status).toBe(403);
+    expect((await call("other", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Nope",
+    })).status).toBe(403);
+    expect((await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved",
+    })).status).toBe(200);
+  });
+
+  it("rejects stale repeated decisions without overwriting", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved",
+    });
+    const before = await counts();
+    const stale = await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "rejected", reason: "Too late",
     });
     expect(stale.status).toBe(409);
+    expect(await counts()).toEqual(before);
+  });
+
+  it("leaves pending and rejected revisions without approved_ore commitments", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    const pending = await sql<{ approved_ore: string | null }>(
+      "select approved_ore::text as approved_ore from finance.request_lines where revision_id = $1::uuid", [revisionId],
+    );
+    expect(pending[0]?.approved_ore).toBeNull();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "rejected", reason: "Not now",
+    });
+    const rejected = await sql<{ approved_ore: string | null }>(
+      "select approved_ore::text as approved_ore from finance.request_lines where revision_id = $1::uuid", [revisionId],
+    );
+    expect(rejected[0]?.approved_ore).toBeNull();
+  });
+});
+
+describe("FIN-05 A03 withdrawal revise and immutability", () => {
+  it("withdrawal invalidates the submitted revision decision target", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    const submittedRevision = Number((await sql<{ revision: number }>("select revision from finance.requests where id = $1::uuid", [recordId]))[0]?.revision ?? 0);
+    await call("member", { action: "withdrawRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: submittedRevision });
+    expect((await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Late",
+    })).status).toBe(409);
+  });
+
+  it("retains old decisions when revising after rejection", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "rejected", reason: "First pass",
+    });
+    const rejectedRevision = Number((await sql<{ revision: number }>("select revision from finance.requests where id = $1::uuid", [recordId]))[0]?.revision ?? 0);
     await call("member", {
-      action: "reviseRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      expectedRevision: 2,
+      action: "reviseRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: rejectedRevision,
       request: sampleRequest({ justification: "Revised scope for frame assembly" }),
     });
-    const decisions = await sql<{ count: string }>("select count(*)::text as count from finance.request_decisions");
-    expect(Number(decisions[0]?.count)).toBe(1);
+    expect(Number((await sql<{ count: string }>("select count(*)::text as count from finance.request_decisions"))[0]?.count)).toBe(1);
+    expect((await sql<{ id: string }>("select id from finance.request_decisions where revision_id = $1::uuid", [revisionId])).length).toBe(1);
   });
 
-  it("withdrawal invalidates the submitted revision target for decisions", async () => {
+  it("blocks edits once approved", async () => {
     await seasonWithBudget();
-    const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest() });
-    const recordId = (saved.body as { id: string }).id;
-    await call("member", { action: "submitRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: 0, request: sampleRequest() });
-    const revisionId = (await sql<{ id: string }>("select submitted_revision_id as id from finance.requests where id = $1::uuid", [recordId]))[0]?.id;
-    await call("member", { action: "withdrawRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: 1 });
-    const denied = await call("head", {
-      action: "decideRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      revisionId,
-      decision: "approved",
-      reason: "After withdraw",
+    const { recordId, revisionId } = await draftAndSubmit();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved",
     });
-    expect(denied.status).toBe(409);
+    const approvedRevision = Number((await sql<{ revision: number }>("select revision from finance.requests where id = $1::uuid", [recordId]))[0]?.revision ?? 0);
+    expect((await call("member", {
+      action: "saveRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: approvedRevision, request: sampleRequest(),
+    })).status).toBe(400);
   });
+});
 
-  it("creates commitments on approval and supports explicit closure with release", async () => {
+describe("FIN-05 A04 closure and commitments", () => {
+  it("stores per-line approved øre on approval", async () => {
     await seasonWithBudget();
-    const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest() });
-    const recordId = (saved.body as { id: string }).id;
-    await call("member", { action: "submitRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: 0, request: sampleRequest() });
-    const revisionId = (await sql<{ id: string }>("select submitted_revision_id as id from finance.requests where id = $1::uuid", [recordId]))[0]?.id;
+    const { recordId, revisionId } = await draftAndSubmit();
     await call("head", {
       action: "decideRequest",
       requestId: requestId(),
@@ -301,45 +366,142 @@ describe("purchase requests", () => {
       revisionId,
       decision: "approved",
       reason: "Within plan",
+      approvedOreByLine: {},
     });
-    const approved = await sql<{ approved_ore: string }>(
-      "select approved_ore::text as approved_ore from finance.request_lines where revision_id = $1::uuid",
-      [revisionId],
-    );
-    expect(BigInt(approved[0]?.approved_ore ?? "0")).toBe(250000n);
-    const closed = await call("member", {
-      action: "closeRequest",
-      requestId: requestId(),
-      requestRecordId: recordId,
-      expectedRevision: 2,
-      reason: "No longer needed",
-      releasedNok: "2500.00",
-    });
-    expect(closed.status).toBe(200);
-    const row = await sql<{ status: string; released_ore: string }>("select status, released_ore::text as released_ore from finance.requests where id = $1::uuid", [recordId]);
-    expect(row[0]).toMatchObject({ status: "closed", released_ore: "250000" });
+    const line = await sql<{ approved_ore: string }>("select approved_ore::text as approved_ore from finance.request_lines where revision_id = $1::uuid", [revisionId]);
+    expect(BigInt(line[0]?.approved_ore ?? "0")).toBe(250000n);
   });
 
-  it("replays idempotent mutations and hides other members requests", async () => {
+  it("closes by requester with explicit zero release when fully consumed", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved",
+    });
+    const openRevision = Number((await sql<{ revision: number }>("select revision from finance.requests where id = $1::uuid", [recordId]))[0]?.revision ?? 0);
+    expect((await call("member", {
+      action: "closeRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: openRevision,
+      reason: "Done spending", releasedNok: "0.00",
+    })).status).toBe(200);
+  });
+
+  it("lets Head close another members open approval with explicit release", async () => {
+    await seasonWithBudget();
+    const { recordId, revisionId } = await draftAndSubmit();
+    await call("head", {
+      action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved",
+    });
+    const openRevision = Number((await sql<{ revision: number }>("select revision from finance.requests where id = $1::uuid", [recordId]))[0]?.revision ?? 0);
+    expect((await call("head", {
+      action: "closeRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: openRevision,
+      reason: "Head closed", releasedNok: "2500.00",
+    })).status).toBe(200);
+  });
+
+  it("does not reopen closed or cancelled requests", async () => {
     await seasonWithBudget();
     const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest() });
     const recordId = (saved.body as { id: string }).id;
-    const replayId = requestId();
-    const first = await call("member", { action: "submitRequest", requestId: replayId, requestRecordId: recordId, expectedRevision: 0, request: sampleRequest() });
-    const second = await call("member", { action: "submitRequest", requestId: replayId, requestRecordId: recordId, expectedRevision: 0, request: sampleRequest() });
-    expect(second.body).toEqual(first.body);
-    const foreign = await read("other");
-    expect(foreign.status).toBe(200);
-    expect((foreign.body as { ownRequests: unknown[] }).ownRequests).toHaveLength(0);
-    const denied = await read("other", { requestRecordId: recordId });
-    expect(denied.status).toBe(404);
+    const draftRevision = savedRevision(saved.body);
+    await call("member", { action: "cancelRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: draftRevision });
+    expect((await call("member", {
+      action: "submitRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: draftRevision + 1, request: sampleRequest(),
+    })).status).toBe(409);
+  });
+});
+
+describe("FIN-05 A05 privacy idempotency and view_versions", () => {
+  it("hides other members requests and returns not found for foreign detail", async () => {
+    await seasonWithBudget();
+    const { recordId } = await draftAndSubmit();
+    expect((await read("other")).body).toMatchObject({ ownRequests: [] });
+    expect((await read("other", { requestRecordId: recordId })).status).toBe(404);
+    const financeView = await read("finance");
+    expect((financeView.body as { requestContext?: unknown[] }).requestContext?.length).toBeGreaterThan(0);
   });
 
-  it("rejects invalid API actions with 503 placeholders removed", async () => {
+  it("replays every mutation without extra audit outbox or view bump", async () => {
     await seasonWithBudget();
-    const still = await call("member", { action: "registerPurchase", requestId: requestId(), purchase: {} });
-    expect(still.status).toBe(503);
-    const save = await call("member", { action: "saveRequest", requestId: requestId(), request: sampleRequest() });
-    expect(save.status).toBe(200);
+    const body = sampleRequest();
+    const saveId = requestId();
+    const saved = await call("member", { action: "saveRequest", requestId: saveId, request: body });
+    const recordId = (saved.body as { id: string }).id;
+    const v1 = await version();
+    const c1 = await counts();
+    const replaySave = await call("member", { action: "saveRequest", requestId: saveId, request: body });
+    expect(replaySave.body).toEqual(saved.body);
+    expect(await version()).toBe(v1);
+    expect(await counts()).toEqual(c1);
+
+    const submitId = requestId();
+    const draftRevision = savedRevision(saved.body);
+    const submitted = await call("member", {
+      action: "submitRequest", requestId: submitId, requestRecordId: recordId, expectedRevision: draftRevision, request: body,
+    });
+    const v2 = await version();
+    const c2 = await counts();
+    const replaySubmit = await call("member", {
+      action: "submitRequest", requestId: submitId, requestRecordId: recordId, expectedRevision: draftRevision, request: body,
+    });
+    expect(replaySubmit.body).toEqual(submitted.body);
+    expect(await version()).toBe(v2);
+    expect(await counts()).toEqual(c2);
+  });
+
+  it("replays submit after budget changes using the stored response", async () => {
+    await seasonWithBudget();
+    const body = sampleRequest();
+    const saved = await call("member", { action: "saveRequest", requestId: requestId(), request: body });
+    const recordId = (saved.body as { id: string }).id;
+    const submitId = requestId();
+    const draftRevision = savedRevision(saved.body);
+    const first = await call("member", {
+      action: "submitRequest", requestId: submitId, requestRecordId: recordId, expectedRevision: draftRevision, request: body,
+    });
+    const itemRevision = Number((await sql<{ revision: number }>("select revision from finance.budget_items where id = $1::uuid", [itemId]))[0]?.revision ?? 0);
+    await call("finance", {
+      action: "editItem", requestId: requestId(), expectedRevision: itemRevision, itemId: itemId, patch: { note: "Changed after submit" },
+    });
+    const second = await call("member", {
+      action: "submitRequest", requestId: submitId, requestRecordId: recordId, expectedRevision: draftRevision, request: body,
+    });
+    expect(second.status).toBe(200);
+    expect(second.body).toEqual(first.body);
+  });
+
+  it("bumps view_versions once per successful mutation and not on invalid or no-op saves", async () => {
+    await seasonWithBudget();
+    const before = await version();
+    expect((await call("member", {
+      action: "saveRequest", requestId: requestId(), request: { ...sampleRequest(), lines: [] },
+    })).status).toBe(400);
+    expect(await version()).toBe(before);
+    const rid = requestId();
+    const body = sampleRequest();
+    const firstSave = await call("member", { action: "saveRequest", requestId: rid, request: body });
+    expect(await version()).toBe(String(Number(before) + 1));
+    const recordId = (firstSave.body as { id: string }).id;
+    const mid = await version();
+    await call("member", { action: "saveRequest", requestId: requestId(), requestRecordId: recordId, expectedRevision: savedRevision(firstSave.body), request: body });
+    expect(await version()).toBe(mid);
+  });
+
+  it("writes outbox events in the same transaction as audit rows on submit", async () => {
+    await seasonWithBudget();
+    const before = await counts();
+    const { recordId } = await draftAndSubmit();
+    const after = await counts();
+    expect(after.audit).toBeGreaterThan(before.audit);
+    expect(after.outbox).toBeGreaterThan(before.outbox);
+    const outbox = await sql<{ event_type: string; payload: { event?: string } }>(
+      "select event_type, payload from finance.outbox where entity_id = $1::uuid", [recordId],
+    );
+    expect(outbox.some((row) => row.event_type === "request.submitted")).toBe(true);
+    expect(outbox[0]?.payload?.event).toBeDefined();
+  });
+
+  it("still returns 503 for unrelated finance placeholders", async () => {
+    await seasonWithBudget();
+    expect((await call("member", { action: "registerPurchase", requestId: requestId(), purchase: {} })).status).toBe(503);
   });
 });

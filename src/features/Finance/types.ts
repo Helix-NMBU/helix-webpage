@@ -480,7 +480,7 @@ export type FinanceMutation =
   | (MutationBase & { action: "restoreFunding"; fundingId: string })
   | (MutationBase & { action: "addEarmark"; part: FundingPartInput })
   | (MutationBase & { action: "editEarmark"; partId: string; patch: Partial<FundingPartInput> })
-  | (MutationBase & { action: "saveRequest"; requestIdToSave?: string; request: RequestInput })
+  | (MutationBase & { action: "saveRequest"; requestRecordId?: string; request: RequestInput })
   | (MutationBase & { action: "submitRequest"; requestRecordId: string; request: RequestInput })
   | (MutationBase & { action: "withdrawRequest"; requestRecordId: string })
   | (MutationBase & { action: "cancelRequest"; requestRecordId: string })

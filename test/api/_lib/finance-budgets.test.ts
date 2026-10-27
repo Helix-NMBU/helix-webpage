@@ -131,6 +131,7 @@ beforeEach(async () => {
   await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
       finance.documents, finance.uploads, finance.exception_reviews, finance.purchases,

@@ -1,6 +1,6 @@
-import { parseNokToOre } from "./money";
-import type { FinanceAction, FinanceFieldError, FinanceMutation, RequestInput } from "./types";
-import { normalizeRequestInput, type NormalizedRequest } from "./request-domain";
+import { parseNokToOre } from "./money.js";
+import type { FinanceAction, FinanceFieldError, FinanceMutation, RequestInput } from "./types.js";
+import { normalizeRequestInput, type NormalizedRequest, type NormalizedRequestLine } from "./request-domain.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -69,7 +69,7 @@ export function parseRequestChange(body: Record<string, unknown>, todayOslo: str
     if (!request) return { ok: false, errors: [{ field: "request", message: "Enter request details." }] };
     const normalized = normalizeRequestInput(request, todayOslo);
     if (!normalized.ok) return normalized;
-    const lines = normalized.value.lines.map((line) => ({
+    const lines = normalized.value.lines.map((line: NormalizedRequestLine) => ({
       budgetItemId: line.budgetItemId,
       description: line.description,
       estimatedOre: line.estimatedOre.toString(),
