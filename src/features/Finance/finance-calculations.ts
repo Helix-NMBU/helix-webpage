@@ -1,4 +1,4 @@
-import { compareNb, differenceOre, effectivePlanOre } from "./budget-domain.js";
+import { compareDepartmentOrder, compareNb, differenceOre, effectivePlanOre } from "./budget-domain.js";
 import { itemOpenCommitmentOre, scenarioNeedOre } from "./commitment-domain.js";
 import { derivePartUsage } from "./funding.js";
 import { addCalendarDays, formatOre } from "./money.js";
@@ -241,7 +241,10 @@ function moneyFields(planOre: bigint, actualOre: bigint, commitmentOre: bigint, 
 
 export function buildDepartmentSummaries(systems: readonly OverviewSystemFact[]): PublicDepartmentSummary[] {
   const departments = new Map<string, PublicDepartmentSummary & { sortOrder: number }>();
-  const orderedSystems = [...systems].sort((left, right) => left.sortOrder - right.sortOrder || compareNb(left.departmentName, right.departmentName) || compareNb(left.name, right.name) || compareNb(left.code, right.code));
+  const orderedSystems = [...systems].sort((left, right) => compareDepartmentOrder(
+    { sortOrder: left.sortOrder, name: left.departmentName, departmentKey: left.departmentKey },
+    { sortOrder: right.sortOrder, name: right.departmentName, departmentKey: right.departmentKey },
+  ) || compareNb(left.name, right.name) || compareNb(left.code, right.code));
   for (const system of orderedSystems) {
     let planOre = 0n;
     let actualOre = 0n;
@@ -274,7 +277,7 @@ export function buildDepartmentSummaries(systems: readonly OverviewSystemFact[])
       ...moneyFields(planOre, actualOre, commitmentOre, unbudgetedOre),
     });
   }
-  const listed = [...departments.values()].sort((left, right) => left.sortOrder - right.sortOrder || compareNb(left.name, right.name));
+  const listed = [...departments.values()].sort(compareDepartmentOrder);
   return listed.map((department) => {
     department.systems.sort((left, right) => compareNb(left.name, right.name) || compareNb(left.code, right.code));
     let planOre = 0n;

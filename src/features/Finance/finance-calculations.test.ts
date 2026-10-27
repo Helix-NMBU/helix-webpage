@@ -275,6 +275,20 @@ describe("FIN-09-A04 overview totals", () => {
     expect(systemBelongsOnOverview({ active: false, planOre: 0n, actualOre: 0n, commitmentOre: 0n, earmarkedOre: 0n })).toBe(false);
   });
 
+  it("breaks a shared department sort order by name, then by department id", () => {
+    const departments = buildDepartmentSummaries([
+      system({ id: "zebra-system", name: "Frame", departmentKey: "id-z", departmentName: "Zebra", sortOrder: 4 }),
+      system({ id: "alpha-later-id", name: "Battery", departmentKey: "id-b", departmentName: "Alpha", sortOrder: 4 }),
+      system({ id: "alpha-earlier-id", name: "Axle", departmentKey: "id-a", departmentName: "Alpha", sortOrder: 4 }),
+    ]);
+
+    expect(departments.map((department) => [department.name, department.departmentKey])).toEqual([
+      ["Alpha", "id-a"],
+      ["Alpha", "id-b"],
+      ["Zebra", "id-z"],
+    ]);
+  });
+
   it("separates unbudgeted spending and leaves use undefined when the plan is zero", () => {
     const departments = buildDepartmentSummaries([
       system({

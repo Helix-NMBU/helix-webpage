@@ -47,6 +47,14 @@ export function compareNb(left: string, right: string): number {
   return left.localeCompare(right, "nb") || left.localeCompare(right, "en");
 }
 
+/** Department order is sort_order, then name, then department id. */
+export function compareDepartmentOrder(
+  left: { sortOrder: number; name: string; departmentKey: string },
+  right: { sortOrder: number; name: string; departmentKey: string },
+): number {
+  return left.sortOrder - right.sortOrder || compareNb(left.name, right.name) || compareNb(left.departmentKey, right.departmentKey);
+}
+
 export function effectivePlanOre(plannedOre: bigint, status: BudgetItemStatus, unallocated: boolean): bigint {
   if (unallocated || status === "cancelled") return 0n;
   return plannedOre;

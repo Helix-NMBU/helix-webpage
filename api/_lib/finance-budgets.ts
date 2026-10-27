@@ -4,6 +4,7 @@ import { FinanceError } from "./finance-error.js";
 import { formatOre } from "./finance-money.js";
 import { osloToday } from "./finance-money.js";
 import {
+  compareDepartmentOrder,
   compareNb,
   differenceOre,
   effectivePlanOre,
@@ -255,7 +256,8 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
          join finance.purchases p on p.id = l.purchase_id and p.status = 'registered'
          where a.budget_item_id = i.id
        ) act on i.id is not null
-       where i.id is not null or sys.active`,
+       where i.id is not null or sys.active
+       order by d.sort_order, d.name, d.department_key, sys.name, sys.code`,
       [budget.budgetId],
     )).rows;
   } catch (error) {
@@ -347,7 +349,7 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
     }
     system.items.push(item);
   }
-  const ordered = [...departments.values()].sort((left, right) => left.sortOrder - right.sortOrder || compareNb(left.name, right.name));
+  const ordered = [...departments.values()].sort(compareDepartmentOrder);
   const choices: BudgetChoices = { systems: [], items: [] };
   for (const department of ordered) {
     department.systems.sort((left, right) => compareNb(left.name, right.name) || compareNb(left.code, right.code));

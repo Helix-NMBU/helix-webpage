@@ -112,7 +112,8 @@ async function loadFacts(query: Query, seasonCode: string, includeDraftItems: bo
       `select sys.id, sys.code, sys.name, sys.active,
               d.department_key, d.name as department_name, d.sort_order
        from finance.systems sys
-       join identity.departments d on d.department_key = sys.department_key`,
+       join identity.departments d on d.department_key = sys.department_key
+       order by d.sort_order, d.name, d.department_key, sys.name, sys.code`,
       [],
     ),
     query<{ id: string; status: FundingStatus; confidence: FundingConfidence | null; amount_ore: string }>(
