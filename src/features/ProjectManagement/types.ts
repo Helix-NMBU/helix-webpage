@@ -5,6 +5,7 @@ export type TaskStatus = typeof TASK_STATUSES[number];
 export const TASK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type TaskPriority = typeof TASK_PRIORITIES[number];
 export const MAX_TASK_ASSIGNEES = 20;
+export const MAX_PROJECT_MILESTONES = 20;
 export const MAX_DEPARTMENT_MEMBERS = 500;
 export const ORGANIZATION_DEPARTMENTS = ["Management", "Mechanical & Production", "Electronics", "Software & Autonomous", "Business & Marketing", "Logistics", "Finance"] as const;
 export type OrganizationDepartment = typeof ORGANIZATION_DEPARTMENTS[number];
@@ -21,6 +22,7 @@ export interface ProjectInput {
   departments: string[];
   deadline: string | null;
 }
+export interface ProjectMilestoneInput { id: string; title: string; description: string; deadline: string | null; partnerName: string; }
 export interface Project extends ProjectInput { id: string; season: string; revision: number; }
 export interface TaskInput {
   title: string;
@@ -71,7 +73,7 @@ export type ProjectMutation =
   | { action: "save_department"; id: string; expectedRevision: number; department: DepartmentInput }
   | { action: "update_milestone"; id: string; expectedRevision: number; changes: MilestoneChanges }
   | { action: "save_task"; id: string; expectedRevision: number; task: TaskInput }
-  | { action: "save_project"; id: string; expectedRevision: number; project: ProjectInput }
+  | { action: "save_project"; id: string; expectedRevision: number; project: ProjectInput; milestones?: ProjectMilestoneInput[] }
   | { action: "set_status"; id: string; expectedRevision: number; status: TaskStatus; blockedReason: string };
 
 export interface ProjectRepository {

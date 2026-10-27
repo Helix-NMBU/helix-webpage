@@ -107,6 +107,7 @@ describe("project management HTTP boundaries", () => {
     const services = fixture();
     expect((await call(services, { method: "DELETE", token: "verified" })).status).toBe(405);
     expect((await call(services, { method: "POST", token: "verified", length: "20001" })).status).toBe(413);
+    expect((await call(services, { method: "POST", token: "verified", body: { action: "save_project" }, length: "64001" })).status).toBe(413);
     expect(services.mutate).not.toHaveBeenCalled();
   });
   it("rejects invalid actions, revisions, IDs and unbounded fields before database mutation", () => {

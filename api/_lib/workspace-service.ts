@@ -20,6 +20,7 @@ const snapshotSql = `with actor as (select m.id ${eligible} and m.id=$1::uuid an
  seen as (update identity.members set last_seen_at=now() where id=(select id from actor) and (last_seen_at is null or last_seen_at<now()-interval '5 minutes') returning id,last_seen_at)
  select $1::uuid as "viewerId",
  exists(select 1 from project_management.access where member_id=$1::uuid and active) as "projectAccess",
+ coalesce((select to_jsonb(task_lead_categories) from project_management.access where member_id=$1::uuid and active),'[]'::jsonb) as "taskLeadCategories",
  exists(select 1 from project_management.access where member_id=$1::uuid and active and can_manage) as "canManageProjects",
  coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name,'avatarUrl',to_jsonb(u)->>'image','helixRole',m.helix_role,
  'role',case when m.email='henrik.engdal@helixnmbu.no' then 'Admin' else 'Member' end,'joinedAt',m.created_at,'lastSeenAt',coalesce((select seen.last_seen_at from seen where seen.id=m.id),m.last_seen_at),'revision',m.directory_revision) order by lower(m.full_name),m.id) ${eligible}),'[]'::jsonb) as members,
@@ -127,7 +128,7 @@ export function createWorkspaceServices(deps: {
         ) {
           const change = parseProjectMutation(body);
           await deps.db.query(
-            "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)",
+            change.action === "save_project" && change.milestones !== undefined ? "select project_management.create_project_with_milestones($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)",
             [
               identity.userId,
               identity.googleSub,
@@ -160,6 +161,8 @@ export function createWorkspaceServices(deps: {
           error && typeof error === "object" && "code" in error
             ? String(error.code)
             : "";
+        if (/project_task_lead_required/.test(message))
+          throw new MemberCvError(403, "A Department Lead grant for this area is required to create milestones.");
         if (/forbidden/.test(message))
           throw new MemberCvError(
             403,
@@ -179,11 +182,11 @@ export function createWorkspaceServices(deps: {
           throw new MemberCvError(404, "This record is no longer available.");
         if (
           /invalid/.test(message) ||
-          ["23514", "23503", "22P02"].includes(code)
+          ["23514", "23503", "22P02", "22007", "22008", "23502"].includes(code)
         )
           throw new MemberCvError(
             400,
-            "Check the selected departments and project Leads.",
+            "Check the project details, selected departments and milestones.",
           );
         throw new MemberCvError(
           503,

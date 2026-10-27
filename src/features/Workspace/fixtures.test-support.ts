@@ -4,6 +4,7 @@ export function directoryFixture(): WorkspaceDirectory {
   const data = initialLocalWorkspace();
   return {
     viewerId: data.viewerId,
+    taskLeadCategories: data.taskLeadCategories,
     canAdmin: true,
     projectAccess: true,
     canManageProjects: true,

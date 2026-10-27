@@ -12,7 +12,7 @@ export function createProjectHandler(getServices: () => ProjectServices = neonPr
     }
     try {
       const token = bearer(req.headers.authorization);
-      if (req.method === "POST" && Number(req.headers["content-length"] ?? 0) > 20000) throw new MemberCvError(413, "This request is too large.");
+      if (req.method === "POST" && Number(req.headers["content-length"] ?? 0) > (req.body?.action === "save_project" ? 64000 : 20000)) throw new MemberCvError(413, "This request is too large.");
       const services = getServices();
       const result = req.method === "GET" ? await services.load(token) : await services.mutate(token, req.body);
       return res.status(200).json(result);

@@ -1,3 +1,4 @@
+import { ProjectComposer } from "./ProjectComposer";
 import { AssigneePicker } from "./TaskAssignees";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Checkbox } from "@libs/components/ui/checkbox";
@@ -76,7 +77,11 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
   </DialogContent></Dialog>;
 }
 
-export function ProjectEditor({ project, category, members = [], busy, onSave, onClose }: { project: Project | null; category: TaskCategory; members?: ProjectWorkspace["members"]; busy: boolean; onSave: (mutation: ProjectMutation) => Promise<unknown>; onClose: () => void }) {
+interface ProjectEditorProps { project: Project | null; category: TaskCategory; members?: ProjectWorkspace["members"]; taskLeadCategories?: TaskCategory[]; busy: boolean; onSave: (mutation: ProjectMutation) => Promise<unknown>; onClose: () => void }
+export function ProjectEditor(props: ProjectEditorProps) {
+  return props.project ? <ExistingProjectEditor {...props} /> : <ProjectComposer {...props} members={props.members ?? []} taskLeadCategories={props.taskLeadCategories ?? []} />;
+}
+function ExistingProjectEditor({ project, category, members = [], busy, onSave, onClose }: ProjectEditorProps) {
   const [id] = useState(() => project?.id ?? crypto.randomUUID());
   const [revision] = useState(project?.revision ?? 0);
   const [draft, setDraft] = useState<ProjectInput>(() => project ? { ...project } : { name: "", description: "", category, departments: [], startDate: null, deadline: null });

@@ -403,10 +403,15 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);const data=directoryFixture();workspace.load.mockResolvedValue(data);workspace.saveProject.mockResolvedValue(data);await open('/projects');
     await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='+ New project')!.click());
     for(const [id,value] of [['project-name','Scheduled build'],['project-start','2026-10-01'],['project-deadline','2026-12-01']]){
+      if(id !== 'project-name') await act(async()=>document.querySelector<HTMLButtonElement>(`[aria-label="${id==='project-start'?'Start date':'Target date'}"]`)!.click());
       const field=document.getElementById(id) as HTMLInputElement;
       await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(field,value);field.dispatchEvent(new Event('input',{bubbles:true}));});
+      if(id !== 'project-name') {
+        await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Done')!.click());
+        await act(async()=>{await new Promise<void>(resolve=>setTimeout(resolve,0));});
+      }
     }
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Save project')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Create project')!.click());
     expect(workspace.saveProject).toHaveBeenCalledWith(expect.objectContaining({action:'save_project',project:expect.objectContaining({startDate:'2026-10-01',deadline:'2026-12-01'})}));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });

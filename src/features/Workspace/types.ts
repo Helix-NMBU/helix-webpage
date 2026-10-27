@@ -3,6 +3,7 @@ import type {
   ProjectDepartment,
   ProjectMember,
   TaskPriority,
+  TaskCategory,
 } from "../ProjectManagement/types.js";
 
 export interface WorkspaceMember extends ProjectMember {
@@ -27,6 +28,7 @@ export interface WorkspaceDirectory {
   canAdmin: boolean;
   projectAccess: boolean;
   canManageProjects: boolean;
+  taskLeadCategories?: TaskCategory[];
   members: WorkspaceMember[];
   departments: ProjectDepartment[];
   projects: WorkspaceProject[];

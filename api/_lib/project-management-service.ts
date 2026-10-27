@@ -71,7 +71,7 @@ export function createProjectServices(deps: { db: CvDatabase; authenticate(token
       try {
         const identity = await deps.authenticate(token);
         const change = parseProjectMutation(body);
-        await deps.db.query(change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
+        await deps.db.query(change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_project" && change.milestones !== undefined ? "select project_management.create_project_with_milestones($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
         return await read(identity);
       } catch (error) { return projectError(error); }
     },

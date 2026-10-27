@@ -642,6 +642,7 @@ describe("project management interface", () => {
   });
   it("offers only the fixed departments when editing a project", async () => {
     await open(); await click("New project");
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Departments"]')!.click());
     const group = document.getElementById("project-departments")!;
     expect([...group.querySelectorAll('[role="checkbox"]')].map(checkbox => checkbox.getAttribute("aria-label"))).toEqual([...ORGANIZATION_DEPARTMENTS]);
     expect(group.querySelector('input[type="text"]')).toBeNull();

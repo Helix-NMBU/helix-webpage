@@ -151,6 +151,7 @@ describe("workspace request boundary", () => {
     expect((await call(services, "POST", "verified", {}, 20001)).status).toBe(
       413,
     );
+    expect((await call(services, "POST", "verified", { action: "save_project" }, 64001)).status).toBe(413);
     expect(services.mutate).not.toHaveBeenCalled();
   });
   it("returns a generic message for unexpected failures", async () => {

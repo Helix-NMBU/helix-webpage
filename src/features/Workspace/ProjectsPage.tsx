@@ -227,6 +227,7 @@ export function ProjectsPage() {
           project={null}
           category="production"
           members={data.members}
+          taskLeadCategories={data.taskLeadCategories ?? []}
           busy={busy}
           onSave={save}
           onClose={() => setEditing(false)}

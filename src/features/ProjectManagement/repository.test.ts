@@ -45,6 +45,22 @@ describe("dedicated local project mode", () => {
     vi.stubEnv("DEV", true); vi.stubEnv("MODE", "development");
     expect(() => createLocalProjectRepository()).toThrow("member-local");
   });
+  it("creates project and initial milestones together, without persisting partial failures", async () => {
+    const repository=createLocalProjectRepository();const before=await repository.load();
+    const project={...before.projects[0],name:"Batch build"};
+    const change={action:"save_project" as const,id:crypto.randomUUID(),expectedRevision:0,project,milestones:[{id:crypto.randomUUID(),title:"Design ready",description:"",deadline:"2026-11-01",partnerName:""}]};
+    const stored=localStorage.getItem("helix-member-local-projects-v1");
+    await expect(repository.mutate({...change,milestones:[change.milestones[0],{...change.milestones[0],id:before.tasks[0].id}]})).rejects.toMatchObject({status:409});
+    expect(localStorage.getItem("helix-member-local-projects-v1")).toBe(stored);
+    const saved=await repository.mutate(change);
+    expect(saved.projects.find(p=>p.id===change.id)?.name).toBe("Batch build");
+    expect(saved.tasks.find(t=>t.id===change.milestones[0].id)).toMatchObject({projectId:change.id,kind:"milestone",status:"todo"});
+    expect(saved.progressEvents.filter(e=>e.taskId===change.milestones[0].id)).toHaveLength(1);
+    localStorage.setItem("helix-member-local-projects-v1",JSON.stringify({...saved,taskLeadCategories:[]}));
+    const withoutLead=localStorage.getItem("helix-member-local-projects-v1");
+    await expect(repository.mutate({...change,id:crypto.randomUUID(),milestones:[{...change.milestones[0],id:crypto.randomUUID()}]})).rejects.toMatchObject({status:403});
+    expect(localStorage.getItem("helix-member-local-projects-v1")).toBe(withoutLead);
+  });
   it("persists changes and rejects a stale revision without overwriting the saved task", async () => {
     const repository = createLocalProjectRepository();
     const initial = await repository.load();

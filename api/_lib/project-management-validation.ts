@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
+import { MAX_TASK_ASSIGNEES, MAX_PROJECT_MILESTONES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
 import { MemberCvError } from "./member-cv-error.js";
 
 function invalid(message = "Invalid project management request."): never { throw new MemberCvError(400, message); }
@@ -58,7 +58,7 @@ function project(value: unknown): ProjectInput {
 }
 export function parseProjectMutation(value: unknown): ProjectMutation {
   const body = object(value);
-  if (JSON.stringify(body).length > 20000) return invalid("This request is too large.");
+  if (JSON.stringify(body).length > (body.action === "save_project" ? 64000 : 20000)) return invalid("This request is too large.");
   const id = uuid(body.id);
   const expectedRevision = body.expectedRevision;
   if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
@@ -87,7 +87,22 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
     return { action: body.action, id, expectedRevision, changes };
   }
   if (body.action === "save_task") return { action: body.action, id, expectedRevision, task: task(body.task) };
-  if (body.action === "save_project") return { action: body.action, id, expectedRevision, project: project(body.project) };
+  if (body.action === "save_project") {
+    const input = project(body.project);
+    if (body.milestones === undefined) return { action: body.action, id, expectedRevision, project: input };
+    if (expectedRevision !== 0 || !Array.isArray(body.milestones) || body.milestones.length > MAX_PROJECT_MILESTONES) return invalid("Initial milestones can only be added when creating a project (up to 20).");
+    const ids = new Set<string>();
+    const milestones = body.milestones.map(value => {
+      const draft = object(value);
+      if (Object.keys(draft).some(key => !["id", "title", "description", "deadline", "partnerName"].includes(key))) return invalid();
+      const milestoneId = uuid(draft.id);
+      if (ids.has(milestoneId)) return invalid("Each milestone must have a unique ID.");
+      ids.add(milestoneId);
+      const parsed = task({ ...draft, projectId: id, category: input.category, milestoneId: null, assigneeIds: [], startDate: null, status: "todo", priority: "normal", kind: "milestone", blockedReason: "" });
+      return { id: milestoneId, title: parsed.title, description: parsed.description, deadline: parsed.deadline, partnerName: parsed.partnerName };
+    });
+    return { action: body.action, id, expectedRevision, project: input, milestones };
+  }
   if (body.action === "set_status") {
     const status = oneOf(body.status, TASK_STATUSES);
     const blockedReason = text(body.blockedReason, "blocked reason", 500);

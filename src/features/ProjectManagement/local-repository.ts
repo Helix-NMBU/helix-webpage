@@ -1,5 +1,5 @@
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
-import { addDays, osloDate, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
+import { addDays, osloDate, validateProjectMilestones, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
 import { canonicalDepartment, fixedDepartmentRecords, fixedProjectDepartments } from "./departments";
 import { progressEvent } from "./progress";
 import { ProjectRequestError } from "./repository";
@@ -77,6 +77,15 @@ export function createLocalProjectRepository(): ProjectRepository {
         if (!workspace.canManage && (!project.departments.some(d => ledDepartments.includes(d)) || (previousProject && !previousProject.departments.some(d => ledDepartments.includes(d))))) throw new ProjectRequestError("Only project managers or a Lead for this department can manage projects.", 403);
         if (project.leadIds?.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all project Leads.");
         if (workspace.tasks.some(task => task.projectId === mutation.id && task.category !== project.category)) throw new Error("Move the project's tasks before changing its category.");
+        if (mutation.milestones !== undefined) {
+          if (mutation.expectedRevision !== 0) throw new Error("Initial milestones can only be added when creating a project.");
+          const milestones = validateProjectMilestones(mutation.milestones, mutation.id, project.category);
+          if (milestones.length && !workspace.taskLeadCategories.includes(project.category)) throw new ProjectRequestError("A Department Lead grant for this area is required to create milestones.", 403);
+          if (milestones.some(item => workspace.tasks.some(task => task.id === item.id))) throw new ProjectRequestError("A milestone with this ID already exists. Reload before saving.", 409);
+          const tasks: Task[] = milestones.map(item => ({ ...item, season: workspace.season, category: project.category, projectId: mutation.id, milestoneId: null, assigneeIds: [], startDate: null, status: "todo", priority: "normal", kind: "milestone", blockedReason: "", revision: 1, createdAt: now, updatedAt: now, completedAt: null }));
+          workspace.tasks.push(...tasks);
+          workspace.progressEvents.push(...tasks.map(task => progressEvent(task, now)));
+        }
         workspace.projects = [...workspace.projects.filter(item => item.id !== mutation.id), { ...project, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
       } else if (mutation.action === "update_milestone") {
         const previous = workspace.tasks.find(item => item.id === mutation.id);

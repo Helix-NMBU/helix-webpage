@@ -1,4 +1,4 @@
-import { MAX_TASK_ASSIGNEES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type DepartmentInput, type MilestoneChanges, type ProjectInput, type Task, type TaskInput } from "./types";
+import { MAX_TASK_ASSIGNEES, MAX_PROJECT_MILESTONES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type DepartmentInput, type MilestoneChanges, type ProjectInput, type ProjectMilestoneInput, type Task, type TaskInput } from "./types";
 
 export function osloDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
@@ -111,4 +111,16 @@ export function validateProject(input: ProjectInput): ProjectInput {
   const deadline = date(input.deadline);
   if (startDate && deadline && startDate > deadline) throw new Error("The start date must be on or before the deadline.");
   return { startDate, priority: input.priority ?? "normal", leadIds: [...new Set(input.leadIds ?? [])], name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline };
+}
+
+export function validateProjectMilestones(input: ProjectMilestoneInput[], projectId: string, category: ProjectInput["category"]): ProjectMilestoneInput[] {
+  if (!Array.isArray(input) || input.length > MAX_PROJECT_MILESTONES) throw new Error(`Add up to ${MAX_PROJECT_MILESTONES} milestones when creating a project.`);
+  const ids = new Set<string>();
+  return input.map(item => {
+    const id = uuidOrNull(item.id)?.toLowerCase();
+    if (!id || ids.has(id)) throw new Error("Each milestone must have a unique ID.");
+    ids.add(id);
+    const task = validateTask({ ...item, category, projectId, milestoneId: null, assigneeIds: [], startDate: null, status: "todo", priority: "normal", kind: "milestone", blockedReason: "" });
+    return { id, title: task.title, description: task.description, deadline: task.deadline, partnerName: task.partnerName };
+  });
 }

@@ -1,6 +1,6 @@
 # Project directory views
 
-The Projects toolbar has a primary `+ New project` button for project managers and department Leads, plus an icon-only Project filters and view control available to all directory readers. Creation uses the existing project form and server permissions.
+The Projects toolbar has a primary `+ New project` button for project managers and department Leads, plus an icon-only Project filters and view control available to all directory readers. Creation opens a large composer with a project name and description, compact priority/Lead/area/department/date controls, and an expandable Milestones section. Server permissions remain authoritative.
 
 The menu switches between List and Timeline, filters by department, Lead, priority and task completion, groups by department or Lead, and orders by target date, start date, name, priority or completion percentage. Search matches project names, descriptions and departments. Completed means a project has at least one task and all counted tasks are complete; empty projects remain distinct. Shared projects appear in each participating department/Lead group, and Lead identities remain separate even when their names match.
 
@@ -13,3 +13,10 @@ Project names and target markers open the project; milestone diamonds open its m
 The views use existing directory metadata and aggregate task counts. No private-task read, API entry point, shared default or new access grant is added. Migration `020_project_start_dates.sql` adds the optional start date and validates its range and ordering. Apply it before releasing the updated API; it is not applied to live data during local implementation.
 
 Project creation and editing include Start date. Forms, API validation and the database reject a start after the deadline and invalid dates. Existing projects stay null until edited; there is no start-date backfill. API callers that omit the field preserve an existing start, while explicit null clears it. Current loopback development fixtures have sample starts for validating bars; saved local workspaces retain their existing dates.
+
+
+Initial milestones can be drafted, edited or removed inside the project composer. Each has a name, description and required target date; partnership milestones also require a sponsor or partner. Up to 20 can be included in the initial save. Finish or cancel an open milestone draft before creating the project. Further milestones can be added from the project after creation. The form keeps drafts and stable IDs after a failed request.
+
+Milestone creation requires the viewer's active area Lead grant. A Project Manager without that grant can create a project alone. Changing to an area the viewer does not lead preserves existing drafts and requires removing them or returning to an authorized area before saving. Directory responses expose only the viewer's own `taskLeadCategories` capability, without adding private task reads.
+
+Migration `021_project_creation_milestones.sql` adds a transaction-scoped wrapper around the existing authorized project and task mutations. Project and initial milestones are created in one database statement: an invalid or conflicting child rolls back the project, all prior children and progress events. Both existing API paths use it for project creation requests containing milestones; no API entry point is added. Apply migrations 020 and 021 in order before releasing the updated API. Neither was applied to live data during this work.

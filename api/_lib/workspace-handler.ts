@@ -21,7 +21,7 @@ export function createWorkspaceHandler(
     }
     try {
       const token = bearer(req.headers.authorization);
-      if (Number(req.headers["content-length"] ?? 0) > 20000)
+      if (Number(req.headers["content-length"] ?? 0) > (req.body?.action === "save_project" ? 64000 : 20000))
         throw new MemberCvError(413, "This request is too large.");
       if (req.method === "GET" && req.query?.department !== undefined)
         return res

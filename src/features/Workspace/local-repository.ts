@@ -22,6 +22,7 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
     >;
     return {
       viewerId: data.viewerId,
+      taskLeadCategories: data.taskLeadCategories,
       canAdmin: true,
       projectAccess: true,
       canManageProjects: data.canManage,
