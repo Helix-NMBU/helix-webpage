@@ -12,9 +12,15 @@ export type NormalizedPurchaseLine = {
   systemId: string;
   budgetItemId: string | null;
   unbudgeted: boolean;
+  requestLineId: string | null;
   description: string;
   quantity: string;
   amountOre: bigint;
+};
+
+export type PurchaseRecoveryContext = {
+  requestRecordId: string;
+  requestLineId?: string | null;
 };
 
 export type NormalizedPurchase = {
@@ -28,6 +34,9 @@ export type NormalizedPurchase = {
   invoiceDueDate: string | null;
   refundAccount: string | null;
   refundPhone: string | null;
+  requestRecordId: string | null;
+  forceDirect: boolean;
+  recoveryContext: PurchaseRecoveryContext | null;
   lines: NormalizedPurchaseLine[];
   uploadIds: string[];
 };
@@ -100,8 +109,10 @@ function normalizeLine(raw: PurchaseLineInput, lineNumber: number, errors: Finan
   } catch {
     errors.push(field("amountNok", "Enter a positive line total in NOK.", lineNumber));
   }
+  let requestLineId: string | null = null;
+  if (typeof raw.requestLineId === "string" && UUID.test(raw.requestLineId)) requestLineId = raw.requestLineId;
   if (!systemId || !description || amountOre === null || amountOre <= 0n || !Number.isFinite(quantityValue) || quantityValue <= 0) return null;
-  return { systemId, budgetItemId, unbudgeted, description, quantity: String(quantityValue), amountOre };
+  return { systemId, budgetItemId, unbudgeted, requestLineId, description, quantity: String(quantityValue), amountOre };
 }
 
 export function normalizePurchaseInput(raw: PurchaseInput): { purchase: NormalizedPurchase | null; errors: FinanceFieldError[] } {
@@ -150,6 +161,18 @@ export function normalizePurchaseInput(raw: PurchaseInput): { purchase: Normaliz
       errors.push(field("refundAccount", "Enter a refund account or phone number for outlays."));
     }
   }
+  const requestRecordId = typeof raw.requestRecordId === "string" && UUID.test(raw.requestRecordId) ? raw.requestRecordId : null;
+  const forceDirect = raw.forceDirect === true;
+  let recoveryContext: PurchaseRecoveryContext | null = null;
+  if (raw.recoveryContext && typeof raw.recoveryContext === "object" && !Array.isArray(raw.recoveryContext)) {
+    const ctx = raw.recoveryContext as Record<string, unknown>;
+    if (typeof ctx.requestRecordId === "string" && UUID.test(ctx.requestRecordId)) {
+      recoveryContext = {
+        requestRecordId: ctx.requestRecordId,
+        requestLineId: typeof ctx.requestLineId === "string" && UUID.test(ctx.requestLineId) ? ctx.requestLineId : null,
+      };
+    }
+  }
   const uploadIds = Array.isArray(raw.uploadIds) ? raw.uploadIds.filter((id): id is string => typeof id === "string" && UUID.test(id)) : [];
   if (uploadIds.length < 1) errors.push(field("files", "Add at least one supporting file."));
   if (uploadIds.length > MAX_PURCHASE_FILES) errors.push(field("files", "You can attach at most 15 files."));
@@ -170,6 +193,9 @@ export function normalizePurchaseInput(raw: PurchaseInput): { purchase: Normaliz
       invoiceDueDate,
       refundAccount,
       refundPhone,
+      requestRecordId,
+      forceDirect,
+      recoveryContext,
       lines,
       uploadIds,
     },
@@ -250,10 +276,14 @@ export function registerPurchaseIdempotencySubject(purchase: NormalizedPurchase)
     invoiceDueDate: purchase.invoiceDueDate,
     refundAccount: purchase.refundAccount,
     refundPhone: purchase.refundPhone,
+    requestRecordId: purchase.requestRecordId,
+    forceDirect: purchase.forceDirect,
+    recoveryContext: purchase.recoveryContext,
     lines: purchase.lines.map((line) => ({
       systemId: line.systemId,
       budgetItemId: line.budgetItemId,
       unbudgeted: line.unbudgeted,
+      requestLineId: line.requestLineId,
       description: line.description,
       quantity: line.quantity,
       amountOre: line.amountOre.toString(),
@@ -277,10 +307,14 @@ export function serializePurchaseBody(
     invoiceDueDate: purchase.invoiceDueDate,
     refundAccount: purchase.refundAccount,
     refundPhone: purchase.refundPhone,
+    requestRecordId: purchase.requestRecordId,
+    forceDirect: purchase.forceDirect,
+    recoveryContext: purchase.recoveryContext,
     lines: purchase.lines.map((line) => ({
       systemId: line.systemId,
       budgetItemId: line.budgetItemId,
       unbudgeted: line.unbudgeted,
+      requestLineId: line.requestLineId,
       description: line.description,
       quantity: line.quantity,
       amountOre: line.amountOre.toString(),

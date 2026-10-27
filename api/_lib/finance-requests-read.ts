@@ -1,4 +1,6 @@
+import { queryRequestFulfilledOre, loadRequestFulfillmentSummaries } from "./finance-commitment.js";
 import { formatOre } from "./finance-money.js";
+import { requestRemainingOre } from "../../src/features/Finance/commitment-domain.js";
 import type { CvDatabase } from "./member-cv-service.js";
 import type {
   BudgetChoices,
@@ -38,14 +40,15 @@ export async function summarizeOwnRequests(query: Query, memberId: string): Prom
      order by r.public_ref`,
     [memberId],
   );
-  return rows.rows.map((row) => {
+  const summaries: OwnRequestSummary[] = [];
+  for (const row of rows.rows) {
     const approvedOre = row.approved_total != null ? BigInt(row.approved_total) : null;
     const releasedOre = BigInt(row.released_ore);
-    const fulfilledOre = 0n;
-    const remainingOre = approvedOre == null || row.status !== "approved"
+    const fulfilledOre = approvedOre == null ? 0n : await queryRequestFulfilledOre(query, row.id);
+    const remainingOre = approvedOre == null
       ? 0n
-      : approvedOre - fulfilledOre - releasedOre < 0n ? 0n : approvedOre - fulfilledOre - releasedOre;
-    return {
+      : requestRemainingOre(approvedOre, fulfilledOre, releasedOre, row.status);
+    summaries.push({
       id: row.id,
       publicRef: row.public_ref,
       status: row.status,
@@ -54,8 +57,9 @@ export async function summarizeOwnRequests(query: Query, memberId: string): Prom
       fulfilledNok: formatOre(fulfilledOre),
       remainingNok: formatOre(remainingOre),
       releasedNok: formatOre(releasedOre),
-    };
-  });
+    });
+  }
+  return summaries;
 }
 
 export async function loadFinanceRequestContext(query: Query, seasonCode: string): Promise<FinanceRequestContext[]> {
@@ -264,10 +268,13 @@ export async function loadOwnRequestDetail(
   );
   const approvedOre = row.approved_revision_id ? BigInt(approvedRows.rows[0]?.total ?? "0") : null;
   const releasedOre = BigInt(row.released_ore);
-  const fulfilledOre = 0n;
-  const remainingOre = approvedOre == null || row.status !== "approved"
+  const fulfilledOre = approvedOre == null ? 0n : await queryRequestFulfilledOre(query, requestId);
+  const remainingOre = approvedOre == null
     ? 0n
-    : (approvedOre - fulfilledOre - releasedOre < 0n ? 0n : approvedOre - fulfilledOre - releasedOre);
+    : requestRemainingOre(approvedOre, fulfilledOre, releasedOre, row.status);
+  const fulfillments = isOwner
+    ? await loadRequestFulfillmentSummaries(query, requestId, memberId)
+    : undefined;
 
   return {
     id: row.id,
@@ -287,6 +294,7 @@ export async function loadOwnRequestDetail(
     approvedNok: approvedOre == null ? null : formatOre(approvedOre),
     fulfilledNok: formatOre(fulfilledOre),
     remainingNok: formatOre(remainingOre),
+    fulfillments,
   };
 }
 
