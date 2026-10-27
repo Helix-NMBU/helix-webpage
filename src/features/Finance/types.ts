@@ -70,6 +70,19 @@ export type PublicEarmarkSummary = {
   systemName: string | null;
 };
 
+export type OverviewSystemSummary = {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+  plannedNok: string;
+  actualNok: string;
+  differenceNok: string;
+  usedFraction: string | null;
+  commitmentNok: string;
+  unbudgetedNok: string;
+};
+
 export type PublicDepartmentSummary = {
   departmentKey: string;
   name: string;
@@ -77,7 +90,15 @@ export type PublicDepartmentSummary = {
   actualNok: string;
   differenceNok: string;
   usedFraction: string | null;
+  commitmentNok: string;
   unbudgetedNok: string;
+  systems: OverviewSystemSummary[];
+};
+
+export type PermittedEarmarkSource = {
+  id: string;
+  sourceName: string;
+  conditions: string | null;
 };
 
 export type PublicOverview = {
@@ -87,6 +108,8 @@ export type PublicOverview = {
   approvedOn: string | null;
   departments: PublicDepartmentSummary[];
   publicEarmarks: PublicEarmarkSummary[];
+  scenarios?: FundingScenario[];
+  earmarkSources?: PermittedEarmarkSource[];
 };
 
 export type PublicBudgetItem = {
@@ -108,6 +131,8 @@ export type PublicBudgetItem = {
   earmarked: boolean;
   earmarkPurpose: string | null;
   earmarkAmountNok: string | null;
+  commitmentNok?: string;
+  usedFraction?: string | null;
   earmarkId?: string | null;
   earmarkSourceName?: string | null;
   earmarkConditions?: string | null;
@@ -132,6 +157,8 @@ export type PublicSystemBudget = {
   actualNok: string;
   differenceNok: string;
   unbudgetedNok: string;
+  commitmentNok?: string;
+  usedFraction?: string | null;
   unbudgetedItemId: string | null;
   unbudgetedPublicRef: string | null;
   unallocated?: UnallocatedBudgetItem;
@@ -145,6 +172,8 @@ export type PublicDepartmentBudget = {
   actualNok: string;
   differenceNok: string;
   unbudgetedNok: string;
+  commitmentNok?: string;
+  usedFraction?: string | null;
   systems: PublicSystemBudget[];
 };
 
@@ -406,7 +435,11 @@ export type FundingScenario = {
   key: "downside" | "current" | "full";
   label: string;
   eligibleFundingNok: string;
+  earmarkedNok: string;
+  unrestrictedNok: string;
   needNok: string;
+  restrictedCoverNok: string;
+  generalNeedNok: string;
   shortfallNok: string;
 };
 

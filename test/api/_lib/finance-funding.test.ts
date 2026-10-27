@@ -415,7 +415,7 @@ describe("financing and earmarked funding", () => {
     ]);
     expect(view.funding[0]).toMatchObject({ linkedItemCount: 1, unrestrictedNok: "-500.00" });
 
-    const overview = JSON.stringify((await call({ query: { action: "overview" }, token: "member" })).body);
+    const overview = JSON.stringify((await call({ query: { action: "overview" }, token: "admin" })).body);
     expect(overview).toContain("Frame work");
     expect(overview).toContain("400.00");
     expect(overview).toContain("1100.00");
