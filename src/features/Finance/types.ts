@@ -265,6 +265,7 @@ export type OwnRequestDetail = {
   approvedNok: string | null;
   fulfilledNok: string;
   remainingNok: string;
+  fulfillments?: RequestFulfillmentSummary[];
 };
 
 export type HeadDecisionQueueItem = {
@@ -423,6 +424,11 @@ export type PurchaseLineInput = {
   amountNok: string;
 };
 
+export type PurchaseRecoveryContextInput = {
+  requestRecordId: string;
+  requestLineId?: string | null;
+};
+
 export type PurchaseInput = {
   buyerName: string;
   supplierName: string;
@@ -434,8 +440,18 @@ export type PurchaseInput = {
   invoiceDueDate?: string | null;
   refundAccount?: string | null;
   refundPhone?: string | null;
+  requestRecordId?: string | null;
+  forceDirect?: boolean;
+  recoveryContext?: PurchaseRecoveryContextInput | null;
   lines: PurchaseLineInput[];
   uploadIds: string[];
+};
+
+export type RequestFulfillmentSummary = {
+  publicRef: string;
+  purchaseDate: string;
+  totalNok: string;
+  lines: Array<{ description: string; amountNok: string }>;
 };
 
 export type RequestLineInput = {

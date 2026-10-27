@@ -93,9 +93,13 @@ export function PurchasesBoard() {
     }
     return map;
   }, [budgetChoices.items]);
+  const detail = purchases?.detail;
+  const approvedLinkLines = useMemo(() => {
+    if (!detail?.approvedRevisionId) return [];
+    return detail.revisions.find((revision) => revision.id === detail.approvedRevisionId)?.lines ?? [];
+  }, [detail]);
   if (!purchases) return null;
   const today = session.today ?? new Date().toISOString().slice(0, 10);
-  const detail = purchases.detail;
   const canDecide = Boolean(session.capabilities?.decideRequests);
   const canRegister = Boolean(session.capabilities?.registerActual);
   const canExport = Boolean(session.capabilities?.purchaseRegister);
@@ -236,6 +240,7 @@ export function PurchasesBoard() {
     setSaving(true);
     const payload: PurchaseInput = {
       ...purchase,
+      requestRecordId: detail?.status === "approved" ? detail.id : purchase.requestRecordId ?? undefined,
       uploadIds: uploads.filter((row) => row.status === "ready").map((row) => row.uploadId),
     };
     try {
@@ -442,6 +447,7 @@ export function PurchasesBoard() {
                 line={line}
                 systems={systems}
                 items={line.systemId ? itemsBySystem.get(line.systemId) ?? [] : []}
+                requestLines={detail?.status === "approved" ? approvedLinkLines : []}
                 onChange={(patch) => updatePurchaseLine(index, patch)}
                 onRemove={() => setPurchase((current) => ({ ...current, lines: current.lines.filter((_, lineIndex) => lineIndex !== index) }))}
                 removable={purchase.lines.length > 1}
@@ -529,9 +535,26 @@ export function PurchasesBoard() {
         <Card>
           <CardHeader>
             <CardTitle>{detail.publicRef}</CardTitle>
-            <CardDescription>Open approval · remaining {detail.remainingNok}</CardDescription>
+            <CardDescription>
+              Open approval · approved {detail.approvedNok ?? "—"} · fulfilled {detail.fulfilledNok} · remaining {detail.remainingNok}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {(detail.fulfillments?.length ?? 0) > 0 ? (
+              <div className="space-y-2 text-sm">
+                <p className="font-medium">Linked purchases</p>
+                {detail.fulfillments?.map((row) => (
+                  <div key={row.publicRef} className="rounded-md border p-3">
+                    <p>{row.publicRef} · {row.purchaseDate} · {row.totalNok}</p>
+                    <ul className="mt-1 text-muted-foreground">
+                      {row.lines.map((line, index) => (
+                        <li key={`${row.publicRef}-${index}`}>{line.description}: {line.amountNok}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="close-reason">Closure reason</Label>
               <Textarea id="close-reason" value={closeReason} onChange={(event) => setCloseReason(event.target.value)} rows={2} />
@@ -701,6 +724,7 @@ function LineEditor({
   line,
   systems,
   items,
+  requestLines,
   onChange,
   onRemove,
   removable,
@@ -709,6 +733,7 @@ function LineEditor({
   line: PurchaseLineInput;
   systems: BudgetChoiceSystem[];
   items: BudgetChoiceItem[];
+  requestLines: Array<{ id: string; budgetItemId: string; description: string; approvedNok: string | null }>;
   onChange: (patch: Partial<PurchaseLineInput>) => void;
   onRemove: () => void;
   removable: boolean;
@@ -742,6 +767,30 @@ function LineEditor({
       <Field label="Description" value={line.description} onChange={(value) => onChange({ description: value })} />
       <Field label="Quantity (descriptive)" value={line.quantity} onChange={(value) => onChange({ quantity: value })} />
       <Field label="Line total (NOK)" value={line.amountNok} onChange={(value) => onChange({ amountNok: value })} />
+      {requestLines.length > 0 ? (
+        <div className="space-y-2 md:col-span-2">
+          <Label>Approved request line (optional)</Label>
+          <Select
+            value={line.requestLineId ?? "__none"}
+            onValueChange={(value) => {
+              if (value === "__none") {
+                onChange({ requestLineId: undefined });
+                return;
+              }
+              const match = requestLines.find((row) => row.id === value);
+              onChange({ requestLineId: value, budgetItemId: match?.budgetItemId, unbudgeted: false });
+            }}
+          >
+            <SelectTrigger><SelectValue placeholder="Link to approval line" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none">No request link</SelectItem>
+              {requestLines.map((row) => (
+                <SelectItem key={row.id} value={row.id}>{row.description} · {row.approvedNok ?? "—"}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
       <div className="flex items-center gap-2 md:col-span-2">
         <Checkbox checked={line.unbudgeted === true} onCheckedChange={(checked) => onChange({ unbudgeted: checked === true, budgetItemId: checked === true ? undefined : line.budgetItemId })} id={`unbudgeted-${index}`} />
         <Label htmlFor={`unbudgeted-${index}`}>Not in the budget</Label>
