@@ -393,14 +393,20 @@ describe("FIN-10-A01 outbox delivery", () => {
     await sql(`insert into finance.uploads (id, member_id, staging_key, status, byte_size, content_type, original_name, expires_at, commit_state)
       values ($1::uuid, $2::uuid, $3, 'pending', 8, 'application/pdf', 'private.pdf', now(), 'uncertain')`,
     [uploadId, requesterId, `${requesterId}/staging/${uploadId}/${"a".repeat(32)}`]);
+    const savedUploadId = crypto.randomUUID();
+    await sql(`insert into finance.uploads (id, member_id, staging_key, status, byte_size, content_type, original_name, expires_at, commit_state, purchase_id)
+      values ($1::uuid, $2::uuid, $3, 'pending', 8, 'application/pdf', 'saved.pdf', now(), 'uncertain', $4::uuid)`,
+    [savedUploadId, requesterId, `${requesterId}/staging/${savedUploadId}/${"b".repeat(32)}`, purchaseId]);
     expect((await call({ token: "business", query: { action: "recovery" } })).status).toBe(403);
     expect((await call({ token: "requester", query: { action: "recovery" } })).status).toBe(403);
     const response = await call({ token: "finance", query: { action: "recovery" } });
     expect(response.status).toBe(200);
-    const view = response.body as { deliveries: { id: string; status: string }[]; uploads: { id: string }[] };
+    const view = response.body as { deliveries: { id: string; status: string }[]; uploads: { id: string; referenced: boolean }[] };
     expect(view.deliveries).toHaveLength(2);
     expect(view.deliveries.every((row) => row.status === "uncertain")).toBe(true);
     expect(view.uploads.map((row) => row.id)).toContain(uploadId);
+    expect(view.uploads.find((row) => row.id === uploadId)?.referenced).toBe(false);
+    expect(view.uploads.find((row) => row.id === savedUploadId)?.referenced).toBe(true);
     const serialized = JSON.stringify(view);
     expect(serialized).not.toContain("staging/");
     expect(serialized).not.toContain("final/");
@@ -412,6 +418,9 @@ describe("FIN-10-A01 outbox delivery", () => {
     expect((await sql<{ status: string }>("select status from finance.outbox where id = $1::uuid", [record.id]))[0]?.status).toBe("failed");
     const uploaded = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, reconciliation: "absent" } });
     expect(uploaded.status).toBe(200);
+    const saved = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId: savedUploadId, reconciliation: "saved" } });
+    expect(saved.status).toBe(200);
+    expect((await sql<{ commit_state: string }>("select commit_state from finance.uploads where id = $1::uuid", [savedUploadId]))[0]?.commit_state).toBe("settled");
   });
 
   it("notifies active heads, the requester, and finance recipients once, and keeps a failed send off the business transaction", async () => {

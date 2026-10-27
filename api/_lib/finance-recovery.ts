@@ -40,17 +40,17 @@ export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller
       where o.status in ('pending', 'failed', 'uncertain')
       order by o.updated_at desc, o.id limit 50`);
   const uploads = await db.query<{
-    id: string; owner: string | null; status: string; commit_state: string; created_at: string; expires_at: string;
+    id: string; owner: string | null; status: string; commit_state: string; referenced: boolean; created_at: string; expires_at: string;
   }>(`select u.id::text, m.full_name as owner, u.status, u.commit_state,
-             u.created_at::text, u.expires_at::text
+             finance.upload_is_referenced(u) as referenced, u.created_at::text, u.expires_at::text
       from finance.uploads u join identity.members m on m.id = u.member_id
-      where u.commit_state = 'uncertain' and u.purchase_id is null
+      where u.commit_state = 'uncertain'
       order by u.created_at desc, u.id limit 50`);
   return {
     deliveries: deliveries.rows.map((r) => ({ id: r.id, eventType: r.event_type, recipient: r.recipient, status: r.status,
       safeError: r.safe_error, attemptCount: Number(r.attempt_count), updatedAt: r.updated_at,
       lastClaimedAt: r.last_claimed_at, providerMessageId: r.provider_message_id })),
-    uploads: uploads.rows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state,
+    uploads: uploads.rows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state, referenced: r.referenced,
       createdAt: r.created_at, expiresAt: r.expires_at })),
   };
 }

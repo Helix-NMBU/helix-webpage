@@ -15,6 +15,7 @@ export function FinanceRecoveryPanel() {
   const [data, setData] = useState<FinanceRecoveryView | null>(null);
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);
+  const retryIds = useRef(new Map<string, string>());
   const allowed = Boolean(session.capabilities?.purchaseRegister && session.access === "allowed");
 
   const load = useCallback(async () => {
@@ -34,14 +35,18 @@ export function FinanceRecoveryPanel() {
 
   useEffect(() => {
     if (allowed) void load();
-    else { generation.current += 1; setData(null); }
+    else { generation.current += 1; retryIds.current.clear(); setData(null); }
     return () => { generation.current += 1; };
   }, [allowed, load]);
 
   async function reconcile(action: Record<string, unknown>) {
+    const key = JSON.stringify(action);
+    const requestId = retryIds.current.get(key) ?? crypto.randomUUID();
+    retryIds.current.set(key, requestId);
     setBusy(true);
     try {
-      const result = await session.mutate({ ...action, requestId: crypto.randomUUID() });
+      const result = await session.mutate({ ...action, requestId });
+      retryIds.current.delete(key);
       notify("Recovery updated", result.recovery?.message ?? "The recovery record was updated.", { id: "finance-recovery", variant: "success" });
       await load();
     } catch (error) {
@@ -73,11 +78,11 @@ export function FinanceRecoveryPanel() {
         ))}
         {data?.uploads.map((row) => (
           <div key={row.id} className="space-y-2 rounded-md border p-3">
-            <p>Upload · {row.owner ?? "Unknown member"} · {row.status}</p>
+            <p>Upload · {row.owner ?? "Unknown member"} · {row.status} · {row.referenced ? "Saved purchase reference found" : "No saved purchase reference"}</p>
             <p className="text-sm text-muted-foreground">ID {row.id} · Created {row.createdAt} · Expires {row.expiresAt}</p>
             <div className="flex flex-wrap gap-2">
               {([ ["saved", "Recorded as saved"], ["absent", "Recorded as absent"], ["still_unknown", "Still unknown"] ] as const).map(([value, label]) => (
-                <Button key={value} type="button" variant="outline" size="sm" disabled={busy} onClick={() => { void reconcile({ action: "cleanupUploads", uploadId: row.id, reconciliation: value }); }}>{label}</Button>
+                <Button key={value} type="button" variant="outline" size="sm" disabled={busy || (value === "saved" && !row.referenced) || (value === "absent" && row.referenced)} onClick={() => { void reconcile({ action: "cleanupUploads", uploadId: row.id, reconciliation: value }); }}>{label}</Button>
               ))}
             </div>
           </div>
