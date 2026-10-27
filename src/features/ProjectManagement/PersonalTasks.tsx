@@ -8,15 +8,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/pop
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
+import { TaskStatusControl, type SaveTaskStatus } from "./TaskStatus";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { Badge } from "@libs/components/ui/badge";
 import { CATEGORY_LABELS, type ProjectWorkspace, type Task } from "./types";
 import { formatDate, osloDate } from "./model";
 import { Choice } from "./TaskEditor";
 
-export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onComplete }: {
+export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onStatusChange }: {
   workspace: ProjectWorkspace; busy: boolean; loading: boolean;
-  onRefresh: () => void; onOpen: (task: Task) => void; onComplete: (task: Task) => void;
+  onRefresh: () => void; onOpen: (task: Task) => void; onStatusChange: SaveTaskStatus;
 }) {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -62,7 +63,7 @@ export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onC
             const closed = task.status === "done" || task.status === "cancelled";
             const context = task.partnerName || workspace.projects.find(project => project.id === task.projectId)?.name || CATEGORY_LABELS[task.category];
             return <TableRow key={task.id} className={closed ? "text-muted-foreground" : ""}>
-              <TableCell className="px-4 py-4"><div className="flex items-start gap-3"><Checkbox className="mt-0.5" checked={task.status === "done"} disabled={busy || loading || task.status === "cancelled"} aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`} onCheckedChange={() => onComplete(task)} /><div className="min-w-0"><button className={`text-left leading-5 underline-offset-4 hover:underline ${closed ? "line-through decoration-muted-foreground/50" : "font-medium"}`} onClick={() => onOpen(task)}>{task.title}</button>{task.status === "blocked" && <div className="mt-1 flex flex-wrap items-center gap-2"><Badge variant="secondary" className="text-xs">Blocked</Badge>{task.blockedReason && <span className="text-xs text-muted-foreground">{task.blockedReason}</span>}</div>}{task.kind === "milestone" && <p className="mt-1 text-xs text-muted-foreground">Milestone</p>}</div></div></TableCell>
+              <TableCell className="px-4 py-4"><div className="flex items-start gap-3"><TaskStatusControl task={task} workspace={workspace} busy={busy || loading} onSave={onStatusChange} /><div className="min-w-0"><button className={`text-left leading-5 underline-offset-4 hover:underline ${closed ? "line-through decoration-muted-foreground/50" : "font-medium"}`} onClick={() => onOpen(task)}>{task.title}</button>{task.status === "blocked" && <div className="mt-1 flex flex-wrap items-center gap-2"><Badge variant="secondary" className="text-xs">Blocked</Badge>{task.blockedReason && <span className="text-xs text-muted-foreground">{task.blockedReason}</span>}</div>}{task.kind === "milestone" && <p className="mt-1 text-xs text-muted-foreground">Milestone</p>}</div></div></TableCell>
               <TableCell className={`whitespace-nowrap ${!closed && task.deadline && task.deadline < today ? "text-destructive" : "text-muted-foreground"}`}>{task.deadline ? `Due ${formatDate(task.deadline)}` : "No due date"}</TableCell>
               {showContext && <TableCell><button className="max-w-64 truncate text-left underline-offset-4 hover:underline" title={context} onClick={() => navigate(`/project-management/${task.category}`)}>{context}</button></TableCell>}
               {showAssignee && <TableCell><AssigneeAvatars assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} assigneeIds={task.assigneeIds} members={workspace.members} /></TableCell>}
@@ -70,6 +71,6 @@ export function PersonalTasks({ workspace, busy, loading, onRefresh, onOpen, onC
           })}
         </TableBody>)}</Table> : <Empty className="min-h-64"><EmptyHeader><EmptyTitle>{assigned.length ? "No matching tasks" : "No tasks assigned to you"}</EmptyTitle><EmptyDescription>{assigned.length ? "Adjust the search, filters or view settings." : "Your Department Lead's assignments will appear here."}</EmptyDescription></EmptyHeader></Empty>}
     </div>
-    <p className="mt-3 text-xs text-muted-foreground">Select a checkbox to complete or reopen a task for all its assignees. Department Leads create and assign work in Project Management.</p>
+    <p className="mt-3 text-xs text-muted-foreground">Select a status icon to update a task for all its assignees. Department Leads create and assign work in Project Management.</p>
   </section>;
 }

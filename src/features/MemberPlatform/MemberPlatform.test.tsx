@@ -567,9 +567,10 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
     await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');
     const next=structuredClone(data);const task=next.tasks.find(t=>t.title==='Verify dimensions')!;task.status='done';task.completedAt=new Date().toISOString();task.revision+=1;projectTasks.mutate.mockResolvedValue(next);
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Complete Verify dimensions"]')!.click());
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Change status for Verify dimensions"]')!.click());
+    await act(async()=>document.querySelector<HTMLElement>('[role="option"][aria-label="Done"]')!.click());
     expect(projectTasks.mutate).toHaveBeenCalledWith(expect.objectContaining({action:'set_status',id:task.id,status:'done',expectedRevision:1}));
-    expect(container.querySelector('[aria-label="Reopen Verify dimensions"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(container.querySelector('[aria-label="Change status for Verify dimensions"] [data-task-status="done"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Filter tasks by milestone Manufacturing sign-off"]')?.textContent).toContain('100%');
     expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('40');
   });

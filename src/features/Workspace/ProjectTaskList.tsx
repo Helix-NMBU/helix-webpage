@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
-import { Checkbox } from "@libs/components/ui/checkbox";
+import { TaskStatusControl, TaskStatusIcon, type SaveTaskStatus } from "../ProjectManagement/TaskStatus";
 import { Input } from "@libs/components/ui/input";
 import {
   Empty,
@@ -29,7 +29,7 @@ export function ProjectTaskList({
   filterLabel,
   onClear,
   onOpen,
-  onComplete,
+  onStatusChange,
   onCreate,
 }: {
   tasks: Task[];
@@ -40,7 +40,7 @@ export function ProjectTaskList({
   filterLabel: string | null;
   onClear: () => void;
   onOpen: (task: Task) => void;
-  onComplete: (task: Task) => void;
+  onStatusChange: SaveTaskStatus;
   onCreate: () => void;
 }) {
   const [search, setSearch] = useState("");
@@ -113,6 +113,7 @@ export function ProjectTaskList({
                   aria-hidden="true"
                   className={`size-3.5 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
                 />
+                <TaskStatusIcon status={status} />
                 {STATUS_LABELS[status]}
                 <span className="ml-1 text-xs tabular-nums text-muted-foreground">
                   {group.length}
@@ -122,24 +123,13 @@ export function ProjectTaskList({
               {open && (
                 <ul className="divide-y divide-border/50">
                   {group.map((task) => {
-                    const canUpdate =
-                      workspace.canManage ||
-                      workspace.taskLeadCategories.includes(task.category) ||
-                      task.assigneeIds.includes(workspace.viewerId);
                     return (
                       <li
                         key={task.id}
                         className={`flex items-center gap-3 px-3 py-4 ${status === "done" || status === "cancelled" ? "text-muted-foreground" : ""}`}
                       >
                         <PriorityIndicator priority={task.priority} />
-                        <Checkbox
-                          aria-label={`${task.status === "done" ? "Reopen" : "Complete"} ${task.title}`}
-                          checked={task.status === "done"}
-                          disabled={
-                            busy || !canUpdate || task.status === "cancelled"
-                          }
-                          onCheckedChange={() => onComplete(task)}
-                        />
+                        <TaskStatusControl task={task} workspace={workspace} busy={busy} onSave={onStatusChange} />
                         <div className="min-w-0 flex-1">
                           <button
                             type="button"

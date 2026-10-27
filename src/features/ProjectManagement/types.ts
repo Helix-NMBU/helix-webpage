@@ -1,6 +1,8 @@
 export const TASK_CATEGORIES = ["production", "partnership-deliverables", "marketing", "operations"] as const;
 export type TaskCategory = typeof TASK_CATEGORIES[number];
-export const TASK_STATUSES = ["todo", "in_progress", "blocked", "done", "cancelled"] as const;
+export const TASK_WORKFLOW_STATUSES = ["backlog", "todo", "in_progress", "done", "blocked"] as const;
+// Retain legacy cancelled records and their immutable history. New workflow menus use the five active choices.
+export const TASK_STATUSES = [...TASK_WORKFLOW_STATUSES, "cancelled"] as const;
 export type TaskStatus = typeof TASK_STATUSES[number];
 export const TASK_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type TaskPriority = typeof TASK_PRIORITIES[number];
@@ -10,7 +12,7 @@ export const MAX_DEPARTMENT_MEMBERS = 500;
 export const ORGANIZATION_DEPARTMENTS = ["Management", "Mechanical & Production", "Electronics", "Software & Autonomous", "Business & Marketing", "Logistics", "Finance"] as const;
 export type OrganizationDepartment = typeof ORGANIZATION_DEPARTMENTS[number];
 export const CATEGORY_LABELS: Record<TaskCategory, string> = { production: "Production", "partnership-deliverables": "Partnership deliverables", marketing: "Marketing", operations: "Operations" };
-export const STATUS_LABELS: Record<TaskStatus, string> = { todo: "To do", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
+export const STATUS_LABELS: Record<TaskStatus, string> = { backlog: "Backlog", todo: "Todo", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
 
 export interface ProjectInput {
   startDate?: string | null;

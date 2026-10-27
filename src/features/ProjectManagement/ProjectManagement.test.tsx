@@ -28,6 +28,10 @@ describe("project management interface", () => {
     mutate.mockReset().mockResolvedValue(initialLocalWorkspace());
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+  async function changeStatus(title: string, label: string) {
+    await act(async()=>document.querySelector<HTMLButtonElement>(`[aria-label="Change status for ${title}"]`)!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.getAttribute('aria-label')===label)!.click());
+  }
   async function open(section = "overview", personal = false, query = "") {
     const router = createMemoryRouter([{ path: personal ? "/tasks" : "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }, { path: "/tasks/:taskId", element: <MemberThemeProvider><MemberNotificationsProvider><TaskDetailPage repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [personal ? `/tasks${query}` : `/project-management/${section}${query}`] });
     await act(async () => root.render(<RouterProvider key={`${section}-${personal}`} router={router} />));
@@ -94,7 +98,7 @@ describe("project management interface", () => {
     await open("overview", true);
     expect(container.textContent).toContain("Shared design review");
     expect(container.querySelector('[aria-label="Assigned to Alex Example, Sam Example"]')).not.toBeNull();
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Complete Shared design review"]')!.click());
+    await changeStatus("Shared design review", "Done");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", id: shared.id, status: "done" }));
   });
   it("describes every assignee to screen readers in read-only task details", async () => {
@@ -177,15 +181,15 @@ describe("project management interface", () => {
     const task = workspace.tasks.find(item => item.title === "Confirm material delivery")!;
     mutate.mockResolvedValue({ ...workspace, tasks: workspace.tasks.map(item => item.id === task.id ? { ...item, status: "done", revision: 2 } : item) });
     await open("overview", true);
-    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Complete ${task.title}"]`)!.click());
-    expect(mutate).toHaveBeenCalledWith({ action: "set_status", id: task.id, expectedRevision: 1, status: "done", blockedReason: task.blockedReason });
+    await changeStatus(task.title, "Done");
+    expect(mutate).toHaveBeenCalledWith({ action: "set_status", id: task.id, expectedRevision: 1, status: "done", blockedReason: "" });
     expect(container.querySelector('tbody[aria-label="Completed"]')?.textContent).toContain(task.title);
     expect(container.querySelector('tbody[aria-label="Overdue"]')).toBeNull();
   });
   it("reopens a completed personal task", async () => {
     const task = initialLocalWorkspace().tasks[0];
     await open("overview", true);
-    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Reopen ${task.title}"]`)!.click());
+    await changeStatus(task.title, "Todo");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "todo", id: task.id }));
   });
   it("keeps assignment in the project subfolder even when a Department Lead opens My tasks", async () => {

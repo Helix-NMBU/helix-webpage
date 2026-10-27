@@ -33,6 +33,7 @@ import { TaskComposer } from "../ProjectManagement/TaskComposer";
 import { summarize } from "../ProjectManagement/model";
 import { useWorkspace } from "./WorkspaceContext";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
+import { type TaskStatus } from "../ProjectManagement/types";
 import { ProjectTaskList } from "./ProjectTaskList";
 import { ProjectSidebar } from "./ProjectSidebar";
 
@@ -241,13 +242,13 @@ export function ProjectDetail({
   function openTask(id: string) {
     navigate(`/tasks/${id}`, { state: { from: `${location.pathname}${location.search}` } });
   }
-  function complete(task: Task) {
-    void save({
+  function changeStatus(task: Task, status: TaskStatus, blockedReason: string) {
+    return save({
       action: "set_status",
       id: task.id,
       expectedRevision: task.revision,
-      status: task.status === "done" ? "todo" : "done",
-      blockedReason: "",
+      status,
+      blockedReason,
     });
   }
   const taskIds = new Set(tasks.map((task) => task.id));
@@ -421,7 +422,7 @@ export function ProjectDetail({
                   }
                   onClear={clearMilestone}
                   onOpen={item => openTask(item.id)}
-                  onComplete={complete}
+                  onStatusChange={changeStatus}
                   onCreate={() => setComposer("task")}
                 />
               )}

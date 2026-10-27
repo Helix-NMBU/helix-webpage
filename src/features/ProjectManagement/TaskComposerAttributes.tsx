@@ -1,10 +1,5 @@
 import type { ReactNode } from "react";
 import {
-  IconCircleDashed,
-  IconCircleHalf2,
-  IconCircleCheck,
-  IconCircleOff,
-  IconAlertCircle,
   IconCube,
   IconDiamonds,
   IconDots,
@@ -25,23 +20,17 @@ import {
 } from "@libs/components/ui/select";
 import { AssigneePicker } from "./TaskAssignees";
 import { Field } from "./TaskEditor";
+import { TaskStatusIcon } from "./TaskStatus";
 import { PriorityGlyph } from "./PriorityGlyph";
 import {
   STATUS_LABELS,
-  TASK_STATUSES,
+  TASK_WORKFLOW_STATUSES,
   TASK_PRIORITIES,
   type TaskInput,
   type ProjectWorkspace,
 } from "./types";
 import { formatDate } from "./model";
 import { compatibleMilestones } from "./progress";
-const statusIcons = {
-  todo: IconCircleDashed,
-  in_progress: IconCircleHalf2,
-  blocked: IconAlertCircle,
-  done: IconCircleCheck,
-  cancelled: IconCircleOff,
-};
 function AttributeChoice({
   id,
   label,
@@ -55,7 +44,7 @@ function AttributeChoice({
   label: string;
   value: string;
   icon: ReactNode;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: ReactNode }[];
   onChange: (value: string) => void;
   disabled: boolean;
 }) {
@@ -74,7 +63,7 @@ function AttributeChoice({
       <SelectContent position="popper" align="start">
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
-            {option.label}
+            {option.icon}{option.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -96,7 +85,6 @@ export function TaskComposerAttributes({
   onDetails: () => void;
   onChange: <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => void;
 }) {
-  const StatusIcon = statusIcons[draft.status];
   const milestones = compatibleMilestones(workspace.tasks, draft);
   return (
     <div className="flex flex-wrap items-center gap-2 px-6 py-3">
@@ -105,11 +93,12 @@ export function TaskComposerAttributes({
         label="Status"
         value={draft.status}
         onChange={(value) => onChange("status", value as TaskInput["status"])}
-        icon={<StatusIcon className="size-4" />}
+        icon={<TaskStatusIcon status={draft.status} />}
         disabled={busy}
-        options={TASK_STATUSES.map((value) => ({
+        options={TASK_WORKFLOW_STATUSES.map((value) => ({
           value,
           label: STATUS_LABELS[value],
+          icon: <TaskStatusIcon status={value} />,
         }))}
       />
       <AttributeChoice

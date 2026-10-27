@@ -7,7 +7,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/componen
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { projectRepository, ProjectRequestError } from "./repository";
-import { CATEGORY_LABELS, STATUS_LABELS, type ProjectMutation, type ProjectRepository, type ProjectWorkspace } from "./types";
+import { CATEGORY_LABELS, type ProjectMutation, type ProjectRepository, type ProjectWorkspace } from "./types";
+import { TaskStatusControl } from "./TaskStatus";
 import { TaskEditor } from "./TaskEditor";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
@@ -108,7 +109,7 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
       <aside tabIndex={0} aria-label="Task properties" className="min-w-0 space-y-6 border-t px-4 pb-8 pt-4 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:border-l md:border-t-0">
         <h2 className="text-sm font-medium text-muted-foreground">Properties</h2>
         <dl className="space-y-6 text-sm [&_dt]:mb-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
-          <div><dt>Status</dt><dd>{STATUS_LABELS[task.status]}</dd></div>
+          <div><dt>Status</dt><dd><TaskStatusControl task={task} workspace={workspace} busy={busy} showLabel onSave={(task, status, blockedReason) => save({ action: "set_status", id: task.id, expectedRevision: task.revision, status, blockedReason })} /></dd></div>
           <div><dt>Priority</dt><dd className="flex items-center gap-2"><PriorityIndicator priority={task.priority} />{task.priority === "normal" ? "Medium" : task.priority[0].toUpperCase() + task.priority.slice(1)}</dd></div>
           <div><dt>Assignees</dt><dd><AssigneeAvatars assigneeIds={task.assigneeIds} members={members} showNames /></dd></div>
           <div><dt>Target date</dt><dd><TargetDate deadline={task.deadline} /></dd></div>

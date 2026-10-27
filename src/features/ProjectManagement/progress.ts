@@ -3,7 +3,7 @@ import type { Task, TaskInput, TaskProgressEvent } from "./types";
 
 export function progressCounts(tasks: Pick<TaskInput, "kind" | "status">[]) {
   const scope = tasks.filter(task => task.kind === "task" && task.status !== "cancelled");
-  return { scope: scope.length, started: scope.filter(task => task.status !== "todo").length, completed: scope.filter(task => task.status === "done").length };
+  return { scope: scope.length, started: scope.filter(task => ["in_progress", "blocked", "done"].includes(task.status)).length, completed: scope.filter(task => task.status === "done").length };
 }
 
 // End-of-day states, carried forward only after the first recorded observation.

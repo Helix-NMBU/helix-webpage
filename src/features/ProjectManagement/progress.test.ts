@@ -4,8 +4,8 @@ import { compatibleMilestones, milestoneProgress, progressCounts, progressEvent,
 
 describe("observed task progress", () => {
   const task = initialLocalWorkspace().tasks[0];
-  it("counts started work inclusively without milestones or cancelled tasks", () => {
-    expect(progressCounts([task, { ...task, status: "blocked" }, { ...task, status: "in_progress" }, { ...task, status: "todo" }, { ...task, status: "cancelled" }, { ...task, kind: "milestone" }])).toEqual({ scope: 4, started: 3, completed: 1 });
+  it("counts scope and started work without treating backlog as started", () => {
+    expect(progressCounts([{ ...task, status: "backlog" }, task, { ...task, status: "blocked" }, { ...task, status: "in_progress" }, { ...task, status: "todo" }, { ...task, status: "cancelled" }, { ...task, kind: "milestone" }])).toEqual({ scope: 5, started: 3, completed: 1 });
   });
   it("uses each task's latest observed state per Oslo date, including reopening and cancelled scope", () => {
     const other = { ...task, id: "other", status: "todo" as const };

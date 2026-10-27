@@ -1,3 +1,4 @@
+import { TaskStatusSelect } from "./TaskStatus";
 import { ProjectComposer } from "./ProjectComposer";
 import { AssigneePicker } from "./TaskAssignees";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -8,7 +9,7 @@ import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { Textarea } from "@libs/components/ui/textarea";
-import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_PRIORITIES, ORGANIZATION_DEPARTMENTS, TASK_STATUSES, type Project, type ProjectInput, type ProjectMutation, type ProjectWorkspace, type Task, type TaskCategory, type TaskInput } from "./types";
+import { CATEGORY_LABELS, TASK_CATEGORIES, TASK_PRIORITIES, ORGANIZATION_DEPARTMENTS, type Project, type ProjectInput, type ProjectMutation, type ProjectWorkspace, type Task, type TaskCategory, type TaskInput } from "./types";
 import { compatibleMilestones, updateTaskDraft } from "./progress";
 import { validateProject, validateTask } from "./model";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -22,7 +23,6 @@ export function Choice({ id, value, onChange, options, disabled = false, ariaLab
 }
 
 const categoryOptions = TASK_CATEGORIES.map(value => ({ value, label: CATEGORY_LABELS[value] }));
-const statusOptions = TASK_STATUSES.map(value => ({ value, label: STATUS_LABELS[value] }));
 
 export function TaskEditor({ task, workspace, category, busy, onSave, onClose, statusOnly = false }: {
   task: Task | null; workspace: ProjectWorkspace; category: TaskCategory; busy: boolean;
@@ -68,7 +68,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
         </div>
       </fieldset>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="task-status" label="Status"><Choice id="task-status" disabled={busy || !canEdit} value={draft.status} options={statusOptions} onChange={value => change("status", value as TaskInput["status"])} /></Field>
+        <Field id="task-status" label="Status"><TaskStatusSelect id="task-status" disabled={busy || !canEdit} value={draft.status} onChange={value => change("status", value)} /></Field>
         {(draft.status === "blocked" || draft.blockedReason) && <Field id="task-blocked" label="Blocked reason"><Textarea id="task-blocked" disabled={busy || !canEdit} required={draft.status === "blocked"} maxLength={500} value={draft.blockedReason} onChange={event => change("blockedReason", event.target.value)} /></Field>}
       </div>
       {task?.completedAt && <p className="text-sm text-muted-foreground">Completed {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Europe/Oslo" }).format(new Date(task.completedAt))}</p>}
