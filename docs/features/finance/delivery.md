@@ -64,4 +64,4 @@ The local member development mode stays on loopback and does not call the financ
 - Choose the current season.
 - Grant business, finance, and head profiles explicitly.
 - Set the approval threshold and the unused annual reference start before any production reference is issued.
-- Object storage, file delivery, and email remain later work.
+- Purchase files use the private finance bucket. Notification mail, purchase export, and upload cleanup are documented in `docs/features/finance/notifications-exports.md`.
