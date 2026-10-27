@@ -18,7 +18,7 @@ const series = [
 ] as const;
 const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
 
-export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null, showDeadlineTail = false, newYearDate = null }: {
+export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null, showDeadlineTail = false, newYearDate = null, footerLabels }: {
   workspace: ProjectWorkspace;
   compact?: boolean;
   deadline?: string | null;
@@ -26,6 +26,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
   endDate?: string | null;
   showDeadlineTail?: boolean;
   newYearDate?: string | null;
+  footerLabels?: { start: string; end: string };
 }) {
   const patternId = useId().replace(/:/g, "");
   const deadlinePatternId = `${patternId}-deadline`;
@@ -105,9 +106,9 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
       </div>
     </div>
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-      <span>{points.length === 1 ? `History begins ${shortDate(current.date)}` : `Recorded since ${shortDate(points[0].date)}`}</span>
+      <span>{footerLabels?.start ?? (points.length === 1 ? `History begins ${shortDate(current.date)}` : `Recorded since ${shortDate(points[0].date)}`)}</span>
       <span>Shaded area: future</span>
-      {deadline && <span className="text-destructive" title="Red hatching marks time after the deadline">Deadline: {shortDate(deadline)}</span>}
+      {deadline && <span className="text-destructive" title="Red hatching marks time after the deadline">{footerLabels?.end ?? `Deadline: ${shortDate(deadline)}`}</span>}
     </div>
     <table className="sr-only"><caption>Progress history</caption><thead><tr><th>Date</th>{series.map(item => <th key={item.key}>{item.label}</th>)}</tr></thead><tbody>{points.map(point => <tr key={point.date}><th scope="row">{shortDate(point.date)}</th><td>{point.scope}</td><td>{point.started}</td><td>{point.completed}</td></tr>)}</tbody></table>
   </div>;
@@ -141,7 +142,7 @@ export function OverviewProgress({ workspace, busy, onSelectProject, onNeedsOrga
   const unallocatedTasks = workspace.tasks.filter(task => !task.projectId || !allocatedProjects.has(task.projectId));
   if (summarize(unallocatedTasks).total > 0) areaRows.push({ id: "unallocated", label: "No department", tasks: unallocatedTasks });
   return <div data-project-progress className="grid w-full grid-cols-1 gap-4">
-    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} deadline={seasonRange.endDate} {...seasonRange} showDeadlineTail newYearDate={`${seasonRange.endDate.slice(0, 4)}-01-01`} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3></div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
+    <Card className="gap-2 py-3"><CardHeader className="px-4"><CardTitle className="text-sm font-medium text-muted-foreground">Progress</CardTitle></CardHeader><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} deadline={seasonRange.endDate} {...seasonRange} showDeadlineTail newYearDate={`${seasonRange.endDate.slice(0, 4)}-01-01`} footerLabels={{ start: "Season start", end: "Season end" }} /><section className="border-t pt-2" aria-labelledby="progress-areas-title"><div className="mb-1 flex items-center justify-between"><h3 id="progress-areas-title" className="text-sm font-medium">Areas</h3></div><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></section></CardContent></Card>
     <section aria-labelledby="overview-projects-title" className="space-y-3"><div className="flex items-center justify-between"><h2 id="overview-projects-title" className="text-base font-medium">Projects <span className="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{projects.length}</span></h2>{workspace.canManage && <Button size="icon" variant="ghost" className="-my-2 size-7" disabled={busy} aria-label="Create project" onClick={onCreateProject}><IconPlus aria-hidden="true" className="size-4" /></Button>}</div><Card className="gap-3 py-2"><CardContent className="px-2">
       {projects.map(project => { const progress = summarize(workspace.tasks.filter(task => task.projectId === project.id)); return <div key={project.id} className="group flex items-center gap-1 rounded-md px-2 hover:bg-muted/50"><button className="flex min-w-0 flex-1 items-center gap-2 py-3 text-left" onClick={() => onSelectProject(project.id)} aria-label={`See tasks for project ${project.name}, ${progress.done} of ${progress.total} tasks complete, ${progress.percent}%`}><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1"><span className="block truncate text-sm">{project.name}</span><span className="mt-1 block text-xs text-muted-foreground">{project.departments.join(", ") || "No department"} · {formatDate(project.deadline)}</span></span><ProgressRing {...progress} label={project.name} /></button>{workspace.canManage && <Button size="icon" variant="ghost" className="size-7 shrink-0" disabled={busy} aria-label={`Edit project ${project.name}`} onClick={() => onOpenProject(project)}><IconDots aria-hidden="true" className="size-4" /></Button>}</div>; })}
       {!projects.length && <p className="px-3 py-4 text-sm text-muted-foreground">No projects yet. A project and milestone are needed before adding tasks.</p>}

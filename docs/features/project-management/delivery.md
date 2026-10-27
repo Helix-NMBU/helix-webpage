@@ -288,3 +288,8 @@ Validation: 142 focused chart and interface tests, client TypeScript and the pro
 Added a vertical New Year reference line and 1 Jan axis label to Season Overview, positioned using the same calendar scale as progress and the July deadline. S27 marks 1 January 2027. The line uses the foreground color (white in the dark theme), with a full-date hover title and accessible chart description. Today labels avoid the marker when close. Project charts retain their existing markers and history.
 
 Validation: 76 focused chart and interface tests, client TypeScript and the production build passed (9.35 MB static output; 9 API functions). Tests cover S27/S28 calendar positions, date labels, unchanged recorded history, project exclusion and out-of-range omission. Browser inspection confirmed the white marker at 1 January 2027 alongside the July deadline. Screenshot: `season-new-year.png` in this chat's visualization folder. No schema, data, permissions, push or deployment changed.
+
+
+## Season chart footer labels — 27 October 2026
+
+Season Overview now labels the chart footer Season start and Season end. Dates remain on the axis; project chart history/deadline captions retain their existing behavior. All 76 focused chart/interface tests and client TypeScript passed. Browser inspection confirmed both labels. Screenshot: `season-chart-labels.png` in this chat's visualization folder.
