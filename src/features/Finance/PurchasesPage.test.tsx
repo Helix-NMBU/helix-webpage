@@ -101,6 +101,46 @@ describe("PurchasesPage", () => {
     expect(calls[0].requestId).toBe(calls[1].requestId);
   });
 
+  it("submits the ID and revision returned when a new request is saved", async () => {
+    session.mutate.mockImplementation(async (body: { action: string }) => body.action === "saveRequest"
+      ? { ok: true, viewVersion: 2, warnings: [], errors: [], id: "new-request", revision: 4 }
+      : { ok: true, viewVersion: 3, warnings: [], errors: [], id: "new-request" });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "New request")!.click(); });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Submit")!.click(); });
+    const submit = session.mutate.mock.calls.map(([body]) => body).find((body) => body.action === "submitRequest");
+    expect(submit).toEqual(expect.objectContaining({ requestRecordId: "new-request", expectedRevision: 4 }));
+  });
+
+  it("retries an unchanged request save with the same ID after a lost response", async () => {
+    let saves = 0;
+    session.mutate.mockImplementation(async (body: { action: string }) => {
+      if (body.action === "saveRequest" && saves++ === 0) throw new Error("Response lost");
+      return { ok: true, viewVersion: 2, warnings: [], errors: [], id: "new-request", revision: 0 };
+    });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "New request")!.click(); });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Submit")!.click(); });
+    }
+    const savesMade = session.mutate.mock.calls.map(([body]) => body).filter((body) => body.action === "saveRequest") as Array<{ requestId: string }>;
+    expect(savesMade).toHaveLength(2);
+    expect(savesMade[0].requestId).toBe(savesMade[1].requestId);
+  });
+
+  it("opens the selected request after its asynchronous detail arrives", async () => {
+    session.purchases = { viewVersion: 1, ownRequests: [{ id: "draft-1", publicRef: "RQ-S27-001", status: "draft", plannedDate: null,
+      approvedNok: null, fulfilledNok: "0.00", remainingNok: "0.00", releasedNok: "0.00" }] };
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "RQ-S27-001")!.click(); });
+    session.purchases = { ...session.purchases, detail: { id: "draft-1", publicRef: "RQ-S27-001", status: "draft", revision: 2,
+      supplierName: "Selected supplier", justification: "Frame materials", plannedDate: "2026-10-10", lateReason: null, closeReason: null,
+      releasedNok: "0.00", draftLines: [], submittedRevisionId: null, approvedRevisionId: null, revisions: [],
+      approvedNok: null, fulfilledNok: "0.00", remainingNok: "0.00" } };
+    await act(async () => { root.render(<PurchasesBoard />); });
+    expect((container.querySelector("#supplier") as HTMLInputElement).value).toBe("Selected supplier");
+  });
+
   it("shows the unpaid register and payment, void, and review controls to finance", async () => {
     session.capabilities = {
       registerActual: true,

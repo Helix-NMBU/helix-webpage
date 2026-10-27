@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
+import { useMemberAccount } from "../MemberPlatform/MemberAccountContext";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { FinanceRecoveryPanel } from "./FinanceRecoveryPanel";
 import { PurchaseRegister } from "./PurchaseRegister";
 import { requiresLateReason } from "./request-domain";
 import type {
@@ -16,6 +18,7 @@ import type {
   BudgetChoiceSystem,
   FinanceExportFile,
   FinanceMutation,
+  FinanceMutationResult,
   HeadDecisionQueueItem,
   OwnRequestSummary,
   PurchaseInput,
@@ -63,11 +66,13 @@ const emptyRequestLine = (): RequestDraftLine => ({ budgetItemId: "", descriptio
 
 export function PurchasesBoard() {
   const session = useFinanceAccess();
+  const account = useMemberAccount();
   const notify = useNotify();
   const purchases = session.purchases;
   const requests = useRequestIds();
   const purchaseRequests = useRequestIds();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const pendingOpen = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editor, setEditor] = useState<{
     requestRecordId?: string;
@@ -84,8 +89,14 @@ export function PurchasesBoard() {
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const unpaidOnlyRef = useRef(false);
-  const buyerDefault = "Member Example";
+  const buyerDefault = account?.name ?? "";
   const [purchase, setPurchase] = useState<PurchaseInput>(() => emptyPurchase(session.today ?? "", buyerDefault));
+  const setDirty = session.setFormDirty;
+  const hasPendingForm = editor !== null || uploads.length > 0 || JSON.stringify(purchase) !== JSON.stringify(emptyPurchase(session.today ?? "", buyerDefault));
+  useEffect(() => {
+    setDirty?.("purchase-editor", hasPendingForm);
+    return () => setDirty?.("purchase-editor", false);
+  }, [hasPendingForm, setDirty]);
   const budgetChoices = session.budgets?.choices ?? { systems: [], items: [] };
   const itemsBySystem = useMemo(() => {
     const map = new Map<string, BudgetChoiceItem[]>();
@@ -98,6 +109,23 @@ export function PurchasesBoard() {
     return map;
   }, [budgetChoices.items]);
   const detail = purchases?.detail;
+  useEffect(() => {
+    if (!detail || detail.id !== selectedId || pendingOpen.current !== detail.id) return;
+    pendingOpen.current = null;
+    if (detail.status !== "draft" && detail.status !== "rejected") {
+      setEditor(null);
+      return;
+    }
+    setEditor({
+      requestRecordId: detail.id,
+      revision: detail.revision,
+      supplierName: detail.supplierName ?? "",
+      justification: detail.justification ?? "",
+      plannedDate: detail.plannedDate ?? session.today ?? "",
+      lateReason: detail.lateReason ?? "",
+      lines: detail.draftLines.length ? detail.draftLines : [emptyRequestLine()],
+    });
+  }, [detail, selectedId, session.today]);
   const approvedLinkLines = useMemo(() => {
     if (!detail?.approvedRevisionId) return [];
     return detail.revisions.find((revision) => revision.id === detail.approvedRevisionId)?.lines ?? [];
@@ -296,6 +324,7 @@ export function PurchasesBoard() {
   }
 
   function openNew() {
+    pendingOpen.current = null;
     setSelectedId(null);
     setEditor({
       revision: 0,
@@ -309,34 +338,25 @@ export function PurchasesBoard() {
   }
 
   function openRequest(row: OwnRequestSummary) {
+    pendingOpen.current = row.id;
     setSelectedId(row.id);
-    void session.loadPage("purchases", purchaseLoadOptions(row.id)).then(() => {
-      const loaded = session.purchases?.detail;
-      if (!loaded) return;
-      setEditor({
-        requestRecordId: loaded.id,
-        revision: loaded.revision,
-        supplierName: loaded.supplierName ?? "",
-        justification: loaded.justification ?? "",
-        plannedDate: loaded.plannedDate ?? today,
-        lateReason: loaded.lateReason ?? "",
-        lines: loaded.draftLines.length ? loaded.draftLines : [emptyRequestLine()],
-      });
-    });
+    setEditor(null);
+    void session.loadPage("purchases", purchaseLoadOptions(row.id));
   }
 
-  async function run(key: string, action: FinanceMutation, success: string) {
+  async function run(key: string, action: FinanceMutation, success: string): Promise<FinanceMutationResult | null> {
     setSaving(true);
+    const { requestId: _unusedRequestId, ...payload } = action;
+    const requestKey = `${key}:${JSON.stringify(payload)}`;
     try {
-      await session.mutate({ ...action, requestId: requests.idFor(key) });
+      const result = await session.mutate({ ...action, requestId: requests.idFor(requestKey) });
       requests.finish();
       notify("Request saved", success, { id: "request-saved", variant: "success" });
       await session.loadPage("purchases", purchaseLoadOptions(selectedId));
-      return true;
+      return result;
     } catch (error) {
-      requests.finish();
       notify("Could not save the request", error instanceof Error ? error.message : "Please try again.", { id: "request-save", variant: "error" });
-      return false;
+      return null;
     } finally {
       setSaving(false);
     }
@@ -352,13 +372,17 @@ export function PurchasesBoard() {
       lateReason: editor.lateReason || null,
       lines: editor.lines.filter((line) => line.budgetItemId && line.estimatedNok),
     };
-    await run("save", {
+    const saved = await run("save", {
       action: "saveRequest",
-      requestId: requests.idFor("save"),
+      requestId: "",
       requestRecordId: editor.requestRecordId,
       expectedRevision: editor.requestRecordId ? editor.revision : undefined,
       request: body,
     } as FinanceMutation, "The draft was saved.");
+    if (saved?.id) {
+      setSelectedId(saved.id);
+      setEditor((current) => current ? { ...current, requestRecordId: saved.id, revision: saved.revision ?? current.revision } : current);
+    }
   }
 
   async function submitCurrent() {
@@ -370,34 +394,38 @@ export function PurchasesBoard() {
       lateReason: editor.lateReason || null,
       lines: editor.lines.filter((line) => line.budgetItemId && line.estimatedNok),
     };
-    if (!editor.requestRecordId) {
+    let requestRecordId = editor.requestRecordId;
+    let revision = editor.revision;
+    if (!requestRecordId) {
       const saved = await run("save", {
         action: "saveRequest",
-        requestId: requests.idFor("save"),
+        requestId: "",
         request: body,
       } as FinanceMutation, "The draft was saved.");
-      if (!saved) return;
-      await session.loadPage("purchases", purchaseLoadOptions(null));
-      const own = session.purchases?.ownRequests ?? [];
-      const created = own.length > 0 ? own[own.length - 1] : undefined;
-      if (!created) return;
-      editor.requestRecordId = created.id;
-      editor.revision = 0;
+      if (!saved?.id) return;
+      requestRecordId = saved.id;
+      revision = saved.revision ?? 0;
+      setSelectedId(requestRecordId);
+      setEditor((current) => current ? { ...current, requestRecordId: saved.id, revision } : current);
     }
-    const action = detail?.status === "rejected" ? "reviseRequest" : "submitRequest";
-    await run("submit", {
+    const action = detail?.id === requestRecordId && detail.status === "rejected" ? "reviseRequest" : "submitRequest";
+    const submitted = await run("submit", {
       action,
-      requestId: requests.idFor("submit"),
-      requestRecordId: editor.requestRecordId,
-      expectedRevision: editor.revision,
+      requestId: "",
+      requestRecordId,
+      expectedRevision: revision,
       request: body,
     } as FinanceMutation, "The request was submitted.");
+    if (submitted) {
+      setEditor(null);
+      await session.loadPage("purchases", purchaseLoadOptions(requestRecordId));
+    }
   }
 
   async function decide(item: HeadDecisionQueueItem, decision: "approved" | "rejected") {
     await run(`decide-${item.id}`, {
       action: "decideRequest",
-      requestId: requests.idFor(`decide-${item.id}`),
+      requestId: "",
       requestRecordId: item.id,
       revisionId: item.revisionId,
       decision,
@@ -594,7 +622,7 @@ export function PurchasesBoard() {
               disabled={saving}
               onClick={() => run("close", {
                 action: "closeRequest",
-                requestId: requests.idFor("close"),
+                requestId: "",
                 requestRecordId: detail.id,
                 expectedRevision: detail.revision,
                 reason: closeReason,
@@ -671,7 +699,7 @@ export function PurchasesBoard() {
                 {detail?.status === "submitted" && (
                   <Button type="button" size="sm" variant="outline" disabled={saving} onClick={() => run("withdraw", {
                     action: "withdrawRequest",
-                    requestId: requests.idFor("withdraw"),
+                    requestId: "",
                     requestRecordId: detail.id,
                     expectedRevision: detail.revision,
                   } as FinanceMutation, "The request was withdrawn.")}>Withdraw</Button>
@@ -708,6 +736,7 @@ export function PurchasesBoard() {
           </div>
         </section>
       ) : null}
+      {canExport ? <FinanceRecoveryPanel /> : null}
       {session.capabilities?.purchaseRegister ? (
         <PurchaseRegister
           register={register}

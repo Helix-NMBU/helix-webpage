@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
@@ -391,10 +391,17 @@ function ItemForm({
   saving: boolean;
   onSubmit: (item: Partial<ItemDraft>, reason: string) => Promise<boolean>;
 }) {
+  const setDirty = useFinanceAccess().setFormDirty;
   const notify = useNotify();
   const [draft, setDraft] = useState<ItemDraft>(() => draftFrom(item, systems));
   const baseline = useRef(draft);
   const [reason, setReason] = useState("");
+  const formId = `budget-item:${item?.id ?? "new"}`;
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(baseline.current) || Boolean(reason);
+  useEffect(() => {
+    setDirty?.(formId, isDirty);
+    return () => setDirty?.(formId, false);
+  }, [formId, isDirty, setDirty]);
   function update(patch: Partial<ItemDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
   }
