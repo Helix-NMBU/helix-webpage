@@ -106,9 +106,15 @@ export function parseRequestChange(body: Record<string, unknown>, todayOslo: str
     }
     if (reason.length < 3) return { ok: false, errors: [{ field: "reason", message: "Enter a decision reason." }] };
     const approvedOreByLine: Record<string, string> = {};
-    if (decision === "approved" && body.approvedOreByLine && typeof body.approvedOreByLine === "object") {
+    if (decision === "approved" && body.approvedOreByLine !== undefined) {
+      if (!body.approvedOreByLine || typeof body.approvedOreByLine !== "object" || Array.isArray(body.approvedOreByLine)) {
+        return { ok: false, errors: [{ field: "approvedOreByLine", message: "Enter valid approved amounts." }] };
+      }
       for (const [key, value] of Object.entries(body.approvedOreByLine as Record<string, unknown>)) {
-        if (typeof value === "string" && /^[0-9]+$/.test(value)) approvedOreByLine[key] = value;
+        if (!UUID.test(key) || typeof value !== "string" || value.length > 19 || !/^[0-9]+$/.test(value) || BigInt(value) > 9223372036854775807n) {
+          return { ok: false, errors: [{ field: "approvedOreByLine", message: "Enter valid approved amounts." }] };
+        }
+        approvedOreByLine[key] = value;
       }
     }
     return {

@@ -13,6 +13,7 @@ import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { FinanceRecoveryPanel } from "./FinanceRecoveryPanel";
 import { PurchaseRegister } from "./PurchaseRegister";
 import { requiresLateReason } from "./request-domain";
+import { parseNokToOre } from "./money";
 import type {
   BudgetChoiceItem,
   BudgetChoiceSystem,
@@ -84,6 +85,7 @@ export function PurchasesBoard() {
     lines: RequestDraftLine[];
   } | null>(null);
   const [decisionReason, setDecisionReason] = useState("");
+  const [decisionAmounts, setDecisionAmounts] = useState<Record<string, Record<string, string>>>({});
   const [closeReason, setCloseReason] = useState("");
   const [releasedNok, setReleasedNok] = useState("0.00");
   const [uploads, setUploads] = useState<UploadState[]>([]);
@@ -92,11 +94,17 @@ export function PurchasesBoard() {
   const buyerDefault = account?.name ?? "";
   const [purchase, setPurchase] = useState<PurchaseInput>(() => emptyPurchase(session.today ?? "", buyerDefault));
   const setDirty = session.setFormDirty;
-  const hasPendingForm = editor !== null || uploads.length > 0 || JSON.stringify(purchase) !== JSON.stringify(emptyPurchase(session.today ?? "", buyerDefault));
+  const hasPendingForm = editor !== null || uploads.length > 0 || decisionReason.trim().length > 0 || Object.keys(decisionAmounts).length > 0 || JSON.stringify(purchase) !== JSON.stringify(emptyPurchase(session.today ?? "", buyerDefault));
   useEffect(() => {
     setDirty?.("purchase-editor", hasPendingForm);
     return () => setDirty?.("purchase-editor", false);
   }, [hasPendingForm, setDirty]);
+  useEffect(() => {
+    if (!session.capabilities?.decideRequests) {
+      setDecisionReason("");
+      setDecisionAmounts({});
+    }
+  }, [session.capabilities?.decideRequests]);
   const budgetChoices = session.budgets?.choices ?? { systems: [], items: [] };
   const itemsBySystem = useMemo(() => {
     const map = new Map<string, BudgetChoiceItem[]>();
@@ -423,15 +431,41 @@ export function PurchasesBoard() {
   }
 
   async function decide(item: HeadDecisionQueueItem, decision: "approved" | "rejected") {
-    await run(`decide-${item.id}`, {
+    const approvedOreByLine: Record<string, string> = {};
+    if (decision === "approved") {
+      let positive = false;
+      try {
+        if (item.lines.length === 0) throw new Error("This request has no submitted lines. Refresh and try again.");
+        for (const line of item.lines) {
+          const input = decisionAmounts[item.revisionId]?.[line.id] ?? line.estimatedNok;
+          const amount = parseNokToOre(input);
+          if (amount === null || amount < 0n) throw new Error(`Enter a valid approved amount for ${line.description}.`);
+          if (amount > 0n) positive = true;
+          approvedOreByLine[line.id] = amount.toString();
+        }
+        if (!positive) throw new Error("Approve at least one positive line amount.");
+      } catch (error) {
+        notify("Check approved amounts", error instanceof Error ? error.message : "Enter valid approved amounts.", { id: "request-decision", variant: "error" });
+        return;
+      }
+    }
+    const saved = await run(`decide-${item.id}`, {
       action: "decideRequest",
       requestId: "",
       requestRecordId: item.id,
       revisionId: item.revisionId,
       decision,
       reason: decisionReason,
+      ...(decision === "approved" ? { approvedOreByLine } : {}),
     } as FinanceMutation, "The decision was recorded.");
-    setDecisionReason("");
+    if (saved) {
+      setDecisionReason("");
+      setDecisionAmounts((current) => {
+        const next = { ...current };
+        delete next[item.revisionId];
+        return next;
+      });
+    }
   }
 
   const showEditor = editor && (!detail || ["draft", "rejected"].includes(detail.status));
@@ -573,7 +607,25 @@ export function PurchasesBoard() {
               <div key={item.revisionId} className="rounded-md border p-4 space-y-2">
                 <p className="font-medium">{item.publicRef} · {item.supplierName}</p>
                 <p className="text-sm text-muted-foreground">{item.justification}</p>
-                <p className="text-sm">Planned {item.plannedDate} · estimated {item.totalEstimatedNok}</p>
+                <p className="text-sm">Planned {item.plannedDate} · estimated {item.totalEstimatedNok} NOK</p>
+                {item.lateReason ? <p className="text-sm">Late reason: {item.lateReason}</p> : null}
+                <div className="space-y-3">
+                  {item.lines.map((line) => {
+                    const inputId = `decision-${item.revisionId}-${line.id}`;
+                    return (
+                      <div key={line.id} className="grid max-w-xl gap-2">
+                        <p className="text-sm">{line.systemName} · {line.budgetItemPublicRef} · {line.budgetItemDescription}</p>
+                        <Label htmlFor={inputId}>Approved amount for {line.description} (NOK)</Label>
+                        <p className="text-sm text-muted-foreground">Estimated {line.estimatedNok} NOK</p>
+                        <Input id={inputId} inputMode="decimal" value={decisionAmounts[item.revisionId]?.[line.id] ?? line.estimatedNok}
+                          onChange={(event) => setDecisionAmounts((current) => ({
+                            ...current,
+                            [item.revisionId]: { ...current[item.revisionId], [line.id]: event.target.value },
+                          }))} />
+                      </div>
+                    );
+                  })}
+                </div>
                 <div className="flex gap-2">
                   <Button type="button" size="sm" disabled={saving || decisionReason.trim().length < 3} onClick={() => decide(item, "approved")}>Approve</Button>
                   <Button type="button" size="sm" variant="outline" disabled={saving || decisionReason.trim().length < 3} onClick={() => decide(item, "rejected")}>Reject</Button>

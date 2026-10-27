@@ -54,6 +54,63 @@ describe("PurchasesPage", () => {
     container.remove();
   });
 
+  function showHeadDecisionQueue() {
+    session.capabilities = { registerActual: false, purchaseRegister: false, decideRequests: true } as FinanceCapabilitySet;
+    session.purchases = { viewVersion: 1, ownRequests: [], decisionQueue: [{
+      id: "request-1", publicRef: "RQ-S27-001", requesterMemberId: "member", revisionId: "revision-1", revisionNumber: 1,
+      supplierName: "Supplier", justification: "Materials for assembly", plannedDate: "2026-10-20", lateReason: "Urgent need",
+      totalEstimatedNok: "4500.25", submittedAt: "2026-10-01T12:00:00Z",
+      lines: [
+        { id: "line-1", budgetItemId: "item-1", budgetItemPublicRef: "BI-S27-001", budgetItemDescription: "Frame", systemName: "Chassis", description: "Tube set", estimatedNok: "2500.00" },
+        { id: "line-2", budgetItemId: "item-2", budgetItemPublicRef: "BI-S27-002", budgetItemDescription: "Wheels", systemName: "Running gear", description: "Wheel set", estimatedNok: "2000.25" },
+      ],
+    }] };
+  }
+
+  function changeText(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+    const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("shows submitted allocations and sends partial approved NOK as exact integer øre", async () => {
+    showHeadDecisionQueue();
+    session.mutate.mockResolvedValue({ ok: true, viewVersion: 2, id: "request-1", warnings: [], errors: [] });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    const first = container.querySelector("#decision-revision-1-line-1") as HTMLInputElement;
+    const second = container.querySelector("#decision-revision-1-line-2") as HTMLInputElement;
+    expect(first.value).toBe("2500.00"); expect(second.value).toBe("2000.25");
+    expect(container.textContent).toContain("Chassis · BI-S27-001 · Frame");
+    expect(container.textContent).toContain("Late reason: Urgent need");
+    expect(container.querySelector('label[for="decision-revision-1-line-1"]')?.textContent).toContain("Tube set");
+    await act(async () => {
+      changeText(container.querySelector("#decision-reason") as HTMLTextAreaElement, "Approve selected amount");
+      changeText(first, "123,45");
+      changeText(second, "0");
+    });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Approve")!.click(); });
+    expect(session.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "decideRequest", decision: "approved", reason: "Approve selected amount", approvedOreByLine: { "line-1": "12345", "line-2": "0" } }));
+  });
+
+  it("rejects invalid approvals, preserves failed input, and lets rejection ignore amounts", async () => {
+    showHeadDecisionQueue();
+    session.mutate.mockRejectedValueOnce(new Error("Temporary failure")).mockResolvedValue({ ok: true, viewVersion: 2, warnings: [], errors: [] });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    const first = container.querySelector("#decision-revision-1-line-1") as HTMLInputElement;
+    const reason = container.querySelector("#decision-reason") as HTMLTextAreaElement;
+    await act(async () => { changeText(reason, "Need more detail"); changeText(first, "-1"); });
+    await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Approve")!.click(); });
+    expect(session.mutate).not.toHaveBeenCalled(); expect(notify).toHaveBeenCalledWith("Check approved amounts", expect.any(String), expect.any(Object));
+    const reject = [...container.querySelectorAll("button")].find((button) => button.textContent === "Reject")!;
+    await act(async () => { reject.click(); });
+    expect(reason.value).toBe("Need more detail"); expect(first.value).toBe("-1");
+    const request = session.mutate.mock.calls[0][0] as Record<string, unknown>;
+    expect(request).toMatchObject({ action: "decideRequest", decision: "rejected", reason: "Need more detail" });
+    expect(request).not.toHaveProperty("approvedOreByLine");
+    await act(async () => { reject.click(); });
+    expect(session.mutate.mock.calls[1][0].requestId).toBe(request.requestId);
+  });
+
   it("renders the registration form for members who can register actuals", async () => {
     await act(async () => {
       root.render(<PurchasesBoard />);

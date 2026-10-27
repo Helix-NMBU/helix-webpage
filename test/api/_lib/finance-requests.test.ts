@@ -290,6 +290,37 @@ describe("FIN-05 A01 draft and submit", () => {
 });
 
 describe("FIN-05 A02 decisions", () => {
+  it("returns submitted lines only to Head and records explicit partial amounts without rounding", async () => {
+    await seasonWithBudget();
+    await grant(otherId, "business");
+    const request = sampleRequest({ lines: [
+      { budgetItemId: itemId, description: "Tube set", estimatedNok: "2500.00" },
+      { budgetItemId: itemId, description: "Brackets", estimatedNok: "975.25" },
+    ] });
+    const { recordId, revisionId } = await draftAndSubmit(request);
+    const headView = (await read("head")).body as { decisionQueue: Array<{ id: string; lines: Array<{ id: string; description: string; estimatedNok: string; budgetItemId: string; budgetItemPublicRef: string; systemName: string }> }> };
+    const decision = headView.decisionQueue.find((item) => item.id === recordId)!;
+    expect(decision.lines).toHaveLength(2);
+    expect(decision.lines).toEqual([
+      expect.objectContaining({ description: "Tube set", estimatedNok: "2500.00", budgetItemId: itemId, budgetItemPublicRef: "BI-S27-010", systemName: "Frame" }),
+      expect.objectContaining({ description: "Brackets", estimatedNok: "975.25", budgetItemId: itemId, budgetItemPublicRef: "BI-S27-010", systemName: "Frame" }),
+    ]);
+    for (const role of ["finance", "member", "other"]) {
+      const result = await read(role);
+      expect(result.status).toBe(200);
+      expect(result.body).not.toHaveProperty("decisionQueue");
+    }
+    const malformed = await call("head", { action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved", approvedOreByLine: { [decision.lines[0].id]: "invalid" } });
+    expect(malformed.status).toBe(400);
+    const foreign = await call("head", { action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved", approvedOreByLine: { "44444444-4444-4444-8444-444444444444": "50" } });
+    expect(foreign.status).toBe(400);
+    const partial = await call("head", { action: "decideRequest", requestId: requestId(), requestRecordId: recordId, revisionId, decision: "approved", reason: "Approved in part", approvedOreByLine: { [decision.lines[0].id]: "100001", [decision.lines[1].id]: "0" } });
+    expect(partial.status).toBe(200);
+    expect(await sql<{description: string; approved_ore: string}>("select description, approved_ore::text from finance.request_lines where revision_id = $1::uuid order by ordinal", [revisionId])).toEqual([
+      { description: "Tube set", approved_ore: "100001" }, { description: "Brackets", approved_ore: "0" },
+    ]);
+  });
+
   it("allows only Head to decide; finance and plain members get 403", async () => {
     await seasonWithBudget();
     const { recordId, revisionId } = await draftAndSubmit();

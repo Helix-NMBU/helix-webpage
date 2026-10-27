@@ -361,6 +361,15 @@ export type HeadDecisionQueueItem = {
   lateReason: string | null;
   totalEstimatedNok: string;
   submittedAt: string;
+  lines: Array<{
+    id: string;
+    budgetItemId: string;
+    budgetItemPublicRef: string;
+    budgetItemDescription: string;
+    systemName: string;
+    description: string;
+    estimatedNok: string;
+  }>;
 };
 
 export type FinanceRequestContext = {

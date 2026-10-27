@@ -44,6 +44,19 @@ export async function applyRequestMutation(db: CvDatabase, actorId: string, body
   const requestId = typeof body.requestId === "string" ? body.requestId : "";
   const hash = createHash("sha256").update(stableJson(parsed.change)).digest("hex");
   try {
+    if (action === "decideRequest" && parsed.change.decision === "approved") {
+      const approved = parsed.change.approvedOreByLine as Record<string, string>;
+      const requestedIds = Object.keys(approved);
+      if (requestedIds.length > 0) {
+        const lines = await db.query<{ id: string }>(
+          "select id from finance.request_lines where revision_id = $1::uuid", [parsed.change.revisionId],
+        );
+        const ids = new Set(lines.rows.map((line) => line.id));
+        if (requestedIds.some((id) => !ids.has(id))) {
+          throw new FinanceError(400, "Approved amounts must belong to this submitted revision.", [{ field: "approvedOreByLine", message: "Approved amounts must belong to this submitted revision." }]);
+        }
+      }
+    }
     const result = await db.query<{ result: unknown }>(
       "select finance.apply_request_change($1::uuid, $2::uuid, $3, $4::jsonb, $5::date) as result",
       [actorId, requestId, hash, JSON.stringify(parsed.change), osloToday()],

@@ -101,6 +101,10 @@ export async function loadDecisionQueue(query: Query, seasonCode: string): Promi
     late_reason: string | null;
     total_estimated: string;
     submitted_at: string;
+    lines: Array<{
+      id: string; budgetItemId: string; budgetItemPublicRef: string;
+      budgetItemDescription: string; systemName: string; description: string; estimatedOre: string;
+    }>;
   }>(
     `select r.id,
             r.public_ref,
@@ -112,11 +116,19 @@ export async function loadDecisionQueue(query: Query, seasonCode: string): Promi
             rev.planned_date::text as planned_date,
             rev.late_reason,
             coalesce(sum(l.estimated_ore), 0)::text as total_estimated,
-            rev.submitted_at::text as submitted_at
+            rev.submitted_at::text as submitted_at,
+            jsonb_agg(jsonb_build_object(
+              'id', l.id, 'budgetItemId', l.budget_item_id,
+              'budgetItemPublicRef', item.public_ref, 'budgetItemDescription', item.description,
+              'systemName', sys.name, 'description', l.description,
+              'estimatedOre', l.estimated_ore::text
+            ) order by l.ordinal) as lines
      from finance.requests r
      join finance.seasons s on s.id = r.season_id
      join finance.request_revisions rev on rev.id = r.submitted_revision_id
      join finance.request_lines l on l.revision_id = rev.id
+     join finance.budget_items item on item.id = l.budget_item_id
+     join finance.systems sys on sys.id = item.system_id
      where s.code = $1 and r.status = 'submitted'
      group by r.id, rev.id
      order by rev.submitted_at`,
@@ -134,6 +146,7 @@ export async function loadDecisionQueue(query: Query, seasonCode: string): Promi
     lateReason: row.late_reason,
     totalEstimatedNok: formatOre(BigInt(row.total_estimated)),
     submittedAt: row.submitted_at,
+    lines: row.lines.map(({ estimatedOre, ...line }) => ({ ...line, estimatedNok: formatOre(BigInt(estimatedOre)) })),
   }));
 }
 

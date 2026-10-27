@@ -205,7 +205,7 @@ it("clears private cached pages and ignores a late response when a head grant is
     capabilities: { ...financeCaps.capabilities, decideRequests: true, protectedBudgetEdits: true } };
   api.capabilities.mockResolvedValue(head);
   api.purchases.mockResolvedValue({ ...privatePurchases,
-    decisionQueue: [{ id: "request", publicRef: "RQ-1", requesterMemberId: "other", revisionId: "revision", revisionNumber: 1,
+    decisionQueue: [{ id: "request", publicRef: "RQ-1", requesterMemberId: "other", revisionId: "revision", revisionNumber: 1, lines: [],
       supplierName: "Private supplier", justification: "Private reason", plannedDate: "2026-11-01", lateReason: null,
       totalEstimatedNok: "10.00", submittedAt: "2026-10-26" }],
     requestContext: [{ id: "request", publicRef: "RQ-1", status: "approved", supplierName: "Private supplier", plannedDate: null, requesterMemberId: "other" }],
