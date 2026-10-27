@@ -39,3 +39,25 @@ it("keeps CSV input and shows row errors after preview", async () => {
   expect([...container.querySelectorAll("button")].find((button) => button.textContent === "Import budget")?.disabled).toBe(true);
   expect(notify).toHaveBeenCalled();
 });
+
+it("shows overspending and cancellation warnings without blocking the import", async () => {
+  const warnings = [
+    "Line 2: Frame (SYS-FR) has 1500.00 NOK of spending, exceeding the imported plan of 900.00 NOK by 600.00 NOK.",
+    "Bracket (SYS-FR) will be cancelled but retains 20.00 NOK of spending.",
+  ];
+  session.mutate.mockResolvedValue({ ok: true, viewVersion: 4, warnings: [], errors: [], importPreview: {
+    previewToken: "token", viewVersion: 4, departmentKey: "mechanical", rows: [],
+    counts: { added: 0, changed: 1, unchanged: 0, removed: 1 }, subtotals: [], totalNok: "900.00", warnings, errors: [],
+  } });
+  await act(async () => root.render(<BudgetImport departments={departments} />));
+  const select = container.querySelector("select")!; const textarea = container.querySelector("textarea")!;
+  await act(async () => {
+    select.value = "mechanical"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "system_id;description;planned_nok\nSYS-FR;Frame;900");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const preview = [...container.querySelectorAll("button")].find((button) => button.textContent === "Preview import")!;
+  await act(async () => preview.click());
+  for (const warning of warnings) expect(container.textContent).toContain(warning);
+  expect([...container.querySelectorAll("button")].find((button) => button.textContent === "Import budget")?.disabled).toBe(false);
+});

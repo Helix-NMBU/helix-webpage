@@ -66,7 +66,12 @@ function preview(source: string, department: string, data: Snapshot): { result: 
     const candidates = prior.filter((item) => item.system_id === system.id && normalizeImportDescription(item.description) === normalizeImportDescription(v.description ?? ""));
     candidates.sort((a, b) => Number(a.status === "cancelled") - Number(b.status === "cancelled") || a.id.localeCompare(b.id));
     const current = candidates[0]; if (current) matched.add(current.id);
-    let amount: bigint; try { amount = parseImportAmount(v.planned_nok ?? "") ?? 0n; } catch { continue; }
+    let amount: bigint;
+    try {
+      const parsedAmount = parseImportAmount(v.planned_nok ?? "");
+      if (parsedAmount === null || parsedAmount < 0n) continue;
+      amount = parsedAmount;
+    } catch { continue; }
     const old = current ? desiredFrom(current) : undefined;
     const part = v.earmark_id ? data.parts.find((entry) => entry.public_ref === v.earmark_id || entry.id === v.earmark_id) : undefined;
     if (v.earmark_id && (!part || part.season_id !== data.seasonId || (part.status === "deleted" && current?.earmark_id !== part.id))) {
@@ -104,7 +109,16 @@ function preview(source: string, department: string, data: Snapshot): { result: 
   }
   const counts = { added: 0, changed: 0, unchanged: 0, removed: 0 };
   resultRows.forEach((row) => { counts[row.kind] += 1; });
-  const warnings = resultRows.filter((row) => row.kind === "removed" && row.actualNok !== "0.00").map((row) => `${row.before?.description ?? "Item"} will be cancelled but retains ${row.actualNok} NOK of spending.`);
+  const warnings = resultRows.flatMap((row) => {
+    const actual = BigInt(row.actualNok.replace(".", ""));
+    const label = `${row.after?.description ?? row.before?.description ?? "Item"} (${row.systemCode})`;
+    if (row.kind === "removed") {
+      return actual > 0n ? [`${label} will be cancelled but retains ${row.actualNok} NOK of spending.`] : [];
+    }
+    const planned = row.after?.planned_nok ? BigInt(row.after.planned_nok.replace(".", "")) : null;
+    if (planned === null || actual <= planned) return [];
+    return [`Line ${row.line}: ${label} has ${row.actualNok} NOK of spending, exceeding the imported plan of ${formatOre(planned)} NOK by ${formatOre(actual - planned)} NOK.`];
+  });
   warnings.unshift("Descriptions identify imported items. Changing a description can add a new item and cancel the old one.");
   const subtotals = [...totals.values()].map((entry) => ({ systemCode: entry.systemCode, systemName: entry.systemName, plannedNok: formatOre(entry.amount) }));
   const previewToken = createHash("sha256").update(JSON.stringify({ source, department, version: data.version, operations })).digest("hex");

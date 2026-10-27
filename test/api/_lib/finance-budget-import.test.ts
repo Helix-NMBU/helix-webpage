@@ -231,4 +231,48 @@ describe("department budget import", () => {
     expect(await sql("select s.code, i.status from finance.budget_items i join finance.systems s on s.id=i.system_id where not i.protected order by s.code")).toEqual([{code:"SYS-FR",status:"cancelled"},{code:"SYS-LV",status:"planned"}]);
   });
 
+  it("warns when imported plan is below registered spending and when a spent item is removed", async () => {
+    const initial = await prepare();
+    expect((await apply(csv, initial)).status).toBe(200);
+    const item = (await sql<{id:string; system_id:string; season_id:string}>(
+      `select i.id, i.system_id, b.season_id from finance.budget_items i join finance.budgets b on b.id=i.budget_id where not i.protected`,
+    ))[0];
+    await pg.exec("begin");
+    await sql(
+      `insert into finance.purchases (season_id, requester_member_id, public_ref, status, buyer_name, supplier_name, payment_method, purchase_date, justification, document_kind)
+       values ($1::uuid, $2::uuid, '2026-0042', 'registered', 'Buyer', 'Supplier', 'team_account', '2026-10-01', 'Workshop material', 'receipt')`,
+      [item.season_id, memberId],
+    );
+    await sql(
+      `insert into finance.purchase_lines (purchase_id, public_ref, system_id, budget_item_id, description, quantity, amount_ore)
+       select id, '2026-0042-L1', $1::uuid, $2::uuid, 'Frame', 1, 150000 from finance.purchases where public_ref = '2026-0042'`,
+      [item.system_id, item.id],
+    );
+    await sql(
+      `insert into finance.allocations (line_id, budget_item_id, public_ref, amount_ore)
+       select id, $1::uuid, '2026-0042-L1-A1', 150000 from finance.purchase_lines where public_ref = '2026-0042-L1'`,
+      [item.id],
+    );
+    await pg.exec("commit");
+    const versionBefore = await version();
+    const unchanged = await prepare();
+    expect(unchanged.counts.unchanged).toBe(1);
+    expect(unchanged.warnings).toContain("Line 2: Frame (SYS-FR) has 1500.00 NOK of spending, exceeding the imported plan of 1000.00 NOK by 500.00 NOK.");
+    const reducedCsv = "system_id;description;planned_nok\nSYS-FR;Frame;900";
+    const reduced = await prepare(reducedCsv);
+    expect(reduced.warnings).toContain("Line 2: Frame (SYS-FR) has 1500.00 NOK of spending, exceeding the imported plan of 900.00 NOK by 600.00 NOK.");
+    expect(reduced.errors).toEqual([]);
+    const equalCsv = "system_id;description;planned_nok\nSYS-FR;Frame;1500";
+    expect((await prepare(equalCsv)).warnings).toHaveLength(1); // Description-identity advice only.
+    const removedCsv = "system_id;description;planned_nok\nSYS-FR;Brake;10";
+    expect((await prepare(removedCsv)).warnings).toContain("Frame (SYS-FR) will be cancelled but retains 1500.00 NOK of spending.");
+    expect(await version()).toBe(versionBefore);
+    expect((await call("head", { action: "cancelItem", requestId: requestId(), itemId: item.id, expectedRevision: 0 })).status).toBe(200);
+    const restored = await prepare();
+    expect(restored.rows[0].after?.status).toBe("planned");
+    expect(restored.warnings).toContain("Line 2: Frame (SYS-FR) has 1500.00 NOK of spending, exceeding the imported plan of 1000.00 NOK by 500.00 NOK.");
+    await sql("update finance.purchases set status='voided', void_reason='Cancelled', voided_at=clock_timestamp(), voided_by_member_id=$1::uuid", [headId]);
+    expect((await prepare()).warnings).toHaveLength(1);
+  });
+
 });
