@@ -192,8 +192,8 @@ export function ProjectsPage() {
       <Directory
         title="Projects"
         action={<div className="flex items-center gap-2">
-          {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
           <ProjectViewMenu data={data} options={options} onChange={change} onReset={reset} />
+          {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
         </div>}
       >
         <>

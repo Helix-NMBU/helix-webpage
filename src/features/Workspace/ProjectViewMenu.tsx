@@ -10,7 +10,7 @@ export function ProjectViewMenu({ data, options, onChange, onReset }: {
   onChange: (key: string, value: string) => void; onReset: () => void;
 }) {
   const active = options.department !== "all" || options.lead !== "all" || options.priority !== "all" || options.completion !== "all";
-  return <Popover><PopoverTrigger asChild><Button variant="outline" size="icon" className="relative size-9 shrink-0" aria-label="Project filters and view" title="Project filters and view">
+  return <Popover><PopoverTrigger asChild><Button variant="outline" size="icon-sm" className="relative shrink-0" aria-label="Project filters and view" title="Project filters and view">
     <IconAdjustmentsHorizontal aria-hidden="true" className="size-4" />
     {active && <span aria-label="Filters active" className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />}
   </Button></PopoverTrigger><PopoverContent align="end" className="max-h-[min(80svh,45rem)] w-80 max-w-[calc(100vw-2rem)] space-y-5 overflow-y-auto">
