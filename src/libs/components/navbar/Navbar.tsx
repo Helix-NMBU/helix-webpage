@@ -2,7 +2,7 @@ import { useLocation, Link } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUp } from "lucide-react";
+import { IconArrowUp, IconMenu2, IconX } from "@tabler/icons-react";
 import { appCtaLinks, desktopNavLinks } from "../../lib/routes";
 import { useMemberNav, type MemberLanguageAppearance } from "./member-nav";
 
@@ -362,11 +362,7 @@ export const Navbar = () => {
           onClick={openDrawer}
           className="absolute inset-0 flex items-center justify-center select-none cursor-pointer"
         >
-          <svg width="34" height="24" viewBox="0 0 24 17" fill="none" aria-hidden="true">
-            <line x1="0" y1="1"   x2="24" y2="1"   stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="0" y1="8.5" x2="24" y2="8.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            <line x1="0" y1="16"  x2="24" y2="16"  stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
+          <IconMenu2 width={34} height={24} aria-hidden="true" />
         </span>
 
         <div
@@ -380,9 +376,7 @@ export const Navbar = () => {
               className="flex items-center justify-center text-[#00007A] hover:opacity-70 transition-opacity cursor-pointer"
               aria-label="Close menu"
             >
-              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 17L17 7M7 7l10 10" />
-              </svg>
+              <IconX className="w-10 h-10" aria-hidden="true" />
             </button>
           </div>
 
@@ -426,7 +420,7 @@ export const Navbar = () => {
           !navVisible && !drawerOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
-        <ArrowUp className="h-5 w-5" />
+        <IconArrowUp aria-hidden="true" className="h-5 w-5" />
       </button>
     </>
   );

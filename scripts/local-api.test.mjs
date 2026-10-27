@@ -78,6 +78,7 @@ beforeAll(async () => {
     }
   `);
   await writeFile(join(fixtureRoot, 'api/website.ts'), "export { default } from './contact.ts';");
+  await writeFile(join(fixtureRoot, 'api/member-login.ts'), "export { default } from './contact.ts';");
   local = await harness(fixtureRoot);
 });
 
@@ -88,6 +89,11 @@ afterAll(async () => {
 });
 
 describe('local API HTTP adapter', () => {
+  it('rewrites project management through the shared authenticated member entrypoint', async () => {
+    const response = await request(local.port, '/api/projects?__module=untrusted');
+    expect(response.status).toBe(202);
+    expect(response.json().query).toEqual({ __module: 'projects' });
+  });
   it('loads a TypeScript handler with method, headers, JSON body, repeated query and cookies', async () => {
     const response = await request(local.port, '/api/contact?tag=a&tag=b&name=Alex+Example', {
       method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Example': 'present', Cookie: 'one=1; two=a=b' },
@@ -178,6 +184,7 @@ describe('local API HTTP adapter', () => {
     const loader = vi.spyOn(member.vite, 'ssrLoadModule');
     expect((await request(member.port, '/api/partner')).status).toBe(503);
     expect((await request(member.port, '/api/auth/get-session')).status).toBe(503);
+    expect((await request(member.port, '/api/projects')).status).toBe(503);
     expect(loader).not.toHaveBeenCalled();
   });
 });
@@ -186,7 +193,7 @@ describe('repository API integration', () => {
   it('executes existing protected handlers and Gmail rewrites without authenticating a user', async () => {
     const repo = await harness(projectRoot, { useProjectConfig: true });
     expect((await request(repo.port, '/@vite/client')).status).toBe(200);
-    for (const path of ['/api/partner?action=session', '/api/website?action=session', '/api/member-cv', '/api/finance', '/api/gmail-status?action=connect']) {
+    for (const path of ['/api/partner?action=session', '/api/website?action=session', '/api/member-cv', '/api/finance', '/api/projects', '/api/gmail-status?action=connect']) {
       const response = await request(repo.port, path);
       expect(response.status, path).toBe(401);
       expect(response.json()).toEqual({ error: 'Log in to continue.' });

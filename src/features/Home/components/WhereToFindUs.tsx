@@ -1,3 +1,4 @@
+import { IconArrowRight } from "@tabler/icons-react";
 export default function WhereToFindUs() {
   return (
     <section className="bg-white text-black">
@@ -26,7 +27,7 @@ export default function WhereToFindUs() {
               rel="noopener noreferrer"
               className="mt-2 w-fit uppercase tracking-widest text-xs border-b border-black/20 pb-0.5 hover:border-black/60 transition-colors"
             >
-              Open in Maps →
+              Open in Maps <IconArrowRight className="ml-1 inline-block size-3.5" aria-hidden="true" />
             </a>
           </div>
         </div>

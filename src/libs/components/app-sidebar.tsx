@@ -1,5 +1,16 @@
 import * as React from "react";
-import { Bell, Home, Mail, Shield, UsersRound, Wallet } from "lucide-react";
+import {
+  IconWallet,
+  IconBell,
+  IconLayoutKanban,
+  IconSmartHome,
+  IconCube,
+  IconUsers,
+  IconUserSquare,
+  IconCheckbox,
+  IconMail,
+  IconUsersGroup,
+} from "@tabler/icons-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -12,7 +23,9 @@ import {
   SidebarRail,
 } from "@libs/components/ui/sidebar";
 import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
-import { previewTeams } from "@/features/MemberPlatform/workspace-preview-data";
+import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
+import { getDepartmentIcon } from "@/features/Workspace/department-icons";
+import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
@@ -34,29 +47,46 @@ export function AppSidebar({
   const recruitment = useRecruitmentAccess();
   const finance = useFinanceAccess();
   const featureAccess = useMemberFeatureAccess();
-  const visibleTeams = previewTeams.filter((team) => featureAccess.canAccess(`team.${team.id}`));
-  const activeTeam = visibleTeams.find((team) =>
-    location.pathname.startsWith(`/teams/${team.id}/`),
-  );
-  const teamItems = [
-    ...visibleTeams.map((team) => ({
-      title: team.title,
-      url: `/teams/${team.id}`,
-      icon: team.icon,
-      isActive: activeTeam?.id === team.id,
-      items: team.sections.map((section) => ({
-        title: section.title,
-        url: `/teams/${team.id}/${section.id}`,
-      })),
-    })),
-    ...(featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed" ? [{
-      title: "Recruiting",
-      url: "/recruiting",
-      icon: UsersRound,
-      isActive: location.pathname === "/recruiting",
-    }] : []),
+  const workspace = useWorkspace()?.data;
+  const spaceItems = [
+    ...(workspace?.projectAccess
+      ? [
+          {
+            title: "Season Overview",
+            url: "/season-overview",
+            icon: IconLayoutKanban,
+            isActive: location.pathname === "/season-overview",
+          },
+        ]
+      : []),
+    ...(featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed"
+      ? [
+          {
+            title: "Recruiting",
+            url: "/recruiting",
+            icon: IconUsersGroup,
+            isActive: location.pathname === "/recruiting",
+          },
+        ]
+      : []),
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId))
+      .map((department) => {
+        const url = departmentPath(department.name);
+        return {
+          title: department.name,
+          url,
+          icon: getDepartmentIcon(department.name),
+          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`),
+          subMenuClassName: "border-l-0",
+          items: [
+            { title: "Home", url, icon: IconSmartHome },
+            { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
+            { title: "Projects", url: `${url}/projects`, icon: IconCube },
+          ],
+        };
+      }) ?? []),
     ...(featureAccess.canAccess("member_access.manage") ? [{
-      title: "Member access", url: "/admin/access", icon: Shield,
+      title: "Member access", url: "/admin/access", icon: IconUsers,
       isActive: location.pathname === "/admin/access",
     }] : []),
   ];
@@ -71,15 +101,32 @@ export function AppSidebar({
             {
               title: "Home",
               url: "/",
-              icon: Home,
+              icon: IconSmartHome,
               isActive: location.pathname === "/",
             },
-            { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
-            { title: "Mail", url: "/mail", icon: Mail, isActive: location.pathname.startsWith("/mail") },
+            {
+              title: "Notifications",
+              url: "/notifications",
+              icon: IconBell,
+              isActive: location.pathname === "/notifications",
+              badge: notifications?.unread || undefined,
+            },
+            {
+              title: "Mail",
+              url: "/mail",
+              icon: IconMail,
+              isActive: location.pathname.startsWith("/mail"),
+            },
+            {
+              title: "Tasks",
+              url: "/tasks",
+              icon: IconCheckbox,
+              isActive: location.pathname === "/tasks" || location.pathname.startsWith("/tasks/"),
+            },
             ...(finance.access === "denied" ? [] : [{
               title: "Finance",
               url: "/finance",
-              icon: Wallet,
+              icon: IconWallet,
               isActive: location.pathname.startsWith("/finance"),
               defaultOpen: true,
               items: [
@@ -95,9 +142,35 @@ export function AppSidebar({
           disabled={disabled}
         />
         <NavMain
-          key={activeTeam?.id ?? "teams"}
-          title="Teams"
-          items={teamItems}
+          title="Workspace"
+          collapsible
+          items={[
+            {
+              title: "Members",
+              url: "/members",
+              icon: IconUsers,
+              isActive: location.pathname === "/members",
+            },
+            {
+              title: "Projects",
+              url: "/projects",
+              icon: IconCube,
+              isActive: location.pathname.startsWith("/projects"),
+            },
+            {
+              title: "Departments",
+              url: "/departments",
+              icon: IconUserSquare,
+              isActive: location.pathname === "/departments",
+            },
+          ]}
+          activeUrl={location.pathname}
+          onNavigate={onNavigate}
+          disabled={disabled}
+        />
+        <NavMain
+          title="Your spaces"
+          items={spaceItems}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
           disabled={disabled}

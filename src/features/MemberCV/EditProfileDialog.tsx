@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
-import { Pencil } from "lucide-react";
+import { IconPencil } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { ButtonGroup } from "@libs/components/ui/button-group";
 import { Input } from "@libs/components/ui/input";
@@ -70,7 +70,7 @@ export function EditProfileDialog({ draft, disabled, onSave }: {
   }
   const country = phoneCountries.find((option) => option.value === phone.country)!;
   return <Dialog open={open} onOpenChange={changeOpen}>
-    <DialogTrigger asChild><Button variant="outline" size="icon" className="mcv-profile-edit size-8 shrink-0" aria-label="Edit profile" title="Edit profile" disabled={disabled}><Pencil aria-hidden="true" /></Button></DialogTrigger>
+    <DialogTrigger asChild><Button variant="outline" size="icon" className="mcv-profile-edit size-8 shrink-0" aria-label="Edit profile" title="Edit profile" disabled={disabled}><IconPencil aria-hidden="true" /></Button></DialogTrigger>
     <DialogContent className="sm:max-w-lg" showCloseButton={!pending}>
       <DialogHeader>
         <DialogTitle>Edit profile</DialogTitle>

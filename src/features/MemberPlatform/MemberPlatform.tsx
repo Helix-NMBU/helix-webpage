@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { LoaderCircle } from "lucide-react";
+import { IconLoader2 } from "@tabler/icons-react";
 import {
   Navigate,
   Outlet,
@@ -19,6 +19,7 @@ import {
   watchMemberSession,
   type MemberLanding,
 } from "../MemberCV/session";
+import { MemberViewportGate } from "./MemberViewportGate";
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
@@ -32,6 +33,11 @@ import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
 import { FinanceAccessProvider } from "./FinanceAccess";
 import { FinanceEntry } from "../Finance/FinancePages";
+import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
+import { MembersPage, ProjectsPage, DepartmentsPage } from "../Workspace/WorkspacePages";
+import { DepartmentProjectsPage, DepartmentTasksPage } from "../Workspace/DepartmentViews";
+import ProjectManagement from "../ProjectManagement/ProjectManagement";
+import TaskDetailPage from "../ProjectManagement/TaskDetail";
 import {
   MemberSettingsPreview,
   TeamWorkspacePreview,
@@ -90,7 +96,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   if (!landing)
     return (
       <main className="member-platform-status">
-        <LoaderCircle className="size-6 animate-spin" aria-label="Verifying your Helix account" />
+        <IconLoader2 className="size-6 animate-spin" aria-label="Verifying your Helix account" />
       </main>
     );
   if (landing.phase === "signed-out") {
@@ -121,7 +127,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
       <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
         <MemberFeatureAccessProvider key={landing.userId} userId={landing.userId}>
           <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>
-            <FinanceAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</FinanceAccessProvider>
+            <WorkspaceProvider key={landing.userId}><FinanceAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</FinanceAccessProvider></WorkspaceProvider>
           </RecruitmentAccessProvider>
         </MemberFeatureAccessProvider>
       </MemberNotificationsProvider>
@@ -155,6 +161,7 @@ function MemberAccessFeatureRoute() {
 export default function MemberPlatform() {
   return (
     <MemberThemeProvider>
+      <MemberViewportGate>
       <TooltipProvider>
         <MemberNavigationProvider>
         <div className="member-platform portal-root">
@@ -176,6 +183,19 @@ export default function MemberPlatform() {
                 <Route path="teams/finance/*" element={<LegacyMemberRedirect to="/finance" />} />
                 <Route path="admin/access" element={<MemberAccessFeatureRoute />} />
                 <Route path="mail" element={<MailWorkspace />} />
+                <Route path="members" element={<MembersPage />} />
+                <Route path="projects" element={<ProjectsPage />} />
+                <Route path="projects/:projectId" element={<ProjectsPage />} />
+                <Route path="departments" element={<DepartmentsPage />} />
+                <Route path="departments/:departmentId/tasks" element={<DepartmentTasksPage />} />
+                <Route path="departments/:departmentId/projects" element={<DepartmentProjectsPage />} />
+                <Route path="departments/:departmentId" element={<DepartmentsPage />} />
+                <Route path="tasks" element={<ProjectManagement personal />} />
+                <Route path="tasks/:taskId" element={<TaskDetailPage />} />
+                <Route path="season-overview" element={<ProjectManagement />} />
+                <Route path="project-management" element={<LegacyMemberRedirect to="/season-overview" />} />
+                <Route path="project-management/*" element={<LegacyMemberRedirect to="/season-overview" />} />
+                <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/departments/mechanical-and-production" />} />
                 <Route path="settings" element={<MemberSettingsPreview />} />
                 <Route path="teams/:teamId/:sectionId" element={<TeamFeatureRoute />} />
                 <Route path="recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
@@ -194,6 +214,7 @@ export default function MemberPlatform() {
         </div>
         </MemberNavigationProvider>
       </TooltipProvider>
+      </MemberViewportGate>
     </MemberThemeProvider>
   );
 }

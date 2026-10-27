@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
@@ -78,7 +78,7 @@ export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibil
               aria-label={`Show ${position.title} on the website`} onCheckedChange={visible => void setVisibility(position, visible)} />
             <Label htmlFor={`position-${position.id}-visible`} className="font-normal">Visible on website</Label>
           </div>
-          <Button variant="outline" size="icon" disabled={busy} aria-label={`Edit ${position.title}`} title={`Edit ${position.title}`} onClick={() => edit(position)}><Pencil aria-hidden="true" /></Button><Button variant="outline" size="icon" disabled={busy} aria-label={`Delete ${position.title}`} title={`Delete ${position.title}`} onClick={() => setDeleting(position)}><Trash2 aria-hidden="true" /></Button></div>
+          <Button variant="outline" size="icon" disabled={busy} aria-label={`Edit ${position.title}`} title={`Edit ${position.title}`} onClick={() => edit(position)}><IconPencil aria-hidden="true" /></Button><Button variant="outline" size="icon" disabled={busy} aria-label={`Delete ${position.title}`} title={`Delete ${position.title}`} onClick={() => setDeleting(position)}><IconTrash aria-hidden="true" /></Button></div>
       </article>)}</div>
       : <p className="py-12 text-center text-sm text-muted-foreground">No positions yet. Create a position to start recruiting.</p>}
     <Dialog open={draft !== null} onOpenChange={open => { if (!open && !pending.current) setDraft(null); }}>

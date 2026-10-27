@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import {
   Card,
@@ -123,7 +123,7 @@ export function SectionNavigation({
               onClick={() => setExpanded((value) => !value)}
             >
               {expanded ? t("Hide sections") : t("Show sections")}
-              <ChevronDown
+              <IconChevronDown
                 aria-hidden="true"
                 className={expanded ? "mcv-nav-chevron-open" : ""}
               />

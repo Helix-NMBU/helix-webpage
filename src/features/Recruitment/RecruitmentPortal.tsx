@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BriefcaseBusiness, RefreshCw } from "lucide-react";
+import { IconBriefcase, IconRefresh } from "@tabler/icons-react";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useRecruitmentAccess } from "../MemberPlatform/RecruitmentAccess";
 import { Button } from "../../libs/components/ui/button";
@@ -80,7 +80,7 @@ export default function RecruitmentPortal() {
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="text-3xl font-medium">Applications</h1></div>
-          <Button variant="outline" size="icon" aria-label="Refresh applications" title="Refresh applications" disabled={loading || busy} onClick={() => void load()}><RefreshCw aria-hidden="true" /></Button>
+          <Button variant="outline" size="icon" aria-label="Refresh applications" title="Refresh applications" disabled={loading || busy} onClick={() => void load()}><IconRefresh aria-hidden="true" /></Button>
         </header>
         <Tabs defaultValue="applications">
           <TabsList aria-label="Recruiting views"><TabsTrigger value="applications">Applications</TabsTrigger><TabsTrigger value="positions">Positions</TabsTrigger></TabsList>
@@ -118,7 +118,7 @@ export default function RecruitmentPortal() {
             </article>)}
           </div> : <Empty className="min-h-64 gap-4 rounded-lg border-0 py-12">
             <EmptyHeader>
-              <EmptyMedia variant="icon"><BriefcaseBusiness aria-hidden="true" /></EmptyMedia>
+              <EmptyMedia variant="icon"><IconBriefcase aria-hidden="true" /></EmptyMedia>
               <EmptyTitle>No applications found.</EmptyTitle>
               <EmptyDescription>Try another season or change your search.</EmptyDescription>
             </EmptyHeader>

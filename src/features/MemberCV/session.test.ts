@@ -414,6 +414,33 @@ describe("member session claim", () => {
     expect(listeners.has("focus")).toBe(false);
   });
 
+  it("ends the cached landing session when focus finds another member", async () => {
+    const onEnd = vi.fn();
+    let sessionUser = { id: "member-a" };
+    const getSession = vi.fn(async () => ({ data: { user: sessionUser } }));
+    const expires = Math.floor(Date.now() / 1000);
+    const token = vi.fn(async () => ({ data: { token: memberJwt(expires + 3600, "member-a") } }));
+    const client = { getSession, token };
+    const fetchImpl = vi.fn(async () => Response.json({ ok: true }));
+    await ensureMemberLanding(client, fetchImpl);
+    const listeners = stubFocusWindow();
+    const stop = watchMemberSession(onEnd, { getSession });
+    listeners.get("focus")?.(new Event("focus"));
+    await Promise.resolve();
+    expect(onEnd).not.toHaveBeenCalled();
+
+    sessionUser = { id: "member-b" };
+    listeners.get("focus")?.(new Event("focus"));
+    await Promise.resolve();
+    expect(onEnd).toHaveBeenCalledOnce();
+
+    const bound = { current: null as string | null };
+    token.mockResolvedValue({ data: { token: memberJwt(expires + 7200, "member-b") } });
+    await expect(sessionTokenFromAuth(client, bound, fetchImpl)).rejects.toMatchObject({ status: 401 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
   it("locks the loaded account when a fresh focus check finds another member", async () => {
     const onEnd = vi.fn();
     let user = { id: "member-a" };

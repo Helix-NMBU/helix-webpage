@@ -3,6 +3,7 @@ import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/ada
 import { clearMemberCvCache, CvRequestError } from "./repository";
 import { financeReturnPath } from "../Finance/routes";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
+import { isProjectTaskPath, isWorkspacePath } from "../ProjectManagement/routes";
 import { readMemberAccount, type MemberAccount } from "../MemberPlatform/account";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn, setLocalMemberSignedIn } from "../MemberPlatform/local-mode";
 
@@ -109,6 +110,7 @@ type JwtRead = { token: string | null; status: number | null };
 // "unavailable" result is dropped so the next call can retry. The JWT is cached
 // separately and only while it is outside the refresh margin.
 let landingPromise: Promise<MemberLanding> | null = null;
+let cachedLandingUserId: string | null = null;
 let jwtCache: { token: string; refreshAt: number } | null = null;
 let jwtFlight: Promise<JwtRead> | null = null;
 let sessionRejected = false;
@@ -125,6 +127,7 @@ function signedOutLanding(): MemberLanding {
 
 export function clearMemberLanding(): void {
   landingPromise = null;
+  cachedLandingUserId = null;
   jwtCache = null;
   jwtFlight = null;
   sessionRejected = false;
@@ -133,6 +136,7 @@ export function clearMemberLanding(): void {
 
 function rejectMemberSession(): void {
   landingPromise = null;
+  cachedLandingUserId = null;
   jwtCache = null;
   jwtFlight = null;
   sessionRejected = true;
@@ -386,8 +390,11 @@ export function ensureMemberLanding(
     run = runMemberLanding(client, fetchImpl, search).then((landing) => {
       if (sessionRejected) {
         if (landingPromise === run) landingPromise = null;
+        cachedLandingUserId = null;
         return signedOutLanding();
       }
+      if (landing.phase === "signed-in" && landing.userId) cachedLandingUserId = landing.userId;
+      else if (landing.phase !== "signed-in") cachedLandingUserId = null;
       if (landing.phase === "unavailable" && landingPromise === run) landingPromise = null;
       if (landing.phase !== "signed-in") jwtCache = null;
       return landing;
@@ -475,7 +482,8 @@ export function watchMemberSession(onEnd: () => void, client: MemberClient | nul
         return;
       }
       const userId = session.data?.user?.id;
-      if (!userId || (boundUserId?.current && userId !== boundUserId.current)) end();
+      const loadedUserId = boundUserId?.current ?? cachedLandingUserId;
+      if (!userId || (loadedUserId && userId !== loadedUserId)) end();
     }).catch((error: unknown) => {
       if (!active) return;
       const failure = memberAuthFailure(error);
@@ -541,7 +549,7 @@ export function memberSignInCallbackUrl(source: unknown, origin: string): string
   if (target.origin !== allowedOrigin) return fallback;
   if (isMemberPlatform(origin)) {
     if (target.pathname === "/member/profile") target.pathname = paths.profile;
-    if (![paths.home, paths.profile, "/recruiting"].includes(target.pathname) && !financeReturnPath(target.pathname)) return fallback;
+    if (![paths.home, paths.profile, "/recruiting"].includes(target.pathname) && !isProjectTaskPath(target.pathname) && !isWorkspacePath(target.pathname) && !financeReturnPath(target.pathname)) return fallback;
   } else if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
   return new URL(`${target.pathname}${target.search}${target.hash}`, origin).href;
 }

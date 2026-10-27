@@ -2,6 +2,7 @@ import { validateCvData, validateSharing } from "./model";
 import type { CvEnvelope, CvMutation } from "./types";
 import { financeReturnPath } from "../Finance/routes";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
+import { isProjectTaskPath, isWorkspacePath } from "../ProjectManagement/routes";
 
 export class CvRequestError extends Error {
   constructor(
@@ -147,6 +148,7 @@ export function memberLoginDestination(state: unknown): string {
       if (financePath) return financePath;
     }
     if (pathname === "/recruiting") return pathname;
+    if (typeof pathname === "string" && (isProjectTaskPath(pathname) || isWorkspacePath(pathname))) return pathname;
     return pathname === paths.profile || pathname === "/member/profile" ? paths.profile : paths.home;
   }
   return pathname === paths.profile ? pathname : paths.home;

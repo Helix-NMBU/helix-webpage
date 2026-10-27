@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowUp, Check } from "lucide-react";
+import { IconArrowUp, IconCheck } from "@tabler/icons-react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
 import { Button } from "@libs/components/ui/button";
@@ -204,7 +204,7 @@ export function WorkspaceHomePreview() {
                 disabled={!text.trim()}
                 aria-label="Send message"
               >
-                <ArrowUp />
+                <IconArrowUp />
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
@@ -434,7 +434,7 @@ export function MemberSettingsPreview() {
           {accessibleTeams.map((team) => (
             <div key={team.id} className="flex items-center gap-3 text-sm">
               <span className="flex-1">{team.title}</span>
-              <Check
+              <IconCheck
                 className="size-4 text-muted-foreground"
                 aria-label="Access granted"
               />

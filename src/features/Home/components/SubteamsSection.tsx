@@ -1,3 +1,4 @@
+import { IconArrowRight } from "@tabler/icons-react";
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -90,7 +91,7 @@ export default function SubteamsSection() {
                   </p>
                 </div>
                 <div className="shrink-0 w-10 h-10 rounded-full border border-white/30 flex items-center justify-center group-hover:border-white transition-colors">
-                  <span className="text-sm">→</span>
+                  <IconArrowRight className="size-3.5" aria-hidden="true" />
                 </div>
               </div>
             </div>
