@@ -114,12 +114,12 @@ export function TaskBoard({
                       onDragStart={(event) => drag.start(event, task)}
                       onDragEnd={drag.end}
                       onClickCapture={drag.preventDragClick}
-                      className={`relative gap-0 py-3 transition-colors hover:border-muted-foreground/40 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
+                      className={`relative h-32 min-h-32 shrink-0 gap-0 py-2.5 transition-colors hover:border-muted-foreground/40 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
                       role="article"
                       aria-label={task.title}
                     >
-                      <CardContent className="space-y-3 px-3">
-                        <div className="flex items-start gap-2">
+                      <CardContent className="h-full min-w-0 justify-between gap-0 px-2.5">
+                        <div className="flex h-10 min-w-0 shrink-0 items-start gap-1.5">
                           <div className="relative z-10 -ml-1 -mt-1">
                             <TaskStatusControl
                               task={task}
@@ -130,10 +130,13 @@ export function TaskBoard({
                           </div>
                           <button
                             type="button"
+                            title={task.title}
                             className="min-w-0 flex-1 text-left text-sm font-medium leading-5 after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
                             onClick={() => onOpen(task)}
                           >
-                            {task.title}
+                            <span className="line-clamp-2 [overflow-wrap:anywhere]">
+                              {task.title}
+                            </span>
                           </button>
                           {show("assignee") && (
                             <span className="relative z-10 shrink-0">
@@ -145,21 +148,18 @@ export function TaskBoard({
                             </span>
                           )}
                         </div>
-                        {task.status === "blocked" && task.blockedReason && (
-                          <p className="line-clamp-3 text-xs text-muted-foreground">
-                            {task.blockedReason}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <div className="flex h-6 min-w-0 shrink-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground">
                           {show("priority") && (
-                            <PriorityIndicator priority={task.priority} />
+                            <span className="shrink-0">
+                              <PriorityIndicator priority={task.priority} />
+                            </span>
                           )}
                           {show("project") && project && (
                             <Link
                               draggable={false}
                               to={`/projects/${project.id}`}
                               title={project.name}
-                              className="relative z-10 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 hover:bg-accent"
+                              className="relative z-10 inline-flex h-6 min-w-0 max-w-40 flex-1 items-center gap-1 rounded-full border px-2 hover:bg-accent"
                             >
                               <IconCube
                                 aria-hidden="true"
@@ -173,7 +173,7 @@ export function TaskBoard({
                               draggable={false}
                               to={`/projects/${project.id}?milestone=${milestone.id}`}
                               title={milestone.title}
-                              className="relative z-10 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 hover:bg-accent"
+                              className="relative z-10 inline-flex h-6 min-w-0 max-w-40 flex-1 items-center gap-1 rounded-full border px-2 hover:bg-accent"
                             >
                               <IconDiamonds
                                 aria-hidden="true"
@@ -185,20 +185,39 @@ export function TaskBoard({
                             </Link>
                           )}
                           {show("partner") && task.partnerName && (
-                            <span className="truncate">{task.partnerName}</span>
+                            <button
+                              type="button"
+                              onClick={() => onOpen(task)}
+                              className="relative z-10 h-6 min-w-0 max-w-40 flex-1 truncate rounded-full border px-2 text-left leading-[22px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              title={task.partnerName}
+                            >
+                              {task.partnerName}
+                            </button>
                           )}
                         </div>
-                        {show("deadline") && (
-                          <div
-                            className={`text-xs ${overdue ? "text-[oklch(0.577_0.245_27.325)]" : "text-muted-foreground"}`}
-                          >
-                            {task.deadline ? (
-                              <TargetDate deadline={task.deadline} />
-                            ) : (
-                              "No due date"
-                            )}
-                          </div>
-                        )}
+                        <div className="flex h-4 min-w-0 shrink-0 items-center gap-2 text-xs leading-4">
+                          {task.status === "blocked" && task.blockedReason && (
+                            <button
+                              type="button"
+                              onClick={() => onOpen(task)}
+                              className="relative z-10 min-w-0 flex-1 truncate text-left text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              title={task.blockedReason}
+                            >
+                              {task.blockedReason}
+                            </button>
+                          )}
+                          {show("deadline") && (
+                            <span
+                              className={`shrink-0 ${overdue ? "text-[oklch(0.577_0.245_27.325)]" : "text-muted-foreground"}`}
+                            >
+                              {task.deadline ? (
+                                <TargetDate deadline={task.deadline} />
+                              ) : (
+                                "No due date"
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   );
