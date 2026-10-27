@@ -112,7 +112,6 @@ export function createFinanceStorage(env: NodeJS.ProcessEnv = process.env): Fina
           Key: finalKey,
           ContentType: contentType,
           MetadataDirective: "REPLACE",
-          ContentLength: byteSize,
         }));
       } catch {
         throw new FinanceError(503, "Could not finalize the upload. Try again.");

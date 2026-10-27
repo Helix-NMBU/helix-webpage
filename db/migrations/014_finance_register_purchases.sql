@@ -135,39 +135,39 @@ set search_path = pg_catalog, finance
 as $fn$
 declare
   key_value text;
+  configured bigint;
   issued bigint;
+  next_value bigint;
 begin
   if p_year is null or p_year < 2000 or p_year > 2200 then
     raise exception 'FINANCE|invalid|Enter a valid reference.';
   end if;
   key_value := 'purchase:' || p_year::text;
-  loop
-    select configured_next into issued
-    from finance.reference_counters
-    where counter_key = key_value
-    for update;
-    if found then
-      update finance.reference_counters
-        set last_issued = configured_next,
-            configured_next = configured_next + 1,
-            updated_at = clock_timestamp(),
-            updated_by_member_id = p_actor
-        where counter_key = key_value
-        returning last_issued into issued;
-      public_ref := p_year::text || '-' || lpad(issued::text, 4, '0');
-      ordinal := issued;
-      return next;
-    end if;
-    begin
-      insert into finance.reference_counters (counter_key, calendar_year, configured_next, last_issued, updated_by_member_id)
-      values (key_value, p_year, 2, 1, p_actor);
-      public_ref := p_year::text || '-0001';
-      ordinal := 1;
-      return next;
-    exception when unique_violation then
-      null;
-    end;
-  end loop;
+  insert into finance.reference_counters (counter_key, calendar_year, configured_next, last_issued, updated_by_member_id)
+  values (key_value, p_year, 1, null, p_actor)
+  on conflict (counter_key) do nothing;
+
+  select configured_next, last_issued
+    into configured, issued
+  from finance.reference_counters
+  where counter_key = key_value
+  for update;
+
+  if not found then
+    raise exception 'FINANCE|conflict|Purchase reference counter is unavailable.';
+  end if;
+
+  next_value := greatest(coalesce(issued, 0) + 1, configured);
+  update finance.reference_counters
+    set last_issued = next_value,
+        configured_next = next_value + 1,
+        updated_at = clock_timestamp(),
+        updated_by_member_id = p_actor
+    where counter_key = key_value;
+
+  public_ref := p_year::text || '-' || lpad(next_value::text, 4, '0');
+  ordinal := next_value;
+  return next;
 end;
 $fn$;
 
@@ -318,7 +318,7 @@ as $fn$
 declare
   replay jsonb;
   current_budget finance.budgets%rowtype;
-  purchase_id uuid := gen_random_uuid();
+  registered_purchase_id uuid := gen_random_uuid();
   purchase_ref text;
   purchase_ordinal bigint;
   registration_year integer;
@@ -333,7 +333,7 @@ declare
   upload_id uuid;
   upload_row finance.uploads%rowtype;
   target_item_id uuid;
-  system_id uuid;
+  line_system_id uuid;
   amount_ore bigint;
   quantity numeric;
   line_description text;
@@ -355,8 +355,6 @@ begin
   if replay is not null then
     return replay;
   end if;
-
-  perform pg_advisory_xact_lock(hashtextextended(p_actor::text, 0));
 
   select count(*)::integer into quota_count
   from finance.purchases
@@ -413,7 +411,7 @@ begin
     payment_method, purchase_date, justification, document_kind, document_number,
     refund_account, refund_phone
   ) values (
-    purchase_id,
+    registered_purchase_id,
     current_budget.season_id,
     p_actor,
     purchase_ref,
@@ -432,7 +430,7 @@ begin
   for line in select value from jsonb_array_elements(p_body -> 'lines') as value
   loop
     line_index := line_index + 1;
-    system_id := (line ->> 'systemId')::uuid;
+    line_system_id := (line ->> 'systemId')::uuid;
     unbudgeted := coalesce((line ->> 'unbudgeted')::boolean, false);
     amount_ore := (line ->> 'amountOre')::bigint;
     quantity := (line ->> 'quantity')::numeric;
@@ -440,14 +438,14 @@ begin
     total_ore := total_ore + amount_ore;
 
     if unbudgeted then
-      target_item_id := finance.ensure_unallocated_for_purchase(p_actor, current_budget.id, system_id);
+      target_item_id := finance.ensure_unallocated_for_purchase(p_actor, current_budget.id, line_system_id);
     else
       target_item_id := (line ->> 'budgetItemId')::uuid;
       if not exists (
         select 1 from finance.budget_items i
         where i.id = target_item_id
           and i.budget_id = current_budget.id
-          and i.system_id = system_id
+          and i.system_id = line_system_id
           and i.status <> 'cancelled'
           and i.protected is not true
       ) then
@@ -459,9 +457,9 @@ begin
     insert into finance.purchase_lines (
       purchase_id, public_ref, system_id, budget_item_id, unbudgeted, description, quantity, amount_ore
     ) values (
-      purchase_id,
+      registered_purchase_id,
       line_ref,
-      system_id,
+      line_system_id,
       case when unbudgeted then null else target_item_id end,
       unbudgeted,
       line_description,
@@ -476,9 +474,9 @@ begin
 
   if payment_method = 'invoice' then
     insert into finance.invoice_obligations (purchase_id, due_date)
-    values (purchase_id, invoice_due);
+    values (registered_purchase_id, invoice_due);
   elsif payment_method = 'outlay' then
-    insert into finance.outlay_reimbursements (purchase_id) values (purchase_id);
+    insert into finance.outlay_reimbursements (purchase_id) values (registered_purchase_id);
   end if;
 
   for upload_id in
@@ -492,7 +490,7 @@ begin
       purchase_id, public_ref, kind, document_number, document_date, original_name,
       content_type, byte_size, content_sha256, storage_key
     ) values (
-      purchase_id,
+      registered_purchase_id,
       doc_ref,
       document_kind,
       nullif(p_body ->> 'documentNumber', ''),
@@ -503,13 +501,13 @@ begin
       upload_row.content_sha256,
       upload_row.final_key
     );
-    update finance.uploads set purchase_id = purchase_id where id = upload_id;
+    update finance.uploads set purchase_id = registered_purchase_id where id = upload_id;
   end loop;
 
   if missing_approval and threshold_ore > 0 and total_ore > threshold_ore then
     insert into finance.exception_reviews (purchase_id, kind, facts)
     values (
-      purchase_id,
+      registered_purchase_id,
       'missing_approval',
       jsonb_build_object(
         'totalOre', total_ore::text,
@@ -519,7 +517,7 @@ begin
     );
   end if;
 
-  perform finance.append_audit(p_actor, 'purchase', purchase_id::text, 'created', null, purchase_ref, null);
+  perform finance.append_audit(p_actor, 'purchase', registered_purchase_id::text, 'created', null, purchase_ref, null);
 
   for recipient in
     select distinct g.member_id
@@ -531,16 +529,16 @@ begin
     values (
       'purchase_registered',
       'purchase',
-      purchase_id,
+      registered_purchase_id,
       recipient.member_id,
-      'purchase_registered:' || purchase_id::text || ':' || recipient.member_id::text,
+      'purchase_registered:' || registered_purchase_id::text || ':' || recipient.member_id::text,
       jsonb_build_object('publicRef', purchase_ref, 'supplierName', p_body ->> 'supplierName')
     )
     on conflict (dedupe_key) do nothing;
   end loop;
 
   return finance.finish_purchase_mutation(
-    p_actor, p_request_id, 'registerPurchase', p_payload_hash, purchase_id, warnings
+    p_actor, p_request_id, 'registerPurchase', p_payload_hash, registered_purchase_id, warnings
   );
 exception
   when unique_violation then

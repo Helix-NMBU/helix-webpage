@@ -11,7 +11,12 @@ const session = vi.hoisted(() => ({
   } as FinanceCapabilitySet,
   today: "2026-10-01",
   budgets: {
+    viewVersion: 1,
+    seasonCode: "S27",
     budgetStatus: "approved",
+    approvedOn: "2026-10-01",
+    revision: 1,
+    departments: [],
     choices: { systems: [], items: [] },
   } as PublicBudgets,
   purchases: { ownRequests: [], viewVersion: 1 } as PurchasesView,

@@ -98,12 +98,13 @@ export function PurchasesBoard() {
         contentType: file.type || "application/octet-stream",
         byteSize: file.size,
       });
-      if (!authorized.uploadUrl || !authorized.id) throw new Error("Upload authorization failed.");
+      const uploadId = authorized.id;
+      if (!authorized.uploadUrl || !uploadId) throw new Error("Upload authorization failed.");
       const response = await fetch(authorized.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
       if (!response.ok) throw new Error("Upload failed.");
-      await session.mutate({ action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId: authorized.id });
-      setUploads((current) => current.map((row) => (row.name === file.name && row.status === "uploading" ? { uploadId: authorized.id, name: file.name, status: "ready" } : row)));
-      setPurchase((current) => ({ ...current, uploadIds: [...current.uploadIds, authorized.id] }));
+      await session.mutate({ action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId });
+      setUploads((current) => current.map((row) => (row.name === file.name && row.status === "uploading" ? { uploadId, name: file.name, status: "ready" as const } : row)));
+      setPurchase((current) => ({ ...current, uploadIds: [...current.uploadIds, uploadId] }));
       notify("File uploaded", `${file.name} is ready to submit.`, { id: "purchase-upload", variant: "success" });
     } catch (error) {
       setUploads((current) => current.filter((row) => row !== entry));

@@ -27,6 +27,7 @@ let pg: PGlite;
 let db: CvDatabase;
 let services: ReturnType<typeof createFinanceServices>;
 let handler: ReturnType<typeof createFinanceHandler>;
+let financeStorage: Awaited<ReturnType<typeof import("./finance-storage-mock.js").createMemoryFinanceStorage>>;
 
 function response() {
   let status = 0;
@@ -109,10 +110,11 @@ beforeAll(async () => {
   `);
   await pg.exec(readFileSync(new URL("../../../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/013_finance_funding.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/014_finance_register_purchases.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
-  const financeStorage = createMemoryFinanceStorage();
+  financeStorage = createMemoryFinanceStorage();
   services = createFinanceServices({
     db,
     financeStorage,
@@ -552,6 +554,138 @@ describe("finance access API", () => {
     const register = JSON.stringify((await call({ query: { action: "purchases" }, token: "member" })).body);
     expect(register).toContain("Hidden Supplier");
     expect(register).not.toContain("Other Season Supplier");
+  });
+
+  it("persists register_purchase in SQL without hanging", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    await sql(
+      `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+       values ('purchase:2026', 2026, 40, $1::uuid)`,
+      [operatorId],
+    );
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const uploadId = crypto.randomUUID();
+    const stagingKey = `${memberId}/staging/${uploadId}/abcdef0123456789abcdef0123456789`;
+    const finalKey = `${memberId}/final/${uploadId}/abcdef0123456789abcdef0123456789`;
+    await sql(
+      `insert into finance.uploads (id, member_id, staging_key, final_key, status, byte_size, content_type, original_name, content_sha256, expires_at)
+       values ($1::uuid, $2::uuid, $3, $4, 'finalized', 8, 'application/pdf', 'receipt.pdf', 'abc', now() + interval '1 hour')`,
+      [uploadId, memberId, stagingKey, finalKey],
+    );
+    const body = {
+      buyerName: "Buyer Example",
+      supplierName: "Supplier Example",
+      paymentMethod: "team_account",
+      purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame",
+      documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, unbudgeted: false, description: "Tube", quantity: "1", amountOre: "90000" }],
+      uploadIds: [uploadId],
+      registrationYear: 2026,
+      thresholdOre: "500000",
+      missingApproval: false,
+      warnings: [],
+    };
+    const hash = "a".repeat(64);
+    const issued = await pg.query<{ public_ref: string }>("select * from finance.issue_purchase_reference($1::uuid, 2026)", [memberId]);
+    expect(issued.rows[0]?.public_ref).toBe("2026-0040");
+    const result = await pg.query<{ result: { ok: boolean } }>(
+      "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result",
+      [memberId, crypto.randomUUID(), hash, JSON.stringify(body)],
+    );
+    expect(result.rows[0]?.result).toMatchObject({ ok: true });
+  });
+
+  it("registers a purchase with uploads, bumps the view version, and replays idempotently", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    await grant(adminId, "head_of_finance");
+    await sql(
+      `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+       values ('purchase:2026', 2026, 40, $1::uuid)`,
+      [operatorId],
+    );
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const { putMemoryPdf } = await import("./finance-storage-mock.js");
+    const auth = await call({
+      token: "member",
+      body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 },
+    });
+    expect(auth.status).toBe(200);
+    const stagingKey = (auth.body as { stagingKey?: string }).stagingKey ?? "";
+    await putMemoryPdf(financeStorage, stagingKey);
+    const uploadId = (auth.body as { id?: string }).id;
+    expect((await call({ token: "member", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } })).status).toBe(200);
+    const purchase = {
+      buyerName: "Buyer Example",
+      supplierName: "Supplier Example",
+      paymentMethod: "team_account",
+      purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame",
+      documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Tube stock", quantity: "3", amountNok: "900.00" }],
+      uploadIds: [uploadId],
+    };
+    const before = Number((await sql<{ version: string }>("select version::text as version from finance.view_versions")).rows[0]?.version ?? "0");
+    const rid = crypto.randomUUID();
+    const saved = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
+    if (saved.status !== 200) throw new Error(JSON.stringify(saved.body));
+    expect(saved.body).toMatchObject({ ok: true });
+    const after = Number((await sql<{ version: string }>("select version::text as version from finance.view_versions")).rows[0]?.version ?? "0");
+    expect(after).toBe(before + 1);
+    expect((await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } })).body).toMatchObject(saved.body as Record<string, unknown>);
+    expect((await counts()).purchases).toBe(2);
+  });
+
+  it("enforces purchase registration quota and upload ownership", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const season = (await sql<{ id: string }>("select id from finance.seasons")).rows[0]?.id;
+    for (let index = 0; index < 20; index += 1) {
+      await sql(
+        `insert into finance.purchases (
+           season_id, requester_member_id, public_ref, status, buyer_name, supplier_name, payment_method, purchase_date, justification, document_kind
+         ) values ($1::uuid, $2::uuid, $3, 'registered', 'Buyer', 'Supplier', 'team_account', '2026-10-01', 'Justification text', 'receipt')`,
+        [season, memberId, `2026-${String(1000 + index)}`],
+      );
+    }
+    const { putMemoryPdf } = await import("./finance-storage-mock.js");
+    const auth = await call({
+      token: "member",
+      body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 },
+    });
+    await putMemoryPdf(financeStorage, (auth.body as { stagingKey?: string }).stagingKey ?? "");
+    const uploadId = (auth.body as { id?: string }).id;
+    await call({ token: "member", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } });
+    const blocked = await call({
+      token: "member",
+      body: {
+        action: "registerPurchase",
+        requestId: crypto.randomUUID(),
+        purchase: {
+          buyerName: "Buyer Example",
+          supplierName: "Supplier Example",
+          paymentMethod: "team_account",
+          purchaseDate: "2026-10-01",
+          justification: "Workshop material for frame",
+          documentKind: "receipt",
+          lines: [{ systemId, budgetItemId: itemId, description: "Line", quantity: "1", amountNok: "10.00" }],
+          uploadIds: [uploadId],
+        },
+      },
+    });
+    expect(blocked.status).toBe(429);
+    const otherAuth = await call({
+      token: "member",
+      body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 },
+    });
+    await putMemoryPdf(financeStorage, (otherAuth.body as { stagingKey?: string }).stagingKey ?? "");
+    expect((await call({ token: "stranger", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId: (otherAuth.body as { id?: string }).id } })).status).toBe(403);
   });
 
   it("returns an unchanged view without skipping a financing denial", async () => {
