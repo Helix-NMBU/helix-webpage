@@ -120,7 +120,7 @@ describe("personal task view", () => {
       status: "all",
     });
   });
-  it("keeps unorganized tasks visible and can show legacy cancelled tasks explicitly", () => {
+  it("keeps unorganized legacy tasks visible and ignores removed cancelled preferences", () => {
     const workspace = initialLocalWorkspace();
     const task = assignedTasks(workspace)[0];
     task.projectId = null;
@@ -136,10 +136,10 @@ describe("personal task view", () => {
     expect(
       personalTaskGroups(
         workspace,
-        options("project=none&milestone=none"),
+        options("cancelled=hide&project=none&milestone=none"),
         today,
-      ),
-    ).toEqual([]);
+      ).flatMap((group) => group.tasks),
+    ).toEqual([task]);
   });
 });
 

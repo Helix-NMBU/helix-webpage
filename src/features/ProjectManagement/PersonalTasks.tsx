@@ -68,6 +68,7 @@ export function PersonalTasks({
     setParams(
       (current) => {
         const next = new URLSearchParams(current);
+        next.delete("cancelled");
         next.set(key, value);
         if (key === "project") next.delete("milestone");
         return next;

@@ -31,8 +31,7 @@ export function ProjectTaskViewMenu({
     options.status !== "all" ||
     options.priority !== "all" ||
     options.assignee !== "all" ||
-    !options.completed ||
-    !options.cancelled;
+    !options.completed;
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -61,6 +60,18 @@ export function ProjectTaskViewMenu({
           onChange={(value) => onChange("view", value)}
         />
         <div className="space-y-3 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">
+          <Field id="project-task-group" label="Grouping">
+            <Choice
+              id="project-task-group"
+              value={options.view === "board" ? "status" : options.group}
+              disabled={options.view === "board"}
+              onChange={(value) => onChange("group", value)}
+              options={[
+                { value: "status", label: "Status" },
+                { value: "none", label: "No grouping" },
+              ]}
+            />
+          </Field>
           <Field id="project-task-status" label="Status">
             <Choice
               id="project-task-status"
@@ -128,37 +139,20 @@ export function ProjectTaskViewMenu({
             />
           </Field>
         </div>
-        {(
-          [
-            [
-              "completed",
-              options.view === "board"
-                ? "Completed milestones"
-                : "Completed tasks",
-              options.completed,
-            ],
-            [
-              "cancelled",
-              options.view === "board"
-                ? "Cancelled milestones"
-                : "Cancelled tasks",
-              options.cancelled,
-            ],
-          ] as const
-        ).map(([key, label, checked]) => (
-          <div key={key} className="flex items-center justify-between gap-3">
-            <Label htmlFor={`project-task-${key}`} className="font-normal">
-              {label}
-            </Label>
-            <Switch
-              id={`project-task-${key}`}
-              checked={checked}
-              onCheckedChange={(value) =>
-                onChange(key, value ? "show" : "hide")
-              }
-            />
-          </div>
-        ))}
+        <div className="flex items-center justify-between gap-3">
+          <Label htmlFor="project-task-completed" className="font-normal">
+            {options.view === "board"
+              ? "Completed milestones"
+              : "Completed tasks"}
+          </Label>
+          <Switch
+            id="project-task-completed"
+            checked={options.completed}
+            onCheckedChange={(value) =>
+              onChange("completed", value ? "show" : "hide")
+            }
+          />
+        </div>
         <Button variant="ghost" className="w-full border-t" onClick={onReset}>
           Reset {options.view === "board" ? "milestone" : "task"} filters
         </Button>

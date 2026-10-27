@@ -11,7 +11,7 @@ export function projectTaskView(params: URLSearchParams) {
     priority: params.get("priority") ?? "all",
     sort: params.get("sort") ?? "deadline",
     completed: params.get("completed") !== "hide",
-    cancelled: params.get("cancelled") !== "hide",
+    group: params.get("group") === "none" ? "none" : "status",
   };
 }
 export type ProjectTaskView = ReturnType<typeof projectTaskView>;
@@ -33,7 +33,6 @@ export function visibleProjectTasks(
             ? !task.assigneeIds.length
             : task.assigneeIds.includes(options.assignee))) &&
         (options.completed || task.status !== "done") &&
-        (options.cancelled || task.status !== "cancelled") &&
         `${task.title} ${task.description} ${task.partnerName}`
           .toLowerCase()
           .includes(search.toLowerCase()),

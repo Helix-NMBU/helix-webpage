@@ -60,7 +60,6 @@ export function personalTaskView(params: URLSearchParams) {
       "due",
     ),
     completed: params.get("completed") !== "hide",
-    cancelled: params.get("cancelled") === "show",
     columns: PERSONAL_TASK_COLUMNS.map(([key]) => key).filter((key) =>
       columns.includes(key),
     ),
@@ -100,8 +99,7 @@ export function personalTaskGroups(
           (options.milestone === "none"
             ? !task.milestoneId
             : task.milestoneId === options.milestone)) &&
-        (options.completed || task.status !== "done") &&
-        (options.cancelled || task.status !== "cancelled"),
+        (options.completed || task.status !== "done"),
     )
     .sort((a, b) => {
       const order =

@@ -177,18 +177,6 @@ export function PersonalTaskViewMenu({
               }
             />
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="view-cancelled" className="font-normal">
-              Cancelled tasks
-            </Label>
-            <Switch
-              id="view-cancelled"
-              checked={options.cancelled}
-              onCheckedChange={(value) =>
-                onChange("cancelled", value ? "show" : "hide")
-              }
-            />
-          </div>
         </div>
         <div className="space-y-3 border-t pt-4">
           <p className="text-sm font-medium">Display properties</p>
@@ -198,9 +186,7 @@ export function PersonalTaskViewMenu({
             className="flex flex-wrap gap-2"
           >
             {PERSONAL_TASK_COLUMNS.filter(
-              ([key]) =>
-                options.view !== "board" ||
-                key !== "project",
+              ([key]) => options.view !== "board" || key !== "project",
             ).map(([key, label]) => (
               <Button
                 key={key}

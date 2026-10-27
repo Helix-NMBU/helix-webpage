@@ -15,6 +15,18 @@ describe("project task filters", () => {
       status: "all",
     });
   });
+  it("restores ungrouped lists and ignores the removed cancelled toggle", () => {
+    expect(options().group).toBe("status");
+    expect(options("group=none").group).toBe("none");
+    expect(options("group=unknown").group).toBe("status");
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find((item) => item.kind === "task")!;
+    task.status = "cancelled";
+    expect(
+      visibleProjectTasks(data.tasks, options("cancelled=hide"), ""),
+    ).toContain(task);
+    expect(options("cancelled=hide")).not.toHaveProperty("cancelled");
+  });
   it("combines task-only status, assignee, priority and search filters", () => {
     const data = initialLocalWorkspace();
     const task = data.tasks.find((task) => task.status === "blocked")!;
@@ -58,9 +70,7 @@ describe("project task filters", () => {
       options("completed=hide&cancelled=hide&sort=priority"),
       "",
     );
-    expect(
-      result.every((task) => !["done", "cancelled"].includes(task.status)),
-    ).toBe(true);
+    expect(result.every((task) => task.status !== "done")).toBe(true);
     const ranks = result.map((task) =>
       ["urgent", "high", "normal", "low"].indexOf(task.priority),
     );

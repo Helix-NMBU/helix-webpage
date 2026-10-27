@@ -80,6 +80,7 @@ export function ProjectTaskList({
     setParams(
       (current) => {
         const next = new URLSearchParams(current);
+        next.delete("cancelled");
         next.set(key, value);
         return next;
       },
@@ -98,6 +99,7 @@ export function ProjectTaskList({
           "completed",
           "cancelled",
           "sort",
+          "group",
         ])
           next.delete(key);
         return next;
@@ -191,48 +193,54 @@ export function ProjectTaskList({
         />
       ) : (
         <div className="space-y-5">
-          {TASK_STATUSES.map((status) => {
-            const group = visible.filter((task) => task.status === status);
+          {(options.group === "none" ? [null] : TASK_STATUSES).map((status) => {
+            const group = status
+              ? visible.filter((task) => task.status === status)
+              : visible;
             if (!group.length) return null;
-            const open = !collapsed.includes(status);
+            const open = !status || !collapsed.includes(status);
             const total = allTasks.filter(
               (task) => task.status === status,
             ).length;
             return (
               <section
-                key={status}
-                aria-label={`${STATUS_LABELS[status]} tasks`}
+                key={status ?? "all"}
+                aria-label={
+                  status ? `${STATUS_LABELS[status]} tasks` : "All tasks"
+                }
               >
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm font-medium"
-                  onClick={() =>
-                    setCollapsed((values) =>
-                      values.includes(status)
-                        ? values.filter((value) => value !== status)
-                        : [...values, status],
-                    )
-                  }
-                >
-                  <IconChevronDown
-                    aria-hidden="true"
-                    className={`size-3.5 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-                  />
-                  <TaskStatusIcon status={status} />
-                  {STATUS_LABELS[status]}
-                  <span className="ml-1 text-xs tabular-nums text-muted-foreground">
-                    {group.length}
-                    {group.length !== total ? ` / ${total}` : ""}
-                  </span>
-                </button>
+                {status && (
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-left text-sm font-medium"
+                    onClick={() =>
+                      setCollapsed((values) =>
+                        values.includes(status)
+                          ? values.filter((value) => value !== status)
+                          : [...values, status],
+                      )
+                    }
+                  >
+                    <IconChevronDown
+                      aria-hidden="true"
+                      className={`size-3.5 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+                    />
+                    <TaskStatusIcon status={status} />
+                    {STATUS_LABELS[status]}
+                    <span className="ml-1 text-xs tabular-nums text-muted-foreground">
+                      {group.length}
+                      {group.length !== total ? ` / ${total}` : ""}
+                    </span>
+                  </button>
+                )}
                 {open && (
                   <ul className="divide-y divide-border/50">
                     {group.map((task) => {
                       return (
                         <li
                           key={task.id}
-                          className={`flex items-center gap-3 px-3 py-4 ${status === "done" || status === "cancelled" ? "text-muted-foreground" : ""}`}
+                          className={`flex items-center gap-3 px-3 py-4 ${task.status === "done" || task.status === "cancelled" ? "text-muted-foreground" : ""}`}
                         >
                           <PriorityIndicator priority={task.priority} />
                           <TaskStatusControl

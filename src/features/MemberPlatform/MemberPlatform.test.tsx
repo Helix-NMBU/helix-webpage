@@ -563,6 +563,32 @@ describe("internal member platform", () => {
     await act(async()=>noMilestone.click());expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Legacy inspection');expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Verify dimensions');
   });
 
+  it("switches project lists to no grouping without losing filters or ordering",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    await open('/projects/00000000-0000-4000-8000-000000000100?sort=title&completed=show&cancelled=hide');
+    const list=()=>container.querySelector('[aria-label="Project tasks"]')!;
+    expect(list().querySelectorAll('section > button[aria-expanded]')).not.toHaveLength(0);
+    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project task filters and view"]')!.click());
+    expect(document.getElementById('project-task-cancelled')).toBeNull();
+    await act(async()=>document.getElementById('project-task-group')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==='No grouping')!.click());
+    expect(router.state.location.search).toContain('group=none');
+    expect(router.state.location.search).toContain('sort=title');
+    expect(router.state.location.search).not.toContain('cancelled=');
+    expect(list().querySelectorAll('section > button[aria-expanded]')).toHaveLength(0);
+    const titles=[...list().querySelectorAll<HTMLButtonElement>('li button:not([aria-label])')].map(button=>button.textContent!);
+    expect(titles).toHaveLength(5);expect(titles).toEqual([...titles].sort((a,b)=>a.localeCompare(b)));
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='Board')!.click());
+    expect(container.querySelector('[aria-label="Milestone board"]')).not.toBeNull();
+    expect(document.getElementById('project-task-group')?.hasAttribute('disabled')).toBe(true);
+    expect(router.state.location.search).toContain('group=none');
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='List')!.click());
+    expect(list().querySelectorAll('section > button[aria-expanded]')).toHaveLength(0);
+    await act(async()=>document.getElementById('project-task-group')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==='Status')!.click());
+    expect(list().querySelectorAll('section > button[aria-expanded]')).not.toHaveLength(0);
+  });
+
   it("shows milestones on the project board, preserves filters and opens their linked task list",async()=>{
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
     const projectUrl='/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040';
