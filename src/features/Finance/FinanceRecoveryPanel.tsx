@@ -80,10 +80,12 @@ export function FinanceRecoveryPanel() {
           <div key={row.id} className="space-y-2 rounded-md border p-3">
             <p>Upload · {row.owner ?? "Unknown member"} · {row.status} · {row.referenced ? "Saved purchase reference found" : "No saved purchase reference"}</p>
             <p className="text-sm text-muted-foreground">ID {row.id} · Created {row.createdAt} · Expires {row.expiresAt}</p>
+            {row.candidateCount > 0 ? <p>{row.candidateCount} final upload object{row.candidateCount === 1 ? " needs" : "s need"} cleanup.</p> : null}
             <div className="flex flex-wrap gap-2">
-              {([ ["saved", "Recorded as saved"], ["absent", "Recorded as absent"], ["still_unknown", "Still unknown"] ] as const).map(([value, label]) => (
+              {row.commitState === "uncertain" ? ([ ["saved", "Recorded as saved"], ["absent", "Recorded as absent"], ["still_unknown", "Still unknown"] ] as const).map(([value, label]) => (
                 <Button key={value} type="button" variant="outline" size="sm" disabled={busy || (value === "saved" && !row.referenced) || (value === "absent" && row.referenced)} onClick={() => { void reconcile({ action: "cleanupUploads", uploadId: row.id, reconciliation: value }); }}>{label}</Button>
-              ))}
+              )) : null}
+              {row.candidateCount > 0 ? <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => { void reconcile({ action: "cleanupUploads", uploadId: row.id, candidateOnly: true }); }}>Clean up final objects</Button> : null}
             </div>
           </div>
         ))}

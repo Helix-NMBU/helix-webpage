@@ -21,7 +21,7 @@ beforeEach(() => {
   mocks.mutate.mockReset().mockResolvedValue({ recovery: { message: "Recorded" } });
   mocks.recovery.mockReset().mockResolvedValue({
     deliveries: [{ id: "delivery-1", eventType: "request.submitted", recipient: "Head", status: "uncertain", safeError: "provider_unknown", attemptCount: 1, updatedAt: "2026-10-27", providerMessageId: null }],
-    uploads: [{ id: "upload-1", owner: "Member", status: "pending", commitState: "uncertain", referenced: false, createdAt: "2026-10-27", expiresAt: "2026-10-28" }],
+    uploads: [{ id: "upload-1", owner: "Member", status: "pending", commitState: "uncertain", referenced: false, candidateCount: 0, createdAt: "2026-10-27", expiresAt: "2026-10-28" }],
   });
   container = document.createElement("div");
   document.body.append(container);
@@ -65,7 +65,7 @@ it("keeps the same request ID when the notification retries a failed reconciliat
 });
 
 it("allows saved reconciliation and prevents absent reconciliation for a referenced upload", async () => {
-  mocks.recovery.mockResolvedValueOnce({ deliveries: [], uploads: [{ id: "saved-upload", owner: "Member", status: "finalized", commitState: "uncertain", referenced: true, createdAt: "2026-10-27", expiresAt: "2026-10-28" }] });
+  mocks.recovery.mockResolvedValueOnce({ deliveries: [], uploads: [{ id: "saved-upload", owner: "Member", status: "finalized", commitState: "uncertain", referenced: true, candidateCount: 0, createdAt: "2026-10-27", expiresAt: "2026-10-28" }] });
   await act(async () => root.render(<FinanceRecoveryPanel />));
   expect(container.textContent).toContain("Saved purchase reference found");
   const buttons = [...container.querySelectorAll("button")];
@@ -74,4 +74,13 @@ it("allows saved reconciliation and prevents absent reconciliation for a referen
   expect(buttons.find((button) => button.textContent === "Recorded as absent")!.disabled).toBe(true);
   await act(async () => saved.click());
   expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "cleanupUploads", uploadId: "saved-upload", reconciliation: "saved" }));
+});
+
+it("offers candidate-only cleanup for a referenced purchase without exposing a storage key", async () => {
+  mocks.recovery.mockResolvedValueOnce({ deliveries: [], uploads: [{ id: "saved-upload", owner: "Member", status: "finalized", commitState: "settled", referenced: true, candidateCount: 1, createdAt: "2026-10-27", expiresAt: "2026-10-28" }] });
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  expect(container.textContent).toContain("1 final upload object needs cleanup.");
+  expect(container.textContent).not.toContain("Recorded as absent");
+  await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Clean up final objects")!.click());
+  expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "cleanupUploads", uploadId: "saved-upload", candidateOnly: true }));
 });

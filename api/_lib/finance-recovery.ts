@@ -40,17 +40,25 @@ export async function loadFinanceRecovery(db: CvDatabase, caller: DeliveryCaller
       where o.status in ('pending', 'failed', 'uncertain')
       order by o.updated_at desc, o.id limit 50`);
   const uploads = await db.query<{
-    id: string; owner: string | null; status: string; commit_state: string; referenced: boolean; created_at: string; expires_at: string;
+    id: string; owner: string | null; status: string; commit_state: string; referenced: boolean; candidate_count: string; created_at: string; expires_at: string;
   }>(`select u.id::text, m.full_name as owner, u.status, u.commit_state,
-             finance.upload_is_referenced(u) as referenced, u.created_at::text, u.expires_at::text
+             finance.upload_is_referenced(u) as referenced, candidates.candidate_count::text,
+             u.created_at::text, u.expires_at::text
       from finance.uploads u join identity.members m on m.id = u.member_id
-      where u.commit_state = 'uncertain'
+      cross join lateral (
+        select count(*) as candidate_count from finance.upload_final_candidates c
+        where c.upload_id = u.id and c.status in ('pending', 'cleanup') and c.last_cleaned_at is null
+          and c.created_at <= now() - interval '24 hours'
+          and not exists (select 1 from finance.uploads referenced_upload where referenced_upload.final_key = c.storage_key)
+          and not exists (select 1 from finance.documents d where d.storage_key = c.storage_key)
+      ) candidates
+      where u.commit_state = 'uncertain' or candidates.candidate_count > 0
       order by u.created_at desc, u.id limit 50`);
   return {
     deliveries: deliveries.rows.map((r) => ({ id: r.id, eventType: r.event_type, recipient: r.recipient, status: r.status,
       safeError: r.safe_error, attemptCount: Number(r.attempt_count), updatedAt: r.updated_at,
       lastClaimedAt: r.last_claimed_at, providerMessageId: r.provider_message_id })),
-    uploads: uploads.rows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state, referenced: r.referenced,
+    uploads: uploads.rows.map((r) => ({ id: r.id, owner: r.owner, status: r.status, commitState: r.commit_state, referenced: r.referenced, candidateCount: Number(r.candidate_count),
       createdAt: r.created_at, expiresAt: r.expires_at })),
   };
 }

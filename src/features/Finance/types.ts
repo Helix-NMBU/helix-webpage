@@ -654,7 +654,7 @@ export type FinanceMutationResult = {
 
 export type FinanceRecoveryView = {
   deliveries: { id: string; eventType: string; recipient: string | null; status: string; safeError: string | null; attemptCount: number; updatedAt: string; lastClaimedAt: string | null; providerMessageId: string | null }[];
-  uploads: { id: string; owner: string | null; status: string; commitState: string; referenced: boolean; createdAt: string; expiresAt: string }[];
+  uploads: { id: string; owner: string | null; status: string; commitState: string; referenced: boolean; candidateCount: number; createdAt: string; expiresAt: string }[];
 };
 
 export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery"] as const;
