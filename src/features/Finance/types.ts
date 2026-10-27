@@ -488,10 +488,30 @@ export type FinanceMutation =
   | (MutationBase & { action: "decideRequest"; requestRecordId: string; revisionId: string; decision: RequestDecisionKind; reason: string; approvedOreByLine?: Record<string, string> })
   | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string; releasedNok: string })
   | (MutationBase & { action: "downloadDocument"; documentId: string })
+  | (MutationBase & { action: "downloadExport"; exportId: string })
   | (MutationBase & { action: "exportPurchases" })
-  | (MutationBase & { action: "retryOutbox"; outboxId?: string });
+  | (MutationBase & { action: "retryOutbox"; outboxId?: string; reconciliation?: "sent" | "not_sent" | "still_unknown" })
+  | (MutationBase & { action: "cleanupUploads"; uploadId?: string; reconciliation?: "saved" | "absent" | "still_unknown"; reportUncertain?: boolean });
 
 export type FinanceAction = FinanceMutation["action"];
+
+export type FinanceExportFile = {
+  fileName: string;
+  csv?: string;
+  exportId?: string;
+  byteSize: number;
+  contentSha256: string;
+  delivery: "inline" | "private";
+};
+
+export type FinanceRecoverySummary = {
+  sent: number;
+  failed: number;
+  uncertain: number;
+  skipped: number;
+  deleted: number;
+  message: string;
+};
 
 export type FinanceMutationResult = {
   ok: true;
@@ -504,6 +524,8 @@ export type FinanceMutationResult = {
   stagingKey?: string;
   expiresAt?: string;
   downloadUrl?: string;
+  exportFile?: FinanceExportFile;
+  recovery?: FinanceRecoverySummary;
 };
 
 export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing"] as const;
