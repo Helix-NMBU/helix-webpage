@@ -46,7 +46,10 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
         if (action === "version") return res.status(200).json(await services.version(token, version));
         if (action === "overview") return res.status(200).json(await services.overview(token, version));
         if (action === "budgets") return res.status(200).json(await services.budgets(token, version));
-        if (action === "purchases") return res.status(200).json(await services.purchases(token, version));
+        if (action === "purchases") {
+          const requestRecordId = typeof req.query.requestRecordId === "string" ? req.query.requestRecordId : undefined;
+          return res.status(200).json(await services.purchases(token, version, requestRecordId));
+        }
         return res.status(200).json(await services.financing(token, version));
       }
       const length = Number(req.headers["content-length"]);

@@ -137,6 +137,11 @@ export function mutationRequiresRevision(action: FinanceAction): boolean {
   return REVISION_ACTIONS.has(action);
 }
 
+export function mutationAllowed(action: FinanceAction, capabilities: FinanceCapabilitySet): boolean {
+  if (action === "closeRequest") return capabilities.ownRequests || capabilities.decideRequests;
+  return capabilities[mutationCapability(action)];
+}
+
 export function isFinanceAction(value: string): value is FinanceAction {
   return Object.prototype.hasOwnProperty.call(ACTION_CAPABILITY, value);
 }
