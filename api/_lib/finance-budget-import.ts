@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { parseBudgetCsv, normalizeImportDescription, parseImportAmount } from "../../src/features/Finance/budget-import.js";
+import { parseBudgetCsv, normalizeImportDescription, parseImportAmount, MAX_IMPORT_ROWS, type BudgetCsvResult } from "../../src/features/Finance/budget-import.js";
 import { formatOre } from "./finance-money.js";
 import { FinanceError } from "./finance-error.js";
 import { mapBudgetError, type BudgetCaller } from "./finance-budgets.js";
@@ -13,14 +13,26 @@ type Desired = { systemId: string; description: string; category: string; planne
 type Operation = { kind: "add" | "change" | "remove"; id?: string; revision?: number; desired?: Desired; oldStatus?: string; oldValues?: Record<string, string | null> };
 
 type Snapshot = { version: number; budgetId: string; budgetRevision: number; budgetStatus: string; seasonId: string; systems: System[]; items: Item[]; parts: Part[] };
-async function snapshot(db: CvDatabase, caller: BudgetCaller): Promise<Snapshot> {
+const MAX_PREVIEW_BYTES = 1024 * 1024;
+const MAX_RELATED_SNAPSHOT_ROWS = 5_000;
+const byId = <T extends { id: string }>(a: T, b: T) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+async function snapshot(db: CvDatabase, caller: BudgetCaller, department: string): Promise<Snapshot> {
   const [budget] = (await db.query<{ version: string; id: string; revision: number; status: string; season_id: string }>(
     `select v.version::text, b.id, b.revision, b.status, b.season_id from finance.view_versions v
      join finance.settings st on st.setting_key = 'current_season' join finance.seasons s on s.code = st.setting_value #>> '{}'
      join finance.budgets b on b.season_id = s.id where v.singleton and s.status <> 'closed'`,
   )).rows;
   if (!budget) throw new FinanceError(409, "Create a current season budget first.");
-  const systems = (await db.query<System>("select id, code, name, department_key, active from finance.systems")).rows;
+  const [departmentCount] = (await db.query<{ count: string }>(
+    `select count(*)::text as count from finance.budget_items i join finance.systems s on s.id = i.system_id
+     where i.budget_id = $1::uuid and not i.protected and s.department_key = $2`, [budget.id, department],
+  )).rows;
+  if (Number(departmentCount?.count ?? 0) > MAX_IMPORT_ROWS) {
+    throw new FinanceError(413, "This department has more than 500 budget items. Contact an administrator before importing.");
+  }
+  const systems = (await db.query<System>(
+    "select id, code, name, department_key, active from finance.systems where department_key = $1 order by id limit 5001", [department],
+  )).rows.sort(byId);
   const items = (await db.query<Item>(
     `select i.id, i.system_id, s.code as system_code, s.department_key, i.description, i.category,
       i.planned_ore::text, i.priority, i.reuse_status, i.expected_purchase_date::text, i.note,
@@ -28,11 +40,17 @@ async function snapshot(db: CvDatabase, caller: BudgetCaller): Promise<Snapshot>
       coalesce((select sum(a.amount_ore) from finance.allocations a join finance.purchase_lines l on l.id = a.line_id
         join finance.purchases p on p.id = l.purchase_id and p.status = 'registered' where a.budget_item_id = i.id), 0)::text as actual_ore
      from finance.budget_items i join finance.systems s on s.id = i.system_id
-     left join finance.funding_parts part on part.id = i.earmark_id where i.budget_id = $1::uuid and not i.protected`, [budget.id],
-  )).rows;
+     left join finance.funding_parts part on part.id = i.earmark_id
+     where i.budget_id = $1::uuid and not i.protected
+       and (s.department_key = $2 or (i.earmark_id is not null and i.status <> 'cancelled'))
+     order by i.id limit 5001`, [budget.id, department],
+  )).rows.sort(byId);
   const parts = (await db.query<Part>(
-    "select p.id, p.public_ref, f.season_id, f.status from finance.funding_parts p join finance.funding f on f.id = p.funding_id",
-  )).rows;
+    "select p.id, p.public_ref, f.season_id, f.status from finance.funding_parts p join finance.funding f on f.id = p.funding_id where f.season_id = $1::uuid order by p.id limit 5001", [budget.season_id],
+  )).rows.sort(byId);
+  if ([systems.length, items.length, parts.length].some((count) => count > MAX_RELATED_SNAPSHOT_ROWS)) {
+    throw new FinanceError(413, "The budget has too many related records to preview. Contact an administrator before importing.");
+  }
   const [end] = (await db.query<{ version: string }>("select version::text from finance.view_versions where singleton")).rows;
   if (!end || end.version !== budget.version) throw new FinanceError(409, "Finance changed while preparing the preview. Try again.");
   return { version: Number(budget.version), budgetId: budget.id, budgetRevision: Number(budget.revision), budgetStatus: budget.status, seasonId: budget.season_id, systems, items, parts };
@@ -46,8 +64,7 @@ function desiredFrom(item: Item): Desired {
   return { systemId: item.system_id, description: item.description, category: item.category, plannedOre: item.planned_ore, priority: item.priority,
     reuseStatus: item.reuse_status, expectedPurchaseDate: item.expected_purchase_date, note: item.note, earmarkId: item.earmark_id, status: item.status };
 }
-function preview(source: string, department: string, data: Snapshot): { result: BudgetImportPreview; operations: Operation[] } {
-  const parsed = parseBudgetCsv(source);
+function preview(source: string, department: string, data: Snapshot, parsed: BudgetCsvResult): { result: BudgetImportPreview; operations: Operation[] } {
   const errors = [...parsed.errors];
   const systems = data.systems.filter((entry) => entry.department_key === department);
   if (!systems.length) errors.push({ field: "departmentKey", message: "Choose a department with budget systems." });
@@ -128,7 +145,8 @@ function preview(source: string, department: string, data: Snapshot): { result: 
 
 export async function performBudgetImport(db: CvDatabase, caller: BudgetCaller, body: Record<string, unknown>): Promise<FinanceMutationResult> {
   if (typeof body.csv !== "string" || typeof body.departmentKey !== "string" || !body.departmentKey.trim()) throw new FinanceError(400, "Choose a department and enter CSV text.");
-  if (body.csv.length > 1_500_000) throw new FinanceError(413, "The CSV is too large.");
+  const parsed = parseBudgetCsv(body.csv);
+  if (parsed.limitError) throw new FinanceError(413, parsed.limitError);
   const action = String(body.action);
   const hash = createHash("sha256").update(JSON.stringify({ action, csv: body.csv, departmentKey: body.departmentKey, expectedRevision: body.expectedRevision, previewToken: body.previewToken, reason: body.reason ?? "" })).digest("hex");
   try {
@@ -136,8 +154,11 @@ export async function performBudgetImport(db: CvDatabase, caller: BudgetCaller, 
       const replay = (await db.query<{ result: FinanceMutationResult | null }>("select finance.replay_budget_mutation($1::uuid,$2::uuid,$3,$4) as result", [caller.memberId, body.requestId, action, hash])).rows[0]?.result;
       if (replay) return replay;
     }
-    const data = await snapshot(db, caller);
-    const prepared = preview(body.csv, body.departmentKey, data);
+    const data = await snapshot(db, caller, body.departmentKey);
+    const prepared = preview(body.csv, body.departmentKey, data, parsed);
+    if (Buffer.byteLength(JSON.stringify(prepared.result), "utf8") > MAX_PREVIEW_BYTES) {
+      throw new FinanceError(413, "The preview exceeds 1 MiB. Reduce the department budget size or contact an administrator.");
+    }
     if (action === "previewImport") return { ok: true, viewVersion: data.version, warnings: [], errors: [], importPreview: prepared.result };
     if (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision !== data.version) throw new FinanceError(409, "Finance changed since the preview. Preview the import again.");
     if (body.previewToken !== prepared.result.previewToken) throw new FinanceError(409, "The CSV or budget changed since the preview. Preview the import again.");

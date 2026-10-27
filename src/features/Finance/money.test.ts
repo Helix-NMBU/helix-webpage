@@ -28,6 +28,10 @@ describe("finance money and dates", () => {
     expect(parseNokToOre("   ")).toBeNull();
     expect(parseNokToOre("1 234,50")).toBe(123450n);
     expect(parseNokToOre("1.234,50")).toBe(123450n);
+    expect(parseNokToOre("1,234.50")).toBe(123450n);
+    expect(parseNokToOre("1.234.567,89")).toBe(123456789n);
+    expect(parseNokToOre("1,234,567.89")).toBe(123456789n);
+    expect(parseNokToOre("1\u202f234\u202f567,89")).toBe(123456789n);
     expect(parseNokToOre("20.000")).toBe(2000000n);
     expect(parseNokToOre("1234.50")).toBe(123450n);
     expect(parseNokToOre("kr 20 000")).toBe(2000000n);
@@ -42,6 +46,9 @@ describe("finance money and dates", () => {
     expect(() => parseNokToOre("1234.567")).toThrow("Enter a valid amount.");
     expect(() => parseNokToOre("12,345")).toThrow("Enter a valid amount.");
     expect(() => parseNokToOre("not money")).toThrow("Enter a valid amount.");
+    for (const invalid of ["1.2.3,45", "1,2,3.45", "12.34,56", "12,34.56", "1234.567,89", "1234,567.89", "1 2 3,45", "12 34,50"]) {
+      expect(() => parseNokToOre(invalid), invalid).toThrow("Enter a valid amount.");
+    }
     expect(parseNokToOre("1.005")).toBe(100500n);
     expect(oreFromNumber(1.005)).toBe(101n);
     expect(oreFromNumber(2.675)).toBe(268n);

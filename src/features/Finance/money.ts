@@ -26,16 +26,25 @@ export function formatOreNb(ore: bigint): string {
 export function parseNokToOre(input: string): bigint | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  let text = trimmed.replace(CURRENCY, "").replace(/[\s\u00a0\u202f]/g, "");
+  let text = trimmed.replace(CURRENCY, "").trim();
   if (!text) return null;
   const negative = text.startsWith("-");
   if (negative || text.startsWith("+")) text = text.slice(1);
   if (!text) throw new FinanceMoneyError("Enter a valid amount.");
+  if (/\s/u.test(text)) {
+    if (!/^\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:[,.]\d{1,2})?$/u.test(text)) throw new FinanceMoneyError("Enter a valid amount.");
+    text = text.replace(/[ \u00a0\u202f]/g, "");
+  }
   const lastComma = text.lastIndexOf(",");
   const lastDot = text.lastIndexOf(".");
   if (lastComma >= 0 && lastDot >= 0) {
-    if (lastComma > lastDot) text = text.replace(/\./g, "").replace(",", ".");
-    else text = text.replace(/,/g, "");
+    if (lastComma > lastDot) {
+      if (!/^\d{1,3}(?:\.\d{3})+,\d{1,2}$/.test(text)) throw new FinanceMoneyError("Enter a valid amount.");
+      text = text.replace(/\./g, "").replace(",", ".");
+    } else {
+      if (!/^\d{1,3}(?:,\d{3})+\.\d{1,2}$/.test(text)) throw new FinanceMoneyError("Enter a valid amount.");
+      text = text.replace(/,/g, "");
+    }
   } else if (lastComma >= 0) {
     text = text.replace(",", ".");
   } else if (lastDot >= 0 && /^\d{1,3}(\.\d{3})+$/.test(text)) {

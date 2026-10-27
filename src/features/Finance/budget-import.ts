@@ -5,13 +5,24 @@ export const IMPORT_COLUMNS = ["system_id", "description", "planned_nok", "prior
 export type ImportColumn = (typeof IMPORT_COLUMNS)[number];
 export type ImportRecord = { line: number; values: Partial<Record<ImportColumn, string>> };
 export type ImportError = { field: string; message: string; line?: number };
+export const MAX_IMPORT_BYTES = 256 * 1024;
+export const MAX_IMPORT_ROWS = 500;
+export const MAX_IMPORT_ERRORS = 100;
+export type BudgetCsvResult = { rows: ImportRecord[]; columns: ImportColumn[]; errors: ImportError[]; limitError?: string };
 
 export function parseImportAmount(value: string): bigint | null {
-  return parseNokToOre(value.replace(/kr\.?/gi, ""));
+  const text = value.trim();
+  const suffix = text.replace(/\s*(?:kr\.?|nok)$/i, "");
+  // A trailing currency unit is accepted; embedded text still fails the money parser.
+  return parseNokToOre(suffix.replace(/^kr\.(?=\s|[+-]?\d)/i, "kr"));
 }
 
 /** Parse RFC-style quoted cells while retaining the physical starting line of each record. */
-export function parseBudgetCsv(source: string): { rows: ImportRecord[]; columns: ImportColumn[]; errors: ImportError[] } {
+export function parseBudgetCsv(source: string): BudgetCsvResult {
+  const limited = (message: string): BudgetCsvResult => ({ rows: [], columns: [], errors: [{ field: "csv", message }], limitError: message });
+  if (source.length > MAX_IMPORT_BYTES || new TextEncoder().encode(source).byteLength > MAX_IMPORT_BYTES) {
+    return limited("The CSV exceeds 256 KiB. Reduce the file size and try again.");
+  }
   const csv = source.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
   const errors: ImportError[] = [];
   if (!csv.trim()) return { rows: [], columns: [], errors: [{ field: "csv", message: "Choose a nonempty CSV file." }] };
@@ -22,6 +33,8 @@ export function parseBudgetCsv(source: string): { rows: ImportRecord[]; columns:
   function endCell() { cells.push(cell); cell = ""; afterQuote = false; }
   function endRow() { endCell(); if (cells.some((value) => value.trim() !== "")) records.push({ line: start, cells }); cells = []; start = line + 1; }
   for (let i = 0; i < csv.length; i += 1) {
+    if (records.length > MAX_IMPORT_ROWS + 1) return limited("The CSV exceeds 500 data rows.");
+    if (errors.length >= MAX_IMPORT_ERRORS) return limited("The CSV contains too many errors. Correct the file and try again.");
     const c = csv[i];
     if (quoted) {
       if (c === '"' && csv[i + 1] === '"') { cell += '"'; i += 1; }
@@ -38,10 +51,13 @@ export function parseBudgetCsv(source: string): { rows: ImportRecord[]; columns:
   }
   if (quoted) errors.push({ field: "csv", line: start, message: `Line ${start}: a quoted cell is not closed.` });
   if (cell || cells.length) endRow();
+  if (records.length > MAX_IMPORT_ROWS + 1) return limited("The CSV exceeds 500 data rows.");
+  if (errors.length >= MAX_IMPORT_ERRORS) return limited("The CSV contains too many errors. Correct the file and try again.");
   if (!records.length) return { rows: [], columns: [], errors: [{ field: "csv", message: "Choose a nonempty CSV file." }] };
   const header = records[0].cells.map((value) => value.trim().toLowerCase());
   const columns: ImportColumn[] = [];
   for (const name of header) {
+    if (errors.length >= MAX_IMPORT_ERRORS) return limited("The CSV contains too many errors. Correct the file and try again.");
     if (!name) continue;
     if (!(IMPORT_COLUMNS as readonly string[]).includes(name)) errors.push({ field: name, message: `Unknown column: ${name}.` });
     else if (columns.includes(name as ImportColumn)) errors.push({ field: name, message: `Duplicate column: ${name}.` });
@@ -51,6 +67,7 @@ export function parseBudgetCsv(source: string): { rows: ImportRecord[]; columns:
   const rows: ImportRecord[] = [];
   const seen = new Set<string>();
   for (const record of records.slice(1)) {
+    if (errors.length >= MAX_IMPORT_ERRORS) return limited("The CSV contains too many errors. Correct the file and try again.");
     if (record.cells.length !== header.length) { errors.push({ field: "csv", line: record.line, message: `Line ${record.line}: expected ${header.length} fields, found ${record.cells.length}.` }); continue; }
     const values: Partial<Record<ImportColumn, string>> = {};
     header.forEach((name, index) => { if ((IMPORT_COLUMNS as readonly string[]).includes(name)) values[name as ImportColumn] = record.cells[index].trim(); });
@@ -78,6 +95,7 @@ export function parseBudgetCsv(source: string): { rows: ImportRecord[]; columns:
     if (seen.has(key)) fail("description", "This system and description occur more than once.");
     seen.add(key); rows.push({ line: record.line, values });
   }
+  if (errors.length >= MAX_IMPORT_ERRORS) return limited("The CSV contains too many errors. Correct the file and try again.");
   if (!rows.length) errors.push({ field: "csv", message: "Add at least one data row." });
   return { rows, columns, errors };
 }

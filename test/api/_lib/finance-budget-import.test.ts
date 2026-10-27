@@ -22,6 +22,7 @@ const identities: Record<string, WorkspaceIdentity> = {
 let pg: PGlite;
 let handler: ReturnType<typeof createFinanceHandler>;
 let sequence = 0;
+let reverseSnapshotItems = false;
 
 function response() {
   let status = 0;
@@ -109,7 +110,10 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/019_finance_budget_import.sql", import.meta.url), "utf8"));
-  const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
+  const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => {
+    const rows = (await pg.query<T>(query, params)).rows;
+    return { rows: reverseSnapshotItems && query.includes("from finance.budget_items i join finance.systems s") ? [...rows].reverse() : rows };
+  } };
   const services = createFinanceServices({
     db,
     authenticate: async (token) => {
@@ -123,6 +127,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   sequence = 0;
+  reverseSnapshotItems = false;
   await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
@@ -171,6 +176,46 @@ describe("department budget import", () => {
     const v = await version(); expect((await apply(secondCsv, third)).status).toBe(200); expect(await version()).toBe(v);
     const fourth = await prepare(csv); expect(fourth.counts.removed).toBe(1); expect((await apply(csv, fourth)).status).toBe(200);
     expect((await sql<{status:string}>("select status from finance.budget_items where description='Brake'"))[0].status).toBe("cancelled");
+  });
+  it("uses the same token and row order when database rows arrive in a different order", async () => {
+    const initial = "system_id;description;planned_nok\nSYS-FR;Alpha;10\nSYS-FR;Beta;20\nSYS-FR;Gamma;30";
+    expect((await apply(initial, await prepare(initial))).status).toBe(200);
+    const changed = "system_id;description;planned_nok\nSYS-FR;New item;40";
+    const first = await prepare(changed);
+    expect(first.counts.removed).toBe(3);
+    reverseSnapshotItems = true;
+    const second = await prepare(changed);
+    expect(second.previewToken).toBe(first.previewToken);
+    expect(second.rows).toEqual(first.rows);
+    expect((await apply(changed, first)).status).toBe(200);
+  });
+
+  it("rejects over-limit UTF-8 input and departments with more than 500 existing items without writes", async () => {
+    const initialVersion = await version();
+    const oversized = "system_id;description;planned_nok\nSYS-FR;" + "ø".repeat(131072) + ";1";
+    const tooLarge = await call("head", { action: "previewImport", requestId: requestId(), departmentKey: "mechanical-production", csv: oversized });
+    expect(tooLarge.status).toBe(413);
+    expect(tooLarge.body).toMatchObject({ error: expect.stringContaining("256 KiB") });
+    expect(await version()).toBe(initialVersion);
+
+    await sql(`insert into finance.budget_items (budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, created_by_member_id, updated_by_member_id)
+      select b.id, s.id, 'BI-S27-' || lpad(n::text, 3, '0'), 'Item ' || n, 'other', 1, 'P2', 'new', 'planned', $1::uuid, $1::uuid
+      from finance.budgets b cross join finance.systems s cross join generate_series(1, 501) n where s.code = 'SYS-FR'`, [operatorId]);
+    const tooMany = await call("head", { action: "previewImport", requestId: requestId(), departmentKey: "mechanical-production", csv });
+    expect(tooMany.status).toBe(413);
+    expect(tooMany.body).toMatchObject({ error: expect.stringContaining("more than 500") });
+    expect(await version()).toBe(initialVersion);
+  });
+
+  it("rejects an oversized preview response instead of exceeding the API payload limit", async () => {
+    await sql(`insert into finance.budget_items (budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, note, created_by_member_id, updated_by_member_id)
+      select b.id, s.id, 'BI-S27-' || lpad(n::text, 3, '0'), 'Item ' || n, 'other', 1, 'P2', 'new', 'planned', repeat('ø', 2000), $1::uuid, $1::uuid
+      from finance.budgets b cross join finance.systems s cross join generate_series(1, 280) n where s.code = 'SYS-FR'`, [operatorId]);
+    const initialVersion = await version();
+    const result = await call("head", { action: "previewImport", requestId: requestId(), departmentKey: "mechanical-production", csv });
+    expect(result.status).toBe(413);
+    expect(result.body).toMatchObject({ error: expect.stringContaining("preview exceeds 1 MiB") });
+    expect(await version()).toBe(initialVersion);
   });
   it("rejects foreign systems, invalid CSV, stale or changed previews without writes", async () => {
     const before = await version();
