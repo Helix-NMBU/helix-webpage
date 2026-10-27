@@ -4,6 +4,7 @@ import { Button } from "@libs/components/ui/button";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { presentPurchases } from "../Finance/access";
 import { createFinanceApi, FinanceRequestError } from "../Finance/repository";
+import { CvRequestError } from "../MemberCV/repository";
 import type { FinancePageId } from "../Finance/routes";
 import type {
   FinanceCapabilitiesResponse,
@@ -60,7 +61,7 @@ const emptyState: FinanceState = {
 const FinanceContext = createContext<FinanceSession | null>(null);
 
 function errorStatus(error: unknown): number {
-  return error instanceof FinanceRequestError ? error.status : 0;
+  return error instanceof FinanceRequestError || error instanceof CvRequestError ? error.status : 0;
 }
 
 function visibleBudgets(budgets: PublicBudgets | null, capabilities: FinanceCapabilitySet): PublicBudgets | null {

@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FinanceAccessProvider, useFinanceAccess } from "./FinanceAccess";
 import { FinanceRequestError } from "../Finance/repository";
+import { CvRequestError } from "../MemberCV/repository";
 import type { FinanceCapabilitiesResponse, FinancingView, PublicBudgets, PurchasesView } from "../Finance/types";
 
 const api = vi.hoisted(() => ({
@@ -147,6 +148,20 @@ it("drops private state when focus reports that the account can no longer use fi
   await mount("business-member");
   expect(container.textContent).toContain("allowed:financing");
   api.capabilities.mockRejectedValue(new FinanceRequestError("Your Google identity no longer matches this profile.", 403));
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(session.access).toBe("denied");
+  expect(session.financing).toBeNull();
+  expect(session.purchases).toBeNull();
+  expect(session.capabilities).toBeNull();
+});
+
+it("clears cached private state when the member session rejects a changed account", async () => {
+  api.capabilities.mockResolvedValueOnce(business);
+  api.financing.mockResolvedValueOnce(financing);
+  await mount("business-member");
+  await act(async () => session.loadPage("financing"));
+  expect(session.financing).not.toBeNull();
+  api.capabilities.mockRejectedValue(new CvRequestError("The signed-in account changed.", 401));
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(session.access).toBe("denied");
   expect(session.financing).toBeNull();

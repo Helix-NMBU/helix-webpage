@@ -84,3 +84,25 @@ it("keeps the reviewed CSV and department stable while a preview is pending", as
   expect(textarea.disabled).toBe(false);
   expect(textarea.value).toContain("Frame;900");
 });
+
+it("discards the previous preview when a replacement file is too large", async () => {
+  session.mutate.mockResolvedValue({ ok: true, viewVersion: 4, warnings: [], errors: [], importPreview: {
+    previewToken: "token", viewVersion: 4, departmentKey: "mechanical", rows: [],
+    counts: { added: 0, changed: 0, unchanged: 0, removed: 0 }, subtotals: [], totalNok: "0.00", warnings: [], errors: [],
+  } });
+  await act(async () => root.render(<BudgetImport departments={departments} />));
+  const select = container.querySelector("select")!; const textarea = container.querySelector("textarea")!;
+  await act(async () => {
+    select.value = "mechanical"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "system_id;description;planned_nok\nSYS-FR;Frame;900");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Preview import")!.click(); });
+  expect(container.textContent).toContain("Import budget");
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+  Object.defineProperty(input, "files", { configurable: true, value: [new File(["x".repeat(256 * 1024 + 1)], "too-large.csv")] });
+  await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+  expect(textarea.value).toBe("");
+  expect(container.textContent).not.toContain("Import budget");
+  expect(notify).toHaveBeenCalled();
+});

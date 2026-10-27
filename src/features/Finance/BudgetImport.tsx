@@ -65,11 +65,13 @@ export function BudgetImport({ departments }: { departments: PublicDepartmentBud
         </Select>
         <Label htmlFor="budget-import-file">CSV file</Label>
         <Input id="budget-import-file" disabled={busy} type="file" accept=".csv,.txt,text/csv,text/plain" onChange={(event) => {
-          const file = event.target.files?.[0];
+          const input = event.currentTarget;
+          const file = input.files?.[0];
           if (!file) return;
-          if (file.size > MAX_IMPORT_BYTES) { fail(new Error("The CSV must be 256 KiB or smaller.")); return; }
+          setCsv(""); setPreview(null);
+          if (file.size > MAX_IMPORT_BYTES) { input.value = ""; fail(new Error("The CSV must be 256 KiB or smaller.")); return; }
           setBusy(true);
-          void file.text().then((text) => { setCsv(text); setPreview(null); }).catch(fail).finally(() => setBusy(false));
+          void file.text().then(setCsv).catch((error: unknown) => { input.value = ""; fail(error); }).finally(() => setBusy(false));
         }} />
         <Label htmlFor="budget-import-csv">CSV text</Label>
         <Textarea id="budget-import-csv" disabled={busy} rows={7} value={csv} onChange={(event) => { setCsv(event.target.value); setPreview(null); }} placeholder="system_id;description;planned_nok;priority;category;reuse_status;expected_purchase_date;note;earmark_id" />
