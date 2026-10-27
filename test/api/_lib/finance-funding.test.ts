@@ -218,8 +218,7 @@ describe("financing and earmarked funding", () => {
     await grant("finance");
     const before = await version();
     expect(await call({ token: "member", body: { action: "registerPurchase", requestId: nextRequestId(), purchase: {} } })).toMatchObject({
-      status: 503,
-      body: { error: "This finance operation is not available yet." },
+      status: 400,
     });
     expect(await call({ token: "member", body: { action: "createBudget", requestId: nextRequestId() } })).toMatchObject({ status: 403 });
     expect(await version()).toBe(before);

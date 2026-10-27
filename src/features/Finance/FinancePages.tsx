@@ -6,6 +6,7 @@ import { Skeleton } from "@libs/components/ui/skeleton";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { BudgetsBoard } from "./BudgetsPage";
 import { FinancingPage } from "./FinancingPage";
+import { PurchasesBoard } from "./PurchasesPage";
 import { financeRoutes, type FinancePageId } from "./routes";
 
 const pages: { id: FinancePageId; label: string; title: string; empty: string; description: string }[] = [
@@ -21,17 +22,22 @@ function FinanceSection({ page }: { page: FinancePageId }) {
   const links = pages.filter((item) => item.id !== "financing" || session.capabilities?.financing);
   const current = pages.find((item) => item.id === page) ?? pages[0];
   const loaded = page === "overview" ? session.overview : page === "budgets" ? session.budgets : page === "purchases" ? session.purchases : session.financing;
+  const purchasesReady = page === "purchases" && Boolean(session.purchases);
   const loadedVersion = loaded?.viewVersion ?? null;
   useEffect(() => {
     if (session.access !== "allowed" || session.viewVersion === null || loadedVersion === session.viewVersion) return;
     void session.loadPage(page);
   }, [loadedVersion, page, session.access, session.loadPage, session.viewVersion]);
+  useEffect(() => {
+    if (session.access !== "allowed" || page !== "purchases" || !session.capabilities?.registerActual || session.budgets) return;
+    void session.loadPage("budgets");
+  }, [page, session.access, session.budgets, session.capabilities?.registerActual, session.loadPage]);
   const budgetsReady = page === "budgets" && Boolean(session.budgets) && (
     (session.budgets?.departments.length ?? 0) > 0
     || session.budgets?.budgetStatus !== "absent"
     || Boolean(session.capabilities?.createBudget)
   );
-  const empty = !session.pageLoading && loaded && !budgetsReady && (
+  const empty = !session.pageLoading && loaded && !budgetsReady && !purchasesReady && (
     page === "overview" ? session.overview?.departments.length === 0 && session.overview.publicEarmarks.length === 0 && session.overview.budgetStatus === "absent"
       : page === "budgets" ? session.budgets?.departments.length === 0
         : page === "purchases" ? session.purchases?.ownRequests.length === 0 && (session.purchases.register?.length ?? 0) === 0
@@ -58,6 +64,8 @@ function FinanceSection({ page }: { page: FinancePageId }) {
         </div>
       ) : budgetsReady ? (
         <BudgetsBoard />
+      ) : purchasesReady ? (
+        <PurchasesBoard />
       ) : empty ? (
         <Empty className="min-h-72 border border-solid">
           <EmptyHeader>
