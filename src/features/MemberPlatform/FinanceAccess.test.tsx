@@ -269,6 +269,42 @@ it("clears the entire finance session when a financing request returns 401", asy
   expect(session.capabilities).toBeNull();
 });
 
+it("rechecks all privileges after an unfocused financing denial and hides stale data while waiting", async () => {
+  api.capabilities.mockResolvedValue(financeCaps);
+  api.purchases.mockResolvedValue(privatePurchases);
+  await mount("finance-member");
+  await act(async () => session.loadPage("purchases"));
+  expect(session.capabilities?.purchaseRegister).toBe(true);
+  expect(session.purchases?.register?.[0].refundAccount).toBe("private-account");
+
+  const snapshot = deferred<FinanceCapabilitiesResponse>();
+  api.capabilities.mockReturnValueOnce(snapshot.promise);
+  api.financing.mockRejectedValueOnce(new FinanceRequestError("Financing access is required.", 403));
+  let loading: Promise<void> = Promise.resolve();
+  await act(async () => { loading = session.loadPage("financing"); });
+  expect(api.capabilities).toHaveBeenCalledTimes(2);
+  expect(session.access).toBe("loading");
+  expect(session.capabilities).toBeNull();
+  expect(session.purchases).toBeNull();
+
+  await act(async () => { snapshot.resolve({ ...member, viewVersion: 2 }); await loading; });
+  expect(session.access).toBe("allowed");
+  expect(session.capabilities).toEqual(member.capabilities);
+  expect(session.profiles).toEqual([]);
+  expect(session.purchases).toBeNull();
+  expect(session.financing).toBeNull();
+});
+
+it("does not restore old privileges when the financing denial recheck fails", async () => {
+  api.capabilities.mockResolvedValue(financeCaps);
+  await mount("finance-member");
+  api.capabilities.mockRejectedValueOnce(new Error("Network unavailable"));
+  api.financing.mockRejectedValueOnce(new FinanceRequestError("Financing access is required.", 403));
+  await act(async () => session.loadPage("financing"));
+  expect(session.access).toBe("unavailable");
+  expect(session.capabilities).toBeNull();
+});
+
 it("retains both purchases and budget responses when they load concurrently", async () => {
   await mount("member");
   const pendingPurchases = deferred<PurchasesView>();

@@ -228,18 +228,12 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       if (!active.current || generation.current !== current || pageTokens.current[page] !== token) return;
       if (errorStatus(error) === 403 || errorStatus(error) === 401) {
         if (page === "financing" && errorStatus(error) === 403) {
-          const wasPrivileged = capabilityRef.current?.financing === true;
-          if (wasPrivileged) generation.current += 1;
-          if (capabilityRef.current) capabilityRef.current = { ...capabilityRef.current, financing: false, manageFunding: false };
-          setState((value) => ({
-            ...value,
-            overview: wasPrivileged ? null : value.overview,
-            budgets: wasPrivileged ? null : value.budgets,
-            purchases: wasPrivileged ? null : value.purchases,
-            financing: null,
-            pageLoading: false,
-            capabilities: value.capabilities ? { ...value.capabilities, financing: false, manageFunding: false } : value.capabilities,
-          }));
+          // A financing denial may indicate that the entire profile changed.
+          // Hide all previously granted controls and invalidate in-flight page
+          // reads until the server returns a fresh capability snapshot.
+          generation.current += 1;
+          setState(emptyState);
+          await revalidate();
         } else fail(error);
         return;
       }
@@ -251,7 +245,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
         action: { label: "Try again", onClick: () => { void loadPage(page); } },
       });
     }
-  }, [api, fail, notify]);
+  }, [api, fail, notify, revalidate]);
   const setExpanded = useCallback((id: string, open: boolean) => {
     setState((current) => ({ ...current, expanded: { ...current.expanded, [id]: open } }));
   }, []);
