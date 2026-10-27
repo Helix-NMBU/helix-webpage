@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Bell, FolderKanban, Home, ListTodo, Mail, UsersRound } from "lucide-react";
+import { Bell, FolderKanban, Home, SquareCheck, Mail, UsersRound } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
 import { NavUser } from "@libs/components/nav-user";
@@ -76,7 +76,7 @@ export function AppSidebar({
             },
             { title: "Notifications", url: "/notifications", icon: Bell, isActive: location.pathname === "/notifications", badge: notifications?.unread || undefined },
             { title: "Mail", url: "/mail", icon: Mail, isActive: location.pathname.startsWith("/mail") },
-            { title: "Tasks", url: "/tasks", icon: ListTodo, isActive: location.pathname === "/tasks" },
+            { title: "Tasks", url: "/tasks", icon: SquareCheck, isActive: location.pathname === "/tasks" },
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
