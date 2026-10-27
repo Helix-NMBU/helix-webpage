@@ -15,8 +15,10 @@ const line = (estimatedNok: string) => ({
 });
 
 describe("request late reason (Oslo calendar days)", () => {
-  it("requires a reason strictly inside three calendar days", () => {
+  it("requires a reason when the planned date is fewer than three Oslo calendar days away, including the past", () => {
     const today = osloToday();
+    expect(requiresLateReason(addCalendarDays(today, -1), today)).toBe(true);
+    expect(requiresLateReason("2020-01-15", today)).toBe(true);
     expect(requiresLateReason(today, today)).toBe(true);
     expect(requiresLateReason(addCalendarDays(today, 1), today)).toBe(true);
     expect(requiresLateReason(addCalendarDays(today, 2), today)).toBe(true);
