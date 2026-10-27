@@ -127,8 +127,9 @@ beforeAll(async () => {
   `);
   await pg.exec(readFileSync(new URL("../../../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
-  await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/013_finance_funding.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/014_finance_register_purchases.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   handler = createFinanceHandler(() => createFinanceServices({
     db,
@@ -221,8 +222,7 @@ describe("financing and earmarked funding", () => {
     await grant("finance");
     const before = await version();
     expect(await call({ token: "member", body: { action: "registerPurchase", requestId: nextRequestId(), purchase: {} } })).toMatchObject({
-      status: 503,
-      body: { error: "This finance operation is not available yet." },
+      status: 400,
     });
     expect(await call({ token: "member", body: { action: "createBudget", requestId: nextRequestId() } })).toMatchObject({ status: 403 });
     expect(await version()).toBe(before);

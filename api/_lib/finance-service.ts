@@ -3,6 +3,8 @@ import { isFinanceAction, isFinanceProfile, mutationAllowed, mutationRequiresRev
 import { applyRequestMutation } from "./finance-requests.js";
 import { loadDecisionQueue, loadFinanceRequestContext, loadOwnRequestDetail, loadRequestChoices, summarizeOwnRequests } from "./finance-requests-read.js";
 import { isBudgetMutation, loadBudgetHierarchy, performBudgetMutation } from "./finance-budgets.js";
+import { isPurchaseMutation, performPurchaseMutation } from "./finance-purchases.js";
+import { createFinanceStorage, type FinanceObjectStorage } from "./finance-storage.js";
 import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
 import { loadFundingRecords, loadPublicEarmarks } from "./finance-funding-read.js";
@@ -41,8 +43,13 @@ export interface FinanceServices {
   mutate(token: string, body: Record<string, unknown>): Promise<FinanceMutationResult>;
 }
 
-export function createFinanceServices(deps: { db: CvDatabase; authenticate: (token: string) => Promise<WorkspaceIdentity> }): FinanceServices {
+export function createFinanceServices(deps: {
+  db: CvDatabase;
+  authenticate: (token: string) => Promise<WorkspaceIdentity>;
+  financeStorage?: FinanceObjectStorage | null;
+}): FinanceServices {
   const { db } = deps;
+  const financeStorage = deps.financeStorage === undefined ? null : deps.financeStorage;
 
   async function rows<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     try {
@@ -252,6 +259,9 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
       if (isRequestAction(action)) return applyRequestMutation(db, current.memberId, body);
+      if (isPurchaseMutation(action)) {
+        return performPurchaseMutation(db, financeStorage, current, body);
+      }
       throw new FinanceError(503, "This finance operation is not available yet.");
     },
   };
@@ -276,5 +286,11 @@ export function neonFinanceServices(): FinanceServices {
       presign: async () => { throw new Error("Not used"); },
     },
   });
-  return createFinanceServices({ db, authenticate: (token) => cv.authenticate(token) });
+  let financeStorage: FinanceObjectStorage | null = null;
+  try {
+    financeStorage = createFinanceStorage();
+  } catch {
+    financeStorage = null;
+  }
+  return createFinanceServices({ db, authenticate: (token) => cv.authenticate(token), financeStorage });
 }

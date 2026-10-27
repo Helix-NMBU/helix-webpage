@@ -159,7 +159,13 @@ beforeAll(async () => {
     insert into identity.member_roles values ('${operatorId}', 'platform_administrator');
     create role anon;
   `);
-  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "015_finance_requests.sql"]) {
+  for (const file of [
+    "011_finance_core.sql",
+    "012_finance_season_budgets.sql",
+    "013_finance_funding.sql",
+    "014_finance_register_purchases.sql",
+    "015_finance_requests.sql",
+  ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -502,6 +508,6 @@ describe("FIN-05 A05 privacy idempotency and view_versions", () => {
 
   it("still returns 503 for unrelated finance placeholders", async () => {
     await seasonWithBudget();
-    expect((await call("member", { action: "registerPurchase", requestId: requestId(), purchase: {} })).status).toBe(503);
+    expect((await call("finance", { action: "exportPurchases", requestId: requestId() })).status).toBe(503);
   });
 });

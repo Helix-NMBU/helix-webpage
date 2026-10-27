@@ -27,6 +27,10 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     if (session.access !== "allowed" || session.viewVersion === null || loadedVersion === session.viewVersion) return;
     void session.loadPage(page);
   }, [loadedVersion, page, session.access, session.loadPage, session.viewVersion]);
+  useEffect(() => {
+    if (session.access !== "allowed" || page !== "purchases" || !session.capabilities?.registerActual || session.budgets) return;
+    void session.loadPage("budgets");
+  }, [page, session.access, session.budgets, session.capabilities?.registerActual, session.loadPage]);
   const budgetsReady = page === "budgets" && Boolean(session.budgets) && (
     (session.budgets?.departments.length ?? 0) > 0
     || session.budgets?.budgetStatus !== "absent"
@@ -34,8 +38,10 @@ function FinanceSection({ page }: { page: FinancePageId }) {
   );
   const purchasesReady = page === "purchases" && Boolean(session.purchases) && (
     (session.purchases?.ownRequests.length ?? 0) > 0
+    || (session.purchases?.register?.length ?? 0) > 0
     || (session.purchases?.decisionQueue?.length ?? 0) > 0
     || Boolean(session.capabilities?.ownRequests)
+    || Boolean(session.capabilities?.registerActual)
   );
   const empty = !session.pageLoading && loaded && !budgetsReady && !purchasesReady && (
     page === "overview" ? session.overview?.departments.length === 0 && session.overview.publicEarmarks.length === 0 && session.overview.budgetStatus === "absent"
