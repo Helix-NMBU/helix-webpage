@@ -421,7 +421,8 @@ describe("FIN-09-A06 freshness", () => {
       api.mutate.mockResolvedValueOnce({ ok: true, viewVersion: version, warnings: [], errors: [] });
       await act(async () => { await session.mutate({ action, requestId: `request-${action}` }); });
       expect(session.viewVersion).toBe(version);
-      expect(api.mutate.mock.calls.at(-1)?.[0]).toMatchObject({ action });
+      const calls = api.mutate.mock.calls;
+      expect(calls[calls.length - 1]?.[0]).toMatchObject({ action });
     }
     expect(api.overview.mock.calls.length).toBe(overviewCalls + actions.length);
     expect(container.textContent).toContain("Actual 7.00");
