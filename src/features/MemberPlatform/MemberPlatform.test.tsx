@@ -495,6 +495,82 @@ describe("internal member platform", () => {
     expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('40');
   });
 
+  it("opens a task from My tasks as a page with description and properties",async()=>{
+    session.landing.mockResolvedValue(signedIn);
+    const data=detailFixture();const task=data.tasks.find(item=>item.title==='Confirm material delivery')!;
+    task.description='Confirm delivery with the supplier.\nRecord the agreed arrival date.';
+    projectTasks.load.mockResolvedValue(data);await open('/tasks');
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===task.title)!.click());
+    expect(router.state.location.pathname).toBe(`/tasks/${task.id}`);
+    expect(container.querySelector('[aria-label="Task content"] h1')?.textContent).toBe(task.title);
+    expect(container.querySelector('[aria-label="Task content"]')?.textContent).toContain(task.description);
+    expect(container.querySelector('[aria-label="Task properties"]')?.textContent).toContain('Chassis & assembly');
+    expect(container.querySelector('[aria-label="Task properties"]')?.textContent).toContain('Chassis ready for assembly');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect([...container.querySelectorAll('button')].some(button=>button.textContent==='Update status')).toBe(true);
+    await act(async()=>[...container.querySelectorAll<HTMLAnchorElement>('a')].find(link=>link.textContent==='Back')!.click());
+    expect(router.state.location.pathname).toBe('/tasks');
+  });
+
+  it("opens task detail from a project and returns to its milestone filter",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    const task=data.tasks.find(item=>item.title==='Verify dimensions')!;
+    const origin=`/projects/${task.projectId}?milestone=${task.milestoneId}`;
+    await open(origin);
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===task.title)!.click());
+    expect(router.state.location.pathname).toBe(`/tasks/${task.id}`);
+    const milestone=[...container.querySelectorAll<HTMLAnchorElement>('[aria-label="Task properties"] a')].find(link=>link.textContent==='Manufacturing sign-off')!;
+    expect(milestone.getAttribute('href')).toBe(`/projects/${task.projectId}?milestone=${task.milestoneId}`);
+    await act(async()=>[...container.querySelectorAll<HTMLAnchorElement>('a')].find(link=>link.textContent==='Back')!.click());
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(origin);
+    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Confirm material delivery');
+  });
+
+  it("supports direct task URLs and hides edit controls from unassigned readers",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();const task=data.tasks.find(item=>item.kind==='task')!;
+    data.canManage=false;data.taskLeadCategories=[];data.viewerId='another-member';projectTasks.load.mockResolvedValue(data);
+    await open(`/tasks/${task.id}`);
+    expect(container.querySelector('[aria-label="Task content"] h1')?.textContent).toBe(task.title);
+    expect([...container.querySelectorAll('button')].some(button=>['Edit task','Update status'].includes(button.textContent??''))).toBe(false);
+  });
+
+  it("preserves task access requirements",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();data.projectAccess=false;workspace.load.mockResolvedValue(data);
+    await open('/tasks/00000000-0000-4000-8000-000000000011');
+    expect(projectTasks.load).not.toHaveBeenCalled();expect(container.textContent).toContain('Task access required');
+  });
+
+  it("handles a missing task without showing another task",async()=>{
+    session.landing.mockResolvedValue(signedIn);
+    await open('/tasks/missing-task');
+    expect(container.textContent).toContain('Task not found');expect(container.querySelector('[aria-label="Task content"]')).toBeNull();
+  });
+
+  it("updates task details after saving and does not retain them on a missing-task URL",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    const task=data.tasks.find(item=>item.title==='Confirm material delivery')!;
+    projectTasks.mutate.mockImplementation(async change=>({...data,tasks:data.tasks.map(item=>item.id===change.id?{...item,...change.task,revision:item.revision+1}:item)}));
+    await open(`/tasks/${task.id}`);
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Edit task')!.click());
+    const description=document.querySelector<HTMLTextAreaElement>('#task-description')!;
+    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(description,'Confirm the supplier delivery slot.');description.dispatchEvent(new Event('input',{bubbles:true}));});
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Save task')!.click());
+    expect(projectTasks.mutate).toHaveBeenCalledWith(expect.objectContaining({action:'save_task',id:task.id,expectedRevision:1,task:expect.objectContaining({description:'Confirm the supplier delivery slot.'})}));
+    expect(container.querySelector('[aria-label="Task content"]')?.textContent).toContain('Confirm the supplier delivery slot.');expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async()=>router.navigate('/tasks/no-longer-available'));
+    expect(container.textContent).toContain('Task not found');expect(container.querySelector('[aria-label="Task content"]')).toBeNull();
+  });
+
+  it("clears task details and its editor when task access is revoked during a save",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
+    projectTasks.mutate.mockRejectedValue(new ProjectRequestError('Task access revoked',403));
+    const task=data.tasks.find(item=>item.title==='Confirm material delivery')!;
+    await open(`/tasks/${task.id}`);
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Edit task')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Save task')!.click());
+    expect(container.textContent).toContain('Task access required');expect(container.querySelector('[aria-label="Task content"]')).toBeNull();expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it("keeps the project task modal open when Create more is enabled",async()=>{
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
     projectTasks.mutate.mockImplementation(async change=>({...data,tasks:[...data.tasks,{...change.task,id:change.id,season:'S27',revision:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null}]}));

@@ -30,6 +30,7 @@ import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAcces
 import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
 import { MembersPage, ProjectsPage, DepartmentsPage } from "../Workspace/WorkspacePages";
 import ProjectManagement from "../ProjectManagement/ProjectManagement";
+import TaskDetailPage from "../ProjectManagement/TaskDetail";
 import {
   MemberSettingsPreview,
   WorkspaceHomePreview,
@@ -153,6 +154,7 @@ export default function MemberPlatform() {
                 <Route path="departments" element={<DepartmentsPage />} />
                 <Route path="departments/:departmentId" element={<DepartmentsPage />} />
                 <Route path="tasks" element={<ProjectManagement personal />} />
+                <Route path="tasks/:taskId" element={<TaskDetailPage />} />
                 <Route path="project-management" element={<Navigate to="/project-management/overview" replace />} />
                 <Route path="project-management/:section" element={<ProjectManagement />} />
                 <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/project-management/production" />} />

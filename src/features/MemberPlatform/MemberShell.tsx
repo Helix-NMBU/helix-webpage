@@ -34,6 +34,7 @@ function Workspace({ children }: { children?: ReactNode }) {
   const notify = useNotify();
   const profile = location.pathname === "/profile";
   const mail = location.pathname.startsWith("/mail");
+  const taskDetail = /^\/tasks\/[^/]+\/?$/.test(location.pathname);
   const projectDetail = /^\/projects\/[^/]+\/?$/.test(location.pathname);
   const page = previewPage(location.pathname);
   const projectManagement = location.pathname.startsWith("/project-management");
@@ -42,7 +43,7 @@ function Workspace({ children }: { children?: ReactNode }) {
   const department = directory?.departments.find(item => departmentPath(item.name) === location.pathname);
   const project = directory?.projects.find(item => location.pathname === `/projects/${item.id}`);
   const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department?.name ?? "Departments" : null;
-  const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Project Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname === "/tasks" ? "Tasks" : profile
+  const pageTitle = workspaceTitle ?? (projectManagement ? (projectSection === "overview" ? "Project Overview" : CATEGORY_LABELS[projectSection as TaskCategory] ?? "Project Management") : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
@@ -87,7 +88,7 @@ function Workspace({ children }: { children?: ReactNode }) {
         onSignOut={() => void logout()}
         disabled={disabled}
       />
-      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : projectDetail ? "md:h-svh md:min-h-0 md:overflow-hidden" : ""}`}>
+      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : (projectDetail || taskDetail) ? "md:h-svh md:min-h-0 md:overflow-hidden" : ""}`}>
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             {children ?? <Outlet />}
@@ -120,6 +121,10 @@ function Workspace({ children }: { children?: ReactNode }) {
                         <BreadcrumbSeparator className="hidden lg:block" />
                       </>
                     )}
+                    {taskDetail && <>
+                      <BreadcrumbItem><BreadcrumbLink asChild><button type="button" disabled={disabled} onClick={event => go("/tasks", event.currentTarget)}>Tasks</button></BreadcrumbLink></BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>}
                     {project && <>
                       <BreadcrumbItem>
                         <BreadcrumbLink asChild>
@@ -138,7 +143,7 @@ function Workspace({ children }: { children?: ReactNode }) {
                 </Breadcrumb>
               </div>
             </header>
-            <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 ${projectDetail ? "md:min-h-0 md:overflow-hidden" : ""}`}>
+            <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 ${projectDetail || taskDetail ? "md:min-h-0 md:overflow-hidden" : ""}`}>
               {children ?? <Outlet />}
             </div>
           </>

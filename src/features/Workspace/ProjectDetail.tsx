@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import {
@@ -28,7 +28,7 @@ import type {
   TaskInput,
 } from "../ProjectManagement/types";
 import { STATUS_LABELS } from "../ProjectManagement/types";
-import { ProjectEditor, TaskEditor } from "../ProjectManagement/TaskEditor";
+import { ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { TaskComposer } from "../ProjectManagement/TaskComposer";
 import { summarize } from "../ProjectManagement/model";
 import { useWorkspace } from "./WorkspaceContext";
@@ -47,7 +47,6 @@ export function ProjectDetail({
   const [loading, setLoading] = useState(directory.projectAccess);
   const [denied, setDenied] = useState(!directory.projectAccess);
   const [busy, setBusy] = useState(false);
-  const [task, setTask] = useState<Task | null>(null);
   const [editing, setEditing] = useState(false);
   const [composer, setComposer] = useState<TaskInput["kind"] | null>(null);
   const repository = useRef<Promise<ProjectRepository> | null>(null);
@@ -63,6 +62,7 @@ export function ProjectDetail({
   const directorySession = useWorkspace();
   const notify = useNotify();
   const navigate = useNavigate();
+  const location = useLocation();
   const getRepository = useCallback(
     () => (repository.current ??= projectRepository()),
     [],
@@ -198,7 +198,6 @@ export function ProjectDetail({
         const next = await (await getRepository()).mutate(change);
         if (!alive.current || generation.current !== current) return false;
         setWorkspace(next);
-        setTask(null);
         void directorySession?.refresh();
       }
       notify(
@@ -226,7 +225,6 @@ export function ProjectDetail({
         ) {
           setWorkspace(null);
           setDenied(true);
-          setTask(null);
           setComposer(null);
           if (error.status === 401) navigate("/login", { replace: true });
         }
@@ -239,6 +237,9 @@ export function ProjectDetail({
         setLoading(false);
       }
     }
+  }
+  function openTask(id: string) {
+    navigate(`/tasks/${id}`, { state: { from: `${location.pathname}${location.search}` } });
   }
   function complete(task: Task) {
     void save({
@@ -372,10 +373,9 @@ export function ProjectDetail({
                           className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm"
                         >
                           <span className="min-w-0 flex-1">
-                            {
-                              tasks.find((task) => task.id === event.taskId)
-                                ?.title
-                            }
+                            <button type="button" className="text-left hover:underline" onClick={() => openTask(event.taskId)}>
+                              {tasks.find((task) => task.id === event.taskId)?.title}
+                            </button>
                             <span className="ml-2 text-muted-foreground">
                               Recorded
                             </span>{" "}
@@ -420,7 +420,7 @@ export function ProjectDetail({
                       : (selected?.title ?? null)
                   }
                   onClear={clearMilestone}
-                  onOpen={setTask}
+                  onOpen={item => openTask(item.id)}
                   onComplete={complete}
                   onCreate={() => setComposer("task")}
                 />
@@ -452,17 +452,6 @@ export function ProjectDetail({
           busy={busy}
           onSave={save}
           onClose={() => setEditing(false)}
-        />
-      )}
-      {task && workspace && (
-        <TaskEditor
-          key={`${task.id}-${task.revision}`}
-          task={task}
-          workspace={workspace}
-          category={project.category}
-          busy={busy}
-          onSave={save}
-          onClose={() => setTask(null)}
         />
       )}
       {composer && workspace && canCreate && (

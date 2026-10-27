@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPlatform/MemberNotifications";
 import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import ProjectManagement from "./ProjectManagement";
+import TaskDetailPage from "./TaskDetail";
 import { ORGANIZATION_DEPARTMENTS } from "./types";
 import { initialLocalWorkspace } from "./local-repository";
 import { createProjectRepository, ProjectRequestError } from "./repository";
@@ -28,12 +29,13 @@ describe("project management interface", () => {
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
   async function open(section = "overview", personal = false, query = "") {
-    const router = createMemoryRouter([{ path: "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [`/project-management/${section}${query}`] });
+    const router = createMemoryRouter([{ path: personal ? "/tasks" : "/project-management/:section", element: <MemberThemeProvider><MemberNotificationsProvider><ProjectManagement personal={personal} repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }, { path: "/tasks/:taskId", element: <MemberThemeProvider><MemberNotificationsProvider><TaskDetailPage repository={{ load, mutate }} /><NotificationProbe /></MemberNotificationsProvider></MemberThemeProvider> }], { initialEntries: [personal ? `/tasks${query}` : `/project-management/${section}${query}`] });
     await act(async () => root.render(<RouterProvider key={`${section}-${personal}`} router={router} />));
     return router;
   }
   const button = (title: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(element => element.textContent === title)!;
   async function click(title: string) { await act(async () => button(title).click()); }
+  async function editTask() { await click(button("Edit task") ? "Edit task" : "Update status"); }
   async function fill(id: string, value: string) {
     const element = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement;
     const prototype = element.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -98,13 +100,12 @@ describe("project management interface", () => {
   it("describes every assignee to screen readers in read-only task details", async () => {
     await open("overview", true);
     await click("Deliver partner team photographs");
-    const picker = document.getElementById("task-assignee") as HTMLButtonElement;
-    expect(picker.disabled).toBe(true);
-    expect(document.getElementById(picker.getAttribute("aria-describedby")!)?.textContent).toBe("Assigned to Alex Example, Sam Example.");
+    expect(container.querySelector('[aria-label="Task properties"] [aria-label="Assigned to Alex Example, Sam Example"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it("removes one co-assignee without clearing the other member", async () => {
     await open("partnership-deliverables");
-    await click("Deliver partner team photographs");
+    await click("Deliver partner team photographs"); await editTask();
     await act(async () => document.getElementById("task-assignee")!.click());
     await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example"]')!.click());
     expect(document.querySelector('[aria-label="Assign Alex Example"]')?.getAttribute("aria-checked")).toBe("true");
@@ -113,33 +114,35 @@ describe("project management interface", () => {
   });
   it("retains unsaved input after a revision conflict", async () => {
     mutate.mockRejectedValue(new ProjectRequestError("This task changed. Reload before saving.", 409));
-    await open("production"); await click("Confirm material delivery"); await fill("task-title", "My unsaved edit"); await click("Save task");
+    await open("production"); await click("Confirm material delivery"); await editTask(); await fill("task-title", "My unsaved edit"); await click("Save task");
     expect((document.getElementById("task-title") as HTMLInputElement).value).toBe("My unsaved edit");
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    expect(document.body.textContent).toContain("Could not save changes");
-    expect(document.body.textContent).toContain("Reload tasks");
+    expect(document.body.textContent).toContain("Could not save task");
+    expect(document.body.textContent).toContain("Reload task");
   });
-  it("settles loading when a save supersedes a pending refresh", async () => {
+  it("ignores a pending list refresh after navigating to a task", async () => {
     await open("production");
     let finish!: (data: ReturnType<typeof initialLocalWorkspace>) => void;
     load.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    await click("Refresh"); await click("Confirm material delivery"); await click("Save task");
+    await click("Refresh"); await click("Confirm material delivery"); await editTask(); await click("Save task");
     await act(async () => finish(initialLocalWorkspace()));
-    expect(button("Refresh").disabled).toBe(false);
+    expect(container.querySelector("h1")?.textContent).toBe("Confirm material delivery");
     expect(container.querySelector("section")?.getAttribute("aria-busy")).toBe("false");
   });
   it.each(["refresh", "save"])("clears stale workspace and offers sign-in when token acquisition rejects during %s", async action => {
-    const token = vi.fn().mockResolvedValueOnce("member-token").mockRejectedValue(new CvRequestError("Your session has ended.", 401));
-    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify(initialLocalWorkspace())));
+    const token = vi.fn().mockResolvedValueOnce("member-token");
+    if (action === "save") token.mockResolvedValueOnce("member-token");
+    token.mockRejectedValue(new CvRequestError("Your session has ended.", 401));
+    const request = vi.fn().mockImplementation(async () => new Response(JSON.stringify(initialLocalWorkspace())));
     const repository = createProjectRepository(token, request);
     load.mockImplementation(repository.load); mutate.mockImplementation(repository.mutate);
     await open("production");
-    if (action === "save") { await click("Confirm material delivery"); await click("Save task"); }
+    if (action === "save") { await click("Confirm material delivery"); await editTask(); await click("Save task"); }
     else await click("Refresh");
     expect(container.querySelector("h1")).toBeNull();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Sign in");
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(action === "save" ? 2 : 1);
   });
   it("uses shared notifications and recovery when access cannot load", async () => {
     load.mockRejectedValue(new ProjectRequestError("Project access is required.", 403));
@@ -152,7 +155,7 @@ describe("project management interface", () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
     await open("production");
     expect(button("New task")).toBeUndefined();
-    await click("Confirm material delivery");
+    await click("Confirm material delivery"); await editTask();
     expect((document.getElementById("task-title") as HTMLInputElement).disabled || document.getElementById("task-title")!.closest("fieldset")?.disabled).toBe(true);
     expect(document.getElementById("task-status")?.getAttribute("disabled")).toBeNull();
     await click("Save task");
@@ -187,7 +190,7 @@ describe("project management interface", () => {
   });
   it("keeps assignment in the project subfolder even when a Department Lead opens My tasks", async () => {
     await open("overview", true);
-    await click("Confirm material delivery");
+    await click("Confirm material delivery"); await editTask();
     expect(document.getElementById("task-assignee")?.hasAttribute("disabled")).toBe(true);
     await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
@@ -272,7 +275,7 @@ describe("project management interface", () => {
     const next = initialLocalWorkspace();
     next.tasks = next.tasks.map(task => task.title === "Confirm material delivery" ? { ...task, status: "done" as const } : task);
     mutate.mockResolvedValueOnce(next);
-    const router = await open("production"); await click("Confirm material delivery");
+    const router = await open("production"); await click("Confirm material delivery"); await editTask();
     await act(async () => document.getElementById("task-status")!.click());
     await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === "Done")!.click());
     await click("Save task");
@@ -280,7 +283,7 @@ describe("project management interface", () => {
     await act(async () => router.navigate("/project-management/overview"));
     expect(container.querySelector('[aria-label="Chassis & assembly: 2 of 3 tasks complete, 67%"]')).not.toBeNull();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed2");
-    expect(load).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenCalledTimes(3);
   });
   it("hides project editing controls from members without management access", async () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
@@ -493,8 +496,9 @@ describe("project management interface", () => {
     await click("15 Dec 2026"); await click("Create milestone");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ title: "Campaign launch", kind: "milestone", milestoneId: null, category: "marketing", deadline: "2026-12-15" }) }));
   });
-  it("shows the milestone link read-only in personal task details", async () => {
-    await open("overview", true); await click("Confirm material delivery");
+  it("shows the milestone link read-only for an assigned member", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
+    await open("overview", true); await click("Confirm material delivery"); await editTask();
     const field = document.getElementById("task-milestone");
     expect(field?.hasAttribute("disabled")).toBe(true);
     expect(field?.textContent).toContain("Chassis ready for assembly");
@@ -510,7 +514,7 @@ describe("project management interface", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Create milestone");
   });
   it("keeps a task draft when a Lead clears its required milestone", async () => {
-    await open("production"); await click("Confirm material delivery");
+    await open("production"); await click("Confirm material delivery"); await editTask();
     await act(async () => document.getElementById("task-milestone")!.click());
     const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "Choose milestone")!;
     await act(async () => option.click()); await click("Save task");
@@ -551,7 +555,7 @@ describe("project management interface", () => {
   it("allows an assignee to update unorganized legacy work without changing its placement", async () => {
     const workspace = initialLocalWorkspace();
     load.mockResolvedValue({ ...workspace, tasks: [{ ...workspace.tasks[1], projectId: null, milestoneId: null }], canManage: false, taskLeadCategories: [] });
-    await open("overview", true); await click("Confirm material delivery"); await click("Save task");
+    await open("overview", true); await click("Confirm material delivery"); await editTask(); await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status" }));
   });
   it("shows milestones and their tasks nested inside the department project in its work area", async () => {

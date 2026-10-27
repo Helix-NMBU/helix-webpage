@@ -104,7 +104,7 @@ export function AppSidebar({
               title: "Tasks",
               url: "/tasks",
               icon: IconCheckbox,
-              isActive: location.pathname === "/tasks",
+              isActive: location.pathname === "/tasks" || location.pathname.startsWith("/tasks/"),
             },
           ]}
           activeUrl={location.pathname}
