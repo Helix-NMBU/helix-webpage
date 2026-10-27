@@ -115,6 +115,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/014_finance_register_purchases.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
@@ -1163,13 +1164,9 @@ describe("finance snapshot", () => {
             return { rows: [] as T[] };
           }
           if (text.includes("finance.budget_items")) throw new Error("draft items queried");
-          if (text.includes("identity.members")) return { rows: [{ id: memberId }] as T[] };
-          if (text.includes("capability_flags")) {
-            return { rows: [{ flags, version: "4", season_code: "S27", threshold_ore: null }] as T[] };
-          }
-          if (text.includes("finance.requests")) return { rows: [] as T[] };
           if (text.includes("finance.purchases")) {
             if (!text.includes("s.code")) throw new Error("missing season filter");
+            if (text.includes("count(*)")) return { rows: [{ count: "0" }] as T[] };
             return {
               rows: [{
                 id: "purchase",
@@ -1177,14 +1174,32 @@ describe("finance snapshot", () => {
                 status: "registered",
                 buyer_name: "Buyer Example",
                 supplier_name: "Hidden Supplier",
+                requester_member_id: memberId,
+                requester_name: "Member Example",
                 payment_method: "outlay",
                 purchase_date: "2026-10-01",
+                justification: "Workshop material",
+                document_kind: "receipt",
+                document_number: null,
+                revision: 0,
+                void_reason: null,
                 total_ore: "1000",
                 refund_account: "private-account",
                 refund_phone: "private-phone",
+                unpaid: false,
+                invoice_due: null,
+                invoice_paid: null,
+                invoice_paid_on: null,
+                outlay_paid: null,
+                outlay_paid_on: null,
               }] as T[],
             };
           }
+          if (text.includes("identity.members")) return { rows: [{ id: memberId }] as T[] };
+          if (text.includes("capability_flags")) {
+            return { rows: [{ flags, version: "4", season_code: "S27", threshold_ore: null }] as T[] };
+          }
+          if (text.includes("finance.requests")) return { rows: [] as T[] };
           if (text.includes("finance.budgets")) {
             return { rows: [{ id: "budget", status: "draft", approved_on: null }] as T[] };
           }

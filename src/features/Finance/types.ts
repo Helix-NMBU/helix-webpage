@@ -201,17 +201,69 @@ export type OwnRequestSummary = {
   releasedNok: string;
 };
 
+export type PurchaseInvoiceState = {
+  dueDate: string | null;
+  paid: boolean;
+  paidOn: string | null;
+};
+
+export type PurchaseReimbursementState = {
+  paid: boolean;
+  paidOn: string | null;
+};
+
+export type PurchaseRegisterLine = {
+  id: string;
+  publicRef: string;
+  systemName: string;
+  itemName: string | null;
+  description: string;
+  amountNok: string;
+  allocationNok: string;
+};
+
+export type PurchaseRegisterDocument = {
+  id: string;
+  publicRef: string;
+  kind: DocumentKind;
+  documentNumber: string | null;
+  originalName: string;
+};
+
+export type PurchaseExceptionReview = {
+  id: string;
+  kind: ExceptionKind;
+  reviewStatus: "open" | "reviewed";
+  facts: Record<string, unknown>;
+  reason: string | null;
+  actorMemberId: string | null;
+  reviewedAt: string | null;
+};
+
 export type FinancePurchaseSummary = {
   id: string;
   publicRef: string;
   status: PurchaseStatus;
   buyerName: string;
   supplierName: string;
+  requesterMemberId: string;
+  requesterName: string;
   paymentMethod: PaymentMethod;
   purchaseDate: string;
+  justification: string;
+  documentKind: DocumentKind;
+  documentNumber: string | null;
+  revision: number;
+  voidReason: string | null;
   totalNok: string;
   refundAccount: string | null;
   refundPhone: string | null;
+  unpaid: boolean;
+  invoice: PurchaseInvoiceState | null;
+  reimbursement: PurchaseReimbursementState | null;
+  lines: PurchaseRegisterLine[];
+  documents: PurchaseRegisterDocument[];
+  exceptions: PurchaseExceptionReview[];
 };
 
 export type RequestDraftLine = {
@@ -295,6 +347,7 @@ export type PurchasesView = {
   viewVersion: number;
   ownRequests: OwnRequestSummary[];
   register?: FinancePurchaseSummary[];
+  unpaidCount?: number;
   detail?: OwnRequestDetail;
   decisionQueue?: HeadDecisionQueueItem[];
   requestContext?: FinanceRequestContext[];

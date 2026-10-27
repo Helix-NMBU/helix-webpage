@@ -48,6 +48,9 @@ const purchases: PurchasesView = {
   register: [{
     id: "purchase", publicRef: "2026-0042", status: "registered", buyerName: "Buyer Example", supplierName: "Hidden Supplier",
     paymentMethod: "outlay", purchaseDate: "2026-10-01", totalNok: "10.00", refundAccount: "12345678901", refundPhone: null,
+    requesterMemberId: "member", requesterName: "Member Example", justification: "Workshop material", documentKind: "receipt",
+    documentNumber: null, revision: 0, voidReason: null, unpaid: true, invoice: null, reimbursement: { paid: false, paidOn: null },
+    lines: [], documents: [], exceptions: [],
   }],
 };
 
@@ -179,6 +182,19 @@ const privatePurchases: PurchasesView = {
     totalNok: "10.00",
     refundAccount: "private-account",
     refundPhone: "private-phone",
+    requesterMemberId: "member",
+    requesterName: "Member Example",
+    justification: "Workshop material",
+    documentKind: "receipt",
+    documentNumber: null,
+    revision: 0,
+    voidReason: null,
+    unpaid: false,
+    invoice: null,
+    reimbursement: null,
+    lines: [],
+    documents: [],
+    exceptions: [],
   }],
 };
 

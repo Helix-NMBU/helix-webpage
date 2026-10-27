@@ -4,6 +4,8 @@ import { applyRequestMutation } from "./finance-requests.js";
 import { loadDecisionQueue, loadFinanceRequestContext, loadOwnRequestDetail, loadRequestChoices, summarizeOwnRequests } from "./finance-requests-read.js";
 import { isBudgetMutation, loadBudgetHierarchy, performBudgetMutation } from "./finance-budgets.js";
 import { isPurchaseMutation, performPurchaseMutation } from "./finance-purchases.js";
+import { isProcessingMutation, performProcessingMutation } from "./finance-processing.js";
+import { loadPurchaseRegister } from "./finance-register.js";
 import { createFinanceStorage, type FinanceObjectStorage } from "./finance-storage.js";
 import { createLiveFinanceSender, type FinanceMailSender } from "./finance-mail.js";
 import { performDeliveryMutation } from "./finance-recovery.js";
@@ -21,7 +23,6 @@ import type {
   FinanceCapabilitySet,
   FinanceMutationResult,
   FinanceProfile,
-  FinancePurchaseSummary,
   FinanceUnchanged,
   FinancingView,
   PublicBudgets,
@@ -40,7 +41,7 @@ export interface FinanceServices {
   version(token: string, knownVersion?: number): Promise<{ viewVersion: number; unchanged?: boolean }>;
   overview(token: string, knownVersion?: number): Promise<PublicOverview | FinanceUnchanged>;
   budgets(token: string, knownVersion?: number): Promise<PublicBudgets | FinanceUnchanged>;
-  purchases(token: string, knownVersion?: number, requestRecordId?: string): Promise<PurchasesView | FinanceUnchanged>;
+  purchases(token: string, knownVersion?: number, requestRecordId?: string, unpaidOnly?: boolean): Promise<PurchasesView | FinanceUnchanged>;
   financing(token: string, knownVersion?: number): Promise<FinancingView | FinanceUnchanged>;
   mutate(token: string, body: Record<string, unknown>): Promise<FinanceMutationResult>;
 }
@@ -187,7 +188,7 @@ export function createFinanceServices(deps: {
       }
       return loadBudgetHierarchy(db, current, budget);
     },
-    async purchases(token, knownVersion, requestRecordId) {
+    async purchases(token, knownVersion, requestRecordId, unpaidOnly = false) {
       const current = await context(token);
       const same = unchanged(current, knownVersion);
       if (same) return same;
@@ -209,33 +210,14 @@ export function createFinanceServices(deps: {
         view.requestContext = await loadFinanceRequestContext(query, current.seasonCode);
       }
       if (current.capabilities.purchaseRegister) {
-        view.register = current.seasonCode ? (await rows<{
-          id: string; public_ref: string; status: FinancePurchaseSummary["status"]; buyer_name: string; supplier_name: string;
-          payment_method: FinancePurchaseSummary["paymentMethod"]; purchase_date: string; total_ore: string;
-          refund_account: string | null; refund_phone: string | null;
-        }>(
-          `select p.id, p.public_ref, p.status, p.buyer_name, p.supplier_name, p.payment_method,
-                  p.purchase_date::text as purchase_date, coalesce(sum(l.amount_ore), 0)::text as total_ore,
-                  p.refund_account, p.refund_phone
-           from finance.purchases p
-           join finance.seasons s on s.id = p.season_id
-           left join finance.purchase_lines l on l.purchase_id = p.id
-           where s.code = $1
-           group by p.id
-           order by p.public_ref`,
-          [current.seasonCode],
-        )).map((row): FinancePurchaseSummary => ({
-          id: row.id,
-          publicRef: row.public_ref,
-          status: row.status,
-          buyerName: row.buyer_name,
-          supplierName: row.supplier_name,
-          paymentMethod: row.payment_method,
-          purchaseDate: row.purchase_date,
-          totalNok: formatOre(BigInt(row.total_ore)),
-          refundAccount: row.refund_account,
-          refundPhone: row.refund_phone,
-        })) : [];
+        if (current.seasonCode) {
+          const loaded = await loadPurchaseRegister(query, current.seasonCode, unpaidOnly);
+          view.register = loaded.register;
+          view.unpaidCount = loaded.unpaidCount;
+        } else {
+          view.register = [];
+          view.unpaidCount = 0;
+        }
       }
       return presentPurchases(view, current.capabilities);
     },
@@ -272,6 +254,9 @@ export function createFinanceServices(deps: {
       if (isRequestAction(action)) return applyRequestMutation(db, current.memberId, body);
       if (isPurchaseMutation(action)) {
         return performPurchaseMutation(db, financeStorage, current, body);
+      }
+      if (isProcessingMutation(action)) {
+        return performProcessingMutation(db, current, body);
       }
       if (action === "exportPurchases" || action === "downloadExport" || action === "retryOutbox" || action === "cleanupUploads") {
         return performDeliveryMutation(db, financeStorage, current, body, {

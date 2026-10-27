@@ -48,7 +48,8 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
         if (action === "budgets") return res.status(200).json(await services.budgets(token, version));
         if (action === "purchases") {
           const requestRecordId = typeof req.query.requestRecordId === "string" ? req.query.requestRecordId : undefined;
-          return res.status(200).json(await services.purchases(token, version, requestRecordId));
+          const unpaidOnly = req.query.unpaid === "1";
+          return res.status(200).json(await services.purchases(token, version, requestRecordId, unpaidOnly));
         }
         return res.status(200).json(await services.financing(token, version));
       }
@@ -59,8 +60,10 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
       if (error instanceof FinanceError || error instanceof MemberCvError) {
         const errors = error instanceof FinanceError ? error.errors : undefined;
         const recovery = error instanceof FinanceError ? error.recovery : undefined;
+        const decision = error instanceof FinanceError ? error.decision : undefined;
         const payload: Record<string, unknown> = errors?.length ? { error: error.message, errors } : { error: error.message };
         if (recovery) payload.recovery = recovery;
+        if (decision) payload.decision = decision;
         return res.status(error.status).json(payload);
       }
       return res.status(503).json({ error: "The finance service is temporarily unavailable. Please try again." });

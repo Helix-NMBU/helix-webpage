@@ -207,6 +207,7 @@ beforeAll(async () => {
     "014_finance_register_purchases.sql",
     "015_finance_requests.sql",
     "016_finance_fulfillment.sql",
+    "018_finance_unpaid_voids_reviews.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
