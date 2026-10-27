@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
-import { FinanceError } from "./finance-error.js";
+import { FinanceError, type ReviewDecision } from "./finance-error.js";
 import { osloToday } from "./finance-money.js";
 import type { FinanceObjectStorage } from "./finance-storage.js";
 import { allowedUpload, verifyFileSignature } from "../../src/features/Finance/purchase-domain.js";
@@ -70,6 +70,18 @@ function textOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function reviewDecision(error: unknown): ReviewDecision | undefined {
+  const detail = error && typeof error === "object" && "detail" in error ? (error as { detail?: unknown }).detail : undefined;
+  if (typeof detail !== "string" || !detail.startsWith("{")) return undefined;
+  try {
+    const parsed = JSON.parse(detail) as { reviewer?: unknown; time?: unknown; reason?: unknown };
+    if (typeof parsed.reviewer !== "string" || typeof parsed.time !== "string" || typeof parsed.reason !== "string") return undefined;
+    return { reviewer: parsed.reviewer, time: parsed.time, reason: parsed.reason };
+  } catch {
+    return undefined;
+  }
+}
+
 export function mapPurchaseError(error: unknown): FinanceError {
   if (error instanceof FinanceError) return error;
   const message = textOf(error);
@@ -82,7 +94,7 @@ export function mapPurchaseError(error: unknown): FinanceError {
       return new FinanceError(409, text, field ? [{ field, message: text }] : undefined, { action: "registerDirect", field });
     }
     const status = kind === "denied" ? 403 : kind === "not_found" ? 404 : kind === "quota" ? 429 : kind === "invalid" ? 400 : 409;
-    return new FinanceError(status, text, field ? [{ field, message: text }] : undefined);
+    return new FinanceError(status, text, field ? [{ field, message: text }] : undefined, undefined, reviewDecision(error));
   }
   if (/season is closed/i.test(message)) return new FinanceError(409, "This season is closed.");
   if (/must be approved/i.test(message)) return new FinanceError(409, "The season budget must be approved before registering purchases.");

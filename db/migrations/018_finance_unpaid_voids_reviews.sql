@@ -180,7 +180,12 @@ begin
     raise exception 'FINANCE|not_found|Exception was not found.';
   end if;
   if review_row.review_status = 'reviewed' then
-    raise exception 'FINANCE|conflict|This exception is already reviewed.';
+    raise exception 'FINANCE|conflict|This exception is already reviewed.'
+      using detail = jsonb_build_object(
+        'reviewer', review_row.actor_member_id,
+        'time', review_row.reviewed_at,
+        'reason', review_row.reason
+      )::text;
   end if;
   update finance.exception_reviews
     set review_status = 'reviewed',

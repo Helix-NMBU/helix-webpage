@@ -44,7 +44,16 @@ function response() {
 async function call(token: string, body: Record<string, unknown>) {
   const wrapped = response();
   await handler({ method: "POST", query: {}, body, headers: { authorization: `Bearer ${token}` } } as unknown as VercelRequest, wrapped.res);
-  return wrapped.result() as { status: number; body: { error?: string; id?: string } };
+  return wrapped.result() as {
+    status: number;
+    body: {
+      error?: string;
+      id?: string;
+      ok?: boolean;
+      viewVersion?: number;
+      decision?: { reviewer: string; time: string; reason: string };
+    };
+  };
 }
 
 async function read(token: string, query: Record<string, string> = {}) {
@@ -798,5 +807,100 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     });
     expect(same.status).toBe(200);
     expect(await version()).toBe(repeatVersion);
+  });
+
+  async function reviewedException() {
+    await seasonWithBudget();
+    const saved = await registerPurchase({
+      paymentMethod: "invoice",
+      documentKind: "invoice",
+      documentNumber: "INV-1001",
+      invoiceDueDate: "2026-11-01",
+    }, "6000.00");
+    const reviewId = (await sql<{ id: string }>(
+      "select id from finance.exception_reviews where purchase_id = $1::uuid",
+      [saved.body.id],
+    ))[0]?.id ?? "";
+    const request = requestId();
+    const recorded = await call("finance", {
+      action: "reviewException",
+      requestId: request,
+      reviewId,
+      reason: "Accepted as a dated exception",
+      expectedRevision: 0,
+    });
+    expect(recorded.status).toBe(200);
+    return { reviewId, request, recorded };
+  }
+
+  async function reviewRows(reviewId: string) {
+    const [rows] = await sql<{ reviews: string; audits: string; keys: string }>(
+      `select
+         (select count(*) from finance.exception_reviews where id = $1::uuid)::text as reviews,
+         (select count(*) from finance.audit_log where entity = 'exception_review' and entity_id = $1::text)::text as audits,
+         (select count(*) from finance.idempotency_keys where action = 'reviewException')::text as keys`,
+      [reviewId],
+    );
+    return rows;
+  }
+
+  it("replays a review with the same request id and payload without a second row or version bump", async () => {
+    const { reviewId, request, recorded } = await reviewedException();
+    const before = await reviewRows(reviewId);
+    const versionBefore = await version();
+    const replay = await call("finance", {
+      action: "reviewException",
+      requestId: request,
+      reviewId,
+      reason: "Accepted as a dated exception",
+      expectedRevision: 9,
+    });
+    expect(replay.status).toBe(200);
+    expect(replay.body).toMatchObject({ ok: true, viewVersion: recorded.body.viewVersion, id: recorded.body.id });
+    expect(await version()).toBe(versionBefore);
+    expect(await reviewRows(reviewId)).toEqual(before);
+  });
+
+  it("returns the recorded review decision when a different request id reviews it again", async () => {
+    const { reviewId } = await reviewedException();
+    const before = await reviewRows(reviewId);
+    const versionBefore = await version();
+    const stored = (await sql<{ reviewer: string; time: string; reason: string }>(
+      `select actor_member_id::text as reviewer,
+              (jsonb_build_object('time', reviewed_at) ->> 'time') as time,
+              reason
+       from finance.exception_reviews where id = $1::uuid`,
+      [reviewId],
+    ))[0];
+    const again = await call("finance", {
+      action: "reviewException",
+      requestId: requestId(),
+      reviewId,
+      reason: "Trying to review the same exception again",
+      expectedRevision: 3,
+    });
+    expect(again.status).toBe(409);
+    expect(again.body.error).toBe("This exception is already reviewed.");
+    expect(again.body.decision).toEqual(stored);
+    expect(await version()).toBe(versionBefore);
+    expect(await reviewRows(reviewId)).toEqual(before);
+  });
+
+  it("rejects a reused review request id when the payload differs", async () => {
+    const { reviewId, request } = await reviewedException();
+    const before = await reviewRows(reviewId);
+    const versionBefore = await version();
+    const mismatch = await call("finance", {
+      action: "reviewException",
+      requestId: request,
+      reviewId,
+      reason: "A different review reason",
+      expectedRevision: 0,
+    });
+    expect(mismatch.status).toBe(409);
+    expect(mismatch.body.error).toBe("This request ID was already used for a different change.");
+    expect(mismatch.body.decision).toBeUndefined();
+    expect(await version()).toBe(versionBefore);
+    expect(await reviewRows(reviewId)).toEqual(before);
   });
 });
