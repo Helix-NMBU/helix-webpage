@@ -31,11 +31,14 @@ type FinanceState = {
   purchases: PurchasesView | null;
   financing: FinancingView | null;
   pageLoading: boolean;
+  expanded: Record<string, boolean>;
 };
 type FinanceSession = FinanceState & {
   retry: () => void;
   loadPage: (page: FinancePageId, options?: { requestRecordId?: string; unpaidOnly?: boolean }) => Promise<void>;
   mutate: (body: Record<string, unknown>) => Promise<FinanceMutationResult>;
+  setExpanded: (id: string, open: boolean) => void;
+  setFormDirty: (id: string, dirty: boolean) => void;
 };
 
 const emptyState: FinanceState = {
@@ -51,6 +54,7 @@ const emptyState: FinanceState = {
   purchases: null,
   financing: null,
   pageLoading: false,
+  expanded: {},
 };
 
 const FinanceContext = createContext<FinanceSession | null>(null);
@@ -73,7 +77,10 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   const active = useRef(false);
   const generation = useRef(0);
   const pageToken = useRef(0);
+  const dirtyIds = useRef(new Set<string>());
+  const viewVersionRef = useRef<number | null>(null);
   const notify = useNotify();
+  viewVersionRef.current = state.viewVersion;
   const applyCapabilities = useCallback((body: FinanceCapabilitiesResponse) => {
     setState((current) => ({
       ...current,
@@ -94,6 +101,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     if (status === 401 || status === 403) {
       generation.current += 1;
       pageToken.current += 1;
+      dirtyIds.current.clear();
       setState({ ...emptyState, access: "denied", pageLoading: false });
       return;
     }
@@ -110,6 +118,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     active.current = true;
     const current = ++generation.current;
     pageToken.current += 1;
+    dirtyIds.current.clear();
     setState(emptyState);
     void api.capabilities().then((body) => {
       if (!active.current || generation.current !== current) return;
@@ -122,14 +131,24 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   }, [api, applyCapabilities, attempt, fail, userId]);
   const revalidate = useCallback(() => {
     const current = generation.current;
-    return api.capabilities().then((body) => {
+    const previousVersion = viewVersionRef.current;
+    return Promise.all([api.capabilities(), api.version()]).then(([body, version]) => {
       if (!active.current || generation.current !== current) return;
-      applyCapabilities(body);
+      const reported = Number.isFinite(version.viewVersion) ? version.viewVersion : body.viewVersion;
+      const viewVersion = Math.max(body.viewVersion, reported);
+      applyCapabilities({ ...body, viewVersion });
+      if (previousVersion !== null && viewVersion !== previousVersion && dirtyIds.current.size > 0) {
+        notify("Finance was updated", "Your unsaved changes are still in the form.", {
+          id: "finance-unsaved-update",
+          variant: "info",
+          href: null,
+        });
+      }
     }).catch((error: unknown) => {
       if (!active.current || generation.current !== current) return;
       fail(error);
     });
-  }, [api, applyCapabilities, fail]);
+  }, [api, applyCapabilities, fail, notify]);
   useEffect(() => {
     const onFocus = () => revalidate();
     window.addEventListener("focus", onFocus);
@@ -138,7 +157,11 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   const mutate = useCallback(async (body: Record<string, unknown>) => {
     const current = generation.current;
     try {
-      return await api.mutate(body);
+      const result = await api.mutate(body);
+      if (active.current && generation.current === current && typeof result.viewVersion === "number") {
+        setState((value) => value.viewVersion === result.viewVersion ? value : { ...value, viewVersion: result.viewVersion });
+      }
+      return result;
     } catch (error) {
       if (active.current && generation.current === current && (errorStatus(error) === 401 || errorStatus(error) === 403)) await revalidate();
       throw error;
@@ -200,7 +223,17 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       });
     }
   }, [api, fail, notify]);
-  const value = useMemo(() => ({ ...state, retry, loadPage, mutate }), [state, retry, loadPage, mutate]);
+  const setExpanded = useCallback((id: string, open: boolean) => {
+    setState((current) => ({ ...current, expanded: { ...current.expanded, [id]: open } }));
+  }, []);
+  const setFormDirty = useCallback((id: string, dirty: boolean) => {
+    if (dirty) dirtyIds.current.add(id);
+    else dirtyIds.current.delete(id);
+  }, []);
+  const value = useMemo(
+    () => ({ ...state, retry, loadPage, mutate, setExpanded, setFormDirty }),
+    [state, retry, loadPage, mutate, setExpanded, setFormDirty],
+  );
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
 

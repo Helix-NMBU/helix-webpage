@@ -10,6 +10,7 @@ import { FinanceAccessProvider } from "../MemberPlatform/FinanceAccess";
 
 const api = vi.hoisted(() => ({
   capabilities: vi.fn(),
+  version: vi.fn(),
   overview: vi.fn(),
   budgets: vi.fn(),
   purchases: vi.fn(),
@@ -141,6 +142,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   notify.mockReset();
   api.capabilities.mockReset().mockResolvedValue(business);
+  api.version.mockReset().mockResolvedValue({ viewVersion: 1 });
   api.overview.mockReset();
   api.budgets.mockReset();
   api.purchases.mockReset();
