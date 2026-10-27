@@ -208,6 +208,7 @@ beforeAll(async () => {
     "015_finance_requests.sql",
     "016_finance_fulfillment.sql",
     "018_finance_unpaid_voids_reviews.sql",
+    "021_finance_final_candidate_ledger.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
@@ -231,7 +232,7 @@ beforeEach(async () => {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
-    truncate table
+    truncate table finance.upload_final_candidates,
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
       finance.documents, finance.uploads, finance.exception_reviews, finance.purchases,
       finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,

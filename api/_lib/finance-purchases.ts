@@ -306,6 +306,22 @@ export async function performPurchaseMutation(
     }
     const digest = createHash("sha256").update(bytes).digest("hex");
     const finalKey = storage.finalKey(caller.memberId, uploadId);
+    try {
+      // Record the key before object I/O, including writes whose outcome is unknown.
+      await db.query(
+        "select finance.reserve_upload_final_candidate($1::uuid, $2::uuid, $3, $4, $5::bigint)",
+        [caller.memberId, uploadId, finalKey, digest, expectedSize],
+      );
+    } catch (error) {
+      const winner = (await db.query<{ member_id: string; status: string; final_key: string | null; byte_size: string }>(
+        "select member_id::text as member_id, status, final_key, byte_size::text as byte_size from finance.uploads where id = $1::uuid",
+        [uploadId],
+      )).rows[0];
+      if (!winner || winner.member_id !== caller.memberId || winner.status !== "finalized" || !winner.final_key || !isOwnedFinalKey(caller.memberId, winner.final_key)) throw mapPurchaseError(error);
+      const saved = await storage.headObject(winner.final_key);
+      if (saved.byteSize !== Number(winner.byte_size)) throw mapPurchaseError(error);
+      return { ok: true, viewVersion: caller.viewVersion, id: uploadId, warnings: [], errors: [] };
+    }
     await storage.putFinalObject(finalKey, bytes, contentType);
     try {
       await db.query(
@@ -322,7 +338,16 @@ export async function performPurchaseMutation(
       if (!current || current.member_id !== caller.memberId || current.status !== "finalized" || !current.final_key || !isOwnedFinalKey(caller.memberId, current.final_key)) throw error;
       const saved = await storage.headObject(current.final_key);
       if (saved.byteSize !== Number(current.byte_size)) throw error;
-      if (current.final_key !== finalKey) await storage.remove(finalKey).catch(() => undefined);
+      if (current.final_key !== finalKey) {
+        // A losing candidate remains in the ledger if deletion is uncertain.
+        try {
+          await db.query("select finance.begin_final_candidate_cleanup($1::uuid, $2::uuid, $3, $4::timestamptz, $5::interval)", [caller.memberId, uploadId, finalKey, new Date().toISOString(), "24 hours"]);
+          await storage.remove(finalKey);
+          await db.query("select finance.finish_final_candidate_cleanup($1::uuid, $2::uuid, $3, $4::timestamptz)", [caller.memberId, uploadId, finalKey, new Date().toISOString()]);
+        } catch {
+          // The ledger retains the candidate for a later authorized cleanup.
+        }
+      }
     }
     return { ok: true, viewVersion: caller.viewVersion, id: uploadId, warnings: [], errors: [] };
   }

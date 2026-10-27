@@ -593,7 +593,7 @@ export type FinanceMutation =
   | (MutationBase & { action: "downloadExport"; exportId: string })
   | (MutationBase & { action: "exportPurchases" })
   | (MutationBase & { action: "retryOutbox"; outboxId?: string; reconciliation?: "sent" | "not_sent" | "still_unknown" })
-  | (MutationBase & { action: "cleanupUploads"; uploadId?: string; reconciliation?: "saved" | "absent" | "still_unknown"; reportUncertain?: boolean });
+  | (MutationBase & { action: "cleanupUploads"; uploadId?: string; reconciliation?: "saved" | "absent" | "still_unknown"; reportUncertain?: boolean; candidateOnly?: boolean });
 
 export type FinanceAction = FinanceMutation["action"];
 

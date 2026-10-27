@@ -304,8 +304,11 @@ async function cleanupUploads(
   const uploadId = body.uploadId === undefined || body.uploadId === null ? null : requireUuid(body.uploadId, "A valid upload ID is required.");
   const reconciliation = body.reconciliation === undefined || body.reconciliation === null ? null : String(body.reconciliation);
   const reportUncertain = body.reportUncertain === true;
+  const candidateOnly = body.candidateOnly === true;
   if (reconciliation !== null && !UPLOAD_RECONCILE.has(reconciliation)) throw new FinanceError(400, "Unknown upload observation.");
-  const payloadHash = hashRecoveryPayload({ action: "cleanupUploads", uploadId, reconciliation, reportUncertain });
+  if (candidateOnly && (!uploadId || reconciliation || reportUncertain)) throw new FinanceError(400, "Select an upload for candidate cleanup.");
+  // Preserve hashes of existing requests that did not specify candidateOnly.
+  const payloadHash = hashRecoveryPayload({ action: "cleanupUploads", uploadId, reconciliation, reportUncertain, ...(candidateOnly ? { candidateOnly } : {}) });
   const existing = await replay(db, caller, requestId, "cleanupUploads", payloadHash);
   if (existing) return existing;
   if (!storage) throw new FinanceError(503, "Finance file storage is unavailable. Configure the private finance bucket.");
@@ -331,16 +334,37 @@ async function cleanupUploads(
       recovery: { sent: 0, failed: 0, uncertain, skipped: uncertain ? 0 : 1, deleted: 0, message },
     }));
   }
-  const listed = uploadId
+  const candidates = (await db.query<{ upload_id: string; storage_key: string }>(
+    "select upload_id, storage_key from finance.list_final_candidate_cleanup_ids($1::uuid, $2::timestamptz, $3::interval, 50, $4::uuid)",
+    [caller.memberId, now().toISOString(), FINANCE_UPLOAD_CLEANUP_GRACE, uploadId],
+  )).rows;
+  let deleted = 0;
+  let failed = 0;
+  let uncertain = 0;
+  let skipped = 0;
+  for (const candidate of candidates) {
+    try {
+      await db.query("select finance.begin_final_candidate_cleanup($1::uuid, $2::uuid, $3, $4::timestamptz, $5::interval)", [caller.memberId, candidate.upload_id, candidate.storage_key, now().toISOString(), FINANCE_UPLOAD_CLEANUP_GRACE]);
+      await storage.remove(candidate.storage_key);
+      await db.query("select finance.finish_final_candidate_cleanup($1::uuid, $2::uuid, $3, $4::timestamptz)", [caller.memberId, candidate.upload_id, candidate.storage_key, now().toISOString()]);
+      deleted += 1;
+    } catch (error) {
+      const mapped = mapFinanceDeliveryError(error);
+      if (mapped.status === 409 && /saved with a purchase|not ready for cleanup/i.test(mapped.message)) {
+        skipped += 1;
+      } else {
+        // Keep the candidate ledger for a later retry, including unknown deletes.
+        uncertain += 1;
+        break;
+      }
+    }
+  }
+  const listed = candidateOnly || uncertain ? [] : uploadId
     ? [uploadId]
     : (await db.query<{ upload_id: string }>(
       "select upload_id from finance.list_upload_cleanup_ids($1::uuid, $2::timestamptz, $3::interval, 50)",
       [caller.memberId, now().toISOString(), FINANCE_UPLOAD_CLEANUP_GRACE],
     )).rows.map((row) => row.upload_id);
-  let deleted = 0;
-  let failed = 0;
-  let uncertain = 0;
-  let skipped = 0;
   for (const id of listed) {
     const outcome = await cleanupOne(db, storage, caller.memberId, id, now(), uploadId !== null);
     if (outcome === "deleted") deleted += 1;
@@ -353,7 +377,7 @@ async function cleanupUploads(
   const message = uncertain > 0
     ? "Cleanup stopped for an unknown storage or commit outcome. Reconcile it before retrying."
     : deleted > 0
-      ? "Expired uploads with no saved purchase were deleted."
+      ? "Unreferenced files were deleted."
       : "No expired uploads were ready for cleanup.";
   logger?.(financeLogLine({ event: "finance_cleanup", deleted: String(deleted), failed: String(failed), uncertain: String(uncertain) }));
   return save(db, caller, requestId, "cleanupUploads", payloadHash, "purchaseRegister", baseResult(caller, {

@@ -180,6 +180,7 @@ beforeAll(async () => {
     "016_finance_fulfillment.sql",
     "018_finance_unpaid_voids_reviews.sql",
     "020_finance_processing_guards.sql",
+    "021_finance_final_candidate_ledger.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
@@ -205,7 +206,7 @@ beforeEach(async () => {
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
-      finance.documents, finance.uploads, finance.exception_reviews, finance.purchases,
+      finance.documents, finance.upload_final_candidates, finance.uploads, finance.exception_reviews, finance.purchases,
       finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
       finance.budget_items, finance.budgets, finance.funding_parts, finance.funding, finance.systems,
       finance.seasons, finance.idempotency_keys, finance.outbox, finance.member_grants, finance.settings,

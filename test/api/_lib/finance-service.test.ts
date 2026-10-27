@@ -116,6 +116,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/021_finance_final_candidate_ledger.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
@@ -137,6 +138,7 @@ async function resetFinance() {
     alter table finance.audit_log disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.upload_final_candidates,
       finance.allocations,
       finance.purchase_lines,
       finance.outlay_reimbursements,
@@ -743,6 +745,65 @@ describe("finance access API", () => {
       expect([...financeStorage.objects.keys()].filter((key) => key.includes(`/final/${uploadId}/`))).toEqual([saved.final_key]);
     } finally {
       spy.mockRestore();
+    }
+  });
+
+  it("recovers a finalize whose database commit succeeded but the response was lost", async () => {
+    const { putMemoryPdf } = await import("./finance-storage-mock.js");
+    const auth = await call({ token: "member", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { stagingKey, id: uploadId } = auth.body as { stagingKey: string; id: string };
+    await putMemoryPdf(financeStorage, stagingKey);
+    const normalHandler = handler;
+    let disconnect = false;
+    let lost = false;
+    const flakyDb: CvDatabase = {
+      query: async <T>(query: string, params?: unknown[]) => {
+        if (disconnect && query.includes("select member_id::text as member_id, status, final_key")) throw new Error("database disconnected");
+        const result = await db.query<T>(query, params);
+        if (!lost && query.includes("finance.complete_upload_finalize")) {
+          lost = true;
+          disconnect = true;
+          throw new Error("commit response lost");
+        }
+        return result;
+      },
+    };
+    const flakyServices = createFinanceServices({ db: flakyDb, financeStorage, authenticate: async (token) => identities[token] ?? Promise.reject(new MemberCvError(401, "Log in to continue.")) });
+    handler = createFinanceHandler(() => flakyServices);
+    const requestId = crypto.randomUUID();
+    try {
+      expect((await call({ token: "member", body: { action: "finalizeUpload", requestId, uploadId } })).status).toBe(503);
+      expect((await sql<{ status: string }>("select status from finance.upload_final_candidates where upload_id = $1::uuid", [uploadId])).rows).toEqual([{ status: "published" }]);
+      disconnect = false;
+      expect((await call({ token: "member", body: { action: "finalizeUpload", requestId, uploadId } })).status).toBe(200);
+      expect((await sql<{ count: string }>("select count(*)::text as count from finance.upload_final_candidates where upload_id = $1::uuid", [uploadId])).rows[0]?.count).toBe("1");
+    } finally {
+      handler = normalHandler;
+    }
+  });
+
+  it("retains a candidate if the reservation response is lost before storage I/O", async () => {
+    const { putMemoryPdf } = await import("./finance-storage-mock.js");
+    const auth = await call({ token: "member", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { stagingKey, id: uploadId } = auth.body as { stagingKey: string; id: string };
+    await putMemoryPdf(financeStorage, stagingKey);
+    const normalHandler = handler;
+    const flakyDb: CvDatabase = {
+      query: async <T>(query: string, params?: unknown[]) => {
+        const result = await db.query<T>(query, params);
+        if (query.includes("finance.reserve_upload_final_candidate")) throw new Error("reservation response lost");
+        return result;
+      },
+    };
+    const flakyServices = createFinanceServices({ db: flakyDb, financeStorage, authenticate: async (token) => identities[token] ?? Promise.reject(new MemberCvError(401, "Log in to continue.")) });
+    handler = createFinanceHandler(() => flakyServices);
+    try {
+      expect((await call({ token: "member", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } })).status).toBe(503);
+      const row = (await sql<{ storage_key: string; status: string }>("select storage_key, status from finance.upload_final_candidates where upload_id = $1::uuid", [uploadId])).rows[0];
+      expect(row.status).toBe("pending");
+      expect(financeStorage.objects.has(row.storage_key)).toBe(false);
+    } finally {
+      handler = normalHandler;
     }
   });
 

@@ -119,7 +119,7 @@ beforeAll(async () => {
     create role authenticated;
     create role anonymous;
   `);
-  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql"]) {
+  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql", "021_finance_final_candidate_ledger.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -166,7 +166,7 @@ async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
-    truncate table
+    truncate table finance.upload_final_candidates,
       finance.outbox_attempts,
       finance.export_objects,
       finance.allocations,
@@ -769,6 +769,90 @@ describe("FIN-10-A03 and FIN-10-A04 export", () => {
 });
 
 describe("FIN-10-A05 cleanup and reconciliation", () => {
+  it("records unknown final writes before I/O and safely re-sweeps a late write", async () => {
+    await seedSeason();
+    const authorized = await call({ token: "requester", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { id: uploadId, stagingKey } = authorized.body as { id: string; stagingKey: string };
+    await putMemoryPdf(storage, stagingKey);
+    const uncertainStorage: FinanceObjectStorage = {
+      ...storage,
+      putFinalObject: async (key, bytes, type) => {
+        await storage.putFinalObject(key, bytes, type);
+        throw new FinanceStorageUncertainError();
+      },
+    };
+    wireServices({ storage: uncertainStorage });
+    const finalize = await call({ token: "requester", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } });
+    expect(finalize.status).toBe(503);
+    const candidate = (await sql<{ storage_key: string; status: string; content_sha256: string }>("select storage_key, status, content_sha256 from finance.upload_final_candidates where upload_id = $1::uuid", [uploadId]))[0];
+    expect(candidate.status).toBe("pending");
+    expect(storage.objects.has(candidate.storage_key)).toBe(true);
+    await expect(sql("select finance.begin_final_candidate_cleanup($1::uuid, $2::uuid, $3, clock_timestamp(), interval '24 hours')", [requesterId, uploadId, candidate.storage_key])).rejects.toThrow(/not ready for cleanup/);
+    expect((await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } })).status).toBe(200);
+    expect(storage.objects.has(candidate.storage_key)).toBe(true);
+    await sql("update finance.upload_final_candidates set created_at = clock_timestamp() - interval '2 days' where upload_id = $1::uuid", [uploadId]);
+    wireServices();
+    expect((await call({ token: "requester", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } })).status).toBe(403);
+    wireServices({ storage: { ...storage, remove: async (key) => { await storage.remove(key); throw new FinanceStorageUncertainError(); } } });
+    const uncertainDelete = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } });
+    expect((uncertainDelete.body as { recovery: { uncertain: number } }).recovery.uncertain).toBe(1);
+    expect((await sql<{ status: string; last_cleaned_at: string | null }>("select status, last_cleaned_at::text from finance.upload_final_candidates where storage_key = $1", [candidate.storage_key]))[0]).toEqual({ status: "cleanup", last_cleaned_at: null });
+    wireServices();
+    const cleaned = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } });
+    expect(cleaned.status).toBe(200);
+    expect((cleaned.body as { recovery: { deleted: number } }).recovery.deleted).toBe(1);
+    expect(storage.objects.has(candidate.storage_key)).toBe(false);
+    expect((await sql<{ status: string; last_cleaned_at: string | null }>("select status, last_cleaned_at::text from finance.upload_final_candidates where storage_key = $1", [candidate.storage_key]))[0]).toMatchObject({ status: "cleanup", last_cleaned_at: expect.any(String) });
+
+    // A delayed provider write cannot be published after cleanup began. The
+    // retained ledger allows a later sweep to delete that key again.
+    storage.objects.set(candidate.storage_key, new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]));
+    await expect(sql("select finance.complete_upload_finalize($1::uuid, $2::uuid, $3, $4, 8, 'application/pdf')", [requesterId, uploadId, candidate.storage_key, candidate.content_sha256])).rejects.toThrow(/no longer available/);
+    await sql("update finance.upload_final_candidates set last_cleaned_at = clock_timestamp() - interval '2 days' where upload_id = $1::uuid", [uploadId]);
+    const reswept = await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } });
+    expect(reswept.status).toBe(200);
+    expect(storage.objects.has(candidate.storage_key)).toBe(false);
+  });
+
+  it("retains a published final key through targeted candidate cleanup", async () => {
+    await seedSeason();
+    const authorized = await call({ token: "requester", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { id: uploadId, stagingKey } = authorized.body as { id: string; stagingKey: string };
+    await putMemoryPdf(storage, stagingKey);
+    expect((await call({ token: "requester", body: { action: "finalizeUpload", requestId: crypto.randomUUID(), uploadId } })).status).toBe(200);
+    const candidate = (await sql<{ storage_key: string; status: string }>("select storage_key, status from finance.upload_final_candidates where upload_id = $1::uuid", [uploadId]))[0];
+    expect(candidate.status).toBe("published");
+    const purchaseId = await insertPurchase({ ref: "2026-0049", method: "outlay", totalOre: "1000", refund: "account" });
+    await sql("update finance.documents set storage_key = $1 where purchase_id = $2::uuid", [candidate.storage_key, purchaseId]);
+    await sql("update finance.uploads set purchase_id = $1::uuid where id = $2::uuid", [purchaseId, uploadId]);
+    await sql("update finance.upload_final_candidates set created_at = clock_timestamp() - interval '2 days' where upload_id = $1::uuid", [uploadId]);
+    expect((await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } })).status).toBe(200);
+    expect(storage.objects.has(candidate.storage_key)).toBe(true);
+    await expect(sql("select finance.begin_final_candidate_cleanup($1::uuid, $2::uuid, $3, clock_timestamp(), interval '24 hours')", [financeId, uploadId, candidate.storage_key])).rejects.toThrow(/saved with a purchase/);
+  });
+
+  it("cleans a lost-write candidate after a retry publishes a different key", async () => {
+    await seedSeason();
+    const authorized = await call({ token: "requester", body: { action: "authorizeUpload", requestId: crypto.randomUUID(), fileName: "receipt.pdf", contentType: "application/pdf", byteSize: 8 } });
+    const { id: uploadId, stagingKey } = authorized.body as { id: string; stagingKey: string };
+    await putMemoryPdf(storage, stagingKey);
+    wireServices({ storage: { ...storage, putFinalObject: async (key, bytes, type) => { await storage.putFinalObject(key, bytes, type); throw new FinanceStorageUncertainError(); } } });
+    const requestId = crypto.randomUUID();
+    expect((await call({ token: "requester", body: { action: "finalizeUpload", requestId, uploadId } })).status).toBe(503);
+    wireServices();
+    expect((await call({ token: "requester", body: { action: "finalizeUpload", requestId, uploadId } })).status).toBe(200);
+    const rows = await sql<{ storage_key: string; status: string }>("select storage_key, status from finance.upload_final_candidates where upload_id = $1::uuid", [uploadId]);
+    const abandoned = rows.find((row) => row.status === "pending")?.storage_key as string;
+    const published = rows.find((row) => row.status === "published")?.storage_key as string;
+    expect(storage.objects.has(abandoned)).toBe(true);
+    expect(storage.objects.has(published)).toBe(true);
+    await sql("update finance.upload_final_candidates set created_at = clock_timestamp() - interval '2 days' where upload_id = $1::uuid", [uploadId]);
+    expect((await call({ token: "finance", body: { action: "cleanupUploads", requestId: crypto.randomUUID(), uploadId, candidateOnly: true } })).status).toBe(200);
+    expect(storage.objects.has(abandoned)).toBe(false);
+    expect(storage.objects.has(published)).toBe(true);
+    expect((await sql<{ final_key: string }>("select final_key from finance.uploads where id = $1::uuid", [uploadId]))[0].final_key).toBe(published);
+  });
+
   it("refuses cleanup after an uncertain commit until absence is reconciled, then deletes only an expired unreferenced file", async () => {
     await seedSeason();
     const version = await viewVersion();
