@@ -606,9 +606,8 @@ describe("finance access API", () => {
     expect(result.rows[0]?.result).toMatchObject({ ok: true });
   });
 
-  it("registers a purchase with uploads, bumps the view version, and replays idempotently", async () => {
+  it("registers a purchase with uploads, returns the member its public reference, and replays idempotently", async () => {
     await seedPrivateRows();
-    await grant(memberId, "finance");
     await grant(adminId, "head_of_finance");
     await sql(
       `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
@@ -641,11 +640,45 @@ describe("finance access API", () => {
     const rid = crypto.randomUUID();
     const saved = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     if (saved.status !== 200) throw new Error(JSON.stringify(saved.body));
-    expect(saved.body).toMatchObject({ ok: true });
+    const savedId = (saved.body as { id: string }).id;
+    const stored = await sql<{ public_ref: string; requester_member_id: string }>("select public_ref, requester_member_id::text from finance.purchases where id = $1::uuid", [savedId]);
+    expect(stored.rows[0]?.requester_member_id).toBe(memberId);
+    expect(saved.body).toMatchObject({ ok: true, publicRef: stored.rows[0]?.public_ref });
+    expect((await call({ query: { action: "purchases" }, token: "member" })).body).not.toHaveProperty("register");
     const after = Number((await sql<{ version: string }>("select version::text as version from finance.view_versions")).rows[0]?.version ?? "0");
     expect(after).toBe(before + 1);
     expect((await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } })).body).toMatchObject(saved.body as Record<string, unknown>);
     expect((await counts()).purchases).toBe(2);
+  });
+
+  it("recovers the same public reference after its lookup fails following a committed registration", async () => {
+    await seedPrivateRows();
+    await sql(`insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+      values ('purchase:2026', 2026, 50, $1::uuid)`, [operatorId]);
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const uploadId = await authorizeAndFinalizeUpload(8);
+    const purchase = {
+      buyerName: "Buyer", supplierName: "Supplier", paymentMethod: "team_account", purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame", documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Tube stock", quantity: "1", amountNok: "900.00" }], uploadIds: [uploadId],
+    };
+    let failLookup = true;
+    const flakyDb: CvDatabase = { query: async <T>(text: string, params?: unknown[]) => {
+      if (text.startsWith("select public_ref from finance.purchases") && failLookup) { failLookup = false; throw new Error("Lost reference lookup"); }
+      return db.query<T>(text, params);
+    } };
+    const flakyServices = createFinanceServices({ db: flakyDb, financeStorage, authenticate: async (token) => identities[token] ?? Promise.reject(new MemberCvError(401, "Log in to continue.")) });
+    handler = createFinanceHandler(() => flakyServices);
+    const requestId = crypto.randomUUID();
+    try {
+      expect((await call({ token: "member", body: { action: "registerPurchase", requestId, purchase } })).status).toBe(503);
+      const saved = (await sql<{ id: string; public_ref: string }>("select id, public_ref from finance.purchases where public_ref <> '2026-0042'")).rows;
+      expect(saved).toHaveLength(1);
+      const replay = await call({ token: "member", body: { action: "registerPurchase", requestId, purchase } });
+      expect(replay).toMatchObject({ status: 200, body: { id: saved[0].id, publicRef: saved[0].public_ref } });
+      expect((await counts()).purchases).toBe(2);
+    } finally { handler = createFinanceHandler(() => services); }
   });
 
   it("enforces purchase registration quota and upload ownership", async () => {

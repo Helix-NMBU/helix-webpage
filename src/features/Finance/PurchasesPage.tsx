@@ -53,6 +53,7 @@ function emptyPurchase(today: string, buyerName: string): PurchaseInput {
 function useRequestIds() {
   const pending = useRef<{ key: string; id: string } | null>(null);
   return {
+    hasFor(key: string) { return pending.current?.key === key; },
     idFor(key: string) {
       if (pending.current?.key === key) return pending.current.id;
       const id = crypto.randomUUID();
@@ -89,6 +90,37 @@ export function PurchasesBoard() {
   const [closeReason, setCloseReason] = useState("");
   const [releasedNok, setReleasedNok] = useState("0.00");
   const [uploads, setUploads] = useState<UploadState[]>([]);
+  const uploadRows = useRef<UploadState[]>([]);
+  const uploadControllers = useRef(new Map<string, AbortController>());
+  const uploadOwnerAlive = useRef(true);
+  const registrationBusy = useRef(false);
+  useEffect(() => {
+    uploadOwnerAlive.current = true;
+    const controllers = uploadControllers.current;
+    return () => {
+      uploadOwnerAlive.current = false;
+      controllers.forEach((controller) => controller.abort());
+      controllers.clear();
+      uploadRows.current = [];
+    };
+  }, []);
+  function updateUploads(update: (current: UploadState[]) => UploadState[]) {
+    const next = update(uploadRows.current);
+    uploadRows.current = next;
+    setUploads(next);
+  }
+  function findUpload(id: string): UploadState | undefined {
+    return uploadOwnerAlive.current ? uploadRows.current.find((row) => row.localId === id) : undefined;
+  }
+  function removeUpload(id: string) {
+    if (registrationBusy.current) return;
+    const file = findUpload(id);
+    if (!file) return;
+    updateUploads((current) => current.filter((row) => row.localId !== id));
+    uploadControllers.current.get(id)?.abort();
+    uploadControllers.current.delete(id);
+    notify("File removed", `${file.name} was removed from this purchase.`, { id: `purchase-upload-${id}`, variant: "info" });
+  }
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const unpaidOnlyRef = useRef(false);
   const buyerDefault = account?.name ?? "";
@@ -168,46 +200,70 @@ export function PurchasesBoard() {
   }
 
   async function uploadFile(file: File) {
-    if (uploads.length >= 15) {
+    if (registrationBusy.current || !uploadOwnerAlive.current) return;
+    // This ref is updated synchronously, so rapid concurrent starts reserve distinct slots.
+    if (uploadRows.current.length >= 15) {
       notify("Too many files", "You can attach at most 15 files.", { id: "purchase-files", variant: "error" });
       return;
     }
     const entry: UploadState = { localId: crypto.randomUUID(), uploadId: "", name: file.name, status: "uploading" };
-    setUploads((current) => [...current, entry]);
-    try {
-      const authorized = await session.mutate({
-        action: "authorizeUpload",
-        requestId: crypto.randomUUID(),
-        fileName: file.name,
-        contentType: file.type || "application/octet-stream",
-        byteSize: file.size,
-      });
-      const uploadId = authorized.id;
-      if (!authorized.uploadUrl || !uploadId) throw new Error("Upload authorization failed.");
-      const response = await fetch(authorized.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-      if (!response.ok) throw new Error("Upload failed.");
-      setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, uploadId } : row));
-      const finalizeRequestId = crypto.randomUUID();
-      const finalize = async () => {
-        setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "uploading" } : row));
+    updateUploads((current) => [...current, entry]);
+    const start = async () => {
+      if (!findUpload(entry.localId)) return;
+      updateUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "uploading", uploadId: "" } : row));
+      try {
+        const authorized = await session.mutate({
+          action: "authorizeUpload",
+          requestId: crypto.randomUUID(),
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          byteSize: file.size,
+        });
+        if (!findUpload(entry.localId)) return;
+        const uploadId = authorized.id;
+        if (!authorized.uploadUrl || !uploadId) throw new Error("Upload authorization failed.");
+        updateUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, uploadId } : row));
+        const controller = new AbortController();
+        uploadControllers.current.set(entry.localId, controller);
+        let response: Response;
         try {
-          await session.mutate({ action: "finalizeUpload", requestId: finalizeRequestId, uploadId });
-          setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "ready" } : row));
-          notify("File uploaded", `${file.name} is ready to submit.`, { id: `purchase-upload-${entry.localId}`, variant: "success" });
-        } catch (error) {
-          setUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "failed" } : row));
-          notify("Could not finalize file", error instanceof Error ? error.message : "Try again.", {
-            id: `purchase-upload-${entry.localId}`,
-            variant: "error",
-            action: { label: "Try again", onClick: () => { void finalize(); } },
-          });
+          response = await fetch(authorized.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" }, signal: controller.signal });
+        } finally {
+          if (uploadControllers.current.get(entry.localId) === controller) uploadControllers.current.delete(entry.localId);
         }
-      };
-      await finalize();
-    } catch (error) {
-      setUploads((current) => current.filter((row) => row.localId !== entry.localId));
-      notify("Upload failed", error instanceof Error ? error.message : "Try again.", { id: "purchase-upload", variant: "error" });
-    }
+        if (!findUpload(entry.localId)) return;
+        if (!response.ok) throw new Error("Upload failed.");
+        const finalizeRequestId = crypto.randomUUID();
+        const finalize = async () => {
+          if (!findUpload(entry.localId)) return;
+          updateUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "uploading" } : row));
+          try {
+            await session.mutate({ action: "finalizeUpload", requestId: finalizeRequestId, uploadId });
+            if (!findUpload(entry.localId)) return;
+            updateUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "ready" } : row));
+            notify("File uploaded", `${file.name} is ready to submit.`, { id: `purchase-upload-${entry.localId}`, variant: "success" });
+          } catch (error) {
+            if (!findUpload(entry.localId)) return;
+            updateUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "failed" } : row));
+            notify("Could not finalize file", error instanceof Error ? error.message : "Try again.", {
+              id: `purchase-upload-${entry.localId}`,
+              variant: "error",
+              action: { label: "Try again", onClick: () => { if (findUpload(entry.localId)?.status === "failed") void finalize(); } },
+            });
+          }
+        };
+        await finalize();
+      } catch (error) {
+        if (!findUpload(entry.localId)) return;
+        updateUploads((current) => current.map((row) => row.localId === entry.localId ? { ...row, status: "failed" } : row));
+        notify("Upload failed", error instanceof Error ? error.message : "Try again.", {
+          id: `purchase-upload-${entry.localId}`,
+          variant: "error",
+          action: { label: "Try again", onClick: () => { if (findUpload(entry.localId)?.status === "failed") void start(); } },
+        });
+      }
+    };
+    await start();
   }
 
   function saveCsv(file: FinanceExportFile) {
@@ -298,35 +354,46 @@ export function PurchasesBoard() {
 
   async function registerPurchase(event: FormEvent) {
     event.preventDefault();
-    if (!canRegister) return;
+    if (!canRegister || registrationBusy.current) return;
+    if (uploadRows.current.some((row) => row.status !== "ready")) {
+      notify("Files are not ready", "Wait for uploads to finish, or retry or remove failed files.", { id: "purchase-files", variant: "error" });
+      return;
+    }
+    registrationBusy.current = true;
     setSaving(true);
     const payload: PurchaseInput = {
       ...purchase,
       requestRecordId: detail?.status === "approved" ? detail.id : purchase.requestRecordId ?? undefined,
-      uploadIds: uploads.filter((row) => row.status === "ready").map((row) => row.uploadId),
+      uploadIds: uploadRows.current.map((row) => row.uploadId),
     };
     try {
-      const check = await session.mutate({ action: "checkPurchase", requestId: crypto.randomUUID(), purchase: payload });
-      if (check.errors.length) {
-        notify("Check the form", check.errors[0]?.message ?? "Fix the highlighted fields.", { id: "purchase-check", variant: "error" });
-        return;
+      const purchaseKey = JSON.stringify(payload);
+      // A retry must reach the saved idempotency result even if the budget changed after an uncertain response.
+      if (!purchaseRequests.hasFor(purchaseKey)) {
+        const check = await session.mutate({ action: "checkPurchase", requestId: crypto.randomUUID(), purchase: payload });
+        if (check.errors.length) {
+          notify("Check the form", check.errors[0]?.message ?? "Fix the highlighted fields.", { id: "purchase-check", variant: "error" });
+          return;
+        }
+        for (const warning of check.warnings) notify("Purchase warning", warning.message, { id: `purchase-warning-${warning.message}`, variant: "warning" });
       }
-      for (const warning of check.warnings) notify("Purchase warning", warning.message, { id: `purchase-warning-${warning.message}`, variant: "warning" });
       const saved = await session.mutate({
         action: "registerPurchase",
-        requestId: purchaseRequests.idFor(JSON.stringify(payload)),
+        requestId: purchaseRequests.idFor(purchaseKey),
         purchase: payload,
       });
+      if (!saved.publicRef) throw new Error("Your purchase may have been saved, but its reference is unavailable. Try again.");
       purchaseRequests.finish();
-      for (const warning of saved.warnings) notify("Purchase saved", warning.message, { id: `purchase-saved-${warning.message}`, variant: "warning" });
-      notify("Purchase registered", saved.id ? "Reference saved." : "Your purchase was saved.", { id: "purchase-saved", variant: "success" });
+      const details = [`Reference: ${saved.publicRef}.`, ...saved.warnings.map((warning) => warning.message)].join(" ");
+      notify("Purchase registered", details, { id: "purchase-saved", variant: saved.warnings.length ? "warning" : "success" });
       setPurchase(emptyPurchase(session.today ?? "", purchase.buyerName));
-      setUploads([]);
+      updateUploads(() => []);
       await session.loadPage("purchases", purchaseLoadOptions(selectedId));
       if (!budgetsLoaded) await session.loadPage("budgets");
     } catch (error) {
       notify("Could not register purchase", error instanceof Error ? error.message : "Please try again.", { id: "purchase-save", variant: "error" });
     } finally {
+      registrationBusy.current = false;
       setSaving(false);
     }
   }
@@ -474,7 +541,8 @@ export function PurchasesBoard() {
   return (
     <div className="space-y-10">
       {canRegister ? (
-        <form className="space-y-6 rounded-lg border p-6" onSubmit={registerPurchase}>
+        <form className="rounded-lg border p-6" onSubmit={registerPurchase}>
+          <fieldset className="space-y-6" disabled={saving}>
           <div>
             <h2 className="text-xl font-medium">Register a purchase</h2>
             <p className="text-sm text-muted-foreground">Line amount is the total in NOK including VAT; quantity is descriptive only.</p>
@@ -542,19 +610,25 @@ export function PurchasesBoard() {
             ))}
           </div>
           <div className="space-y-3">
-            <Label>Supporting files (1 to 15, max 10 MB each)</Label>
-            <Input type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf" onChange={(event) => {
+            <Label htmlFor="purchase-supporting-files">Supporting files (1 to 15, max 10 MB each)</Label>
+            <Input id="purchase-supporting-files" type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.pdf,image/jpeg,image/png,image/heic,image/heif,application/pdf" onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
               if (file) void uploadFile(file);
             }} />
             {uploads.length ? (
-              <ul className="text-sm text-muted-foreground">
-                {uploads.map((file) => <li key={file.localId}>{file.name} — {file.status}</li>)}
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                {uploads.map((file) => (
+                  <li key={file.localId} className="flex flex-wrap items-center gap-2">
+                    <span>{file.name} — {file.status}</span>
+                    <Button type="button" variant="outline" size="sm" aria-label={`Remove ${file.name}`} onClick={() => removeUpload(file.localId)}>Remove</Button>
+                  </li>
+                ))}
               </ul>
             ) : null}
           </div>
           <Button type="submit" disabled={saving || !budgetsLoaded}>{saving ? "Saving…" : "Register purchase"}</Button>
+          </fieldset>
         </form>
       ) : null}
       <div className="space-y-8">

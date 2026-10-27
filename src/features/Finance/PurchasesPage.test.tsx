@@ -137,17 +137,151 @@ describe("PurchasesPage", () => {
       Object.defineProperty(input, "files", { value: [file], configurable: true });
       await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
     }
-    expect([...container.querySelectorAll("li")].filter((item) => item.textContent === "receipt.pdf — ready")).toHaveLength(2);
+    expect([...container.querySelectorAll("li span")].filter((item) => item.textContent === "receipt.pdf — ready")).toHaveLength(2);
     await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     const check = session.mutate.mock.calls.find(([body]) => body.action === "checkPurchase")?.[0] as unknown as { purchase: { uploadIds: string[] } };
     expect(check.purchase.uploadIds).toEqual(ids);
+  });
+
+  function uploadSelection(name: string) {
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF-1.4"], name, { type: "application/pdf" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function defer<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((accept, fail) => { resolve = accept; reject = fail; });
+    return { promise, resolve, reject };
+  }
+
+  it("reports the public reference and saved warnings together after registration", async () => {
+    session.mutate.mockImplementation(async (body: { action: string }) => body.action === "registerPurchase"
+      ? { ok: true, viewVersion: 2, id: "internal-uuid", publicRef: "2026-0042", warnings: [{ message: "This item is over plan." }], errors: [] }
+      : { ok: true, viewVersion: 1, warnings: [], errors: [] });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    expect(notify).toHaveBeenCalledWith("Purchase registered", "Reference: 2026-0042. This item is over plan.", expect.objectContaining({ variant: "warning" }));
+    expect(notify.mock.calls.some(([title, description]) => title === "Purchase registered" && String(description).includes("internal-uuid"))).toBe(false);
+  });
+
+  it("keeps the same retry key and form input if the saved reference is unavailable", async () => {
+    let attempts = 0;
+    session.mutate.mockImplementation(async (body: { action: string }) => {
+      if (body.action === "registerPurchase") return attempts++ === 0
+        ? { ok: true, viewVersion: 2, id: "internal-uuid", warnings: [], errors: [] }
+        : { ok: true, viewVersion: 2, id: "internal-uuid", publicRef: "2026-0042", warnings: [], errors: [] };
+      return { ok: true, warnings: [], errors: [] };
+    });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    const buyerLabel = [...container.querySelectorAll("label")].find((label) => label.textContent === "Buyer name")!;
+    const buyer = container.querySelector(`#${CSS.escape(buyerLabel.htmlFor)}`) as HTMLInputElement;
+    await act(async () => { changeText(buyer, "My buyer"); });
+    await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    expect(buyer.value).toBe("My buyer");
+    await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    const savedCalls = session.mutate.mock.calls.map(([body]) => body).filter((body) => body.action === "registerPurchase") as Array<{ requestId: string }>;
+    expect(savedCalls).toHaveLength(2); expect(savedCalls[0].requestId).toBe(savedCalls[1].requestId);
+    expect(notify).toHaveBeenCalledWith("Purchase registered", "Reference: 2026-0042.", expect.any(Object));
+  });
+
+  it("removes an upload before authorization returns and ignores its late completion", async () => {
+    const authorization = defer<{ id: string; uploadUrl: string }>();
+    session.mutate.mockImplementation(async (body: { action: string }) => body.action === "authorizeUpload" ? authorization.promise : { ok: true, warnings: [], errors: [] });
+    const put = vi.fn(); vi.stubGlobal("fetch", put);
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { uploadSelection("late.pdf"); });
+    expect(container.textContent).toContain("late.pdf — uploading");
+    const remove = container.querySelector('button[aria-label="Remove late.pdf"]') as HTMLButtonElement;
+    await act(async () => { remove.click(); });
+    await act(async () => { authorization.resolve({ id: "upload-id", uploadUrl: "https://upload.test" }); await authorization.promise; });
+    expect(put).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("late.pdf — uploading");
+    expect(notify.mock.calls.some(([title]) => title === "File uploaded")).toBe(false);
+  });
+
+  it("aborts a removed in-flight transfer and ignores a late PUT result", async () => {
+    const transfer = defer<{ ok: boolean }>();
+    const put = vi.fn((_url: string, _init: RequestInit) => transfer.promise); vi.stubGlobal("fetch", put);
+    session.mutate.mockImplementation(async (body: { action: string }) => body.action === "authorizeUpload"
+      ? { id: "upload-id", uploadUrl: "https://upload.test", ok: true } : { ok: true, warnings: [], errors: [] });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { uploadSelection("transfer.pdf"); });
+    expect(put).toHaveBeenCalledTimes(1);
+    const signal = (put.mock.calls[0][1] as { signal: AbortSignal }).signal;
+    await act(async () => { (container.querySelector('button[aria-label="Remove transfer.pdf"]') as HTMLButtonElement).click(); });
+    expect(signal.aborted).toBe(true);
+    await act(async () => { transfer.resolve({ ok: true }); await transfer.promise; });
+    expect(session.mutate.mock.calls.some(([body]) => body.action === "finalizeUpload")).toBe(false);
+    expect(container.textContent).not.toContain("transfer.pdf — ready");
+  });
+
+  it("ignores a finalization that completes after its file is removed", async () => {
+    const finalization = defer<{ ok: boolean; warnings: never[]; errors: never[] }>();
+    session.mutate.mockImplementation(async (body: { action: string }) => {
+      if (body.action === "authorizeUpload") return { id: "upload-id", uploadUrl: "https://upload.test", ok: true };
+      if (body.action === "finalizeUpload") return finalization.promise;
+      return { ok: true, warnings: [], errors: [{ field: "files", message: "Choose a file." }] };
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { uploadSelection("finalizing.pdf"); });
+    expect(session.mutate.mock.calls.some(([body]) => body.action === "finalizeUpload")).toBe(true);
+    await act(async () => { (container.querySelector('button[aria-label="Remove finalizing.pdf"]') as HTMLButtonElement).click(); });
+    await act(async () => { finalization.resolve({ ok: true, warnings: [], errors: [] }); await finalization.promise; });
+    expect(container.textContent).not.toContain("finalizing.pdf — ready");
+    expect(notify.mock.calls.some(([title]) => title === "File uploaded")).toBe(false);
+    await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    const checked = session.mutate.mock.calls.map(([body]) => body).find((body) => body.action === "checkPurchase");
+    expect(checked.purchase.uploadIds).toEqual([]);
+  });
+
+  it("removes finalized and failed files without resuming an old retry action", async () => {
+    session.mutate.mockImplementation(async (body: { action: string }) => {
+      if (body.action === "authorizeUpload") return { id: crypto.randomUUID(), uploadUrl: "https://upload.test", ok: true };
+      if (body.action === "finalizeUpload") throw new Error("Finalize failed");
+      return { ok: true, warnings: [], errors: [] };
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { uploadSelection("failed.pdf"); });
+    expect(container.textContent).toContain("failed.pdf — failed");
+    const failure = notify.mock.calls.find(([title]) => title === "Could not finalize file");
+    expect(failure).toBeDefined();
+    await act(async () => { (container.querySelector('button[aria-label="Remove failed.pdf"]') as HTMLButtonElement).click(); });
+    await act(async () => { failure![2].action.onClick(); });
+    expect(session.mutate.mock.calls.filter(([body]) => body.action === "finalizeUpload")).toHaveLength(1);
+    expect(container.textContent).not.toContain("failed.pdf — failed");
+    session.mutate.mockImplementation(async (body: { action: string }) => body.action === "authorizeUpload"
+      ? { id: "ready-id", uploadUrl: "https://upload.test", ok: true } : { ok: true, warnings: [], errors: [] });
+    await act(async () => { uploadSelection("ready.pdf"); });
+    expect(container.textContent).toContain("ready.pdf — ready");
+    await act(async () => { (container.querySelector('button[aria-label="Remove ready.pdf"]') as HTMLButtonElement).click(); });
+    expect(container.textContent).not.toContain("ready.pdf — ready");
+  });
+
+  it("reserves no more than 15 file slots during concurrent starts and blocks incomplete submission", async () => {
+    const authorization = defer<{ id: string; uploadUrl: string }>();
+    session.mutate.mockImplementation(async (body: { action: string }) => body.action === "authorizeUpload" ? authorization.promise : { ok: true, warnings: [], errors: [] });
+    await act(async () => { root.render(<PurchasesBoard />); });
+    await act(async () => { for (let i = 0; i < 16; i += 1) uploadSelection(`file-${i}.pdf`); });
+    expect(session.mutate.mock.calls.filter(([body]) => body.action === "authorizeUpload")).toHaveLength(15);
+    expect(container.querySelectorAll('button[aria-label^="Remove file-"]')).toHaveLength(15);
+    expect(notify).toHaveBeenCalledWith("Too many files", expect.any(String), expect.any(Object));
+    await act(async () => { container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    expect(session.mutate.mock.calls.some(([body]) => body.action === "checkPurchase")).toBe(false);
+    expect(notify).toHaveBeenCalledWith("Files are not ready", expect.any(String), expect.any(Object));
+    await act(async () => { (container.querySelector('button[aria-label="Remove file-0.pdf"]') as HTMLButtonElement).click(); uploadSelection("replacement.pdf"); });
+    expect(session.mutate.mock.calls.filter(([body]) => body.action === "authorizeUpload")).toHaveLength(16);
+    expect(container.querySelectorAll('button[aria-label^="Remove"]')).toHaveLength(15);
   });
 
   it("reuses the registration ID after a lost response", async () => {
     let attempts = 0;
     session.mutate.mockImplementation(async (body: { action: string }) => {
       if (body.action === "registerPurchase" && attempts++ === 0) throw new Error("Response lost");
-      return { ok: true, warnings: [], errors: [], id: "saved" };
+      return { ok: true, warnings: [], errors: [], id: "saved", publicRef: "2026-0042" };
     });
     await act(async () => { root.render(<PurchasesBoard />); });
     for (let i = 0; i < 2; i += 1) {
@@ -156,6 +290,7 @@ describe("PurchasesPage", () => {
     const calls = session.mutate.mock.calls.map(([body]) => body).filter((body) => body.action === "registerPurchase") as Array<{ requestId: string }>;
     expect(calls).toHaveLength(2);
     expect(calls[0].requestId).toBe(calls[1].requestId);
+    expect(session.mutate.mock.calls.filter(([body]) => body.action === "checkPurchase")).toHaveLength(1);
   });
 
   it("submits the ID and revision returned when a new request is saved", async () => {

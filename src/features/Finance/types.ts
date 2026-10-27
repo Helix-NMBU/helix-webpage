@@ -649,6 +649,7 @@ export type FinanceMutationResult = {
   ok: true;
   viewVersion: number;
   id?: string;
+  publicRef?: string;
   revision?: number;
   warnings: FinanceWarning[];
   errors: FinanceFieldError[];

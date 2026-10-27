@@ -128,6 +128,17 @@ async function storedPurchaseReplay(
   return { ok: true, viewVersion, id: parsed.id, warnings: parsed.warnings ?? [], errors: parsed.errors ?? [] };
 }
 
+async function withPurchaseReference(db: CvDatabase, memberId: string, result: FinanceMutationResult): Promise<FinanceMutationResult> {
+  if (!result.id || !UUID.test(result.id)) throw new FinanceError(503, "Your purchase may have been saved, but its reference is unavailable. Try again.");
+  const rows = await db.query<{ public_ref: string }>(
+    "select public_ref from finance.purchases where id = $1::uuid and requester_member_id = $2::uuid",
+    [result.id, memberId],
+  );
+  const publicRef = rows.rows[0]?.public_ref;
+  if (!publicRef) throw new FinanceError(503, "Your purchase may have been saved, but its reference is unavailable. Try again.");
+  return { ...result, publicRef };
+}
+
 async function call(db: CvDatabase, sql: string, params: unknown[]): Promise<FinanceMutationResult> {
   try {
     const result = await db.query<{ result: FinanceMutationResult | string }>(sql, params);
@@ -415,7 +426,7 @@ export async function performPurchaseMutation(
     if (!normalized.purchase) throw invalid([{ field: "purchase", message: "Enter a valid purchase." }]);
     const hash = hashRegisterPurchaseIdempotency(normalized.purchase);
     const replayed = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
-    if (replayed) return replayed;
+    if (replayed) return withPurchaseReference(db, caller.memberId, replayed);
     const validated = await validatePurchase(db, caller, parsePurchase(body));
     try {
       await verifyPurchaseEvidence(db, storage, caller.memberId, validated.purchase.uploadIds);
@@ -431,12 +442,13 @@ export async function performPurchaseMutation(
       missingApproval: validated.missingApproval,
       warnings: validated.warnings,
     });
-    return call(db, "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [
+    const registered = await call(db, "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [
       caller.memberId,
       requestId,
       hash,
       JSON.stringify(payload),
     ]);
+    return withPurchaseReference(db, caller.memberId, registered);
   }
   if (action === "downloadDocument") {
     if (!caller.capabilities.filesAndRefunds) throw new FinanceError(403, "Finance access is required.");
