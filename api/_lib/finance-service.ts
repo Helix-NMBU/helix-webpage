@@ -2,7 +2,10 @@ import pg from "pg";
 import { isFinanceAction, isFinanceProfile, mutationCapability, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
 import { isBudgetMutation, loadBudgetHierarchy, performBudgetMutation } from "./finance-budgets.js";
 import { FinanceError } from "./finance-error.js";
+import { applyFundingMutation } from "./finance-funding.js";
+import { loadFundingRecords, loadPublicEarmarks } from "./finance-funding-read.js";
 import { formatOre, osloToday } from "./finance-money.js";
+import { isFundingAction } from "../../src/features/Finance/funding.js";
 import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
 import { createCvServices } from "./member-cv-service.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
@@ -14,11 +17,8 @@ import type {
   FinancePurchaseSummary,
   FinanceUnchanged,
   FinancingView,
-  FundingPartRecord,
-  FundingRecord,
   OwnRequestSummary,
   PublicBudgets,
-  PublicEarmarkSummary,
   PublicOverview,
   PurchasesView,
 } from "./finance-types.js";
@@ -137,22 +137,7 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
       if (same) return same;
       const budget = await budgetState(current.seasonCode);
       const publicEarmarks = current.seasonCode
-        ? (await rows<{ id: string; public_ref: string; purpose: string; amount_ore: string; spend_by: string | null }>(
-          `select p.id, p.public_ref, p.purpose, p.amount_ore::text as amount_ore, p.spend_by::text as spend_by
-           from finance.funding_parts p
-           join finance.funding f on f.id = p.funding_id
-           join finance.seasons s on s.id = f.season_id
-           where s.code = $1 and f.status in ('secured', 'received')
-           order by p.public_ref`,
-          [current.seasonCode],
-        )).map((row): PublicEarmarkSummary => ({
-          id: row.id,
-          publicRef: row.public_ref,
-          purpose: row.purpose,
-          amountNok: formatOre(BigInt(row.amount_ore)),
-          usedNok: formatOre(0n),
-          spendBy: row.spend_by,
-        }))
+        ? await loadPublicEarmarks(db.query.bind(db), current.seasonCode, osloToday())
         : [];
       return {
         viewVersion: current.viewVersion,
@@ -242,60 +227,13 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
       if (!current.seasonCode) {
         return { viewVersion: current.viewVersion, seasonCode: null, funding: [], parts: [], scenarios: [] };
       }
-      const funding = (await rows<{
-        id: string; public_ref: string; source_name: string; owner_name: string; funding_type: FundingRecord["fundingType"];
-        amount_ore: string; status: FundingRecord["status"]; confidence: FundingRecord["confidence"];
-        expected_date: string | null; received_date: string | null; owner_email: string | null;
-        reporting_required: boolean; agreement_link: string | null; note: string | null; revision: number;
-      }>(
-        `select f.id, f.public_ref, f.source_name, f.owner_name, f.funding_type, f.amount_ore::text as amount_ore,
-                f.status, f.confidence, f.expected_date::text as expected_date, f.received_date::text as received_date,
-                f.owner_email, f.reporting_required, f.agreement_link, f.note, f.revision
-         from finance.funding f
-         join finance.seasons s on s.id = f.season_id
-         where s.code = $1
-         order by f.public_ref`,
-        [current.seasonCode],
-      )).map((row): FundingRecord => ({
-        id: row.id,
-        publicRef: row.public_ref,
-        sourceName: row.source_name,
-        ownerName: row.owner_name,
-        fundingType: row.funding_type,
-        amountNok: formatOre(BigInt(row.amount_ore)),
-        status: row.status,
-        confidence: row.confidence,
-        expectedDate: row.expected_date,
-        receivedDate: row.received_date,
-        ownerEmail: row.owner_email,
-        reportingRequired: row.reporting_required,
-        agreementLink: row.agreement_link,
-        note: row.note,
-        revision: row.revision,
-      }));
-      const parts = (await rows<{
-        id: string; public_ref: string; funding_id: string; purpose: string; amount_ore: string;
-        spend_by: string | null; conditions: string | null; revision: number;
-      }>(
-        `select p.id, p.public_ref, p.funding_id, p.purpose, p.amount_ore::text as amount_ore,
-                p.spend_by::text as spend_by, p.conditions, p.revision
-         from finance.funding_parts p
-         join finance.funding f on f.id = p.funding_id
-         join finance.seasons s on s.id = f.season_id
-         where s.code = $1
-         order by p.public_ref`,
-        [current.seasonCode],
-      )).map((row): FundingPartRecord => ({
-        id: row.id,
-        publicRef: row.public_ref,
-        fundingId: row.funding_id,
-        purpose: row.purpose,
-        amountNok: formatOre(BigInt(row.amount_ore)),
-        spendBy: row.spend_by,
-        conditions: row.conditions,
-        revision: row.revision,
-      }));
-      return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, funding, parts, scenarios: [] };
+      try {
+        const loaded = await loadFundingRecords(db.query.bind(db), current.seasonCode, osloToday(), current.capabilities.draftBudgetItems);
+        return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios: [] };
+      } catch (error) {
+        if (error instanceof FinanceError) throw error;
+        throw new FinanceError(503, UNAVAILABLE);
+      }
     },
     async mutate(token, body) {
       const current = await context(token);
@@ -309,6 +247,7 @@ export function createFinanceServices(deps: { db: CvDatabase; authenticate: (tok
           throw new FinanceError(400, "A valid revision is required.");
         }
       }
+      if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
       throw new FinanceError(503, "This finance operation is not available yet.");
     },
