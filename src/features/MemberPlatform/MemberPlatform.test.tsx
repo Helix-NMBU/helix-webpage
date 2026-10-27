@@ -456,6 +456,7 @@ describe("internal member platform", () => {
     const details=container.querySelector('[aria-label="Project details"]')!;
     expect(details.textContent).toContain('Properties');expect(details.textContent).toContain('Milestones');expect(details.textContent).toContain('Progress');
     expect(details.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
+    expect(details.querySelector('[data-progress-deadline]')?.getAttribute('data-progress-deadline')).toBe(directoryFixture().projects[0].deadline);
     await act(async()=>[...breadcrumb.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Projects')!.click());
     expect(router.state.location.pathname).toBe('/projects');
   });

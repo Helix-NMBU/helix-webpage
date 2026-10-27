@@ -231,6 +231,7 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scope5Started4Completed1");
     expect(container.querySelector('[aria-label="Chassis & assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(container.textContent).toContain("Shaded area: future");
+    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe(initialLocalWorkspace().projects.map(project => project.deadline).filter(Boolean).sort().pop());
     expect(button("Refresh")).toBeUndefined();
     expect(container.textContent).not.toContain("Completion by department");
     expect(container.textContent).not.toContain("View progress data");
@@ -241,6 +242,22 @@ describe("project management interface", () => {
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
     expect(tables[tables.length - 1].textContent).not.toContain("Publish workshop update");
     expect(tables[tables.length - 1].textContent).not.toContain("Submit competition registration");
+  });
+  it("uses the latest project deadline for Overview rather than individual task deadlines", async () => {
+    const workspace = initialLocalWorkspace();
+    const latest = addDays(osloDate(), 45);
+    workspace.projects = workspace.projects.map((project, index) => ({ ...project, deadline: index === 0 ? latest : index === 1 ? null : addDays(osloDate(), 5) }));
+    workspace.tasks = workspace.tasks.map(task => ({ ...task, deadline: addDays(osloDate(), 80) }));
+    load.mockResolvedValue(workspace);
+    await open();
+    expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe(latest);
+  });
+  it("omits the Overview deadline region when none of the projects has a deadline", async () => {
+    const workspace = initialLocalWorkspace();
+    workspace.projects = workspace.projects.map(project => ({ ...project, deadline: null }));
+    load.mockResolvedValue(workspace);
+    await open();
+    expect(container.querySelector("[data-progress-deadline]")).toBeNull();
   });
   it("reloads the workspace when entering Overview from another work area", async () => {
     const router = await open("production");
