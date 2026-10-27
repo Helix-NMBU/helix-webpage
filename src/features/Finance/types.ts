@@ -397,6 +397,10 @@ export type FinanceMutationResult = {
   id?: string;
   warnings: FinanceWarning[];
   errors: FinanceFieldError[];
+  uploadUrl?: string;
+  stagingKey?: string;
+  expiresAt?: string;
+  downloadUrl?: string;
 };
 
 export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing"] as const;

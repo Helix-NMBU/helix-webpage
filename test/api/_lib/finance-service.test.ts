@@ -109,9 +109,13 @@ beforeAll(async () => {
   `);
   await pg.exec(readFileSync(new URL("../../../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/012_finance_season_budgets.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/014_finance_register_purchases.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
+  const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
+  const financeStorage = createMemoryFinanceStorage();
   services = createFinanceServices({
     db,
+    financeStorage,
     authenticate: async (token) => {
       if (token === "banned") throw new MemberCvError(403, "Use your verified @helixnmbu.no Google Workspace account.");
       const identity = identities[token];
@@ -507,8 +511,7 @@ describe("finance access API", () => {
     expect(JSON.stringify(register.body)).toContain("12345678901");
     const before = await counts();
     expect(await call({ token: "member", body: { action: "registerPurchase", requestId, purchase: {} } })).toMatchObject({
-      status: 503,
-      body: { error: "This finance operation is not available yet." },
+      status: 400,
     });
     expect(await call({ token: "member", body: { action: "voidPurchase", requestId } })).toMatchObject({ status: 400, body: { error: "A valid revision is required." } });
     expect(await call({ token: "member", body: { action: "createBudget", requestId } })).toMatchObject({ status: 403 });
@@ -519,7 +522,7 @@ describe("finance access API", () => {
     expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 409, body: { error: "A budget already exists for this season." } });
     const versionAfter = await sql<{ version: string }>("select version::text as version from finance.view_versions");
     expect(versionAfter.rows[0]?.version).toBe(versionBefore.rows[0]?.version);
-    expect(await call({ token: "admin", body: { action: "registerPurchase", requestId, purchase: {} } })).toMatchObject({ status: 503, body: { error: "This finance operation is not available yet." } });
+    expect(await call({ token: "admin", body: { action: "registerPurchase", requestId, purchase: {} } })).toMatchObject({ status: 400 });
   });
 
   it("hides draft budget items and limits the register to the current season", async () => {
