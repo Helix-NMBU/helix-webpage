@@ -175,7 +175,7 @@ describe("FIN-09-A05 public overview", () => {
     expect(container.textContent).not.toContain("Now");
     expect(container.textContent).not.toContain("Earmark sources");
     expect(container.textContent).not.toContain("Synthetic source");
-    api.capabilities.mockResolvedValue(business);
+    api.capabilities.mockResolvedValue({ ...business, viewVersion: 2 });
     api.version.mockResolvedValue({ viewVersion: 2 });
     api.overview.mockResolvedValue({
       ...overview("19.00", 2),
@@ -334,7 +334,7 @@ describe("FIN-09-A06 freshness", () => {
     expect(session.financing).toBeNull();
     expect(container.textContent).toContain("Zebra workshop");
 
-    api.version.mockRejectedValue(new FinanceRequestError("Log in to continue.", 401));
+    api.capabilities.mockRejectedValue(new FinanceRequestError("Log in to continue.", 401));
     await act(async () => window.dispatchEvent(new Event("focus")));
     expect(session.access).toBe("denied");
     expect(session.overview).toBeNull();

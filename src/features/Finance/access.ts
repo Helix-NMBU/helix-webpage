@@ -44,16 +44,19 @@ export function capabilitiesForProfiles(profiles: readonly FinanceProfile[]): Fi
 }
 
 export function presentPurchases(view: PurchasesView, capabilities: FinanceCapabilitySet): PurchasesView {
+  const next = { ...view };
+  if (!capabilities.decideRequests) delete next.decisionQueue;
   if (!capabilities.purchaseRegister) {
-    const next = { ...view };
     delete next.register;
     delete next.unpaidCount;
+    delete next.requestContext;
+    if (next.detail && !next.ownRequests.some((request) => request.id === next.detail?.id)) delete next.detail;
     return next;
   }
-  if (!view.register || capabilities.filesAndRefunds) return view;
+  if (!next.register || capabilities.filesAndRefunds) return next;
   return {
-    ...view,
-    register: view.register.map((row: FinancePurchaseSummary) => ({
+    ...next,
+    register: next.register.map((row: FinancePurchaseSummary) => ({
       ...row,
       refundAccount: null,
       refundPhone: null,

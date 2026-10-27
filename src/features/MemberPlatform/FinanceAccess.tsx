@@ -76,12 +76,21 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   const [state, setState] = useState<FinanceState>(emptyState);
   const active = useRef(false);
   const generation = useRef(0);
-  const pageToken = useRef(0);
+  const pageTokens = useRef<Record<FinancePageId, number>>({ overview: 0, purchases: 0, budgets: 0, financing: 0 });
+  const capabilityRef = useRef<FinanceCapabilitySet | null>(null);
+  const revalidationToken = useRef(0);
   const dirtyIds = useRef(new Set<string>());
   const viewVersionRef = useRef<number | null>(null);
   const notify = useNotify();
   viewVersionRef.current = state.viewVersion;
   const applyCapabilities = useCallback((body: FinanceCapabilitiesResponse) => {
+    const previous = capabilityRef.current;
+    const lostCapability = previous !== null && (Object.keys(previous) as (keyof FinanceCapabilitySet)[])
+      .some((key) => previous[key] && !body.capabilities[key]);
+    capabilityRef.current = body.capabilities;
+    // All cached pages may contain fields for an old grant. Discard them and
+    // invalidate in-flight reads before allowing a fresh, role-filtered read.
+    if (lostCapability) generation.current += 1;
     setState((current) => ({
       ...current,
       access: "allowed",
@@ -91,16 +100,19 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       seasonCode: body.seasonCode,
       approvalThresholdNok: body.approvalThresholdNok,
       today: body.today,
-      financing: body.capabilities.financing ? current.financing : null,
-      budgets: visibleBudgets(current.budgets, body.capabilities),
-      purchases: current.purchases ? presentPurchases(current.purchases, body.capabilities) : null,
+      overview: lostCapability ? null : current.overview,
+      financing: !lostCapability && body.capabilities.financing ? current.financing : null,
+      budgets: lostCapability ? null : visibleBudgets(current.budgets, body.capabilities),
+      purchases: lostCapability ? null : current.purchases ? presentPurchases(current.purchases, body.capabilities) : null,
+      pageLoading: lostCapability ? false : current.pageLoading,
     }));
   }, []);
   const fail = useCallback((error: unknown) => {
     const status = errorStatus(error);
     if (status === 401 || status === 403) {
       generation.current += 1;
-      pageToken.current += 1;
+      capabilityRef.current = null;
+      revalidationToken.current += 1;
       dirtyIds.current.clear();
       setState({ ...emptyState, access: "denied", pageLoading: false });
       return;
@@ -117,7 +129,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   useEffect(() => {
     active.current = true;
     const current = ++generation.current;
-    pageToken.current += 1;
+    capabilityRef.current = null;
+    revalidationToken.current += 1;
     dirtyIds.current.clear();
     setState(emptyState);
     void api.capabilities().then((body) => {
@@ -132,11 +145,13 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   const revalidate = useCallback(() => {
     const current = generation.current;
     const previousVersion = viewVersionRef.current;
-    return Promise.all([api.capabilities(), api.version()]).then(([body, version]) => {
-      if (!active.current || generation.current !== current) return;
-      const reported = Number.isFinite(version.viewVersion) ? version.viewVersion : body.viewVersion;
-      const viewVersion = Math.max(body.viewVersion, reported);
-      applyCapabilities({ ...body, viewVersion });
+    const token = ++revalidationToken.current;
+    // The server reads capabilities and version in one database snapshot.
+    // A separate version request can pair a revocation with stale privileges.
+    return api.capabilities().then((body) => {
+      if (!active.current || generation.current !== current || revalidationToken.current !== token) return;
+      const viewVersion = body.viewVersion;
+      applyCapabilities(body);
       if (previousVersion !== null && viewVersion !== previousVersion && dirtyIds.current.size > 0) {
         notify("Finance was updated", "Your unsaved changes are still in the form.", {
           id: "finance-unsaved-update",
@@ -145,7 +160,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
         });
       }
     }).catch((error: unknown) => {
-      if (!active.current || generation.current !== current) return;
+      if (!active.current || generation.current !== current || revalidationToken.current !== token) return;
       fail(error);
     });
   }, [api, applyCapabilities, fail, notify]);
@@ -159,58 +174,71 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     try {
       const result = await api.mutate(body);
       if (active.current && generation.current === current && typeof result.viewVersion === "number") {
-        setState((value) => value.viewVersion === result.viewVersion ? value : { ...value, viewVersion: result.viewVersion });
+        const nextVersion = result.viewVersion;
+        setState((value) => value.viewVersion !== null && value.viewVersion >= nextVersion ? value : { ...value, viewVersion: nextVersion });
       }
       return result;
     } catch (error) {
-      if (active.current && generation.current === current && (errorStatus(error) === 401 || errorStatus(error) === 403)) await revalidate();
+      if (active.current && generation.current === current && errorStatus(error) === 401) fail(error);
+      else if (active.current && generation.current === current && errorStatus(error) === 403) await revalidate();
       throw error;
     }
-  }, [api, revalidate]);
+  }, [api, fail, revalidate]);
   const loadPage = useCallback(async (page: FinancePageId, options?: { requestRecordId?: string; unpaidOnly?: boolean }) => {
     const current = generation.current;
-    const token = ++pageToken.current;
+    const token = ++pageTokens.current[page];
     setState((value) => ({ ...value, pageLoading: true }));
     try {
       if (page === "financing") {
         const financing = await api.financing();
-        if (!active.current || generation.current !== current || pageToken.current !== token) return;
+        if (!active.current || generation.current !== current || pageTokens.current[page] !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities?.financing) return { ...value, financing: null, pageLoading: false };
-          return { ...value, financing, viewVersion: financing.viewVersion, pageLoading: false };
+          return { ...value, financing, viewVersion: Math.max(value.viewVersion ?? 0, financing.viewVersion), pageLoading: false };
         });
         return;
       }
       if (page === "purchases") {
         const purchases = await api.purchases(options?.requestRecordId, options?.unpaidOnly);
-        if (!active.current || generation.current !== current || pageToken.current !== token) return;
+        if (!active.current || generation.current !== current || pageTokens.current[page] !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };
-          return { ...value, purchases: presentPurchases(purchases, value.capabilities), viewVersion: purchases.viewVersion, pageLoading: false };
+          return { ...value, purchases: presentPurchases(purchases, value.capabilities), viewVersion: Math.max(value.viewVersion ?? 0, purchases.viewVersion), pageLoading: false };
         });
         return;
       }
       if (page === "budgets") {
         const budgets = await api.budgets();
-        if (!active.current || generation.current !== current || pageToken.current !== token) return;
+        if (!active.current || generation.current !== current || pageTokens.current[page] !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };
-          return { ...value, budgets: visibleBudgets(budgets, value.capabilities), viewVersion: budgets.viewVersion, pageLoading: false };
+          return { ...value, budgets: visibleBudgets(budgets, value.capabilities), viewVersion: Math.max(value.viewVersion ?? 0, budgets.viewVersion), pageLoading: false };
         });
         return;
       }
       const overview = await api.overview();
-      if (!active.current || generation.current !== current || pageToken.current !== token) return;
+      if (!active.current || generation.current !== current || pageTokens.current[page] !== token) return;
       setState((value) => (
         value.access === "allowed"
-          ? { ...value, overview, viewVersion: overview.viewVersion, pageLoading: false }
+          ? { ...value, overview, viewVersion: Math.max(value.viewVersion ?? 0, overview.viewVersion), pageLoading: false }
           : { ...value, pageLoading: false }
       ));
     } catch (error) {
-      if (!active.current || generation.current !== current || pageToken.current !== token) return;
+      if (!active.current || generation.current !== current || pageTokens.current[page] !== token) return;
       if (errorStatus(error) === 403 || errorStatus(error) === 401) {
-        if (page === "financing") {
-          setState((value) => ({ ...value, financing: null, pageLoading: false, capabilities: value.capabilities ? { ...value.capabilities, financing: false, manageFunding: false } : value.capabilities }));
+        if (page === "financing" && errorStatus(error) === 403) {
+          const wasPrivileged = capabilityRef.current?.financing === true;
+          if (wasPrivileged) generation.current += 1;
+          if (capabilityRef.current) capabilityRef.current = { ...capabilityRef.current, financing: false, manageFunding: false };
+          setState((value) => ({
+            ...value,
+            overview: wasPrivileged ? null : value.overview,
+            budgets: wasPrivileged ? null : value.budgets,
+            purchases: wasPrivileged ? null : value.purchases,
+            financing: null,
+            pageLoading: false,
+            capabilities: value.capabilities ? { ...value.capabilities, financing: false, manageFunding: false } : value.capabilities,
+          }));
         } else fail(error);
         return;
       }

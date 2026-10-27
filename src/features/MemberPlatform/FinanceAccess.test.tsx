@@ -200,6 +200,79 @@ const privatePurchases: PurchasesView = {
   }],
 };
 
+it("clears private cached pages and ignores a late response when a head grant is revoked", async () => {
+  const head = { ...financeCaps, profiles: ["head_of_finance"] as const,
+    capabilities: { ...financeCaps.capabilities, decideRequests: true, protectedBudgetEdits: true } };
+  api.capabilities.mockResolvedValue(head);
+  api.purchases.mockResolvedValue({ ...privatePurchases,
+    decisionQueue: [{ id: "request", publicRef: "RQ-1", requesterMemberId: "other", revisionId: "revision", revisionNumber: 1,
+      supplierName: "Private supplier", justification: "Private reason", plannedDate: "2026-11-01", lateReason: null,
+      totalEstimatedNok: "10.00", submittedAt: "2026-10-26" }],
+    requestContext: [{ id: "request", publicRef: "RQ-1", status: "approved", supplierName: "Private supplier", plannedDate: null, requesterMemberId: "other" }],
+  });
+  api.overview.mockResolvedValue({ viewVersion: 1, seasonCode: "S27", budgetStatus: "approved", approvedOn: null,
+    departments: [], publicEarmarks: [], earmarkSources: [{ id: "part", sourceName: "Private source", conditions: "Private terms" }] });
+  await mount("finance-member");
+  await act(async () => session.loadPage("overview"));
+  await act(async () => session.loadPage("purchases"));
+  expect(JSON.stringify(session)).toContain("Private supplier");
+  expect(JSON.stringify(session)).toContain("Private source");
+  const pending = deferred<PurchasesView>();
+  api.purchases.mockReturnValueOnce(pending.promise);
+  let loading: Promise<void> = Promise.resolve();
+  await act(async () => { loading = session.loadPage("purchases"); });
+  api.capabilities.mockResolvedValue({ ...member, viewVersion: 2 });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await act(async () => { pending.resolve(privatePurchases); await loading; });
+  expect(session.overview).toBeNull();
+  expect(session.purchases).toBeNull();
+  expect(JSON.stringify(session)).not.toContain("Private supplier");
+  expect(JSON.stringify(session)).not.toContain("Private source");
+});
+
+it("ignores an older overlapping focus response after a newer grant revocation", async () => {
+  api.capabilities.mockResolvedValue(financeCaps);
+  await mount("finance-member");
+  const old = deferred<FinanceCapabilitiesResponse>();
+  api.capabilities.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...member, viewVersion: 2 });
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  await act(async () => { window.dispatchEvent(new Event("focus")); });
+  await act(async () => { old.resolve(financeCaps); await old.promise; });
+  expect(session.capabilities?.purchaseRegister).toBe(false);
+  expect(session.viewVersion).toBe(2);
+});
+
+it("clears the entire finance session when a financing request returns 401", async () => {
+  api.capabilities.mockResolvedValue(financeCaps);
+  api.purchases.mockResolvedValue(privatePurchases);
+  await mount("finance-member");
+  await act(async () => session.loadPage("purchases"));
+  api.financing.mockRejectedValue(new FinanceRequestError("Session expired", 401));
+  await act(async () => session.loadPage("financing"));
+  expect(session.access).toBe("denied");
+  expect(session.purchases).toBeNull();
+  expect(session.capabilities).toBeNull();
+});
+
+it("retains both purchases and budget responses when they load concurrently", async () => {
+  await mount("member");
+  const pendingPurchases = deferred<PurchasesView>();
+  const pendingBudgets = deferred<PublicBudgets>();
+  api.purchases.mockReturnValue(pendingPurchases.promise);
+  api.budgets.mockReturnValue(pendingBudgets.promise);
+  let first: Promise<void> = Promise.resolve();
+  let second: Promise<void> = Promise.resolve();
+  await act(async () => { first = session.loadPage("purchases"); second = session.loadPage("budgets"); });
+  await act(async () => {
+    pendingBudgets.resolve({ viewVersion: 1, seasonCode: "S27", budgetStatus: "absent", approvedOn: null, revision: 0,
+      departments: [], choices: { systems: [], items: [] } });
+    pendingPurchases.resolve({ viewVersion: 1, ownRequests: [] });
+    await Promise.all([first, second]);
+  });
+  expect(session.budgets?.seasonCode).toBe("S27");
+  expect(session.purchases?.ownRequests).toEqual([]);
+});
+
 it("discards a purchase response that arrives after the register grant is gone", async () => {
   api.capabilities.mockResolvedValue(financeCaps);
   const pending = deferred<PurchasesView>();
@@ -260,7 +333,7 @@ it("discards a financing response that arrives after financing access is removed
   expect(container.textContent).toContain("allowed:public:clear:");
 });
 
-it("redacts refund fields when a late purchase response outlives the files grant", async () => {
+it("discards a purchase response when the files grant is removed before it arrives", async () => {
   api.capabilities.mockResolvedValue(financeCaps);
   const pending = deferred<PurchasesView>();
   api.purchases.mockReturnValue(pending.promise);
@@ -276,9 +349,7 @@ it("redacts refund fields when a late purchase response outlives the files grant
     pending.resolve(privatePurchases);
     await loading;
   });
-  expect(session.purchases?.register?.[0]?.refundAccount).toBeNull();
-  expect(session.purchases?.register?.[0]?.refundPhone).toBeNull();
-  expect(session.purchases?.register?.[0]?.supplierName).toBe("Hidden Supplier");
+  expect(session.purchases).toBeNull();
   expect(container.textContent).not.toContain("private-account");
   expect(container.textContent).not.toContain("private-phone");
 });
@@ -343,8 +414,7 @@ it("hides draft budget items when that capability is gone before the response la
     });
     await loading;
   });
-  expect(session.budgets?.budgetStatus).toBe("draft");
-  expect(session.budgets?.departments).toEqual([]);
+  expect(session.budgets).toBeNull();
   expect(JSON.stringify(session.budgets)).not.toContain("Draft line");
 });
 
