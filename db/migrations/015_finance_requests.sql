@@ -618,7 +618,7 @@ begin
     if ordinal = 0 then
       raise exception 'FINANCE|invalid|Add at least one budget line with a positive estimate.|lines';
     end if;
-    if planned >= p_today and (planned - p_today) < 3 and (late_reason is null or char_length(late_reason) < 3) then
+    if (planned - p_today) < 3 and (late_reason is null or char_length(late_reason) < 3) then
       raise exception 'FINANCE|invalid|Explain why this purchase is planned within three calendar days.|lateReason';
     end if;
 

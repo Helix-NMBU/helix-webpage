@@ -14,9 +14,10 @@ export function osloCalendarDaysBetween(startIso: string, endIso: string): numbe
   return Math.round((endUtc - startUtc) / 86_400_000);
 }
 
+/** True when the planned date is fewer than three whole Oslo calendar days from today (includes past dates). */
 export function requiresLateReason(plannedDate: string, todayOslo: string): boolean {
   const daysUntil = osloCalendarDaysBetween(todayOslo, plannedDate);
-  return daysUntil >= 0 && daysUntil < LATE_REASON_MIN;
+  return daysUntil < LATE_REASON_MIN;
 }
 
 export function normalizeRequestInput(input: RequestInput, todayOslo: string): { ok: true; value: NormalizedRequest } | { ok: false; errors: FinanceFieldError[] } {

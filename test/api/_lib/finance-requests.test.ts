@@ -214,9 +214,20 @@ describe("FIN-05 A01 draft and submit", () => {
     expect(row[0]?.status).toBe("submitted");
   });
 
-  it("requires late reason inside three Oslo days but not on the third day", async () => {
+  it("requires late reason inside three Oslo days, for past dates, but not on the third day ahead", async () => {
     await seasonWithBudget();
     const today = osloToday();
+    const yesterday = addCalendarDays(today, -1);
+    expect((await call("member", {
+      action: "saveRequest",
+      requestId: requestId(),
+      request: sampleRequest({ plannedDate: yesterday }),
+    })).status).toBe(400);
+    expect((await call("member", {
+      action: "saveRequest",
+      requestId: requestId(),
+      request: sampleRequest({ plannedDate: "2020-06-01", lateReason: "Backdated plan" }),
+    })).status).toBe(200);
     const twoDays = addCalendarDays(today, 2);
     const saved = await call("member", {
       action: "saveRequest",
