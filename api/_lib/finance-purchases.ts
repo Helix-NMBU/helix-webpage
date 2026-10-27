@@ -62,6 +62,10 @@ function payloadHash(value: unknown): string {
   return createHash("sha256").update(canonical(value)).digest("hex");
 }
 
+export function hashFinancePayload(value: unknown): string {
+  return payloadHash(value);
+}
+
 function textOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

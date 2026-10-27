@@ -78,10 +78,11 @@ export async function voidRegisteredPurchase(
   payloadHash: string,
   purchaseId: string,
   reason: string,
+  expectedRevision?: number | null,
 ): Promise<unknown> {
   const result = await db.query<{ result: unknown }>(
-    "select finance.void_registered_purchase($1::uuid, $2::uuid, $3, $4::uuid, $5) as result",
-    [actorId, idempotencyRequestId, payloadHash, purchaseId, reason],
+    "select finance.void_registered_purchase($1::uuid, $2::uuid, $3, $4::uuid, $5, $6::integer) as result",
+    [actorId, idempotencyRequestId, payloadHash, purchaseId, reason, expectedRevision ?? null],
   );
   return result.rows[0]?.result;
 }
