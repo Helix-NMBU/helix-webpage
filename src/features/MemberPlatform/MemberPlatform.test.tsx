@@ -38,6 +38,14 @@ let selfAccess = {
   memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
   roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
 };
+const departmentDirectory = ["Business & Marketing", "Finance", "Mechanical & Production"].map((name, index) => ({
+  id: `department-${index}`, name, season: "S27", revision: 1, leadId: null, memberIds: ["member"],
+}));
+const workspaceDirectory = {
+  viewerId: "member", canAdmin: false, projectAccess: true, canManageProjects: false,
+  members: [], projects: [],
+  departments: [...departmentDirectory],
+};
 
 describe("internal member platform", () => {
   let container: HTMLDivElement;
@@ -58,9 +66,10 @@ describe("internal member platform", () => {
       memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
       roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
     };
+    workspaceDirectory.departments = [...departmentDirectory];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/gmail-status" ? { connected: false } : {};
+      const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/member-login?__module=workspace" ? workspaceDirectory : url === "/api/gmail-status" ? { connected: false } : {};
       return { ok: true, status: 200, json: async () => body } as unknown as Response;
     }));
     container = document.createElement("div");
@@ -126,6 +135,7 @@ describe("internal member platform", () => {
   it("shows only the assigned department team and blocks direct access to another team", async () => {
     session.landing.mockResolvedValue(signedIn);
     selfAccess = { ...selfAccess, features: ["team.finance"] };
+    workspaceDirectory.departments = departmentDirectory.filter(department => department.name === "Finance");
     await open("/");
     expect(container.textContent).toContain("Finance");
     expect(container.textContent).not.toContain("Business & Marketing");

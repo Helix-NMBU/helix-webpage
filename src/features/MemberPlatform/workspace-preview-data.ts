@@ -1,11 +1,11 @@
-import { Megaphone, Wallet, Wrench } from "lucide-react";
+import { IconSpeakerphone, IconWallet } from "@tabler/icons-react";
 
 // Fictional workspace content for the UI preview, never an authorization policy.
 export const previewTeams = [
   {
     id: "business-marketing",
     title: "Business & Marketing",
-    icon: Megaphone,
+    icon: IconSpeakerphone,
     description: "Partnerships, campaigns and the Helix story.",
     sections: [
       {
@@ -35,7 +35,7 @@ export const previewTeams = [
   {
     id: "finance",
     title: "Finance",
-    icon: Wallet,
+    icon: IconWallet,
     description: "Budgets, expenses and financial planning.",
     sections: [
       {
@@ -62,36 +62,7 @@ export const previewTeams = [
       },
     ],
   },
-  {
-    id: "mechanical-production",
-    title: "Mechanical & Production",
-    icon: Wrench,
-    description: "Build plans, workshop activity and parts.",
-    sections: [
-      {
-        id: "production",
-        title: "Production plan",
-        description: "Coordinate the next steps from design to assembly.",
-        columns: ["Work item", "Stage", "Status"],
-        rows: [
-          ["Mounting bracket", "Design review", "To review"],
-          ["Frame assembly", "Workshop preparation", "In progress"],
-          ["Fit and finish", "Final inspection", "Planned"],
-        ],
-      },
-      {
-        id: "inventory",
-        title: "Parts & inventory",
-        description: "See which parts are ready and what needs ordering.",
-        columns: ["Part", "Location", "Status"],
-        rows: [
-          ["Fastener kit", "Workshop shelf A", "Ready"],
-          ["Aluminium stock", "Materials rack", "To review"],
-          ["Bearing set", "Incoming delivery", "Planned"],
-        ],
-      },
-    ],
-  },
+
 ];
 
 export function previewPage(pathname: string) {

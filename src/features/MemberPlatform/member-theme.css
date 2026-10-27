@@ -116,3 +116,13 @@ html[data-member-theme] .typeset-chat {
   --typeset-leading: 1.6;
   --typeset-flow: 1em;
 }
+
+/* Progress series retain contrast on both card surfaces. */
+html[data-member-theme] [data-project-progress] {
+  --progress-started: var(--chart-3);
+  --progress-completed: var(--chart-4);
+}
+html[data-member-theme="dark"] [data-project-progress] {
+  --progress-started: var(--chart-2);
+  --progress-completed: var(--chart-1);
+}

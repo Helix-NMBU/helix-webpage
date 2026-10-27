@@ -1,0 +1,265 @@
+{
+  "feature": "helix-finance-migration",
+  "specRevision": 1,
+  "status": "published",
+  "tracker": "Linear",
+  "project": "P-HELIX-4",
+  "team": "HELIX",
+  "milestoneId": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+  "proposedMilestoneName": "Finance",
+  "parentId": "HELIX-34",
+  "sourceDocumentId": "b6615672-a43b-4046-bd39-fba429e8ad7f",
+  "approval": {
+    "date": "2026-10-26",
+    "source": "Direct user answer to complete-plan approval request",
+    "answer": "Approve and publish in Linear",
+    "specRevision": 1,
+    "approvedDraftSpecSha256": "e5b99484a53347f7ca8f72ccc4c81f0726b064ec21b91fae0439e1f538d51c22"
+  },
+  "baseBranch": "main",
+  "verifiedMainSnapshot": "f755d3105a4eec76c2ae54db1040a557e11fc26e",
+  "integrationBranch": "codex/finance",
+  "implementationLabel": "ready-for-agent",
+  "publicationOutcome": "Complete. Approved specification parent, source inventory, eleven children and all native blockers verified by readback. Implementation has not started.",
+  "tickets": [
+    {
+      "localId": "FIN-01",
+      "title": "Establish Finance access, data contracts and protected routes",
+      "requirements": [
+        "F-01",
+        "F-02",
+        "F-03",
+        "F-18"
+      ],
+      "blockedBy": [],
+      "draftFile": "issues/fin-01-finance-foundation.md",
+      "trackerId": "HELIX-35",
+      "trackerUuid": "5f7e678e-77f0-4dd2-abac-d708835a5bf5",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-35/fin-01-establish-finance-access-data-contracts-and-protected-routes",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-02",
+      "title": "Create, approve and maintain season budgets",
+      "requirements": [
+        "F-04",
+        "F-05"
+      ],
+      "blockedBy": [
+        "FIN-01"
+      ],
+      "draftFile": "issues/fin-02-season-budgets.md",
+      "trackerId": "HELIX-36",
+      "trackerUuid": "77b72b12-221d-4f21-8e2b-cc2573fbc133",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-36/fin-02-create-approve-and-maintain-season-budgets",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-03",
+      "title": "Manage financing and earmarked funding",
+      "requirements": [
+        "F-07"
+      ],
+      "blockedBy": [
+        "FIN-01"
+      ],
+      "draftFile": "issues/fin-03-funding-earmarks.md",
+      "trackerId": "HELIX-37",
+      "trackerUuid": "2c6b6e95-8466-43d4-a3c5-cd8c0a30ddd4",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-37/fin-03-manage-financing-and-earmarked-funding",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-04",
+      "title": "Preview and atomically re-import department budgets",
+      "requirements": [
+        "F-06"
+      ],
+      "blockedBy": [
+        "FIN-02"
+      ],
+      "draftFile": "issues/fin-04-department-csv.md",
+      "trackerId": "HELIX-38",
+      "trackerUuid": "a4254134-9285-4b2a-9666-8f512e2df9ba",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-38/fin-04-preview-and-atomically-re-import-department-budgets",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-05",
+      "title": "Submit requests and record Head of Finance decisions",
+      "requirements": [
+        "F-08",
+        "F-09"
+      ],
+      "blockedBy": [
+        "FIN-02"
+      ],
+      "draftFile": "issues/fin-05-requests-decisions.md",
+      "trackerId": "HELIX-39",
+      "trackerUuid": "0aa01473-e4e9-4efc-9773-76b0c221c317",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-39/fin-05-submit-requests-and-record-head-of-finance-decisions",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-06",
+      "title": "Register actual purchases with private supporting files",
+      "requirements": [
+        "F-10",
+        "F-11"
+      ],
+      "blockedBy": [
+        "FIN-02"
+      ],
+      "draftFile": "issues/fin-06-actual-registration.md",
+      "trackerId": "HELIX-40",
+      "trackerUuid": "020110b0-6496-4c9d-ac85-0ffaab750710",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-40/fin-06-register-actual-purchases-with-private-supporting-files",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-07",
+      "title": "Fulfill requests through several actual purchases",
+      "requirements": [
+        "F-09",
+        "F-13"
+      ],
+      "blockedBy": [
+        "FIN-05",
+        "FIN-06"
+      ],
+      "draftFile": "issues/fin-07-partial-fulfillment.md",
+      "trackerId": "HELIX-41",
+      "trackerUuid": "00034c58-78c3-4bb1-835a-2c26f6014a09",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-41/fin-07-fulfill-requests-through-several-actual-purchases",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-08",
+      "title": "Process unpaid work, voids and approval-exception reviews",
+      "requirements": [
+        "F-12",
+        "F-13"
+      ],
+      "blockedBy": [
+        "FIN-07"
+      ],
+      "draftFile": "issues/fin-08-finance-processing.md",
+      "trackerId": "HELIX-42",
+      "trackerUuid": "72fb295c-4ca1-419b-80f3-7fae886b3e03",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-42/fin-08-process-unpaid-work-voids-and-approval-exception-reviews",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-09",
+      "title": "Show commitment-aware scenarios and Finance overview",
+      "requirements": [
+        "F-14",
+        "F-15"
+      ],
+      "blockedBy": [
+        "FIN-03",
+        "FIN-07"
+      ],
+      "draftFile": "issues/fin-09-overview-scenarios.md",
+      "trackerId": "HELIX-43",
+      "trackerUuid": "c8fd0de9-12d6-4cd9-adfa-3217d6f95f4e",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-43/fin-09-show-commitment-aware-scenarios-and-finance-overview",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-10",
+      "title": "Deliver durable notifications, exports and recovery",
+      "requirements": [
+        "F-16",
+        "F-17"
+      ],
+      "blockedBy": [
+        "FIN-05",
+        "FIN-06"
+      ],
+      "draftFile": "issues/fin-10-notifications-exports-recovery.md",
+      "trackerId": "HELIX-44",
+      "trackerUuid": "0fe7a667-b349-490b-8e89-682207706159",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-44/fin-10-deliver-durable-notifications-exports-and-recovery",
+      "published": true,
+      "readbackVerified": true
+    },
+    {
+      "localId": "FIN-11",
+      "title": "Verify the integrated Finance milestone and prepare review",
+      "requirements": [
+        "F-01",
+        "F-02",
+        "F-03",
+        "F-04",
+        "F-05",
+        "F-06",
+        "F-07",
+        "F-08",
+        "F-09",
+        "F-10",
+        "F-11",
+        "F-12",
+        "F-13",
+        "F-14",
+        "F-15",
+        "F-16",
+        "F-17",
+        "F-18"
+      ],
+      "blockedBy": [
+        "FIN-04",
+        "FIN-08",
+        "FIN-09",
+        "FIN-10"
+      ],
+      "draftFile": "issues/fin-11-integration-acceptance.md",
+      "trackerId": "HELIX-45",
+      "trackerUuid": "ad6cbf94-2199-4f8f-96d1-82fd7654dff8",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-45/fin-11-verify-the-integrated-finance-milestone-and-prepare-review",
+      "published": true,
+      "readbackVerified": true
+    }
+  ],
+  "draftSpecSha256": "e5b99484a53347f7ca8f72ccc4c81f0726b064ec21b91fae0439e1f538d51c22",
+  "draftTicketSha256": {
+    "FIN-01": "09eac12e5f2866d5a080a14f4ab08ae5de96716fe66eb9739c90d444d50fe06c",
+    "FIN-02": "17338c0b75b537e502f4e1d937c49808a6cde361e1291da78861dfb05e0a736f",
+    "FIN-03": "7364de41a948061824abd00cda5078d84fa0f7b549d3e4c75d6ca2a2c71f362a",
+    "FIN-04": "2922ecc7c79300151079f0cdd33fe5c55f633bd18ebae001ad39c25177031176",
+    "FIN-05": "09b660b71054e07e72dd83279dd4f5bbf6e072855ef394ffb458a0cad2de6e3a",
+    "FIN-06": "d69fc81871fde126b7803ebd440e25323503cf6bc585ada7fbe7c2b292577d69",
+    "FIN-07": "98a066c6f9b9bbd66c64a5b59373ee37f540ff1b545e9b765e227cb26a92f0ae",
+    "FIN-08": "64201c6a4bf81182951348eea012508f3c84bbd2cae0da07849aeced8e5e491c",
+    "FIN-09": "e86e226a415ed22aa221458c22e2a5bcd5eb05e7182263f723ac869e8e23b7ae",
+    "FIN-10": "02d5f6a29d2ae5127c2398cdd0872d40d236158ab2f89786ab54d5918c8e24a1",
+    "FIN-11": "7296aba729aa17f6b8fbefa66e35c8daa8d84607beef32e919af5518da5cd0b6"
+  },
+  "sourceDocumentUrl": "https://linear.app/helixnmbu/document/finance-source-inventory-26-october-2026-8b5eab2b1c49",
+  "implementationLabelId": "a8c0111b-af8c-4592-9ffa-28c1b9891728",
+  "milestonePublished": true,
+  "parentUuid": "e1f2722e-ce3a-4718-837c-b0e49c22acc9",
+  "parentUrl": "https://linear.app/helixnmbu/issue/HELIX-34/finance-member-budgets-purchases-approvals-and-financing",
+  "verification": {
+    "date": "2026-10-26",
+    "checks": {
+      "parentContent": true,
+      "milestoneContent": true,
+      "sourceContent": true,
+      "exactlyElevenChildren": true,
+      "allChildMetadataAndNativeBlockers": true,
+      "allChildContent": true
+    },
+    "markdownNormalization": "Linear normalizes links, bullet markers, table separators and issue mentions. Full normalized source, parent and ticket text verified.",
+    "initialEligible": "HELIX-35"
+  }
+}

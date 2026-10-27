@@ -1,25 +1,25 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
-  Archive,
-  ArchiveX,
-  Forward,
-  File,
-  Inbox,
-  ListFilter,
-  LoaderCircle,
-  MoreHorizontal,
-  PenSquare,
-  Reply,
-  RefreshCw,
-  Mail,
-  MailOpen,
-  Search,
-  Send,
-  ShieldAlert,
-  Star,
-  Trash2,
-  X,
-} from "lucide-react";
+  IconArchive,
+  IconArchiveOff,
+  IconArrowBackUp,
+  IconArrowForwardUp,
+  IconDots,
+  IconEdit,
+  IconFile,
+  IconFilter,
+  IconInbox,
+  IconLoader2,
+  IconMail,
+  IconMailOpened,
+  IconRefresh,
+  IconSearch,
+  IconSend,
+  IconShieldExclamation,
+  IconStar,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
@@ -73,7 +73,7 @@ import {
 type MailFolder = {
   id: string;
   label: string;
-  icon: typeof Inbox;
+  icon: typeof IconInbox;
 };
 
 type GmailMessageSummary = {
@@ -103,13 +103,13 @@ function mailListCacheKey(folder: string, search: string, unreadOnly: boolean): 
 }
 
 const mailFolders: MailFolder[] = [
-  { id: "inbox", label: "Inbox", icon: Inbox },
-  { id: "starred", label: "Starred", icon: Star },
-  { id: "sent", label: "Sent", icon: Send },
-  { id: "drafts", label: "Drafts", icon: File },
-  { id: "archive", label: "Archive", icon: ArchiveX },
-  { id: "spam", label: "Spam", icon: ShieldAlert },
-  { id: "trash", label: "Trash", icon: Trash2 },
+  { id: "inbox", label: "Inbox", icon: IconInbox },
+  { id: "starred", label: "Starred", icon: IconStar },
+  { id: "sent", label: "Sent", icon: IconSend },
+  { id: "drafts", label: "Drafts", icon: IconFile },
+  { id: "archive", label: "Archive", icon: IconArchiveOff },
+  { id: "spam", label: "Spam", icon: IconShieldExclamation },
+  { id: "trash", label: "Trash", icon: IconTrash },
 ];
 
 export function GmailLogo({ className }: { className?: string }) {
@@ -263,7 +263,7 @@ function ConnectedMailSidebar({
           <div className="flex items-center justify-between gap-3">
             <div className="text-base font-medium text-foreground">{folder.label}</div>
             <div className="flex items-center gap-1">
-              <SidebarMenuButton type="button" size="sm" aria-label="Refresh mail" tooltip={{ children: "Refresh mail", hidden: false }} className="size-8 justify-center p-0" disabled={loading} onClick={onRefresh}><RefreshCw className={loading ? "animate-spin" : ""} /></SidebarMenuButton>
+              <SidebarMenuButton type="button" size="sm" aria-label="Refresh mail" tooltip={{ children: "Refresh mail", hidden: false }} className="size-8 justify-center p-0" disabled={loading} onClick={onRefresh}><IconRefresh className={loading ? "animate-spin" : ""} /></SidebarMenuButton>
               <SidebarMenuButton
                 type="button"
                 size="sm"
@@ -272,7 +272,7 @@ function ConnectedMailSidebar({
                 className="size-8 justify-center p-0"
                 onClick={onNewMessage}
               >
-                <PenSquare />
+                <IconEdit aria-hidden="true" />
                 <span className="sr-only">New message</span>
               </SidebarMenuButton>
               {mailFolders.filter((item) => item.id === "inbox").map((item) => (
@@ -286,7 +286,7 @@ function ConnectedMailSidebar({
                   className="size-8 justify-center p-0"
                   onClick={() => onFolderChange(item.id)}
                 >
-                  <item.icon />
+                  <item.icon aria-hidden="true" />
                   <span className="sr-only">{item.label}</span>
                 </SidebarMenuButton>
               ))}
@@ -301,7 +301,7 @@ function ConnectedMailSidebar({
                   className="size-8 justify-center p-0"
                   onClick={() => onUnreadOnlyChange(!unreadOnly)}
                 >
-                  <ListFilter />
+                  <IconFilter aria-hidden="true" />
                   <span className="sr-only">{unreadOnly ? "Show all inbox messages" : "Show unread only"}</span>
                 </SidebarMenuButton>
               )}
@@ -314,7 +314,7 @@ function ConnectedMailSidebar({
                     aria-label="More mail folders"
                     className="size-8 justify-center p-0"
                   >
-                    <MoreHorizontal />
+                    <IconDots aria-hidden="true" />
                     <span className="sr-only">More mail folders</span>
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
@@ -322,7 +322,7 @@ function ConnectedMailSidebar({
                   <DropdownMenuLabel>More folders</DropdownMenuLabel>
                   {overflowFolders.map((item) => (
                     <DropdownMenuItem key={item.id} onSelect={() => onFolderChange(item.id)}>
-                      <item.icon />
+                      <item.icon aria-hidden="true" />
                       {item.label}
                     </DropdownMenuItem>
                   ))}
@@ -333,7 +333,7 @@ function ConnectedMailSidebar({
             </div>
           </div>
           <div className="relative">
-            <Search
+            <IconSearch
               className="pointer-events-none absolute left-2.5 top-2 size-4 text-muted-foreground"
               aria-hidden="true"
             />
@@ -490,7 +490,7 @@ function MessageComposer({
       <DialogHeader className="relative flex h-12 shrink-0 justify-center border-b px-5 pr-14">
         <DialogTitle className="text-sm font-medium">{label}</DialogTitle>
         <DialogDescription className="sr-only">{mode === "reply" ? "Write your reply." : mode === "forward" ? "Forward this message to someone." : "Compose and send an email from your Gmail account."}</DialogDescription>
-        <DialogClose asChild><Button type="button" variant="ghost" size="icon-sm" aria-label="Close" disabled={sending} className="absolute right-3 top-1/2 -translate-y-1/2"><X /></Button></DialogClose>
+        <DialogClose asChild><Button type="button" variant="ghost" size="icon-sm" aria-label="Close" disabled={sending} className="absolute right-3 top-1/2 -translate-y-1/2"><IconX /></Button></DialogClose>
       </DialogHeader>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 divide-y divide-border">
@@ -523,7 +523,7 @@ function MessageComposer({
       </div>
       <DialogFooter className="shrink-0 border-t px-5 py-3">
         <Button type="submit" size="icon" aria-label="Send" title="Send" disabled={sending || signatureLoading || !signature || !to.trim() || !subject.trim()}>
-          {sending ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
+          {sending ? <IconLoader2 className="size-4 animate-spin" /> : <IconSend className="size-4" />}
         </Button>
       </DialogFooter>
     </form>
@@ -978,12 +978,12 @@ export function MailWorkspace({ connected: connectedOverride }: { connected?: bo
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <h1 className="min-w-0 flex-1 break-words text-xl font-semibold tracking-tight">{selectedMessage.subject}</h1>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="ghost" size="icon" aria-label="Reply" title="Reply" onClick={() => startCompose("reply")} disabled={messageLoading || listLoading}><Reply aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Forward" title="Forward" onClick={() => startCompose("forward")} disabled={messageLoading || listLoading}><Forward aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label={selectedMessage.unread ? "Mark as read" : "Mark as unread"} title={selectedMessage.unread ? "Mark as read" : "Mark as unread"} onClick={() => void updateReadState(selectedMessage.id, !selectedMessage.unread)} disabled={readPending || messageLoading || listLoading}>{selectedMessage.unread ? <MailOpen /> : <Mail />}</Button>
-                        <Button variant="ghost" size="icon" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending || messageLoading || listLoading}><Archive aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending || messageLoading || listLoading}><ShieldAlert aria-hidden="true" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending || messageLoading || listLoading}><Trash2 aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Reply" title="Reply" onClick={() => startCompose("reply")} disabled={messageLoading || listLoading}><IconArrowBackUp aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Forward" title="Forward" onClick={() => startCompose("forward")} disabled={messageLoading || listLoading}><IconArrowForwardUp aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label={selectedMessage.unread ? "Mark as read" : "Mark as unread"} title={selectedMessage.unread ? "Mark as read" : "Mark as unread"} onClick={() => void updateReadState(selectedMessage.id, !selectedMessage.unread)} disabled={readPending || messageLoading || listLoading}>{selectedMessage.unread ? <IconMailOpened /> : <IconMail />}</Button>
+                        <Button variant="ghost" size="icon" aria-label="Archive message" title="Archive" onClick={() => void performMessageAction("archive")} disabled={actionPending || messageLoading || listLoading}><IconArchive aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Mark as spam" title="Junk" onClick={() => setConfirmAction("junk")} disabled={actionPending || messageLoading || listLoading}><IconShieldExclamation aria-hidden="true" /></Button>
+                        <Button variant="ghost" size="icon" aria-label="Move to trash" title="Delete" onClick={() => setConfirmAction("trash")} disabled={actionPending || messageLoading || listLoading}><IconTrash aria-hidden="true" /></Button>
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ChevronsUpDown, Handshake, LogOut, ShieldCheck, Users } from "lucide-react";
+import { IconSelector, IconHeartHandshake, IconLogout, IconShieldCheck, IconUsers } from "@tabler/icons-react";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@libs/components/ui/breadcrumb";
 import { Button } from "@libs/components/ui/button";
@@ -15,6 +15,7 @@ import {
 } from "@libs/components/ui/sidebar";
 import { TooltipProvider } from "@libs/components/ui/tooltip";
 import { accountInitials } from "../MemberPlatform/account";
+import { avatarFallbackStyle } from "@libs/components/avatar-colors";
 import { useMemberTheme, type MemberTheme } from "../MemberPlatform/MemberTheme";
 import type { SponsorContext } from "./types";
 
@@ -43,12 +44,12 @@ function AccountMenu({ context, signingOut, onSignOut }: Pick<ShellProps, "conte
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <SidebarMenuButton size="lg" aria-label="Sponsor account menu" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-          <Avatar className="size-8 rounded-lg"><AvatarFallback className="rounded-lg">{accountInitials(name)}</AvatarFallback></Avatar>
+          <Avatar className="size-8 rounded-lg"><AvatarFallback className="rounded-lg" style={avatarFallbackStyle(context.email)}>{accountInitials(name)}</AvatarFallback></Avatar>
           <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
             <span className="truncate font-medium" title={name}>{name}</span>
             <span className="truncate text-xs">{roleTitles[context.role]}</span>
           </div>
-          <ChevronsUpDown className="ml-auto size-4" />
+          <IconSelector aria-hidden="true" className="ml-auto size-4" />
         </SidebarMenuButton>
       </PopoverTrigger>
       <PopoverContent aria-label="Sponsor account" className="w-72 max-w-[calc(100vw-2rem)] gap-0 p-1" side={isMobile ? "top" : "right"} align="end" sideOffset={4}>
@@ -67,7 +68,7 @@ function AccountMenu({ context, signingOut, onSignOut }: Pick<ShellProps, "conte
         </div>
         <Separator className="my-1" />
         <Button variant="ghost" disabled={signingOut} className="w-full justify-start font-normal" onClick={onSignOut}>
-          <LogOut />{signingOut ? "Signing out…" : "Sign out"}
+          <IconLogout aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}
         </Button>
       </PopoverContent>
     </Popover>
@@ -80,9 +81,9 @@ function WorkspaceLayout({ context, page, signingOut, onSignOut, variant = "spon
   const titles = partner ? { ...pageTitles, requests: "Engagement Requests" } : pageTitles;
   const home = partner ? "/directory" : "/sponsor";
   const items = [
-    ...(context.directory ? [{ page: "directory", label: titles.directory, to: home, icon: Users }] : []),
-    ...(context.portal || context.role === "admin" ? [{ page: "requests", label: titles.requests, to: partner ? "/requests" : "/sponsor/requests", icon: Handshake }] : []),
-    ...(context.role === "admin" ? [{ page: "admin", label: pageTitles.admin, to: "/sponsor/admin", icon: ShieldCheck }] : []),
+    ...(context.directory ? [{ page: "directory", label: titles.directory, to: home, icon: IconUsers }] : []),
+    ...(context.portal || context.role === "admin" ? [{ page: "requests", label: titles.requests, to: partner ? "/requests" : "/sponsor/requests", icon: IconHeartHandshake }] : []),
+    ...(context.role === "admin" ? [{ page: "admin", label: pageTitles.admin, to: "/sponsor/admin", icon: IconShieldCheck }] : []),
   ];
   function closeOnNavigation(event: React.MouseEvent<HTMLAnchorElement>) {
     if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) setOpenMobile(false);
@@ -102,7 +103,7 @@ function WorkspaceLayout({ context, page, signingOut, onSignOut, variant = "spon
         <SidebarGroupContent><nav aria-label="Sponsor navigation"><SidebarMenu>
           {items.map(({ page: destination, label, to, icon: Icon }) => <SidebarMenuItem key={destination}>
             <SidebarMenuButton asChild isActive={page === destination} tooltip={label}>
-              <Link to={to} aria-current={page === destination ? "page" : undefined} onClick={closeOnNavigation}><Icon /><span>{label}</span></Link>
+              <Link to={to} aria-current={page === destination ? "page" : undefined} onClick={closeOnNavigation}><Icon aria-hidden="true" /><span>{label}</span></Link>
             </SidebarMenuButton>
           </SidebarMenuItem>)}
         </SidebarMenu></nav></SidebarGroupContent>

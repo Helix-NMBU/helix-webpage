@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Input } from "@libs/components/ui/input";
@@ -20,7 +20,7 @@ function SignatureDisclosure({ title, summary, label, defaultOpen = false, child
     <CollapsibleTrigger type="button" aria-label={label} className="group flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
       {summary && <span className="flex min-w-0 max-w-[45%] items-center gap-2 truncate text-xs text-muted-foreground">{summary}</span>}
-      <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      <IconChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
     <CollapsibleContent><div className="space-y-3 border-t p-3">{children}</div></CollapsibleContent>
   </Collapsible>;

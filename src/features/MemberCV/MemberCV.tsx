@@ -38,7 +38,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@libs/components/ui/collapsible";
-import { ArrowLeft, ArrowRight, ChevronDown, Ellipsis, Eye, FileText, X } from "lucide-react";
+import { IconArrowLeft, IconArrowRight, IconChevronDown, IconDots, IconEye, IconFileText, IconX } from "@tabler/icons-react";
 import { ChoiceInput, PeriodInputs } from "./ProfileInputs";
 import {
   employmentTypes,
@@ -46,6 +46,7 @@ import {
   languageLevels,
 } from "./profile-inputs";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
+import { avatarFallbackStyle } from "@libs/components/avatar-colors";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import {
   Dialog,
@@ -309,7 +310,7 @@ function Section({
                     )}
                   >
                     <span>{title}</span>
-                    <ChevronDown
+                    <IconChevronDown
                       aria-hidden="true"
                       className={open ? "mcv-nav-chevron-open" : ""}
                     />
@@ -360,7 +361,7 @@ function RepeatableEntry({
         <CollapsibleTrigger asChild>
           <Button type="button" variant="ghost" className="mcv-entry-trigger" aria-expanded={open}>
             <span>{title}</span>
-            <ChevronDown aria-hidden="true" className={open ? "mcv-nav-chevron-open" : ""} />
+            <IconChevronDown aria-hidden="true" className={open ? "mcv-nav-chevron-open" : ""} />
           </Button>
         </CollapsibleTrigger>
         <Button variant="ghost" type="button" className="mcv-remove" aria-label={removeLabel} onClick={onRemove}>
@@ -1021,7 +1022,7 @@ export default function MemberCV() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
                 <Avatar className="size-16 rounded-xl">
-                  <AvatarFallback className="rounded-xl text-xl">
+                  <AvatarFallback className="rounded-xl text-xl" style={avatarFallbackStyle(account?.email || envelope?.identity.email || memberName)}>
                     {accountInitials(memberName)}
                   </AvatarFallback>
                 </Avatar>
@@ -1053,9 +1054,9 @@ export default function MemberCV() {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Preview CV" title="Preview CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", false, event.currentTarget)}><Eye aria-hidden="true" /></Button>
+              <Button variant="outline" size="icon" className="cv-control size-8" aria-label="Preview CV" title="Preview CV" disabled={Boolean(busy)} onClick={(event) => void run("preview", false, event.currentTarget)}><IconEye aria-hidden="true" /></Button>
               <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button ref={actionsTrigger} variant="outline" size="icon" className="cv-control size-8" aria-label="CV actions" title="CV actions" disabled={Boolean(busy)}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+                <DropdownMenuTrigger asChild><Button ref={actionsTrigger} variant="outline" size="icon" className="cv-control size-8" aria-label="CV actions" title="CV actions" disabled={Boolean(busy)}><IconDots aria-hidden="true" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={openCvSetup}>Edit</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { setDownloadLanguage("nb"); setDownloadOpen(true); }}>Download</DropdownMenuItem>
@@ -1065,7 +1066,7 @@ export default function MemberCV() {
             </div>
           </CardContent></Card> : <Empty className="min-h-80 border border-solid bg-card">
             <EmptyHeader>
-              <EmptyMedia variant="icon"><FileText aria-hidden="true" /></EmptyMedia>
+              <EmptyMedia variant="icon"><IconFileText aria-hidden="true" /></EmptyMedia>
               <EmptyTitle>No CV yet</EmptyTitle>
               <EmptyDescription>You haven't set up your CV yet.<br />Get started by creating your CV.</EmptyDescription>
             </EmptyHeader>
@@ -1119,7 +1120,7 @@ export default function MemberCV() {
                   disabled={Boolean(busy) || ended || wizardStep === cvSteps[0].id}
                   onClick={() => nextCvStep(-1)}
                 >
-                  <ArrowLeft aria-hidden="true" />
+                  <IconArrowLeft aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"
@@ -1131,7 +1132,7 @@ export default function MemberCV() {
                   disabled={Boolean(busy) || ended || isLastCvStep}
                   onClick={() => nextCvStep(1)}
                 >
-                  <ArrowRight aria-hidden="true" />
+                  <IconArrowRight aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"
@@ -1143,7 +1144,7 @@ export default function MemberCV() {
                   disabled={Boolean(busy)}
                   onClick={(event) => requestSetupExit(event.currentTarget)}
                 >
-                  <X aria-hidden="true" />
+                  <IconX aria-hidden="true" />
                 </Button>
               </div>
             </DialogHeader>

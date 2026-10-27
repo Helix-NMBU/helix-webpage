@@ -18,6 +18,10 @@
       "destination": "/api/auth?__path=:path*"
     },
     {
+      "source": "/api/projects",
+      "destination": "/api/member-login?__module=projects"
+    },
+    {
       "source": "/api/gmail-connect",
       "destination": "/api/gmail?action=connect"
     },

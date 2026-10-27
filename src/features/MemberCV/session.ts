@@ -2,6 +2,7 @@ import { createAuthClient } from "@neondatabase/neon-js/auth";
 import { BetterAuthVanillaAdapter } from "@neondatabase/neon-js/auth/vanilla/adapters";
 import { clearMemberCvCache, CvRequestError } from "./repository";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
+import { isProjectTaskPath, isWorkspacePath } from "../ProjectManagement/routes";
 import { readMemberAccount, type MemberAccount } from "../MemberPlatform/account";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn, setLocalMemberSignedIn } from "../MemberPlatform/local-mode";
 
@@ -547,7 +548,7 @@ export function memberSignInCallbackUrl(source: unknown, origin: string): string
   if (target.origin !== allowedOrigin) return fallback;
   if (isMemberPlatform(origin)) {
     if (target.pathname === "/member/profile") target.pathname = paths.profile;
-    if (![paths.home, paths.profile, "/recruiting"].includes(target.pathname)) return fallback;
+    if (![paths.home, paths.profile, "/recruiting"].includes(target.pathname) && !isProjectTaskPath(target.pathname) && !isWorkspacePath(target.pathname)) return fallback;
   } else if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
   return new URL(`${target.pathname}${target.search}${target.hash}`, origin).href;
 }

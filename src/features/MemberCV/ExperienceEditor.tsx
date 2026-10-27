@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
@@ -43,7 +43,7 @@ function RoleDetails({ role, locale, disabled, onChange }: {
     <CollapsibleTrigger asChild>
       <Button variant="ghost" type="button" disabled={disabled}>
         {t("Role details (optional)")}
-        <ChevronDown aria-hidden="true" className={open ? "mcv-nav-chevron-open" : ""} />
+        <IconChevronDown aria-hidden="true" className={open ? "mcv-nav-chevron-open" : ""} />
       </Button>
     </CollapsibleTrigger>
     <CollapsibleContent forceMount className="mcv-role-details-content" aria-hidden={!open}>
@@ -143,7 +143,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" type="button" className="mcv-role-trigger" aria-expanded={expandedRoleId === role.id}>
                     <h4>{role.title || `${memberText(locale, "Role")} ${index + 1}`}</h4>
-                    <ChevronDown aria-hidden="true" className={expandedRoleId === role.id ? "mcv-nav-chevron-open" : ""} />
+                    <IconChevronDown aria-hidden="true" className={expandedRoleId === role.id ? "mcv-nav-chevron-open" : ""} />
                   </Button>
                 </CollapsibleTrigger>
                 <Button variant="ghost" type="button" className="mcv-remove" disabled={disabled}
