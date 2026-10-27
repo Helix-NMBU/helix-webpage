@@ -10,7 +10,7 @@ const session = vi.hoisted(() => ({ setFormDirty: vi.fn(), mutate: vi.fn(), load
 vi.mock("../MemberPlatform/FinanceAccess", () => ({ useFinanceAccess: () => session }));
 vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => notify }));
 vi.mock("@libs/components/ui/select", () => ({
-  Select: ({ value, onValueChange, children }: { value?: string; onValueChange: (value: string) => void; children: ReactNode }) => <select value={value ?? ""} onChange={(event) => onValueChange(event.target.value)}><option value="">Choose a department</option>{children}</select>,
+  Select: ({ value, onValueChange, children, disabled }: { value?: string; onValueChange: (value: string) => void; children: ReactNode; disabled?: boolean }) => <select disabled={disabled} value={value ?? ""} onChange={(event) => onValueChange(event.target.value)}><option value="">Choose a department</option>{children}</select>,
   SelectContent: ({ children }: { children: ReactNode }) => children,
   SelectItem: ({ children, value }: { children: ReactNode; value: string }) => <option value={value}>{children}</option>,
   SelectTrigger: () => null,
@@ -60,4 +60,27 @@ it("shows overspending and cancellation warnings without blocking the import", a
   await act(async () => preview.click());
   for (const warning of warnings) expect(container.textContent).toContain(warning);
   expect([...container.querySelectorAll("button")].find((button) => button.textContent === "Import budget")?.disabled).toBe(false);
+});
+
+it("keeps the reviewed CSV and department stable while a preview is pending", async () => {
+  let resolve!: (value: unknown) => void;
+  session.mutate.mockReturnValue(new Promise((done) => { resolve = done; }));
+  await act(async () => root.render(<BudgetImport departments={departments} />));
+  const select = container.querySelector("select")!; const textarea = container.querySelector("textarea")!;
+  await act(async () => {
+    select.value = "mechanical"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "system_id;description;planned_nok\nSYS-FR;Frame;900");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Preview import")!.click(); });
+  expect(select.disabled).toBe(true);
+  expect(textarea.disabled).toBe(true);
+  expect((container.querySelector('input[type="file"]') as HTMLInputElement).disabled).toBe(true);
+  await act(async () => resolve({ ok: true, viewVersion: 4, warnings: [], errors: [], importPreview: {
+    previewToken: "token", viewVersion: 4, departmentKey: "mechanical", rows: [],
+    counts: { added: 0, changed: 0, unchanged: 0, removed: 0 }, subtotals: [], totalNok: "0.00", warnings: [], errors: [],
+  } }));
+  expect(select.disabled).toBe(false);
+  expect(textarea.disabled).toBe(false);
+  expect(textarea.value).toContain("Frame;900");
 });

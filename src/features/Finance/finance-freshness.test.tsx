@@ -224,6 +224,30 @@ describe("FIN-09-A05 public overview", () => {
 });
 
 describe("FIN-09-A06 freshness", () => {
+  it("preserves a purchase form and notifies the member when finance changes", async () => {
+    const budget = { viewVersion: 1, seasonCode: "S27", budgetStatus: "approved", approvedOn: "2026-10-01", revision: 1,
+      departments: [], choices: { systems: [], items: [] } };
+    api.budgets.mockResolvedValue(budget);
+    api.purchases.mockResolvedValue({ viewVersion: 1, ownRequests: [] });
+    const router = createMemoryRouter([{ path: "/finance/purchases", element: (
+      <FinanceAccessProvider userId="member"><Probe /><FinanceEntry page="purchases" /></FinanceAccessProvider>
+    ) }], { initialEntries: ["/finance/purchases"] });
+    await act(async () => root.render(<RouterProvider router={router} />));
+    const label = [...container.querySelectorAll("label")].find((item) => item.textContent === "Buyer name")!;
+    const input = document.getElementById(label.htmlFor) as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Unsaved buyer");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    api.capabilities.mockResolvedValue({ ...member, viewVersion: 2 });
+    api.purchases.mockResolvedValue({ viewVersion: 2, ownRequests: [] });
+    api.budgets.mockResolvedValue({ ...budget, viewVersion: 2 });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect((document.getElementById(label.htmlFor) as HTMLInputElement).value).toBe("Unsaved buyer");
+    expect(notify).toHaveBeenCalledWith("Finance was updated", "Your unsaved changes are still in the form.",
+      expect.objectContaining({ id: "finance-unsaved-update" }));
+  });
+
   it("refreshes a read-only overview after a version check without losing expanded state or location", async () => {
     const router = await renderOverview();
     await act(async () => button("Show systems")!.click());

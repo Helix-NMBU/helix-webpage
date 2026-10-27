@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
@@ -672,19 +672,19 @@ export function PurchasesBoard() {
                       lines[index] = { ...lines[index], budgetItemId: value };
                       setEditor({ ...editor, lines });
                     }}>
-                      <SelectTrigger><SelectValue placeholder="Budget item" /></SelectTrigger>
+                      <SelectTrigger aria-label={`Budget item for estimated line ${index + 1}`}><SelectValue placeholder="Budget item" /></SelectTrigger>
                       <SelectContent>
                         {choices.map((choice) => (
                           <SelectItem key={choice.id} value={choice.id}>{choice.publicRef} · {choice.description}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Input placeholder="Description" value={line.description} onChange={(event) => {
+                    <Input aria-label={`Description for estimated line ${index + 1}`} placeholder="Description" value={line.description} onChange={(event) => {
                       const lines = [...editor.lines];
                       lines[index] = { ...lines[index], description: event.target.value };
                       setEditor({ ...editor, lines });
                     }} />
-                    <Input placeholder="Amount NOK" value={line.estimatedNok} onChange={(event) => {
+                    <Input aria-label={`Amount NOK for estimated line ${index + 1}`} placeholder="Amount NOK" value={line.estimatedNok} onChange={(event) => {
                       const lines = [...editor.lines];
                       lines[index] = { ...lines[index], estimatedNok: event.target.value };
                       setEditor({ ...editor, lines });
@@ -761,10 +761,11 @@ export function PurchasesBoard() {
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+  const id = useId();
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      <Input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
@@ -794,7 +795,7 @@ function LineEditor({
       <div className="space-y-2">
         <Label>System</Label>
         <Select value={line.systemId} onValueChange={(value) => onChange({ systemId: value })}>
-          <SelectTrigger><SelectValue placeholder="Choose system" /></SelectTrigger>
+          <SelectTrigger aria-label={`System for line ${index + 1}`}><SelectValue placeholder="Choose system" /></SelectTrigger>
           <SelectContent>
             {systems.map((system) => <SelectItem key={system.id} value={system.id}>{system.code} — {system.name}</SelectItem>)}
           </SelectContent>
@@ -807,7 +808,7 @@ function LineEditor({
           onValueChange={(value) => onChange(value === "__unbudgeted" ? { unbudgeted: true, budgetItemId: undefined } : { unbudgeted: false, budgetItemId: value })}
           disabled={!line.systemId}
         >
-          <SelectTrigger><SelectValue placeholder="Choose item" /></SelectTrigger>
+          <SelectTrigger aria-label={`Budget item for line ${index + 1}`}><SelectValue placeholder="Choose item" /></SelectTrigger>
           <SelectContent>
             {items.map((item) => <SelectItem key={item.id} value={item.id}>{item.publicRef} — {item.description}</SelectItem>)}
             <SelectItem value="__unbudgeted">Not in the budget</SelectItem>
@@ -831,7 +832,7 @@ function LineEditor({
               onChange({ requestLineId: value, budgetItemId: match?.budgetItemId, unbudgeted: false });
             }}
           >
-            <SelectTrigger><SelectValue placeholder="Link to approval line" /></SelectTrigger>
+            <SelectTrigger aria-label={`Approved request line for line ${index + 1}`}><SelectValue placeholder="Link to approval line" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__none">No request link</SelectItem>
               {requestLines.map((row) => (
