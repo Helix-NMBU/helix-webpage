@@ -6,6 +6,7 @@ import { Skeleton } from "@libs/components/ui/skeleton";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { BudgetsBoard } from "./BudgetsPage";
 import { FinancingPage } from "./FinancingPage";
+import { OverviewBoard } from "./OverviewPage";
 import { PurchasesBoard } from "./PurchasesPage";
 import { financeRoutes, type FinancePageId } from "./routes";
 
@@ -31,6 +32,12 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     if (session.access !== "allowed" || page !== "purchases" || !session.capabilities?.registerActual || session.budgets) return;
     void session.loadPage("budgets");
   }, [page, session.access, session.budgets, session.capabilities?.registerActual, session.loadPage]);
+  const overviewReady = page === "overview" && Boolean(session.overview) && (
+    (session.overview?.departments.length ?? 0) > 0
+    || (session.overview?.publicEarmarks.length ?? 0) > 0
+    || session.overview?.budgetStatus !== "absent"
+    || Boolean(session.overview?.scenarios?.length)
+  );
   const budgetsReady = page === "budgets" && Boolean(session.budgets) && (
     (session.budgets?.departments.length ?? 0) > 0
     || session.budgets?.budgetStatus !== "absent"
@@ -63,7 +70,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           </Button>
         ))}
       </nav>
-      {page === "financing" ? <FinancingPage /> : session.pageLoading || !loaded ? (
+      {page === "financing" ? <FinancingPage /> : !loaded ? (
         <div role="status" aria-label="Loading finance page" className="space-y-4">
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-40 w-full" />
@@ -72,6 +79,8 @@ function FinanceSection({ page }: { page: FinancePageId }) {
         <BudgetsBoard />
       ) : purchasesReady ? (
         <PurchasesBoard />
+      ) : overviewReady ? (
+        <OverviewBoard />
       ) : empty ? (
         <Empty className="min-h-72 border border-solid">
           <EmptyHeader>

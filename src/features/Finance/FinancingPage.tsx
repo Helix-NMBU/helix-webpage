@@ -11,6 +11,7 @@ import { Switch } from "@libs/components/ui/switch";
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { ScenarioList } from "./budget-summary";
 import { FinanceRequestError } from "./repository";
 import {
   FUNDING_CONFIDENCE,
@@ -103,6 +104,10 @@ export function FinancingPage() {
   const [showDeleted, setShowDeleted] = useState(false);
   const showDeletedId = useId();
   const canEdit = Boolean(session.capabilities?.manageFunding && session.seasonCode);
+  useEffect(() => {
+    session.setFormDirty("financing-editor", editor !== null);
+    return () => session.setFormDirty("financing-editor", false);
+  }, [editor, session.setFormDirty]);
   const records = session.financing?.funding ?? [];
   const visible = records.filter((record) => showDeleted || record.status !== "deleted");
   const partsFor = (fundingId: string) => session.financing?.parts.filter((part) => part.fundingId === fundingId) ?? [];
@@ -241,6 +246,7 @@ export function FinancingPage() {
         </div>
         {canEdit ? <Button type="button" onClick={() => setEditor({ kind: "funding", mode: "create", requestId: crypto.randomUUID(), values: emptyFunding(), errors: {} })} disabled={editor !== null || saving}>Add funding</Button> : null}
       </div>
+      {session.financing && session.financing.scenarios.length > 0 ? <ScenarioList scenarios={session.financing.scenarios} /> : null}
       {editor ? <EditorForm editor={editor} saving={saving} formRef={formRef} onSubmit={submit} onChange={setEditor} onCancel={() => setEditor(null)} /> : null}
       {visible.length === 0 ? (
         <Empty className="min-h-72 border border-solid">

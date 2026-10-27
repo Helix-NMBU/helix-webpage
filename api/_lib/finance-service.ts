@@ -11,7 +11,8 @@ import { createLiveFinanceSender, type FinanceMailSender } from "./finance-mail.
 import { performDeliveryMutation } from "./finance-recovery.js";
 import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
-import { loadFundingRecords, loadPublicEarmarks } from "./finance-funding-read.js";
+import { loadFundingRecords } from "./finance-funding-read.js";
+import { attachCommitmentSummaries, loadFundingScenarios, loadOverview } from "./finance-summary.js";
 import { formatOre, osloToday } from "./finance-money.js";
 import { isFundingAction } from "../../src/features/Finance/funding.js";
 import { isRequestAction } from "../../src/features/Finance/requests.js";
@@ -157,17 +158,16 @@ export function createFinanceServices(deps: {
       const same = unchanged(current, knownVersion);
       if (same) return same;
       const budget = await budgetState(current.seasonCode);
-      const publicEarmarks = current.seasonCode
-        ? await loadPublicEarmarks(db.query.bind(db), current.seasonCode, osloToday())
-        : [];
-      return {
+      return loadOverview(db.query.bind(db), {
         viewVersion: current.viewVersion,
         seasonCode: current.seasonCode,
         budgetStatus: budget.status,
         approvedOn: budget.approvedOn,
-        departments: [],
-        publicEarmarks,
-      };
+        showAggregates: budget.status === "approved" || (budget.status === "draft" && current.capabilities.draftBudgetItems),
+        showPrivate: current.capabilities.financing,
+        includeDraftItems: current.capabilities.draftBudgetItems,
+        today: osloToday(),
+      });
     },
     async budgets(token, knownVersion) {
       const current = await context(token);
@@ -186,7 +186,7 @@ export function createFinanceServices(deps: {
           choices: { systems: [], items: [] },
         };
       }
-      return loadBudgetHierarchy(db, current, budget);
+      return attachCommitmentSummaries(db.query.bind(db), await loadBudgetHierarchy(db, current, budget), current.seasonCode);
     },
     async purchases(token, knownVersion, requestRecordId, unpaidOnly = false) {
       const current = await context(token);
@@ -230,8 +230,12 @@ export function createFinanceServices(deps: {
         return { viewVersion: current.viewVersion, seasonCode: null, funding: [], parts: [], scenarios: [] };
       }
       try {
-        const loaded = await loadFundingRecords(db.query.bind(db), current.seasonCode, osloToday(), current.capabilities.draftBudgetItems);
-        return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios: [] };
+        const today = osloToday();
+        const [loaded, scenarios] = await Promise.all([
+          loadFundingRecords(db.query.bind(db), current.seasonCode, today, current.capabilities.draftBudgetItems),
+          loadFundingScenarios(db.query.bind(db), current.seasonCode, current.capabilities.draftBudgetItems),
+        ]);
+        return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios };
       } catch (error) {
         if (error instanceof FinanceError) throw error;
         throw new FinanceError(503, UNAVAILABLE);

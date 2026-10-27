@@ -4,6 +4,7 @@ import type {
   FinanceCapabilitiesResponse,
   FinanceFieldError,
   FinanceMutationResult,
+  FinanceVersionResponse,
   FinancingView,
   PublicBudgets,
   PublicOverview,
@@ -71,6 +72,7 @@ export function createFinanceApi(owner: { current: string | null }) {
   }
   return {
     capabilities: () => local() ? Promise.resolve(localCapabilities()) : request<FinanceCapabilitiesResponse>("capabilities"),
+    version: () => local() ? Promise.resolve({ viewVersion: 0 } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
     overview: () => local() ? Promise.resolve(localOverview()) : request<PublicOverview>("overview"),
     budgets: () => local() ? Promise.resolve(localBudgets()) : request<PublicBudgets>("budgets"),
     purchases: (requestRecordId?: string, unpaidOnly?: boolean) => {

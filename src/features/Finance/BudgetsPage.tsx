@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { CommitmentUse } from "./budget-summary";
 import { BUDGET_ITEM_CATEGORIES, MANUAL_ITEM_DEFAULTS } from "./budget-domain";
 import type { BudgetChoiceSystem, BudgetEarmarkChoice, BudgetItemInput, BudgetItemPriority, BudgetItemReuse, FinanceMutation, PublicBudgetItem, PublicSystemBudget } from "./types";
 
@@ -114,6 +115,7 @@ export function BudgetsBoard() {
               <div className="space-y-1">
                 <h2 id={`department-${department.departmentKey}`} className="text-xl font-medium">{department.name}</h2>
                 <AmountLine planned={department.plannedNok} actual={department.actualNok} difference={department.differenceNok} unbudgeted={department.unbudgetedNok} />
+                <CommitmentUse commitmentNok={department.commitmentNok} usedFraction={department.usedFraction} />
               </div>
               {department.systems.map((system) => (
                 <SystemBudget
@@ -219,6 +221,7 @@ function SystemBudget({
       <div className="space-y-1">
         <h3 id={`system-${system.id}`} className="text-base font-medium">{system.name}</h3>
         <AmountLine planned={system.plannedNok} actual={system.actualNok} difference={system.differenceNok} unbudgeted={system.unbudgetedNok} />
+        <CommitmentUse commitmentNok={system.commitmentNok} usedFraction={system.usedFraction} />
         <p className="text-sm text-muted-foreground">
           Unbudgeted spending {system.unbudgetedNok}
           {system.unbudgetedPublicRef ? ` · ${system.unbudgetedPublicRef}` : ""}

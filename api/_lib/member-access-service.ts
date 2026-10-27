@@ -37,7 +37,7 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const { memberId } = await identityAndId(token);
       await requireAdmin(memberId);
       const [departmentRows, roleRows, memberRows] = await Promise.all([
-        db.query<{ id: string; name: string }>("select department_key as id, name from identity.departments order by sort_order"),
+        db.query<{ id: string; name: string }>("select department_key as id, name from identity.departments order by sort_order, name, department_key"),
         db.query<AccessRole>("select role_key as key, label from identity.platform_roles order by sort_order"),
         db.query<{ id: string; email: string; name: string; department_id: string | null; role_keys: string[] }>(`select m.id, lower(m.email) as email, coalesce(nullif(m.full_name, ''), m.email) as name, md.department_key as department_id,
           coalesce((select array_agg(mr.role_key order by r.sort_order) from identity.member_roles mr join identity.platform_roles r using (role_key) where mr.member_id = m.id), array[]::text[]) as role_keys
