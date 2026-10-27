@@ -7,7 +7,23 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const sizeScript = fileURLToPath(new URL('./check-deployment-size.mjs', import.meta.url));
+const functionScript = fileURLToPath(new URL('./check-vercel-functions.mjs', import.meta.url));
 const ignoreScript = fileURLToPath(new URL('./ignore-docs-build.sh', import.meta.url));
+
+test('Hobby function budget leaves one slot below the 12-function cap', () => {
+  const root = mkdtempSync(join(tmpdir(), 'helix-function-limit-test-'));
+  try {
+    mkdirSync(join(root, 'api'));
+    for (let index = 0; index < 11; index++) writeFileSync(join(root, 'api', `route-${index}.ts`), 'export {};');
+    const withinBudget = spawnSync(process.execPath, [functionScript], { cwd: root, encoding: 'utf8' });
+    assert.equal(withinBudget.status, 0, withinBudget.stderr);
+    assert.match(withinBudget.stdout, /11 \/ 11 \(Hobby cap: 12\)/);
+    writeFileSync(join(root, 'api', 'route-11.ts'), 'export {};');
+    const overBudget = spawnSync(process.execPath, [functionScript], { cwd: root, encoding: 'utf8' });
+    assert.equal(overBudget.status, 1);
+    assert.match(overBudget.stderr, /below the 12-function cap/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test('size gate counts nested files and rejects output above 10 MB', () => {
   const root = mkdtempSync(join(tmpdir(), 'helix-size-test-'));

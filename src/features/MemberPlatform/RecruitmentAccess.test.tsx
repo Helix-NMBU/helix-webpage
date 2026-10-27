@@ -78,3 +78,17 @@ it("ignores an old account's outstanding preload after a new session mounts", as
   expect(session.positions[0].title).toBe("Other account position"); expect(session.applications).toEqual([]);
   expect(container.textContent).not.toContain("Applicant");
 });
+
+it("does not restore a deleted posting when an earlier save response arrives after navigation", async () => {
+  await mount(); const saving = deferred<RecruitmentPosition>();
+  mocks.api.savePosition.mockReturnValueOnce(saving.promise); mocks.api.deletePosition.mockResolvedValue(undefined);
+  const updated = { ...position, title: "Earlier edit" };
+  let saved!: Promise<void>;
+  await act(async () => { saved = session.savePosition(updated); });
+  await act(async () => router.navigate("/elsewhere"));
+  await act(async () => router.navigate("/"));
+  await act(async () => session.deletePosition(position.id));
+  expect(session.positions).toEqual([]);
+  await act(async () => { saving.resolve(updated); return saved; });
+  expect(session.positions).toEqual([]);
+});

@@ -1,13 +1,15 @@
 import { PartnerRequestError, partnerSessionToken } from "./session";
 import type { PartnerDirectory, PartnerDownload, PartnerSession } from "./types";
+import type { RequestDetail, RequestList } from "../SponsorWorkspace/request-types";
 
 export function createPartnerRepository(token = partnerSessionToken, fetchImpl: typeof fetch = fetch) {
-  async function request<T>(query: Record<string, string>): Promise<T> {
+  async function callApi<T>(query: Record<string, string>, init: RequestInit = {}): Promise<T> {
     const jwt = await token();
     let response: Response;
     try {
       response = await fetchImpl(`/api/partner?${new URLSearchParams(query)}`, {
-        method: "GET", credentials: "include", cache: "no-store", headers: { Authorization: `Bearer ${jwt}` },
+        ...init, method: init.method ?? "GET", credentials: "include", cache: "no-store",
+        headers: { Authorization: `Bearer ${jwt}`, ...init.headers },
       });
     } catch { throw new PartnerRequestError("Could not reach the partner portal. Try again.", 0); }
     const body = await response.json().catch(() => null);
@@ -18,9 +20,17 @@ export function createPartnerRepository(token = partnerSessionToken, fetchImpl: 
     return body as T;
   }
   return {
-    session: () => request<PartnerSession>({ action: "session" }),
-    directory: (organizationId: string) => request<PartnerDirectory>({ action: "directory", organizationId }),
-    download: (organizationId: string, memberId: string) => request<PartnerDownload>({ action: "download", organizationId, memberId }),
+    session: () => callApi<PartnerSession>({ action: "session" }),
+    directory: (organizationId: string) => callApi<PartnerDirectory>({ action: "directory", organizationId }),
+    download: (organizationId: string, memberId: string) => callApi<PartnerDownload>({ action: "download", organizationId, memberId }),
+    requests: (organizationId: string) => callApi<RequestList>({ action: "requests", organizationId }),
+    request: (organizationId: string, id: string) => callApi<{ request: RequestDetail }>({ action: "request", organizationId, id }),
+    createRequest: (organizationId: string, draft: unknown) => callApi<{ request: RequestDetail }>({ action: "requests" }, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, ...draft as object }),
+    }),
+    mutateRequest: (organizationId: string, input: unknown) => callApi<{ request: RequestDetail }>({ action: "request" }, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, ...input as object }),
+    }),
   };
 }
 

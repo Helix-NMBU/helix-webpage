@@ -25,6 +25,7 @@ type ShellProps = {
   page: SponsorPage;
   signingOut: boolean;
   onSignOut: () => void;
+  variant?: "sponsor" | "partner";
   children: ReactNode;
 };
 
@@ -74,11 +75,14 @@ function AccountMenu({ context, signingOut, onSignOut }: Pick<ShellProps, "conte
   </SidebarMenuItem></SidebarMenu>;
 }
 
-function WorkspaceLayout({ context, page, signingOut, onSignOut, children }: ShellProps) {
+function WorkspaceLayout({ context, page, signingOut, onSignOut, variant = "sponsor", children }: ShellProps) {
   const { setOpenMobile } = useSidebar();
+  const partner = variant === "partner";
+  const titles = partner ? { ...pageTitles, requests: "Engagement Requests" } : pageTitles;
+  const home = partner ? "/directory" : "/sponsor";
   const items = [
-    ...(context.directory ? [{ page: "directory", label: pageTitles.directory, to: "/sponsor", icon: IconUsers }] : []),
-    ...(context.portal || context.role === "admin" ? [{ page: "requests", label: pageTitles.requests, to: "/sponsor/requests", icon: IconHeartHandshake }] : []),
+    ...(context.directory ? [{ page: "directory", label: titles.directory, to: home, icon: IconUsers }] : []),
+    ...(context.portal || context.role === "admin" ? [{ page: "requests", label: titles.requests, to: partner ? "/requests" : "/sponsor/requests", icon: IconHeartHandshake }] : []),
     ...(context.role === "admin" ? [{ page: "admin", label: pageTitles.admin, to: "/sponsor/admin", icon: IconShieldCheck }] : []),
   ];
   function closeOnNavigation(event: React.MouseEvent<HTMLAnchorElement>) {
@@ -87,10 +91,10 @@ function WorkspaceLayout({ context, page, signingOut, onSignOut, children }: She
   return <>
     <Sidebar collapsible="icon" aria-label="Sponsor workspace">
       <SidebarHeader>
-        <SidebarMenu><SidebarMenuItem><SidebarMenuButton asChild size="lg" tooltip="Sponsor portal">
-          <Link to="/sponsor" aria-label="Helix NMBU · Sponsor portal" onClick={closeOnNavigation}>
+        <SidebarMenu><SidebarMenuItem><SidebarMenuButton asChild size="lg" tooltip={partner ? "Partner portal" : "Sponsor portal"}>
+          <Link to={home} aria-label={`Helix NMBU · ${partner ? "Partner" : "Sponsor"} portal`} onClick={closeOnNavigation}>
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><img src="/Vector.png" alt="" className="h-5 w-3 object-contain" /></div>
-            <div className="grid flex-1 text-left text-sm leading-tight"><span className="truncate font-medium">Helix NMBU</span><span className="truncate text-xs">Sponsor portal</span></div>
+            <div className="grid flex-1 text-left text-sm leading-tight"><span className="truncate font-medium">Helix NMBU</span><span className="truncate text-xs">{partner ? "Partner portal" : "Sponsor portal"}</span></div>
           </Link>
         </SidebarMenuButton></SidebarMenuItem></SidebarMenu>
       </SidebarHeader>
@@ -112,10 +116,11 @@ function WorkspaceLayout({ context, page, signingOut, onSignOut, children }: She
         <SidebarTrigger />
         <Separator orientation="vertical" className="mx-2 h-4" />
         <Breadcrumb><BreadcrumbList>
-          <BreadcrumbItem className="hidden sm:block">Sponsor portal</BreadcrumbItem>
+          <BreadcrumbItem className="hidden sm:block">{partner ? "Partner portal" : "Sponsor portal"}</BreadcrumbItem>
           <BreadcrumbSeparator className="hidden sm:block" />
-          <BreadcrumbItem><BreadcrumbPage>{pageTitles[page]}</BreadcrumbPage></BreadcrumbItem>
+          <BreadcrumbItem><BreadcrumbPage>{titles[page]}</BreadcrumbPage></BreadcrumbItem>
         </BreadcrumbList></Breadcrumb>
+        {partner && <Button className="ml-auto" variant="outline" size="sm" disabled={signingOut} onClick={onSignOut}>{signingOut ? "Signing out…" : "Sign out"}</Button>}
       </header>
       <div className="mx-auto w-full min-w-0 max-w-7xl space-y-5 p-4 md:p-6">{children}</div>
     </SidebarInset>

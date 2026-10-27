@@ -92,6 +92,7 @@ describe("task workflow persistence", () => {
         description: "",
         category: "production",
         departments: ["Mechanical & Production"],
+        leadIds: [identities[0].userId],
         deadline: "2026-11-30",
       },
     });

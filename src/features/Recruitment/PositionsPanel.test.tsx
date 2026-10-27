@@ -13,15 +13,16 @@ const position: RecruitmentPosition = {
 let root: Root;
 let container: HTMLDivElement;
 const save = vi.fn<(position: Omit<RecruitmentPosition, "id"> & { id?: string }) => Promise<void>>();
+const visibility = vi.fn<(id: string, visible: boolean) => Promise<void>>();
 const remove = vi.fn<(id: string) => Promise<void>>();
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  save.mockReset().mockResolvedValue(undefined); remove.mockReset().mockResolvedValue(undefined);
+  save.mockReset().mockResolvedValue(undefined); visibility.mockReset().mockResolvedValue(undefined); remove.mockReset().mockResolvedValue(undefined);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 async function render(positions = [position], loading = false) {
-  await act(async () => root.render(<PositionsPanel positions={positions} loading={loading} onSave={save} onDelete={remove} />));
+  await act(async () => root.render(<PositionsPanel positions={positions} loading={loading} onSave={save} onDelete={remove} onVisibilityChange={visibility} />));
 }
 async function click(text: string) {
   const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === text || item.getAttribute("aria-label")?.startsWith(`${text} `));
@@ -52,7 +53,7 @@ describe("recruitment position editor", () => {
     await fill("position-tasks", " Develop software \n\n Test the car \n");
     await fill("position-outcomes", " Experience \n Teamwork ");
     await submit();
-    expect(save).toHaveBeenCalledExactlyOnceWith({ title: "Software Engineer", department: "Software", applyUrl: "",
+    expect(save).toHaveBeenCalledExactlyOnceWith({ title: "Software Engineer", department: "Software & Autonomous", applyUrl: "",
       contact: { name: "Recruiter", email: "recruiter@helixnmbu.no" }, about: "Build the car.", tasks: ["Develop software", "Test the car"], achieve: ["Experience", "Teamwork"], visible: false });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
@@ -86,12 +87,13 @@ describe("recruitment position editor", () => {
   });
   it("saves visibility directly from the position entry and blocks duplicate changes", async () => {
     let finish!: () => void;
-    save.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    visibility.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
     await render();
     const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!;
     expect(toggle.getAttribute("aria-label")).toBe("Show Open Application on the website");
     await act(async () => { toggle.click(); toggle.click(); });
-    expect(save).toHaveBeenCalledExactlyOnceWith({ ...position, visible: false });
+    expect(visibility).toHaveBeenCalledExactlyOnceWith(position.id, false);
+    expect(save).not.toHaveBeenCalled();
     expect(toggle.disabled).toBe(true);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     await act(async () => finish());
@@ -100,7 +102,7 @@ describe("recruitment position editor", () => {
     expect(toggle.disabled).toBe(false);
   });
   it("keeps the saved visibility and permits retry after a failed row change", async () => {
-    save.mockRejectedValueOnce(new Error("Unavailable"));
+    visibility.mockRejectedValueOnce(new Error("Unavailable"));
     await render();
     const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!;
     await act(async () => toggle.click());
@@ -108,7 +110,7 @@ describe("recruitment position editor", () => {
     expect(toggle.disabled).toBe(false);
     expect(container.textContent).not.toContain("Unavailable");
     await act(async () => toggle.click());
-    expect(save).toHaveBeenCalledTimes(2);
+    expect(visibility).toHaveBeenCalledTimes(2);
   });
   it("requires deletion confirmation, retains failed selections, and prevents duplicate deletion", async () => {
     remove.mockRejectedValueOnce(new Error("Unavailable"));

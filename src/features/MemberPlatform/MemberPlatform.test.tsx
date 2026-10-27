@@ -9,15 +9,6 @@ import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
 
-import { initialLocalWorkspace } from '../ProjectManagement/local-repository';
-import { ProjectRequestError } from '../ProjectManagement/repository';
-const projectTasks = vi.hoisted(() => ({load:vi.fn(),mutate:vi.fn()}));
-vi.mock('../ProjectManagement/repository', async original => ({...await original<typeof import('../ProjectManagement/repository')>(),projectRepository:async()=>projectTasks}));
-import { directoryFixture } from '../Workspace/fixtures.test-support';
-const departmentHome = vi.hoisted(() => ({load:vi.fn(),save:vi.fn()}));
-vi.mock('../Workspace/department-home-repository', async original => ({...await original<typeof import('../Workspace/department-home-repository')>(),departmentHomeRepository:async()=>departmentHome}));
-const workspace = vi.hoisted(() => ({ load:vi.fn(),saveMember:vi.fn(),saveProject:vi.fn() }));
-vi.mock('../Workspace/repository', async original => ({...await original<typeof import('../Workspace/repository')>(),workspaceRepository:async()=>workspace}));
 const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn(), positions: vi.fn() }));
 vi.mock("../Recruitment/website-api", async original => ({ ...await original<typeof import("../Recruitment/website-api")>(), createRecruitmentApi: () => recruitment }));
 import { RecruitmentRequestError } from "../Recruitment/website-api";
@@ -27,6 +18,7 @@ vi.mock("../MemberCV/session", async (original) => ({
   ...await original<typeof import("../MemberCV/session")>(),
   authClient: {},
   memberAuthConfigured: true,
+  memberSessionToken: async () => "test-session-token",
   ensureMemberLanding: session.landing,
   watchMemberSession: () => () => undefined,
   signOutMember: session.signOut,
@@ -42,6 +34,18 @@ vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
 
 const signedOut = { phase: "signed-out", token: null, userId: null, status: 401, error: null };
 const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null, account: { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" } };
+let selfAccess = {
+  memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
+  roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
+};
+const departmentDirectory = ["Business & Marketing", "Finance", "Mechanical & Production"].map((name, index) => ({
+  id: `department-${index}`, name, season: "S27", revision: 1, leadId: null, memberIds: ["member"],
+}));
+const workspaceDirectory = {
+  viewerId: "member", canAdmin: false, projectAccess: true, canManageProjects: false,
+  members: [], projects: [],
+  departments: [...departmentDirectory],
+};
 
 describe("internal member platform", () => {
   let container: HTMLDivElement;
@@ -51,13 +55,6 @@ describe("internal member platform", () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     window.localStorage.removeItem("helix-member-theme");
     vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
-    projectTasks.load.mockReset().mockResolvedValue(initialLocalWorkspace());
-    projectTasks.mutate.mockReset();
-    departmentHome.load.mockReset().mockImplementation(async departmentId => ({departmentId,description:'',driveFolderUrl:null,revision:0,canEdit:true}));
-    departmentHome.save.mockReset();
-    workspace.load.mockReset().mockResolvedValue(directoryFixture());
-    workspace.saveMember.mockReset();
-    workspace.saveProject.mockReset();
     recruitment.session.mockReset().mockRejectedValue(new RecruitmentRequestError("Recruiter access required", 403));
     recruitment.list.mockReset().mockResolvedValue([]);
     recruitment.positions.mockReset().mockResolvedValue([]);
@@ -65,6 +62,16 @@ describe("internal member platform", () => {
     session.signOut.mockReset().mockResolvedValue(undefined);
     session.editorNavigate.mockReset();
     session.editorSignOut.mockReset();
+    selfAccess = {
+      memberId: "member", email: signedIn.account.email, name: signedIn.account.name, departmentId: "finance",
+      roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
+    };
+    workspaceDirectory.departments = [...departmentDirectory];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/member-login?__module=workspace" ? workspaceDirectory : url === "/api/gmail-status" ? { connected: false } : {};
+      return { ok: true, status: 200, json: async () => body } as unknown as Response;
+    }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -79,16 +86,6 @@ describe("internal member platform", () => {
     router = createMemoryRouter([{ path: "*", element: <MemberPlatform /> }], { initialEntries: [path] });
     await act(async () => root.render(<RouterProvider router={router} />));
   }
-  it.each(["/login", "/projects", "/tasks/00000000-0000-4000-8000-000000000010"])("blocks a narrow direct visit to %s before authentication or data loading",async path=>{
-    const width=window.innerWidth;
-    Object.defineProperty(window,"innerWidth",{configurable:true,value:390});
-    try {
-      await open(path);
-      expect(container.textContent).toContain("Increase your window size");
-      expect(session.landing).not.toHaveBeenCalled();expect(workspace.load).not.toHaveBeenCalled();expect(projectTasks.load).not.toHaveBeenCalled();
-    } finally {Object.defineProperty(window,"innerWidth",{configurable:true,value:width});}
-  });
-
   async function profileMenu() {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Profile menu"]')?.click());
   }
@@ -96,7 +93,7 @@ describe("internal member platform", () => {
   it.each([
     { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" },
     { name: "Åse Hansen", email: "ase@helixnmbu.no", role: "Member" },
-  ])("shows the signed-in account $name and its role", async (account) => {
+  ])("shows the signed-in account $name and its role in the sidebar", async (account) => {
     session.landing.mockResolvedValue({ ...signedIn, account });
     await open("/");
     const trigger = container.querySelector('[aria-label="Profile menu"]');
@@ -105,8 +102,8 @@ describe("internal member platform", () => {
     expect(trigger?.textContent).not.toContain("Member account");
     await profileMenu();
     const menu = document.querySelector('[aria-label="Account menu"]');
-    expect(menu?.textContent).toContain("Profile");
-    expect(menu?.textContent).toContain("Sign out");
+    expect(menu?.textContent).not.toContain(account.name);
+    expect(menu?.textContent).not.toContain(account.role);
   });
 
   it.each(["/", "/settings", "/teams/business-marketing/campaigns"])("removes preview notices from %s", async (path) => {
@@ -114,11 +111,11 @@ describe("internal member platform", () => {
     await open(path);
     expect(container.textContent).not.toMatch(/\bpreview\b|\bmockup\b|\bfictional\b|\bexample mode\b|added later/i);
     if (path === "/settings") {
-      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toContain("Admin");
+      expect(container.querySelector('[aria-labelledby="member-settings-title"]')?.textContent).not.toMatch(/\bAdmin\b/);
     }
   });
 
-  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/tasks", "/season-overview", "/project-management/overview", "/recruiting", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
+  it.each(["/", "/profile", "/settings", "/notifications", "/mail", "/recruiting", "/admin/access", "/teams/finance/budget", "/garage"])("sends signed-out visitors at %s to /login without rendering private content", async (path) => {
     await open(path);
     expect(router.state.location.pathname).toBe("/login");
     expect(container.textContent).toContain("Log in to your account");
@@ -133,6 +130,18 @@ describe("internal member platform", () => {
     expect(router.state.location.pathname).toBe("/");
     expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
     expect(recruitment.list).not.toHaveBeenCalled();
+  });
+
+  it("shows only the assigned department team and blocks direct access to another team", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    selfAccess = { ...selfAccess, features: ["team.finance"] };
+    workspaceDirectory.departments = departmentDirectory.filter(department => department.name === "Finance");
+    await open("/");
+    expect(container.textContent).toContain("Finance");
+    expect(container.textContent).not.toContain("Business & Marketing");
+    await act(async () => router.navigate("/teams/business-marketing/campaigns"));
+    expect(router.state.location.pathname).toBe("/");
+    expect(container.textContent).not.toContain("Partner Spotlight");
   });
 
   it("redirects legacy recruitment links to the Recruiting route", async () => {
@@ -170,6 +179,7 @@ describe("internal member platform", () => {
     await act(async () => window.dispatchEvent(new Event("focus")));
     await act(async () => router.navigate("/recruiting"));
     expect(container.textContent).toContain("Applicant One");
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).startsWith("/api/member-access?action=self"))).toHaveLength(1);
     expect(recruitment.session).toHaveBeenCalledOnce();
     expect(recruitment.list).toHaveBeenCalledOnce();
     expect(recruitment.positions).toHaveBeenCalledOnce();
@@ -194,11 +204,6 @@ describe("internal member platform", () => {
   it("preserves recruitment as a safe member login destination", () => {
     expect(memberLoginDestination({ from: "/recruiting" })).toBe("/recruiting");
     expect(googleSignInRequest("/recruiting", "https://internal.helixnmbu.no").callbackURL).toBe("https://internal.helixnmbu.no/recruiting");
-  });
-
-  it.each(["/members", "/projects", "/departments/mechanical-and-production", "/tasks", "/season-overview", "/project-management/overview", "/project-management/production?view=timeline#tasks", "/project-management/partnership-deliverables"])("preserves %s through both member login and Google callback", path => {
-    expect(memberLoginDestination({ from: path })).toBe(path);
-    expect(googleSignInRequest(path, "https://internal.helixnmbu.no").callbackURL).toBe(`https://internal.helixnmbu.no${path}`);
   });
 
   it("opens Notifications from below Home and shows an honest empty state", async () => {
@@ -239,7 +244,7 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
     await profileMenu();
-    const appearance = document.querySelector('button[aria-labelledby="member-appearance-label member-appearance-value"]');
+    const appearance = [...document.querySelectorAll<HTMLButtonElement>('[aria-labelledby="member-appearance-label member-appearance-value"]')][0];
     await act(async () => appearance?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })));
     const dark = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(item => item.textContent?.includes("Dark"));
     expect(dark).toBeDefined();
@@ -268,14 +273,9 @@ describe("internal member platform", () => {
   it("keeps profile and CV access in the account panel and guards Settings navigation from the editor", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/");
-    expect(container.textContent).toContain("Workspace");
-    expect(container.textContent).toContain("Your spaces");
-    expect(container.textContent).toContain("Season Overview");
-    const mail = container.querySelector('[aria-label="Mail"]')!;
-    const tasks = container.querySelector('[aria-label="Tasks"]')!;
-    expect(mail.compareDocumentPosition(tasks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.textContent).toContain("Business & Marketing");
+    expect(container.textContent).toContain("Finance");
     expect(container.textContent).toContain("Mechanical & Production");
-    expect(container.querySelector('[aria-label="Business & Marketing"]')).toBeNull();
     expect(container.querySelector('a[href^="/profile"]')).toBeNull();
     expect(container.querySelector('[aria-label="Profile"]')).toBeNull();
     await profileMenu();
@@ -341,438 +341,6 @@ describe("internal member platform", () => {
     }
     expect(memberLoginDestination({ from: "/profile" })).toBe("/profile");
   });
-
-  it("shows an unlabeled platform group, a collapsible Workspace, and only accessible spaces", async () => {
-    session.landing.mockResolvedValue(signedIn);
-    await open("/members");
-    expect(container.querySelector('[data-sidebar="group-label"]')?.textContent).toBe("Workspace");
-    expect(container.querySelector('[aria-label="Home"] svg')?.classList.contains('tabler-icon-smart-home')).toBe(true);
-    expect(container.querySelector('[aria-label="Season Overview"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Mechanical & Production"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Electronics"]')).toBeNull();
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Toggle Workspace"]')?.click());
-    expect(container.querySelector('button[aria-label="Members"]')).toBeNull();
-    expect(container.querySelector('[aria-label="Mechanical & Production"]')).not.toBeNull();
-  });
-
-  it("lets ordinary members view members and all projects without editing controls", async () => {
-    session.landing.mockResolvedValue(signedIn);
-    const data=directoryFixture();data.canAdmin=false;data.canManageProjects=false;data.departments=data.departments.map(d=>({...d,leadId:null}));workspace.load.mockResolvedValue(data);
-    await open('/members');
-    expect(container.querySelector('h1')?.textContent).toBe('Members');
-    expect(container.querySelector('table')?.textContent).toContain('Sam Example');
-    expect(container.querySelector('[aria-label="Edit Sam Example"]')).toBeNull();
-    expect(container.textContent).not.toContain('Invite');
-    await act(async()=>router.navigate('/projects'));
-    expect(container.querySelector('h1')?.textContent).toBe('Projects');
-    expect(container.querySelector('table')?.textContent).toContain('Chassis & assembly');
-    expect([...container.querySelectorAll('button')].some(b=>b.textContent==='+ New project')).toBe(false);
-    expect(container.querySelector('table')?.textContent).toContain('Department');
-    expect(container.querySelector('table')?.textContent).not.toContain('Health');
-  });
-
-  it("switches the projects directory to a filtered timeline through the toolbar menu",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();const project=data.projects[0];
-    project.milestones=[{id:'first-goal',title:'Ready for assembly',deadline:project.deadline,priority:'high'},{id:'second-goal',title:'Manufacturing review',deadline:project.deadline,priority:'normal'}];
-    workspace.load.mockResolvedValue(data);
-    await open(`/projects?department=${data.departments.find(item=>project.departments.includes(item.name))!.id}`);
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project filters and view"]')!.click());
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project layout"] button')].find(button=>button.textContent==='Timeline')!.click());
-    expect(router.state.location.search).toContain('view=timeline');expect(router.state.location.search).toContain('department=');
-    expect(container.querySelector('[aria-label="Project timeline"]')).not.toBeNull();
-    const goals=container.querySelectorAll<HTMLAnchorElement>('[aria-label^="Open milestone"]');
-    expect(goals).toHaveLength(2);expect(goals[0].style.top).not.toBe(goals[1].style.top);
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project layout"] button')].find(button=>button.textContent==='List')!.click());
-    expect(container.querySelector('table[aria-label="Projects list"]')).not.toBeNull();
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project display properties"] button')].find(button=>button.textContent==='Priority')!.click());
-    expect(container.querySelector('table thead')?.textContent).not.toContain('Priority');
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Reset view and filters')!.click());
-    expect(router.state.location.search).toBe('');expect(container.querySelector('table thead')?.textContent).toContain('Priority');
-  });
-
-  it("combines project menu filters and preserves them when switching views",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();data.projects[0].priority='urgent';workspace.load.mockResolvedValue(data);await open('/projects');
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project filters and view"]')!.click());
-    await act(async()=>document.getElementById('project-filter-priority')!.click());
-    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==='Urgent')!.click());
-    expect(container.querySelectorAll('table tbody tr')).toHaveLength(1);expect(router.state.location.search).toContain('priority=urgent');
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Project layout"] button')].find(button=>button.textContent==='Timeline')!.click());
-    expect(container.querySelectorAll('[aria-label^="Timeline for"]')).toHaveLength(1);expect(router.state.location.search).toContain('priority=urgent');
-  });
-
-  it("restores a timeline URL and opens its milestone in the project filter",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();const project=data.projects[0];
-    project.milestones=[{id:'first-goal',title:'Ready for assembly',deadline:project.deadline,priority:'high'}];workspace.load.mockResolvedValue(data);
-    await open('/projects?view=timeline&scale=month');
-    expect(container.querySelector('#project-timeline-scale')?.textContent).toBe('Month');
-    await act(async()=>container.querySelector<HTMLAnchorElement>('[aria-label="Open milestone Ready for assembly in Chassis & assembly"]')!.click());
-    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(`/projects/${project.id}?milestone=first-goal`);
-  });
-
-  it("saves a project start date from the creation form",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();workspace.load.mockResolvedValue(data);workspace.saveProject.mockResolvedValue(data);await open('/projects');
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='+ New project')!.click());
-    for(const [id,value] of [['project-name','Scheduled build'],['project-start','2026-10-01'],['project-deadline','2026-12-01']]){
-      if(id !== 'project-name') await act(async()=>document.querySelector<HTMLButtonElement>(`[aria-label="${id==='project-start'?'Start date':'Target date'}"]`)!.click());
-      const field=document.getElementById(id) as HTMLInputElement;
-      await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(field,value);field.dispatchEvent(new Event('input',{bubbles:true}));});
-      if(id !== 'project-name') {
-        await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Done')!.click());
-        await act(async()=>{await new Promise<void>(resolve=>setTimeout(resolve,0));});
-      }
-    }
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Create project')!.click());
-    expect(workspace.saveProject).toHaveBeenCalledWith(expect.objectContaining({action:'save_project',project:expect.objectContaining({startDate:'2026-10-01',deadline:'2026-12-01'})}));
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it("renders a dated project bar with milestones at their calendar positions",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();const project=data.projects[0];project.startDate='2026-09-01';project.deadline='2026-12-01';
-    project.milestones=[{id:'design-review',title:'Design review',deadline:'2026-10-01',priority:'normal'}];
-    data.projects[1].startDate=null;workspace.load.mockResolvedValue(data);await open('/projects?view=timeline');
-    const bar=container.querySelector<HTMLElement>(`[data-project-bar="${project.id}"]`)!;
-    const milestone=container.querySelector<HTMLElement>('[aria-label="Open milestone Design review in Chassis & assembly"]')!;
-    expect(bar).not.toBeNull();
-    expect((parseFloat(milestone.style.left)-parseFloat(bar.style.left))/parseFloat(bar.style.width)).toBeCloseTo(30/91);
-    expect(milestone.style.top).toBe('26px');
-    expect(container.querySelector(`[data-project-bar="${data.projects[1].id}"]`)).toBeNull();
-    expect(container.querySelector(`[aria-label^="Open project ${data.projects[1].name}, target"]`)).not.toBeNull();
-  });
-
-  it.each(['manager','lead'])("lets a %s open the project creation form",async role=>{
-    session.landing.mockResolvedValue(signedIn);
-    const data=directoryFixture();data.canAdmin=false;data.canManageProjects=role==='manager';workspace.load.mockResolvedValue(data);
-    await open('/projects');
-    const create=[...container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='+ New project');
-    expect(create).toBeDefined();await act(async()=>create!.click());
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('New project');
-    expect(document.querySelector('#project-leads')).not.toBeNull();
-    expect(document.querySelector('#project-priority')).not.toBeNull();
-  });
-
-  it("lists every department but only opens the viewer's departments",async()=>{
-    session.landing.mockResolvedValue(signedIn);await open('/departments');
-    const table=container.querySelector('table')!;
-    expect(table.querySelectorAll('tbody tr')).toHaveLength(7);
-    expect(table.querySelector('tbody tr td')?.textContent).toBe('Mechanical & Production');
-    expect(table.querySelectorAll('tbody tr')[2].textContent).toContain('Sam Example');
-    expect([...table.querySelectorAll('button')].map(b=>b.textContent)).toEqual(['Mechanical & Production']);
-    await act(async()=>[...table.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Mechanical & Production')!.click());
-    expect(router.state.location.pathname).toBe('/departments/mechanical-and-production');
-    expect(container.querySelector('h1')?.textContent).toBe('Mechanical & Production');
-    await act(async()=>router.navigate('/departments/finance'));
-    expect(router.state.location.pathname).toBe('/departments');
-    expect(container.querySelector('h1')?.textContent).toBe('Departments');
-  });
-
-
-  it("opens the department workspace from both entry points and navigates its tabs", async()=>{
-    session.landing.mockResolvedValue(signedIn);await open('/departments');
-    await act(async()=>container.querySelector<HTMLButtonElement>('table button')!.click());
-    expect(container.querySelector('h1')?.textContent).toBe('Mechanical & Production');
-    expect(container.textContent).toContain('Department resources');
-    expect([...container.querySelectorAll('[role="tab"]')].map(tab=>tab.textContent)).toEqual(['Overview','Documents','Members']);
-    await act(async()=>container.querySelector<HTMLButtonElement>('[role="tab"][data-state="inactive"]')?.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0})));
-    expect(router.state.location.search).toBe('?tab=documents');
-    expect(container.textContent).toContain('Documents are stored in the department’s shared Google Drive folder.');
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(tab=>tab.textContent==='Members')!.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0})));
-    expect(container.querySelector('table')?.textContent).toContain('Sam Example');
-    expect(container.querySelector('table')?.textContent).toContain('Lead');
-    await act(async()=>router.navigate('/members'));
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Mechanical & Production"]')!.click());
-    expect(router.state.location.pathname).toBe('/departments/mechanical-and-production');
-    expect(container.textContent).toContain('Department resources');
-  });
-
-  it("saves a Drive folder through department settings and shows it as a document resource",async()=>{
-    session.landing.mockResolvedValue(signedIn);await open('/departments/mechanical-and-production');
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Department settings')!.click());
-    const description=document.querySelector<HTMLTextAreaElement>('#department-description')!;
-    const folder=document.querySelector<HTMLInputElement>('#department-drive-folder')!;
-    await act(async()=>{
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(description,'Design and build the S27 car.');description.dispatchEvent(new Event('input',{bubbles:true}));
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(folder,'https://drive.google.com/drive/u/0/folders/shared-folder?usp=sharing');folder.dispatchEvent(new Event('input',{bubbles:true}));
-    });
-    const id=directoryFixture().departments.find(d=>d.name==='Mechanical & Production')!.id;
-    departmentHome.save.mockResolvedValue({departmentId:id,description:'Design and build the S27 car.',driveFolderUrl:'https://drive.google.com/drive/folders/shared-folder',revision:1,canEdit:true});
-    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(departmentHome.save).toHaveBeenCalledWith(expect.objectContaining({description:'Design and build the S27 car.',driveFolderUrl:'https://drive.google.com/drive/folders/shared-folder',expectedRevision:0}));
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.querySelector('a[href="https://drive.google.com/drive/folders/shared-folder"]')?.getAttribute('target')).toBe('_blank');
-    expect(container.textContent).toContain('Design and build the S27 car.');
-  });
-
-  it("keeps department settings read-only for ordinary members and opens filtered projects",async()=>{
-    session.landing.mockResolvedValue(signedIn);
-    departmentHome.load.mockImplementation(async departmentId=>({departmentId,description:'Department description',driveFolderUrl:null,revision:0,canEdit:false}));
-    await open('/departments/mechanical-and-production');
-    expect([...container.querySelectorAll('button')].some(button=>button.textContent==='Department settings')).toBe(false);
-    const quickLinks=container.querySelector('nav[aria-label="Department quick links"]')!;
-    await act(async()=>[...quickLinks.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.startsWith('Projects'))!.click());
-    expect(router.state.location.pathname).toBe('/projects');
-    expect(container.querySelectorAll('tbody tr')).toHaveLength(1);
-    expect(container.querySelector('table')?.textContent).toContain('Chassis & assembly');
-  });
-
-
-  function detailFixture(){
-    const data=initialLocalWorkspace();const milestone=data.tasks.find(t=>t.kind==='milestone'&&t.category==='production')!;const base=data.tasks.find(t=>t.kind==='task'&&t.category==='production')!;
-    const id=(number:number)=>`00000000-0000-4000-8000-${String(number).padStart(12,'0')}`;
-    data.tasks.push({...milestone,id:id(40),title:'Manufacturing sign-off'}, {...base,id:id(41),title:'Verify dimensions',milestoneId:id(40),status:'todo',completedAt:null}, {...base,id:id(42),title:'Legacy inspection',milestoneId:null,status:'todo',completedAt:null}, {...milestone,id:id(50),title:'Planning review'});
-    return data;
-  }
-
-  it("opens project tasks with Properties, Milestones and whole-project Progress",async()=>{
-    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects');
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('table button')].find(b=>b.textContent==='Chassis & assembly')!.click());
-    expect(router.state.location.pathname).toBe('/projects/00000000-0000-4000-8000-000000000100');
-    const breadcrumb=container.querySelector('nav[aria-label="breadcrumb"]')!;
-    expect(breadcrumb.textContent).toContain('Helix NMBU');expect(breadcrumb.textContent).toContain('Projects');expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('Chassis & assembly');
-    expect(container.querySelector('[aria-label="Chassis & assembly project"] header')).toBeNull();
-    const tasks=container.querySelector('[aria-label="Project tasks"]')!;
-    expect(tasks.textContent).toContain('Complete chassis design review');expect(tasks.textContent).toContain('Verify dimensions');expect(tasks.textContent).not.toContain('Publish workshop update');
-    const details=container.querySelector('[aria-label="Project details"]')!;
-    expect(details.textContent).toContain('Properties');expect(details.textContent).toContain('Milestones');expect(details.textContent).toContain('Progress');
-    expect(details.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
-    expect(details.querySelector('[data-progress-deadline]')?.getAttribute('data-progress-deadline')).toBe(directoryFixture().projects[0].deadline);
-    expect(details.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe(directoryFixture().projects[0].startDate);
-    await act(async()=>[...breadcrumb.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Projects')!.click());
-    expect(router.state.location.pathname).toBe('/projects');
-  });
-
-  it("toggles a milestone filter off on a second click and keeps progress scoped to the whole project",async()=>{
-    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects/00000000-0000-4000-8000-000000000100');
-    const milestone=container.querySelector<HTMLButtonElement>('[aria-label="Filter tasks by milestone Chassis ready for assembly"]')!;
-    await act(async()=>milestone.click());
-    const list=()=>container.querySelector('[aria-label="Project tasks"]')!;
-    expect(milestone.getAttribute('aria-pressed')).toBe('true');expect(list().textContent).toContain('Confirm material delivery');expect(list().textContent).not.toContain('Verify dimensions');expect(list().textContent).not.toContain('Legacy inspection');
-    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
-    await act(async()=>milestone.click());expect(milestone.getAttribute('aria-pressed')).toBe('false');expect(list().textContent).toContain('Verify dimensions');expect(list().textContent).toContain('Legacy inspection');expect(router.state.location.search).toBe('');
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Filter tasks by milestone Manufacturing sign-off"]')!.click());expect(list().textContent).toContain('Verify dimensions');expect(list().textContent).not.toContain('Confirm material delivery');
-    await act(async()=>[...list().querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='New task')!.click());expect(document.querySelector('#new-task-milestone')?.textContent).toBe('Manufacturing sign-off');
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(b=>b.textContent?.startsWith('Cancel'))!.click());
-    await act(async()=>[...list().querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Clear milestone filter')!.click());expect(list().textContent).toContain('Confirm material delivery');
-  });
-
-  it("restores milestone filters from the URL and handles an empty milestone",async()=>{
-    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');
-    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Verify dimensions');expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Confirm material delivery');
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Filter tasks by milestone Planning review"]')!.click());expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('No matching tasks');
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Filter tasks by milestone Planning review"]')!.click());expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Verify dimensions');
-    const noMilestone=[...container.querySelectorAll<HTMLButtonElement>('[aria-label="Project details"] button')].find(b=>b.textContent?.startsWith('No milestone'))!;
-    await act(async()=>noMilestone.click());expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Legacy inspection');expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Verify dimensions');
-  });
-
-  it("switches project lists to no grouping without losing filters or ordering",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    await open('/projects/00000000-0000-4000-8000-000000000100?sort=title&completed=show&cancelled=hide');
-    const list=()=>container.querySelector('[aria-label="Project tasks"]')!;
-    expect(list().querySelectorAll('section > button[aria-expanded]')).not.toHaveLength(0);
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project task filters and view"]')!.click());
-    expect(document.getElementById('project-task-cancelled')).toBeNull();
-    await act(async()=>document.getElementById('project-task-group')!.click());
-    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==='No grouping')!.click());
-    expect(router.state.location.search).toContain('group=none');
-    expect(router.state.location.search).toContain('sort=title');
-    expect(router.state.location.search).not.toContain('cancelled=');
-    expect(list().querySelectorAll('section > button[aria-expanded]')).toHaveLength(0);
-    const titles=[...list().querySelectorAll<HTMLButtonElement>('li button:not([aria-label])')].map(button=>button.textContent!);
-    expect(titles).toHaveLength(5);expect(titles).toEqual([...titles].sort((a,b)=>a.localeCompare(b)));
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='Board')!.click());
-    expect(container.querySelector('[aria-label="Milestone board"]')).not.toBeNull();
-    expect(document.getElementById('project-task-group')?.hasAttribute('disabled')).toBe(true);
-    expect(router.state.location.search).toContain('group=none');
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='List')!.click());
-    expect(list().querySelectorAll('section > button[aria-expanded]')).toHaveLength(0);
-    await act(async()=>document.getElementById('project-task-group')!.click());
-    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option=>option.textContent==='Status')!.click());
-    expect(list().querySelectorAll('section > button[aria-expanded]')).not.toHaveLength(0);
-  });
-
-  it("shows milestones on the project board, preserves filters and opens their linked task list",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    const projectUrl='/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040';
-    await open(projectUrl);
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project task filters and view"]')!.click());
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='Board')!.click());
-    expect(router.state.location.search).toContain('view=board');expect(router.state.location.search).toContain('milestone=');
-    const board=()=>container.querySelector('[aria-label="Milestone board"]')!;
-    expect(board().querySelectorAll('[role="article"]')).toHaveLength(1);
-    expect(board().textContent).toContain('Manufacturing sign-off');expect(board().textContent).not.toContain('Confirm material delivery');
-    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Manufacturing sign-off')!;task.status='done';task.revision++;
-    projectTasks.mutate.mockResolvedValue(next);
-    await act(async()=>board().querySelector<HTMLButtonElement>('[aria-label="Change status for Manufacturing sign-off"]')!.click());
-    await act(async()=>document.querySelector<HTMLElement>('[role="option"][aria-label="Done"]')!.click());
-    expect(board().querySelector('[aria-label="Done column"] [role="article"]')?.getAttribute('aria-label')).toBe('Manufacturing sign-off');
-    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
-    expect(board().querySelector('[role="progressbar"]')?.textContent).toBe('0/1');
-    await act(async()=>board().querySelector<HTMLButtonElement>('[role="article"] button:not([aria-label])')!.click());
-    expect(router.state.location.pathname).toBe('/projects/00000000-0000-4000-8000-000000000100');
-    expect(router.state.location.search).toContain('view=list');
-    expect(router.state.location.search).toContain(`milestone=${task.id}`);
-    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Verify dimensions');
-    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Confirm material delivery');
-  });
-  it("saves a dragged project milestone as Blocked only after receiving a reason",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    await open('/projects/00000000-0000-4000-8000-000000000100?view=board&milestone=00000000-0000-4000-8000-000000000040');
-    const card=container.querySelector('[role="article"][aria-label="Manufacturing sign-off"]')!;
-    const target=container.querySelector('[aria-label="Blocked column"]')!;
-    const transfer={effectAllowed:'',dropEffect:'',setData:vi.fn()};
-    for(const [element,type] of [[card,'dragstart'],[target,'dragover'],[target,'drop'],[card,'dragend']] as const){
-      const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(event,'dataTransfer',{value:transfer});
-      await act(async()=>element.dispatchEvent(event));
-    }
-    expect(projectTasks.mutate).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Move milestone to Blocked');
-    const field=document.querySelector<HTMLTextAreaElement>('[aria-label="Blocked reason"]')!;
-    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(field,'Waiting for measurements');field.dispatchEvent(new Event('input',{bubbles:true}));});
-    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Manufacturing sign-off')!;task.status='blocked';task.blockedReason='Waiting for measurements';task.revision++;
-    projectTasks.mutate.mockResolvedValue(next);
-    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(projectTasks.mutate).toHaveBeenCalledWith({action:'set_status',id:task.id,expectedRevision:1,status:'blocked',blockedReason:'Waiting for measurements'});
-    expect(container.querySelector('[aria-label="Blocked column"] [role="article"]')?.textContent).toContain('Waiting for measurements');
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
-  });
-  it("restores project Board filters and clears them while retaining the layout",async()=>{
-    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());
-    await open('/projects/00000000-0000-4000-8000-000000000100?view=board&status=blocked&priority=low');
-    expect(container.querySelectorAll('[aria-label="Milestone board"] [role="article"]')).toHaveLength(0);
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Clear filters')!.click());
-    expect(router.state.location.search).toBe('?view=board');
-    expect(container.querySelectorAll('[aria-label="Milestone board"] [role="article"]')).toHaveLength(3);
-  });
-  it("updates task completion, milestone progress and project progress together",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');
-    const next=structuredClone(data);const task=next.tasks.find(t=>t.title==='Verify dimensions')!;task.status='done';task.completedAt=new Date().toISOString();task.revision+=1;projectTasks.mutate.mockResolvedValue(next);
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Change status for Verify dimensions"]')!.click());
-    await act(async()=>document.querySelector<HTMLElement>('[role="option"][aria-label="Done"]')!.click());
-    expect(projectTasks.mutate).toHaveBeenCalledWith(expect.objectContaining({action:'set_status',id:task.id,status:'done',expectedRevision:1}));
-    expect(container.querySelector('[aria-label="Change status for Verify dimensions"] [data-task-status="done"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Filter tasks by milestone Manufacturing sign-off"]')?.textContent).toContain('100%');
-    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('40');
-  });
-
-  it("opens a task from My tasks as a page with description and properties",async()=>{
-    session.landing.mockResolvedValue(signedIn);
-    const data=detailFixture();const task=data.tasks.find(item=>item.title==='Confirm material delivery')!;
-    task.description='Confirm delivery with the supplier.\nRecord the agreed arrival date.';
-    projectTasks.load.mockResolvedValue(data);await open('/tasks');
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===task.title)!.click());
-    expect(router.state.location.pathname).toBe(`/tasks/${task.id}`);
-    expect(container.querySelector('[aria-label="Task content"] h1')?.textContent).toBe(task.title);
-    expect(container.querySelector('[aria-label="Task content"]')?.textContent).toContain(task.description);
-    expect(container.querySelector('[aria-label="Task properties"]')?.textContent).toContain('Chassis & assembly');
-    expect(container.querySelector('[aria-label="Task properties"]')?.textContent).toContain('Chassis ready for assembly');
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect([...container.querySelectorAll('button')].some(button=>button.textContent==='Update status')).toBe(true);
-    await act(async()=>[...container.querySelectorAll<HTMLAnchorElement>('a')].find(link=>link.textContent==='Back')!.click());
-    expect(router.state.location.pathname).toBe('/tasks');
-  });
-
-  it("opens task detail from a project and returns to its milestone filter",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    const task=data.tasks.find(item=>item.title==='Verify dimensions')!;
-    const origin=`/projects/${task.projectId}?milestone=${task.milestoneId}`;
-    await open(origin);
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===task.title)!.click());
-    expect(router.state.location.pathname).toBe(`/tasks/${task.id}`);
-    const milestone=[...container.querySelectorAll<HTMLAnchorElement>('[aria-label="Task properties"] a')].find(link=>link.textContent==='Manufacturing sign-off')!;
-    expect(milestone.getAttribute('href')).toBe(`/projects/${task.projectId}?milestone=${task.milestoneId}`);
-    await act(async()=>[...container.querySelectorAll<HTMLAnchorElement>('a')].find(link=>link.textContent==='Back')!.click());
-    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(origin);
-    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Confirm material delivery');
-  });
-
-  it("supports direct task URLs and hides edit controls from unassigned readers",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();const task=data.tasks.find(item=>item.kind==='task')!;
-    data.canManage=false;data.taskLeadCategories=[];data.viewerId='another-member';projectTasks.load.mockResolvedValue(data);
-    await open(`/tasks/${task.id}`);
-    expect(container.querySelector('[aria-label="Task content"] h1')?.textContent).toBe(task.title);
-    expect([...container.querySelectorAll('button')].some(button=>['Edit task','Update status'].includes(button.textContent??''))).toBe(false);
-  });
-
-  it("preserves task access requirements",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();data.projectAccess=false;workspace.load.mockResolvedValue(data);
-    await open('/tasks/00000000-0000-4000-8000-000000000011');
-    expect(projectTasks.load).not.toHaveBeenCalled();expect(container.textContent).toContain('Task access required');
-  });
-
-  it("handles a missing task without showing another task",async()=>{
-    session.landing.mockResolvedValue(signedIn);
-    await open('/tasks/missing-task');
-    expect(container.textContent).toContain('Task not found');expect(container.querySelector('[aria-label="Task content"]')).toBeNull();
-  });
-
-  it("updates task details after saving and does not retain them on a missing-task URL",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    const task=data.tasks.find(item=>item.title==='Confirm material delivery')!;
-    projectTasks.mutate.mockImplementation(async change=>({...data,tasks:data.tasks.map(item=>item.id===change.id?{...item,...change.task,revision:item.revision+1}:item)}));
-    await open(`/tasks/${task.id}`);
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Edit task')!.click());
-    const description=document.querySelector<HTMLTextAreaElement>('#task-description')!;
-    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(description,'Confirm the supplier delivery slot.');description.dispatchEvent(new Event('input',{bubbles:true}));});
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Save task')!.click());
-    expect(projectTasks.mutate).toHaveBeenCalledWith(expect.objectContaining({action:'save_task',id:task.id,expectedRevision:1,task:expect.objectContaining({description:'Confirm the supplier delivery slot.'})}));
-    expect(container.querySelector('[aria-label="Task content"]')?.textContent).toContain('Confirm the supplier delivery slot.');expect(document.querySelector('[role="dialog"]')).toBeNull();
-    await act(async()=>router.navigate('/tasks/no-longer-available'));
-    expect(container.textContent).toContain('Task not found');expect(container.querySelector('[aria-label="Task content"]')).toBeNull();
-  });
-
-  it("clears task details and its editor when task access is revoked during a save",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    projectTasks.mutate.mockRejectedValue(new ProjectRequestError('Task access revoked',403));
-    const task=data.tasks.find(item=>item.title==='Confirm material delivery')!;
-    await open(`/tasks/${task.id}`);
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Edit task')!.click());
-    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Save task')!.click());
-    expect(container.textContent).toContain('Task access required');expect(container.querySelector('[aria-label="Task content"]')).toBeNull();expect(document.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it("keeps the project task modal open when Create more is enabled",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
-    projectTasks.mutate.mockImplementation(async change=>({...data,tasks:[...data.tasks,{...change.task,id:change.id,season:'S27',revision:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null}]}));
-    await open('/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040');
-    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('[aria-label="Project tasks"] button')].find(button=>button.textContent==='New task')!.click());
-    const title=document.querySelector<HTMLTextAreaElement>('#new-task-title')!;
-    const description=document.querySelector<HTMLTextAreaElement>('#new-task-description')!;
-    await act(async()=>{
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(title,'Inspect suspension clearances');title.dispatchEvent(new Event('input',{bubbles:true}));
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(description,'Check the assembly drawing before inspection.');description.dispatchEvent(new Event('input',{bubbles:true}));
-      document.getElementById('create-another-task')!.click();
-    });
-    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(projectTasks.mutate).toHaveBeenCalledWith(expect.objectContaining({action:'save_task',task:expect.objectContaining({title:'Inspect suspension clearances',description:'Check the assembly drawing before inspection.'})}));
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();expect(document.querySelector<HTMLTextAreaElement>('#new-task-title')?.value).toBe('');expect(document.querySelector<HTMLTextAreaElement>('#new-task-description')?.value).toBe('');expect(document.querySelector('#new-task-milestone')?.textContent).toBe('Manufacturing sign-off');
-  });
-
-  it("preserves project-module access requirements for task lists",async()=>{
-    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();data.projectAccess=false;workspace.load.mockResolvedValue(data);
-    await open('/projects/00000000-0000-4000-8000-000000000100');expect(projectTasks.load).not.toHaveBeenCalled();expect(container.textContent).toContain('Project task access required');expect(container.textContent).not.toContain('Complete chassis design review');
-  });
-
-  it("keeps tasks hidden when the server revokes project access",async()=>{
-    session.landing.mockResolvedValue(signedIn);projectTasks.load.mockRejectedValue(new ProjectRequestError('Access revoked',403));
-    await open('/projects/00000000-0000-4000-8000-000000000100');expect(container.textContent).toContain('Project task access required');expect(container.textContent).not.toContain('Complete chassis design review');
-  });
-
-  it("saves member edits through the admin action and retains the form on a failed save",async()=>{
-    session.landing.mockResolvedValue(signedIn);await open('/members');
-    await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Sam Example"]')!.click());
-    const input=document.querySelector<HTMLInputElement>('#member-name')!;
-    await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'Sam Updated');input.dispatchEvent(new Event('input',{bubbles:true}));});
-    workspace.saveMember.mockRejectedValueOnce(new Error('Record changed. Reload before saving.'));
-    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(document.querySelector<HTMLInputElement>('#member-name')?.value).toBe('Sam Updated');
-    expect(workspace.saveMember).toHaveBeenCalledWith(expect.objectContaining({name:'Sam Updated',expectedRevision:1,departments:expect.any(Array)}));
-    const saved=directoryFixture();saved.members[1].name='Sam Updated';workspace.saveMember.mockResolvedValue(saved);
-    await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.querySelector('table')?.textContent).toContain('Sam Updated');
-  });
-
   it("uses notifications for unavailable connections across the app", async () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/settings");

@@ -3,6 +3,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { positionApplicationUrl } from "../Recruitment/positions";
 import ApplyPage from "./ApplyPage";
 import ApplicationFormPage from "./ApplicationFormPage";
 const notify = vi.hoisted(() => vi.fn());
@@ -57,4 +58,9 @@ it("shows every visible open posting and department supplied by the catalog", as
   const filter = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Software & Autonomous")!;
   await act(async () => filter.click());
   expect(container.textContent).toContain(position.title);
+});
+
+it("keeps legacy placeholder application links on the platform form", () => {
+  expect(positionApplicationUrl({ id: "open-application", applyUrl: "https://form.typeform.com/to/placeholder" })).toBe("/apply/form?position=open-application");
+  expect(positionApplicationUrl({ id: "engineer", applyUrl: "" })).toBe("/apply/form?position=engineer");
 });

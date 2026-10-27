@@ -4,6 +4,7 @@ import { createGmailConnectHandler } from "./_lib/gmail-connect-handler.js";
 import { createGmailDisconnectHandler } from "./_lib/gmail-disconnect-handler.js";
 import { createGmailMessageActionHandler, createGmailMessageHandler, createGmailMessagesHandler } from "./_lib/gmail-messages-handler.js";
 import { createGmailStatusHandler } from "./_lib/gmail-status-handler.js";
+import { createEmailSignatureHandler } from "./_lib/email-signature-handler.js";
 
 const handlers = {
   callback: createGmailCallbackHandler(),
@@ -13,6 +14,7 @@ const handlers = {
   messages: createGmailMessagesHandler(),
   message: createGmailMessageHandler(),
   messageAction: createGmailMessageActionHandler(),
+  signature: createEmailSignatureHandler(),
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -79,6 +79,8 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/012_project_milestones.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    // Reinstall the latest project mutation function after replaying older migration definitions.
+    await db.exec(readFileSync(new URL("../db/migrations/020_project_start_dates.sql", import.meta.url), "utf8"));
     expect((await service().load("verified")).tasks.find(item => item.id === id(800))?.assigneeIds).toEqual([manager.userId]);
     expect((await service().load("verified")).progressEvents.filter(event => event.taskId === id(800))).toHaveLength(1);
     await db.query("delete from project_management.tasks where id=$1", [id(800)]);
@@ -97,6 +99,7 @@ describe("project management database and authorization", () => {
   it("persists department-spanning subprojects and complete tasks in the shared season", async () => {
     await service().mutate("verified", { action: "save_project", id: id(20), expectedRevision: 0,
       project: { name: "Suspension", description: "Build and test", category: "production", departments: ["Mechanical & Production", "Electronics"], leadIds: [manager.userId], deadline: "2026-12-10" } });
+    expect((await db.query("select lead_ids from project_management.projects where id=$1", [id(20)])).rows[0]?.lead_ids).toEqual([manager.userId]);
     await save(960, task({ kind: "milestone", projectId: id(20) }));
     const workspace = await save(10, task({ projectId: id(20), milestoneId: id(960) }));
     expect(workspace.projects.find(item => item.id === id(20))).toMatchObject({ id: id(20), departments: ["Mechanical & Production", "Electronics"], deadline: "2026-12-10", revision: 1 });
@@ -419,7 +422,7 @@ describe("project management database and authorization", () => {
       await db.query("insert into project_management.departments(id,season,name) values($1,'S27',$2)", [id(number), name]);
       await db.query("insert into project_management.department_members(department_id,member_id,is_lead) values($1,$2,true)", [id(number), lead]);
     }
-    await db.query("insert into project_management.projects(id,season,name,category,departments) values($1,'S27','Legacy departments','marketing',array['Business','Marketing','Unknown'])", [id(703)]);
+    await db.query("insert into project_management.projects(id,season,name,category,departments,lead_ids) values($1,'S27','Legacy departments','marketing',array['Business','Marketing','Unknown'],array[$2::uuid])", [id(703), manager.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
     const after = await service().load("verified");
     expect(after.departments.map(item => item.name).sort()).toEqual([...ORGANIZATION_DEPARTMENTS].sort());

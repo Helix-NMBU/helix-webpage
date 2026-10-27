@@ -11,6 +11,13 @@ function errorStatus(error: unknown): number {
   return error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : 0;
 }
 
+function nextPositionVersion(versions: Map<string, number>, id?: string): number {
+  if (!id) return 0;
+  const version = (versions.get(id) ?? 0) + 1;
+  versions.set(id, version);
+  return version;
+}
+
 type Access = "loading" | "allowed" | "denied" | "unavailable";
 type RecruitmentState = {
   access: Access;
@@ -26,6 +33,7 @@ type RecruitmentSession = RecruitmentState & {
   refresh: () => Promise<void>;
   removeApplication: (id: string, reject: boolean) => ReturnType<ReturnType<typeof createRecruitmentApi>["reject"]>;
   savePosition: (position: Omit<RecruitmentPosition, "id"> & { id?: string }) => Promise<void>;
+  setPositionVisibility: (id: string, visible: boolean) => Promise<void>;
   deletePosition: (id: string) => Promise<void>;
 };
 const initialState: RecruitmentState = { access: "loading", applications: [], positions: [], loading: true, ready: false };
@@ -41,6 +49,7 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
   const active = useRef(false);
   const generation = useRef(0);
   const dataRevision = useRef(0);
+  const positionVersions = useRef(new Map<string, number>());
   const bootstrap = useRef<Promise<RecruitmentState & { error?: unknown }> | null>(null);
   const refreshPending = useRef<Promise<void> | null>(null);
   const notify = useNotify();
@@ -118,28 +127,42 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
   }, [api, failure]);
   const savePosition = useCallback(async (position: Omit<RecruitmentPosition, "id"> & { id?: string }) => {
     const current = generation.current;
+    const version = nextPositionVersion(positionVersions.current, position.id);
     dataRevision.current += 1;
     try {
       const saved = await api.savePosition(position);
-      if (!active.current || generation.current !== current) return;
+      if (!active.current || generation.current !== current || (positionVersions.current.get(saved.id) ?? 0) !== version) return;
       dataRevision.current += 1;
       setState(value => ({ ...value, positions: [...value.positions.filter(row => row.id !== saved.id), saved] }));
       notify("Position saved", saved.visible ? "This position is visible on the website." : "This position is hidden from the website.", { variant: "success", href: null });
     } catch (error) { if (active.current && generation.current === current) failure(error); throw error; }
   }, [api, failure, notify]);
+  const setPositionVisibility = useCallback(async (id: string, visible: boolean) => {
+    const current = generation.current;
+    const version = nextPositionVersion(positionVersions.current, id);
+    dataRevision.current += 1;
+    try {
+      const saved = await api.setPositionVisibility(id, visible);
+      if (!active.current || generation.current !== current || positionVersions.current.get(id) !== version) return;
+      dataRevision.current += 1;
+      setState(value => ({ ...value, positions: value.positions.map(position => position.id === id ? saved : position) }));
+      notify("Position saved", saved.visible ? "This position is visible on the website." : "This position is hidden from the website.", { variant: "success", href: null });
+    } catch (error) { if (active.current && generation.current === current) failure(error); throw error; }
+  }, [api, failure, notify]);
   const deletePosition = useCallback(async (id: string) => {
     const current = generation.current;
+    const version = nextPositionVersion(positionVersions.current, id);
     dataRevision.current += 1;
     try {
       await api.deletePosition(id);
-      if (!active.current || generation.current !== current) return;
+      if (!active.current || generation.current !== current || positionVersions.current.get(id) !== version) return;
       dataRevision.current += 1;
       setState(value => ({ ...value, positions: value.positions.filter(row => row.id !== id) }));
       notify("Position deleted", "Existing applications have been kept.", { variant: "success", href: null });
     } catch (error) { if (active.current && generation.current === current) failure(error); throw error; }
   }, [api, failure, notify]);
-  const value = useMemo(() => ({ ...state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition }),
-    [state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition]);
+  const value = useMemo(() => ({ ...state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition, setPositionVisibility }),
+    [state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition, setPositionVisibility]);
   return <RecruitmentContext.Provider value={value}>{state.access === "loading"
     ? <div role="status" aria-label="Loading your workspace" className="p-8"><Skeleton className="h-40 w-full" /></div>
     : children}</RecruitmentContext.Provider>;

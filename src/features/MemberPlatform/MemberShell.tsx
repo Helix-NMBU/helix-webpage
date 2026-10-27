@@ -41,8 +41,8 @@ function Workspace({ children }: { children?: ReactNode }) {
   const page = previewPage(location.pathname);
   const seasonOverview = location.pathname === "/season-overview" || location.pathname.startsWith("/project-management");
   const directory = useWorkspace()?.data;
-  const department = directory?.departments.find(item => location.pathname === departmentPath(item.name) || location.pathname.startsWith(`${departmentPath(item.name)}/`));
-  const project = directory?.projects.find(item => location.pathname === `/projects/${item.id}`);
+  const department = directory?.departments?.find(item => location.pathname === departmentPath(item.name) || location.pathname.startsWith(`${departmentPath(item.name)}/`));
+  const project = directory?.projects?.find(item => location.pathname === `/projects/${item.id}`);
   const departmentSubpage = department && location.pathname !== departmentPath(department.name)
     ? location.pathname.slice(departmentPath(department.name).length + 1).split("/")[0]
     : null;

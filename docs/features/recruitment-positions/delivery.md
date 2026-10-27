@@ -1,46 +1,50 @@
-# Recruitment milestone completion
+# Recruiting release
 
 Updated: 2026-10-26
 Repository: Helix-NMBU/helix-webpage
-Branch: codex/recruitment-milestone-completion
-Base: ccbc68c64c379c5cede610f90114a36f94dc749b
-Tracker: [Recruiting / HELIX-29](https://linear.app/helixnmbu/issue/HELIX-29/move-recruiting-into-the-member-portal-with-role-based-access)
+Feature branch: codex/recruitment-milestone-completion
+Reviewed main base: 36dddd3bb62fd74b387dfb4673f7940a667dfb65
+Reviewed implementation: 7182b1a1f531f162a574553e40e159cd8c74999d
+Tracker: HELIX-31, HELIX-32 and HELIX-33 in the Recruiting milestone.
 
-## Approved work
+## Scope and authorization
 
-The user's 26 October implementation request adds acceptance criteria to the Recruiting milestone, which Linear already marks complete. Implement position management linked to the public website, verify application submission and authorized review, and preload recruitment data and sidebar access for the authenticated session. The older draft scope in this folder describes historical scoping; its staging workflow and lack of implementation authorization are superseded by the user's current request and AGENTS.md. This work preserves the existing recruiter allowlist and server-verified administrator model. It does not implement the proposed organizational access-role redesign.
+The user approved publishing, merging to main and releasing the recruitment milestone, and explicitly requested retaining the feature branch. Work was isolated in /Users/henrik.noteless/.codex/worktrees/recruitment-release/helix-webpage to preserve the shared checkout's ongoing project-management work. GitHub automatic branch deletion is disabled.
 
-## Implementation
+Recruiters manage visible/hidden postings, including Open Application, and review public website applications. Position entries have immediate visibility switches and accessible icon-only Edit/Delete controls. New postings default to hidden, the editor covers all posting fields, and failed saves retain input with shared notification feedback.
 
-- Migration 008 introduces the Neon positions catalog. It seeds the current public postings once without copying legacy application records. Replaying the migration does not restore deleted postings.
-- The existing website API serves visible positions publicly, supplies all positions to recruiters, and supports authorized create, edit, visibility, and delete operations. Submission validates against the same visible catalog. Saved applications retain their original position ID/title after catalog changes.
-- Recruiting has Applications and Positions tabs. The editor covers every posting field, starts new postings hidden, retains failed drafts, and uses shared notifications.
-- Login resolves the recruitment grant and preloads all application pages and positions before showing the workspace. A provider above the routed pages keeps those lists and the grant in memory throughout the session. Ordinary navigation and browser focus do not repeat recruitment checks or fetches. Refresh explicitly gets external changes.
-- Every protected API operation still authenticates and checks authorization. Denied operations clear cached private data and revoke the sidebar capability. Session/account changes unmount the provider. Signed download links are not cached.
-- Data revisions prevent older refresh responses from overwriting successful mutations. Application deletion updates session memory even when the user leaves its page during the request.
+## Integration and schema
 
-## Assignments and review
+Main had already acquired the managed positions catalog and role-based feature grants from migration 009. The release retains that schema, existing catalog rows and identity.member_has_feature authorization. The undeployed migration 008 is superseded and removed. No new production schema migration is required, and 009's seeding and legacy recruiter grants were not replayed. The existing production migration ledger does not contain a 009 entry; operators must validate/adopt that existing schema before using the general migration runner rather than blindly replaying its data/grant statements.
 
-- Backend implementation: position_backend, isolated /tmp/helix-recruitment-position-api, branch codex/recruitment-position-api, commit 6e13fc0. Integrated as a reviewed patch while retaining preexisting handler consolidation.
-- Editor implementation: recruitment_flow_audit, isolated /tmp/helix-recruitment-position-editor, branch codex/recruitment-position-editor, commit 53ee382. Integrated as a patch and adjusted the default application URL to use the selected posting.
-- Coordinator: public catalog consumers, session provider, portal integration, race fixes, and regression coverage.
-- Independent review: recruitment_review. Initial findings about dynamic department filters, multiple Open postings, Home retry recovery, and stale refresh/deletion results were fixed. Follow-up review reported no material findings.
+The new editor uses the existing Neon catalog. The dedicated visibility endpoint changes visibility without overwriting posting text. Legacy placeholder Typeform links open the platform application form. Public listing/form reads and submission validation use the same visible catalog; submitted applications keep the server-selected position ID/title after a posting is hidden or deleted.
 
-## Local verification
+All member feature access and recruitment lists are retained for the authenticated session. Login preloads all application pages and managed positions. Navigation and browser focus do not repeat those loads or separate sidebar capability checks. Explicit Refresh obtains external changes. Every protected API request still authenticates and checks feature authorization; denial clears private cached data, and account/session changes discard the old provider. Signed file URLs are requested on demand.
 
-- PGlite integration tests exercise migrations, hidden/public CRUD, public submission, authorized review and private files, denial/revocation, and application retention after posting deletion.
-- React tests cover public catalog consumers and stale position URLs, all visible Open postings, editor failure recovery, session preload/deduplication, navigation, manual refresh, revocation, mutation races, and old-account results.
-- Browser: dedicated loopback member-local mode, http://127.0.0.1:5190/recruiting. Created a hidden Controls Engineer posting, navigated Home and back, verified retained fields, then changed visibility and saved. This browser check used development-only in-memory data; it does not prove live Neon identity or object storage acceptance.
-- Environment: untracked .env.local with HELIX_ENVIRONMENT=local and email disabled. No real database or auth credentials were present.
-- Frontend, API and API-runtime typechecks and ESLint passed. The repository's ESLint configuration does not lint TSX.
-- Production build passed: 9.14 MB static output of the 10 MB budget; 9 source functions of the 11-function target. Old generated .vercel/output, which described the retired entrypoints, was preserved at /tmp/helix-recruitment-vercel-output-before-20261026 before checking the current build. A fresh generated Vercel deployment has not been built or published.
-- Final full suite passed: 74 Vitest files and 940 tests, plus 2 deployment guard tests. The loopback API/auth tests require local socket permission in a sandbox.
-- Final independent delta review reported no new blockers; git diff --check passed.
+Session data revisions protect against older refreshes. Per-position operation versions also prevent a delayed save or visibility response from restoring an entry deleted after navigation.
 
-## Preserved preexisting work
+The branch includes pending deployment stabilization: Node 24/npm 11.17 toolchain pinning, a current local Vercel CLI, and API tests moved outside deployment entrypoints. Latest main mail/signature work was merged without dropping it. No unrelated project-management implementation is included.
 
-Before this task the checkout had edits to AGENTS.md, website-handler.ts, the Vercel function checker and vercel.json, deleted standalone confirmation/rejection routes, and untracked CONTEXT.md plus feature scope/navigation documents. Those changes were preserved. Local validation exposed an accompanying stale allowlist in scripts/local-api.mjs; removing the two retired direct handler mappings makes the existing website rewrites work. Existing session-cache behavior also required updating stale account-menu and CV repository assertions.
+## Verification
 
-## Release requirements
+- Clean npm ci passed in the isolated worktree.
+- Full integrated suite passed: 79 Vitest files and 986 tests, plus 3 deployment guard tests. After the final mutation-race fix, all 7 session-cache tests passed. CI verifies the exact published revision separately.
+- Frontend, API and runtime typechecks, ESLint and whitespace checks passed. TSX is outside the repository's current ESLint configuration.
+- Vite production build passed at 9.20 MB of the 10 MB static budget.
+- A real local Vercel production build completed successfully. Source and generated function checks both passed at 10 of the 11-function target.
+- Standards review reported no actionable violations. Spec/correctness review found the delayed-save race; commit 7182b1a fixed it and the reviewer confirmed no remaining material findings.
+- Real Google/member authentication was observed at internal.helixnmbu.no/recruiting using the existing platform-administrator account. No production test account was created.
+- Temporary Neon branch br-round-waterfall-bas93pob verified actual catalog CRUD, visibility filtering, public-service application persistence, authorized list/read, title selection from the catalog, application retention after posting deletion, denied access without the role grant, and actual private PDF upload/download. The service harness bound its test identity to the existing member row; real browser authentication was verified separately. Synthetic data is restricted to this temporary branch and dedicated local UI mode. The branch expires on 2026-10-27 at 20:00 UTC.
+- Runtime private storage acceptance used the temporary branch's private applications bucket and short-lived signed URLs. It does not establish the production runtime credential's bucket permissions.
 
-No push, PR, external migration or deployment was performed. Apply migration 008 through the existing migration runner to the intended Neon database before releasing the code, after any prerequisites. Real-account Google/member authentication, recruiter access, application storage and private CV download still need acceptance against that configured environment. Linear's already-completed milestone was not changed to imply those production checks passed.
+## Public-domain backend connection
+
+The public website still deploys from this repository under the older Vercel team, whose application API lacks database configuration. Public HTTPS hosts helixnmbu.no and www.helixnmbu.no now call the configured internal.helixnmbu.no recruitment API directly for public catalog reads and submissions. Local and preview hosts retain relative API requests. No DNS or domain ownership changes are needed.
+
+The backend permits browser CORS only for those exact two HTTPS public origins, supports JSON submission preflight without credentials or Authorization headers, and rejects protected member actions from those origins. Protected internal requests retain real authorization. Direct browser requests preserve the normal Vercel client-IP rate-limit path rather than funneling applicants through a shared proxy address. Responses remain uncached. Production browser acceptance follows deployment of both GitHub-connected projects.
+
+Final integrated verification after the public-backend connection: 81 Vitest files / 991 tests and 3 deployment guards passed; frontend/API/runtime typechecks, lint and build passed. Public connection delta independently reviewed with no actionable findings.
+
+## Publication
+
+PR, CI and production deployment details are recorded in Linear and appended after verification. Retain codex/recruitment-milestone-completion after merge.

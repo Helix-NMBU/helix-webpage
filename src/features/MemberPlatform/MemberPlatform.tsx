@@ -7,6 +7,7 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useParams,
 } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { TooltipProvider } from "@libs/components/ui/tooltip";
@@ -24,6 +25,8 @@ import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
 import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
+import { MemberFeatureAccessProvider, RequireMemberFeature } from "./MemberFeatureAccess";
+import { MemberAccessPage } from "./MemberAccessPage";
 import { clearGmailSessionCache } from "./gmail-session-cache";
 import { MailWorkspace } from "./MailWorkspace";
 import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
@@ -35,6 +38,7 @@ import ProjectManagement from "../ProjectManagement/ProjectManagement";
 import TaskDetailPage from "../ProjectManagement/TaskDetail";
 import {
   MemberSettingsPreview,
+  TeamWorkspacePreview,
   WorkspaceHomePreview,
 } from "./WorkspacePreview";
 import "@fontsource-variable/geist";
@@ -119,7 +123,11 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   return (
     <MemberAccountProvider account={landing.account ?? null}>
       <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
-        <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}><WorkspaceProvider key={landing.userId}>{children ?? <Outlet />}</WorkspaceProvider></RecruitmentAccessProvider>
+        <MemberFeatureAccessProvider key={landing.userId} userId={landing.userId}>
+          <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>
+            <WorkspaceProvider key={landing.userId}>{children ?? <Outlet />}</WorkspaceProvider>
+          </RecruitmentAccessProvider>
+        </MemberFeatureAccessProvider>
       </MemberNotificationsProvider>
     </MemberAccountProvider>
   );
@@ -133,6 +141,19 @@ function LegacyMemberRedirect({ to }: { to: string }) {
       replace
     />
   );
+}
+
+function TeamFeatureRoute() {
+  const { teamId = "" } = useParams();
+  return <RequireMemberFeature feature={`team.${teamId}`}><TeamWorkspacePreview /></RequireMemberFeature>;
+}
+
+function RecruitmentFeatureRoute() {
+  return <RequireMemberFeature feature="recruitment.manage"><RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess></RequireMemberFeature>;
+}
+
+function MemberAccessFeatureRoute() {
+  return <RequireMemberFeature feature="member_access.manage"><MemberAccessPage /></RequireMemberFeature>;
 }
 
 export default function MemberPlatform() {
@@ -149,7 +170,8 @@ export default function MemberPlatform() {
                 <Route index element={<WorkspaceHomePreview />} />
                 <Route path="profile" element={<MemberCV />} />
                 <Route path="notifications" element={<MemberNotificationsPage />} />
-                <Route path="recruiting" element={<RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess>} />
+                <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
+                <Route path="admin/access" element={<MemberAccessFeatureRoute />} />
                 <Route path="mail" element={<MailWorkspace />} />
                 <Route path="members" element={<MembersPage />} />
                 <Route path="projects" element={<ProjectsPage />} />
@@ -165,17 +187,17 @@ export default function MemberPlatform() {
                 <Route path="project-management/*" element={<LegacyMemberRedirect to="/season-overview" />} />
                 <Route path="teams/mechanical-production/:sectionId" element={<LegacyMemberRedirect to="/departments/mechanical-and-production" />} />
                 <Route path="settings" element={<MemberSettingsPreview />} />
-                <Route path="teams/:teamId/:sectionId" element={<LegacyMemberRedirect to="/departments" />} />
+                <Route path="teams/:teamId/:sectionId" element={<TeamFeatureRoute />} />
+                <Route path="recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
+                <Route path="recruitment" element={<LegacyMemberRedirect to="/recruiting" />} />
+                <Route path="recruitment/*" element={<LegacyMemberRedirect to="/recruiting" />} />
+                <Route path="member/login" element={<LegacyMemberRedirect to="/login" />} />
+                <Route path="member/profile" element={<LegacyMemberRedirect to="/profile" />} />
+                <Route path="cv-bank" element={<LegacyMemberRedirect to="/login" />} />
+                <Route path="cv-bank/login" element={<LegacyMemberRedirect to="/login" />} />
+                <Route path="cv-bank/profile" element={<LegacyMemberRedirect to="/profile" />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Route>
-              <Route path="recruiting/login" element={<LegacyMemberRedirect to="/recruiting" />} />
-              <Route path="recruitment" element={<LegacyMemberRedirect to="/recruiting" />} />
-              <Route path="recruitment/*" element={<LegacyMemberRedirect to="/recruiting" />} />
-              <Route path="/member/login" element={<LegacyMemberRedirect to="/login" />} />
-              <Route path="/member/profile" element={<LegacyMemberRedirect to="/profile" />} />
-              <Route path="/cv-bank" element={<LegacyMemberRedirect to="/login" />} />
-              <Route path="/cv-bank/login" element={<LegacyMemberRedirect to="/login" />} />
-              <Route path="/cv-bank/profile" element={<LegacyMemberRedirect to="/profile" />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
           <MemberNotificationToaster />

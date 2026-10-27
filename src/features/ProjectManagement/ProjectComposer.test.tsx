@@ -78,7 +78,7 @@ describe("project creation composer", () => {
   });
   it("requires a project Lead before saving",async()=>{
     await open([...TASK_CATEGORIES],false);await field("project-name","Unassigned project");await click("Create project");
-    expect(save).not.toHaveBeenCalled();expect(notify.mock.calls.at(-1)?.[1]).toContain("at least one project Lead");
+    expect(save).not.toHaveBeenCalled();expect(notify.mock.calls[notify.mock.calls.length - 1]?.[1]).toContain("at least one project Lead");
   });
   it("preserves milestones when changing area and requires a scoped Lead or their removal",async()=>{
     await open(["production"]);await field("project-name","Build");await click("Milestones");await milestone("Review");

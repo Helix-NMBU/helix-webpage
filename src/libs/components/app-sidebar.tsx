@@ -26,6 +26,7 @@ import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
 import { getDepartmentIcon } from "@/features/Workspace/department-icons";
 import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
+import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -42,6 +43,7 @@ export function AppSidebar({
   const location = useLocation();
   const notifications = useMemberNotifications();
   const recruitment = useRecruitmentAccess();
+  const featureAccess = useMemberFeatureAccess();
   const workspace = useWorkspace()?.data;
   const spaceItems = [
     ...(workspace?.projectAccess
@@ -54,7 +56,7 @@ export function AppSidebar({
           },
         ]
       : []),
-    ...(recruitment.access === "allowed"
+    ...(featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed"
       ? [
           {
             title: "Recruiting",
@@ -64,8 +66,7 @@ export function AppSidebar({
           },
         ]
       : []),
-    ...(workspace?.departments
-      .filter((department) => department.memberIds.includes(workspace.viewerId))
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId))
       .map((department) => {
         const url = departmentPath(department.name);
         return {
@@ -81,6 +82,10 @@ export function AppSidebar({
           ],
         };
       }) ?? []),
+    ...(featureAccess.canAccess("member_access.manage") ? [{
+      title: "Member access", url: "/admin/access", icon: IconUsers,
+      isActive: location.pathname === "/admin/access",
+    }] : []),
   ];
   return (
     <Sidebar collapsible="icon" {...props}>

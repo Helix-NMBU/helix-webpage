@@ -7,6 +7,7 @@ import gsap from "gsap";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { publicPositions } from "../Recruitment/positions";
 import { cvBase64 } from "../Recruitment/website-api";
+import { publicWebsiteApiUrl } from "./public-api";
 import { currentSeason } from "../../libs/lib/season";
 
 gsap.registerPlugin(useGSAP);
@@ -269,7 +270,7 @@ export default function ApplicationFormPage() {
     submitting.current = true;
     setStatus({ state: "submitting" });
     try {
-      const response = await fetch("/api/website", {
+      const response = await fetch(publicWebsiteApiUrl(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

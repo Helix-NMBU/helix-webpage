@@ -15,17 +15,18 @@ type Props = {
   positions: RecruitmentPosition[];
   loading: boolean;
   onSave: (position: PositionInput) => Promise<void>;
+  onVisibilityChange: (id: string, visible: boolean) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 };
 type Draft = Omit<PositionInput, "tasks" | "achieve"> & { tasks: string; achieve: string };
-const DEPARTMENTS = ["Finance", "Mechanical & Production", "Electrical", "Software", "Software & Autonomous", "Business & Marketing", "Logistics", "Open"];
+const DEPARTMENTS = ["Finance", "Mechanical & Production", "Electrical", "Software & Autonomous", "Business & Marketing", "Logistics", "Open"];
 const emptyDraft = (): Draft => ({
-  title: "", department: "Software", applyUrl: "", contact: { name: "", email: "", linkedin: "" },
+  title: "", department: "Software & Autonomous", applyUrl: "", contact: { name: "", email: "", linkedin: "" },
   about: "", tasks: "", achieve: "", visible: false,
 });
 const lines = (value: string) => value.split("\n").map(line => line.trim()).filter(Boolean);
 
-export function PositionsPanel({ positions, loading, onSave, onDelete }: Props) {
+export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibilityChange }: Props) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [deleting, setDeleting] = useState<RecruitmentPosition | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,7 +53,7 @@ export function PositionsPanel({ positions, loading, onSave, onDelete }: Props) 
   const setVisibility = async (position: RecruitmentPosition, visible: boolean) => {
     if (pending.current) return;
     pending.current = true; setBusy(true);
-    try { await onSave({ ...position, visible }); }
+    try { await onVisibilityChange(position.id, visible); }
     catch { /* The caller reports the failure; retain the saved visibility. */ }
     finally { pending.current = false; setBusy(false); }
   };
@@ -85,13 +86,13 @@ export function PositionsPanel({ positions, loading, onSave, onDelete }: Props) 
         <DialogHeader><DialogTitle>{draft?.id ? "Edit position" : "Create position"}</DialogTitle><DialogDescription>Hidden positions are saved for recruiters. Turn on website visibility when the position is ready for applicants.</DialogDescription></DialogHeader>
         {draft && <form onSubmit={event => void save(event)} className="space-y-5">
           <fieldset disabled={busy} className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-title">Title</Label><Input id="position-title" value={draft.title} required maxLength={200} onChange={event => update({ title: event.target.value })} /></div>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-title">Title</Label><Input id="position-title" value={draft.title} required maxLength={160} onChange={event => update({ title: event.target.value })} /></div>
             <div className="space-y-2"><Label htmlFor="position-department">Department</Label><Select value={draft.department} onValueChange={department => update({ department })} disabled={busy}><SelectTrigger id="position-department" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{departments.map(department => <SelectItem key={department} value={department}>{department === "Open" ? "Open application" : department}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-2"><Label htmlFor="position-apply-url">Application URL</Label><Input id="position-apply-url" value={draft.applyUrl} placeholder="Leave blank to use the application form" maxLength={2000} onChange={event => update({ applyUrl: event.target.value })} /></div>
-            <div className="space-y-2"><Label htmlFor="position-contact-name">Contact name</Label><Input id="position-contact-name" value={draft.contact.name} required maxLength={200} onChange={event => update({ contact: { ...draft.contact, name: event.target.value } })} /></div>
+            <div className="space-y-2"><Label htmlFor="position-contact-name">Contact name</Label><Input id="position-contact-name" value={draft.contact.name} required maxLength={160} onChange={event => update({ contact: { ...draft.contact, name: event.target.value } })} /></div>
             <div className="space-y-2"><Label htmlFor="position-contact-email">Contact email</Label><Input id="position-contact-email" type="email" value={draft.contact.email} required maxLength={254} onChange={event => update({ contact: { ...draft.contact, email: event.target.value } })} /></div>
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-contact-linkedin">Contact LinkedIn (optional)</Label><Input id="position-contact-linkedin" type="url" value={draft.contact.linkedin ?? ""} maxLength={2000} onChange={event => update({ contact: { ...draft.contact, linkedin: event.target.value } })} /></div>
-            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-about">Description</Label><Textarea id="position-about" value={draft.about} required maxLength={10000} rows={4} onChange={event => update({ about: event.target.value })} /></div>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-about">Description</Label><Textarea id="position-about" value={draft.about} required maxLength={5000} rows={4} onChange={event => update({ about: event.target.value })} /></div>
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-tasks">Tasks</Label><Textarea id="position-tasks" value={draft.tasks} maxLength={20000} rows={4} placeholder="One task per line" onChange={event => update({ tasks: event.target.value })} /></div>
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-outcomes">Outcomes</Label><Textarea id="position-outcomes" value={draft.achieve} maxLength={20000} rows={4} placeholder="One outcome per line" onChange={event => update({ achieve: event.target.value })} /></div>
             <div className="flex items-center gap-3 sm:col-span-2"><Switch id="position-visible" checked={draft.visible} disabled={busy} onCheckedChange={visible => update({ visible })} /><Label htmlFor="position-visible">Visible on the website</Label></div>
