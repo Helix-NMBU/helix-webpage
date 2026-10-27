@@ -5,6 +5,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/componen
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { BudgetsBoard } from "./BudgetsPage";
+import { FinancingPage } from "./FinancingPage";
 import { PurchasesBoard } from "./PurchasesPage";
 import { financeRoutes, type FinancePageId } from "./routes";
 
@@ -12,7 +13,7 @@ const pages: { id: FinancePageId; label: string; title: string; empty: string; d
   { id: "overview", label: "Overview", title: "Overview", empty: "No season is configured yet", description: "Season budget, spending and public earmarks will appear here." },
   { id: "purchases", label: "Purchases", title: "Purchases", empty: "No purchases to show", description: "Your requests will appear here." },
   { id: "budgets", label: "Budgets", title: "Budgets", empty: "No budget is published yet", description: "Department and system plans will appear here." },
-  { id: "financing", label: "Financing", title: "Financing", empty: "No funding records yet", description: "Funding sources and earmarked parts will appear here." },
+  { id: "financing", label: "Financing", title: "Financing", empty: "No funding records yet", description: "Funding sources and earmarked parts for the current season." },
 ];
 
 function FinanceSection({ page }: { page: FinancePageId }) {
@@ -36,7 +37,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     || session.budgets?.budgetStatus !== "absent"
     || Boolean(session.capabilities?.createBudget)
   );
-  const empty = !session.pageLoading && loaded && !budgetsReady && (
+  const empty = !session.pageLoading && loaded && !budgetsReady && !purchasesReady && (
     page === "overview" ? session.overview?.departments.length === 0 && session.overview.publicEarmarks.length === 0 && session.overview.budgetStatus === "absent"
       : page === "budgets" ? session.budgets?.departments.length === 0
         : page === "purchases" ? session.purchases?.ownRequests.length === 0 && (session.purchases.register?.length ?? 0) === 0
@@ -56,7 +57,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           </Button>
         ))}
       </nav>
-      {session.pageLoading || !loaded ? (
+      {page === "financing" ? <FinancingPage /> : session.pageLoading || !loaded ? (
         <div role="status" aria-label="Loading finance page" className="space-y-4">
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-40 w-full" />

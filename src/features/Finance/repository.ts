@@ -42,11 +42,15 @@ function localPurchases(): PurchasesView {
 
 export function createFinanceApi(owner: { current: string | null }) {
   const local = () => isLocalMemberMode() && localMemberSignedIn();
-  async function request<T>(action: string): Promise<T> {
+  async function request<T>(action: string, init?: RequestInit): Promise<T> {
     const token = await memberSessionToken(owner);
-    const response = await fetch(`/api/finance?action=${action}`, {
+    const response = await fetch(action.startsWith("/") ? action : `/api/finance?action=${action}`, {
       cache: "no-store",
-      headers: { Authorization: `Bearer ${token}` },
+      ...init,
+      headers: {
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        Authorization: `Bearer ${token}`,
+      },
     });
     const body = await response.json().catch(() => ({})) as { error?: string; errors?: FinanceFieldError[] };
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not load finance.", response.status, body.errors ?? []);

@@ -8,7 +8,6 @@ import type { FinancePageId } from "../Finance/routes";
 import type {
   FinanceCapabilitiesResponse,
   FinanceCapabilitySet,
-  FinanceMutation,
   FinanceMutationResult,
   FinanceProfile,
   FinancingView,
@@ -36,7 +35,7 @@ type FinanceState = {
 type FinanceSession = FinanceState & {
   retry: () => void;
   loadPage: (page: FinancePageId) => Promise<void>;
-  mutate: (action: FinanceMutation) => Promise<FinanceMutationResult>;
+  mutate: (body: Record<string, unknown>) => Promise<FinanceMutationResult>;
 };
 
 const emptyState: FinanceState = {
@@ -123,7 +122,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   }, [api, applyCapabilities, attempt, fail, userId]);
   const revalidate = useCallback(() => {
     const current = generation.current;
-    void api.capabilities().then((body) => {
+    return api.capabilities().then((body) => {
       if (!active.current || generation.current !== current) return;
       applyCapabilities(body);
     }).catch((error: unknown) => {
@@ -136,6 +135,15 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [revalidate]);
+  const mutate = useCallback(async (body: Record<string, unknown>) => {
+    const current = generation.current;
+    try {
+      return await api.mutate(body);
+    } catch (error) {
+      if (active.current && generation.current === current && (errorStatus(error) === 401 || errorStatus(error) === 403)) await revalidate();
+      throw error;
+    }
+  }, [api, revalidate]);
   const loadPage = useCallback(async (page: FinancePageId) => {
     const current = generation.current;
     const token = ++pageToken.current;
@@ -146,7 +154,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
         if (!active.current || generation.current !== current || pageToken.current !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities?.financing) return { ...value, financing: null, pageLoading: false };
-          return { ...value, financing, pageLoading: false };
+          return { ...value, financing, viewVersion: financing.viewVersion, pageLoading: false };
         });
         return;
       }
@@ -155,7 +163,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
         if (!active.current || generation.current !== current || pageToken.current !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };
-          return { ...value, purchases: presentPurchases(purchases, value.capabilities), pageLoading: false };
+          return { ...value, purchases: presentPurchases(purchases, value.capabilities), viewVersion: purchases.viewVersion, pageLoading: false };
         });
         return;
       }
@@ -164,7 +172,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
         if (!active.current || generation.current !== current || pageToken.current !== token) return;
         setState((value) => {
           if (value.access !== "allowed" || !value.capabilities) return { ...value, pageLoading: false };
-          return { ...value, budgets: visibleBudgets(budgets, value.capabilities), pageLoading: false };
+          return { ...value, budgets: visibleBudgets(budgets, value.capabilities), viewVersion: budgets.viewVersion, pageLoading: false };
         });
         return;
       }
@@ -172,7 +180,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       if (!active.current || generation.current !== current || pageToken.current !== token) return;
       setState((value) => (
         value.access === "allowed"
-          ? { ...value, overview, pageLoading: false }
+          ? { ...value, overview, viewVersion: overview.viewVersion, pageLoading: false }
           : { ...value, pageLoading: false }
       ));
     } catch (error) {
@@ -192,7 +200,6 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       });
     }
   }, [api, fail, notify]);
-  const mutate = useCallback((action: FinanceMutation) => api.mutate(action), [api]);
   const value = useMemo(() => ({ ...state, retry, loadPage, mutate }), [state, retry, loadPage, mutate]);
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
