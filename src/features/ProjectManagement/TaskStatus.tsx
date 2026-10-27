@@ -53,7 +53,7 @@ const colors = {
   todo: "text-muted-foreground",
   in_progress: "text-yellow-400",
   done: "text-primary",
-  blocked: "text-destructive",
+  blocked: "text-[oklch(0.577_0.245_27.325)]",
   cancelled: "text-muted-foreground",
 };
 
