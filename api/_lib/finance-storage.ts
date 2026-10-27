@@ -4,9 +4,18 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { FinanceError } from "./finance-error.js";
 
 export const FINANCE_FILE_LIMIT_BYTES = 10 * 1024 * 1024;
+export const FINANCE_EXPORT_LIMIT_BYTES = 20 * 1024 * 1024;
 export const FINANCE_PRESIGN_SECONDS = 120;
 const STAGING_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/staging\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{32}$/i;
 const FINAL_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/final\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{32}$/i;
+const EXPORT_KEY = /^exports\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[0-9a-f]{32}$/i;
+
+export class FinanceStorageUncertainError extends Error {
+  constructor() {
+    super("Finance storage did not confirm the change.");
+    this.name = "FinanceStorageUncertainError";
+  }
+}
 
 export type FinanceStoredObject = {
   byteSize: number;
@@ -19,6 +28,9 @@ export interface FinanceObjectStorage {
   finalKey(memberId: string, uploadId: string): string;
   presignPut(stagingKey: string, contentType: string, byteSize: number): Promise<string>;
   presignGet(storageKey: string, fileName: string, contentType: string): Promise<string>;
+  exportKey(memberId: string, exportId: string): string;
+  putObject(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  exists(key: string): Promise<"present" | "absent" | "uncertain">;
   headObject(key: string): Promise<{ byteSize: number; contentType: string | undefined }>;
   readSignature(key: string, length: number): Promise<Uint8Array>;
   readObject(key: string, byteSize: number): Promise<Uint8Array>;
@@ -66,8 +78,33 @@ export function createFinanceStorage(env: NodeJS.ProcessEnv = process.env): Fina
         throw new FinanceError(503, "Could not authorize the upload. Try again.");
       }
     },
+    exportKey(memberId, exportId) {
+      return `exports/${memberId}/${exportId}/${randomHex(16)}`;
+    },
+    async putObject(key, bytes, contentType) {
+      if (!EXPORT_KEY.test(key)) throw new FinanceError(400, "Invalid export path.");
+      if (bytes.byteLength <= 0 || bytes.byteLength > FINANCE_EXPORT_LIMIT_BYTES) throw new FinanceError(413, "The export is too large.");
+      try {
+        await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: contentType }));
+      } catch {
+        throw new FinanceStorageUncertainError();
+      }
+    },
+    async exists(key) {
+      try {
+        const result = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+        return Number(result.ContentLength ?? 0) > 0 ? "present" : "absent";
+      } catch (error) {
+        const status = typeof error === "object" && error && "$metadata" in error
+          ? Number((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode)
+          : 0;
+        const name = error instanceof Error ? error.name : "";
+        if (name === "NotFound" || name === "NoSuchKey" || status === 404) return "absent";
+        return "uncertain";
+      }
+    },
     async presignGet(storageKey, fileName, contentType) {
-      if (!FINAL_KEY.test(storageKey) && !STAGING_KEY.test(storageKey)) throw new FinanceError(404, "File not found.");
+      if (!FINAL_KEY.test(storageKey) && !STAGING_KEY.test(storageKey) && !EXPORT_KEY.test(storageKey)) throw new FinanceError(404, "File not found.");
       try {
         return await getSignedUrl(client, new GetObjectCommand({
           Bucket: bucket,
@@ -118,10 +155,11 @@ export function createFinanceStorage(env: NodeJS.ProcessEnv = process.env): Fina
       }
     },
     async remove(key) {
+      if (!FINAL_KEY.test(key) && !STAGING_KEY.test(key) && !EXPORT_KEY.test(key)) throw new FinanceError(404, "File not found.");
       try {
         await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
       } catch {
-        throw new FinanceError(503, "File cleanup is pending. Try again.");
+        throw new FinanceStorageUncertainError();
       }
     },
   };
