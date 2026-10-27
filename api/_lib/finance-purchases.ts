@@ -8,9 +8,11 @@ import {
   MAX_PURCHASE_FILE_BYTES,
   MAX_PURCHASE_FILES,
   normalizePurchaseInput,
+  registerPurchaseIdempotencySubject,
   registrationYear,
   serializePurchaseBody,
   validatePurchaseRelationships,
+  type NormalizedPurchase,
 } from "../../src/features/Finance/purchase-domain.js";
 import type {
   BudgetChoices,
@@ -24,6 +26,11 @@ import { loadBudgetHierarchy } from "./finance-budgets.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNAVAILABLE = "The finance service is temporarily unavailable. Please try again.";
+const REGISTER_IDEMPOTENCY_CONFLICT = "This request ID was already used for a different change.";
+
+export function hashRegisterPurchaseIdempotency(purchase: NormalizedPurchase): string {
+  return payloadHash({ action: "registerPurchase", purchase: registerPurchaseIdempotencySubject(purchase) });
+}
 const PURCHASE_ACTIONS = new Set(["checkPurchase", "authorizeUpload", "finalizeUpload", "registerPurchase", "downloadDocument"]);
 
 export type PurchaseCaller = {
@@ -75,18 +82,27 @@ export function mapPurchaseError(error: unknown): FinanceError {
   return new FinanceError(503, UNAVAILABLE);
 }
 
-async function storedPurchaseReplay(db: CvDatabase, memberId: string, requestId: string): Promise<FinanceMutationResult | null> {
-  const rows = await db.query<{ response: FinanceMutationResult | string }>(
-    `select response
+async function storedPurchaseReplay(
+  db: CvDatabase,
+  memberId: string,
+  requestId: string,
+  payloadHashValue: string,
+): Promise<FinanceMutationResult | null> {
+  const rows = await db.query<{ response: FinanceMutationResult | string; payload_hash: string }>(
+    `select response, payload_hash
      from finance.idempotency_keys
      where member_id = $1::uuid
        and request_id = $2::uuid
-       and action = 'registerPurchase'
-       and response is not null`,
+       and action = 'registerPurchase'`,
     [memberId, requestId],
   );
-  const value = rows.rows[0]?.response;
-  if (!value) return null;
+  const row = rows.rows[0];
+  if (!row) return null;
+  if (row.payload_hash !== payloadHashValue) {
+    throw new FinanceError(409, REGISTER_IDEMPOTENCY_CONFLICT);
+  }
+  if (row.response === null || row.response === undefined) return null;
+  const value = row.response;
   const parsed = typeof value === "string" ? JSON.parse(value) as FinanceMutationResult : value;
   const viewVersion = Number(parsed?.viewVersion);
   if (!parsed || parsed.ok !== true || !Number.isSafeInteger(viewVersion)) return null;
@@ -269,7 +285,11 @@ export async function performPurchaseMutation(
   }
   if (action === "registerPurchase") {
     const requestId = requireUuid(body.requestId, "requestId", "A valid request ID is required.");
-    const replayed = await storedPurchaseReplay(db, caller.memberId, requestId);
+    const normalized = normalizePurchaseInput(parsePurchase(body));
+    if (normalized.errors.length) throw invalid(normalized.errors);
+    if (!normalized.purchase) throw invalid([{ field: "purchase", message: "Enter a valid purchase." }]);
+    const hash = hashRegisterPurchaseIdempotency(normalized.purchase);
+    const replayed = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
     if (replayed) return replayed;
     const validated = await validatePurchase(db, caller, parsePurchase(body));
     const payload = serializePurchaseBody(validated.purchase, {
@@ -278,8 +298,6 @@ export async function performPurchaseMutation(
       missingApproval: validated.missingApproval,
       warnings: validated.warnings,
     });
-    const { warnings: _warningsForHash, ...purchaseIdentity } = payload;
-    const hash = payloadHash({ action: "registerPurchase", purchase: purchaseIdentity });
     return call(db, "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [
       caller.memberId,
       requestId,

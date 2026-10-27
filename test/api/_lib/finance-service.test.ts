@@ -1009,6 +1009,53 @@ describe("finance access API", () => {
     expect(await viewVersion()).toBe(versionBefore + 1);
   });
 
+  it("rejects registerPurchase when the same requestId is reused with a different purchase payload", async () => {
+    await seedPrivateRows();
+    await grant(memberId, "finance");
+    await sql(
+      `insert into finance.reference_counters (counter_key, calendar_year, configured_next, updated_by_member_id)
+       values ('purchase:2026', 2026, 95, $1::uuid)`,
+      [operatorId],
+    );
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const uploadId = await authorizeAndFinalizeUpload(8);
+    const uploadId2 = await authorizeAndFinalizeUpload(8);
+    const purchase = {
+      buyerName: "Buyer Example",
+      supplierName: "Supplier Example",
+      paymentMethod: "team_account",
+      purchaseDate: "2026-10-01",
+      justification: "Workshop material for frame",
+      documentKind: "receipt",
+      lines: [{ systemId, budgetItemId: itemId, description: "Line", quantity: "1", amountNok: "10.00" }],
+      uploadIds: [uploadId],
+    };
+    const rid = crypto.randomUUID();
+    const versionBefore = await viewVersion();
+    expect((await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } })).status).toBe(200);
+    const purchasesAfter = await tableCount("purchases");
+    const changed = await call({
+      token: "member",
+      body: {
+        action: "registerPurchase",
+        requestId: rid,
+        purchase: {
+          ...purchase,
+          supplierName: "Other Supplier Example",
+          lines: [{ systemId, budgetItemId: itemId, description: "Line", quantity: "1", amountNok: "99.00" }],
+          uploadIds: [uploadId2],
+        },
+      },
+    });
+    expect(changed).toMatchObject({
+      status: 409,
+      body: { error: "This request ID was already used for a different change." },
+    });
+    expect(await tableCount("purchases")).toBe(purchasesAfter);
+    expect(await viewVersion()).toBe(versionBefore + 1);
+  });
+
   it("returns an unchanged view without skipping a financing denial", async () => {
     const same = await call({ query: { action: "overview", knownVersion: "0" }, token: "member" });
     expect(same.body).toEqual({ unchanged: true, viewVersion: 0 });

@@ -237,6 +237,31 @@ export function registrationYear(now = new Date()): number {
   return Number(osloToday(now).slice(0, 4));
 }
 
+/** Stable idempotency subject for registerPurchase: normalized purchase fields only (no warnings, threshold, or registration year). */
+export function registerPurchaseIdempotencySubject(purchase: NormalizedPurchase) {
+  return {
+    buyerName: purchase.buyerName,
+    supplierName: purchase.supplierName,
+    paymentMethod: purchase.paymentMethod,
+    purchaseDate: purchase.purchaseDate,
+    justification: purchase.justification,
+    documentKind: purchase.documentKind,
+    documentNumber: purchase.documentNumber,
+    invoiceDueDate: purchase.invoiceDueDate,
+    refundAccount: purchase.refundAccount,
+    refundPhone: purchase.refundPhone,
+    lines: purchase.lines.map((line) => ({
+      systemId: line.systemId,
+      budgetItemId: line.budgetItemId,
+      unbudgeted: line.unbudgeted,
+      description: line.description,
+      quantity: line.quantity,
+      amountOre: line.amountOre.toString(),
+    })),
+    uploadIds: [...purchase.uploadIds].sort(),
+  };
+}
+
 export function serializePurchaseBody(
   purchase: NormalizedPurchase,
   options: { registrationYear: number; thresholdOre: bigint | null; missingApproval: boolean; warnings: FinanceWarning[] },
