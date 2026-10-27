@@ -75,6 +75,24 @@ export function mapPurchaseError(error: unknown): FinanceError {
   return new FinanceError(503, UNAVAILABLE);
 }
 
+async function storedPurchaseReplay(db: CvDatabase, memberId: string, requestId: string): Promise<FinanceMutationResult | null> {
+  const rows = await db.query<{ response: FinanceMutationResult | string }>(
+    `select response
+     from finance.idempotency_keys
+     where member_id = $1::uuid
+       and request_id = $2::uuid
+       and action = 'registerPurchase'
+       and response is not null`,
+    [memberId, requestId],
+  );
+  const value = rows.rows[0]?.response;
+  if (!value) return null;
+  const parsed = typeof value === "string" ? JSON.parse(value) as FinanceMutationResult : value;
+  const viewVersion = Number(parsed?.viewVersion);
+  if (!parsed || parsed.ok !== true || !Number.isSafeInteger(viewVersion)) return null;
+  return { ok: true, viewVersion, id: parsed.id, warnings: parsed.warnings ?? [], errors: parsed.errors ?? [] };
+}
+
 async function call(db: CvDatabase, sql: string, params: unknown[]): Promise<FinanceMutationResult> {
   try {
     const result = await db.query<{ result: FinanceMutationResult | string }>(sql, params);
@@ -251,6 +269,8 @@ export async function performPurchaseMutation(
   }
   if (action === "registerPurchase") {
     const requestId = requireUuid(body.requestId, "requestId", "A valid request ID is required.");
+    const replayed = await storedPurchaseReplay(db, caller.memberId, requestId);
+    if (replayed) return replayed;
     const validated = await validatePurchase(db, caller, parsePurchase(body));
     const payload = serializePurchaseBody(validated.purchase, {
       registrationYear: registrationYear(),
@@ -258,7 +278,8 @@ export async function performPurchaseMutation(
       missingApproval: validated.missingApproval,
       warnings: validated.warnings,
     });
-    const hash = payloadHash({ action: "registerPurchase", purchase: payload });
+    const { warnings: _warningsForHash, ...purchaseIdentity } = payload;
+    const hash = payloadHash({ action: "registerPurchase", purchase: purchaseIdentity });
     return call(db, "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [
       caller.memberId,
       requestId,

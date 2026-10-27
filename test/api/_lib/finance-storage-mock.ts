@@ -46,3 +46,13 @@ export async function putMemoryPdf(storage: ReturnType<typeof createMemoryFinanc
   storage.objects.set(key, bytes);
   return bytes.byteLength;
 }
+
+export function putSizedPdf(storage: ReturnType<typeof createMemoryFinanceStorage>, key: string, byteSize: number) {
+  const bytes = new Uint8Array(byteSize);
+  bytes[0] = 0x25;
+  bytes[1] = 0x50;
+  bytes[2] = 0x44;
+  bytes[3] = 0x46;
+  storage.objects.set(key, bytes);
+  return byteSize;
+}

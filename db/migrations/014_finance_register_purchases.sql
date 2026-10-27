@@ -351,10 +351,32 @@ declare
   saved jsonb;
   recipient record;
 begin
+  perform pg_advisory_xact_lock(hashtextextended(p_actor::text || ':' || p_request_id::text, 0));
   replay := finance.begin_purchase_mutation(p_actor, p_request_id, 'registerPurchase', p_payload_hash, 'registerActual');
   if replay is not null then
     return replay;
   end if;
+
+  perform 1
+  from finance.budget_items i
+  where i.id in (
+      select (l ->> 'budgetItemId')::uuid
+      from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
+      where coalesce((l ->> 'unbudgeted')::boolean, false) is not true and nullif(l ->> 'budgetItemId', '') is not null
+    )
+    or (
+      i.protected
+      and i.budget_id = (select b.id from finance.budgets b join finance.seasons s on s.id = b.season_id join finance.settings st on st.setting_key = 'current_season' and s.code = st.setting_value #>> '{}')
+      and i.system_id in (
+        select (l ->> 'systemId')::uuid
+        from jsonb_array_elements(coalesce(p_body -> 'lines', '[]'::jsonb)) l
+        where coalesce((l ->> 'unbudgeted')::boolean, false)
+      )
+    )
+  order by i.id
+  for key share of i;
+
+  current_budget := finance.lock_current_budget();
 
   select count(*)::integer into quota_count
   from finance.purchases
@@ -363,8 +385,6 @@ begin
   if quota_count >= 20 then
     raise exception 'FINANCE|quota|You can save at most 20 purchases per hour. Try again later.';
   end if;
-
-  current_budget := finance.lock_current_budget();
   if current_budget.status <> 'approved' then
     raise exception 'FINANCE|conflict|The season budget must be approved before registering purchases.';
   end if;
@@ -532,7 +552,11 @@ begin
       registered_purchase_id,
       recipient.member_id,
       'purchase_registered:' || registered_purchase_id::text || ':' || recipient.member_id::text,
-      jsonb_build_object('publicRef', purchase_ref, 'supplierName', p_body ->> 'supplierName')
+      jsonb_build_object(
+        'publicRef', purchase_ref,
+        'supplierName', p_body ->> 'supplierName',
+        'totalOre', total_ore::text
+      )
     )
     on conflict (dedupe_key) do nothing;
   end loop;
