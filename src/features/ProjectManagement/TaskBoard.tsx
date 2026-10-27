@@ -94,7 +94,7 @@ export function TaskBoard({
                 tabIndex={0}
                 role="region"
                 aria-label={`${STATUS_LABELS[status]} cards`}
-                className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain px-0.5 pb-1"
+                className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain px-0.5 py-1"
               >
                 {group.map((task) => {
                   const project = projects.get(task.projectId ?? "");
