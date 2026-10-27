@@ -1,7 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { IconCube, IconDiamonds } from "@tabler/icons-react";
+import { IconCube, IconDiamonds, IconRefresh } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
-import { Input } from "@libs/components/ui/input";
 import {
   Table,
   TableBody,
@@ -64,8 +63,7 @@ export function PersonalTasks({
     setParams(
       (current) => {
         const next = new URLSearchParams(current);
-        if (key === "search" && !value) next.delete(key);
-        else next.set(key, value);
+        next.set(key, value);
         if (key === "project") next.delete("milestone");
         return next;
       },
@@ -82,34 +80,27 @@ export function PersonalTasks({
         <h1 id="my-tasks-title" className="text-2xl font-medium tracking-tight">
           My tasks
         </h1>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy || loading}
-          onClick={onRefresh}
-        >
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <PersonalTaskViewMenu
+            workspace={workspace}
+            assigned={assigned}
+            options={options}
+            onChange={change}
+            onReset={() => setParams({}, { replace: true })}
+          />
+          <Button
+            variant="outline"
+            size="icon-sm"
+            disabled={busy || loading}
+            onClick={onRefresh}
+            aria-label="Refresh tasks"
+            title="Refresh tasks"
+          >
+            <IconRefresh aria-hidden="true" className="size-4" />
+          </Button>
+        </div>
       </div>
       <div className="overflow-hidden rounded-xl border bg-background">
-        <div className="flex items-center gap-2 border-b p-3">
-          <Input
-            aria-label="Search my tasks"
-            placeholder="Search tasks…"
-            className="h-8 min-w-0 sm:w-72"
-            value={options.search}
-            onChange={(event) => change("search", event.target.value)}
-          />
-          <div className="ml-auto">
-            <PersonalTaskViewMenu
-              workspace={workspace}
-              assigned={assigned}
-              options={options}
-              onChange={change}
-              onReset={() => setParams({}, { replace: true })}
-            />
-          </div>
-        </div>
         {groups.length ? (
           <Table>
             <TableHeader>
@@ -279,7 +270,7 @@ export function PersonalTasks({
               </EmptyTitle>
               <EmptyDescription>
                 {assigned.length
-                  ? "Adjust the search, filters or view settings."
+                  ? "Adjust the filters or view settings."
                   : "Your Department Lead's assignments will appear here."}
               </EmptyDescription>
             </EmptyHeader>

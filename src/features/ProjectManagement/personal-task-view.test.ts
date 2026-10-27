@@ -48,12 +48,12 @@ describe("personal task view", () => {
         .sort(),
     ).toEqual(linked.map((task) => task.id).sort());
   });
-  it("combines status, area, project, search and completion filters", () => {
+  it("combines status, area, project and completion filters", () => {
     const workspace = initialLocalWorkspace();
     const task = assignedTasks(workspace).find(
       (task) => task.status === "blocked",
     )!;
-    const query = `status=blocked&area=${task.category}&project=${task.projectId}&search=${encodeURIComponent(task.title)}`;
+    const query = `status=blocked&area=${task.category}&project=${task.projectId}`;
     expect(
       personalTaskGroups(workspace, options(query), today).flatMap(
         (group) => group.tasks,

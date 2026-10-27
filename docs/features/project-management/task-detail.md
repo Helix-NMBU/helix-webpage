@@ -2,7 +2,7 @@
 
 Task titles in My tasks, project task lists and activity, work-area tables and timelines, project milestone children, and Needs organization open `/tasks/:taskId`. The page displays the title and plain-text description, preserving line breaks. Missing descriptions have an empty-state message. Milestone entries retain their existing controls.
 
-The Properties column shows status, priority, all assignees, target/start dates, project, milestone, department, work area, season, and any sponsor/partner or blocked reason. Project and milestone links open the project and its milestone filter. Back returns to the originating list URL, preserving URL-based filters, or My tasks for direct links. My tasks search, filters, grouping, ordering and visible properties are encoded in that return URL. The Tasks sidebar entry remains active and the shell breadcrumb links to My tasks.
+The Properties column shows status, priority, all assignees, target/start dates, project, milestone, department, work area, season, and any sponsor/partner or blocked reason. Project and milestone links open the project and its milestone filter. Back returns to the originating list URL, preserving URL-based filters, or My tasks for direct links. My tasks filters, grouping, ordering and visible properties are encoded in that return URL. The Tasks sidebar entry remains active and the shell breadcrumb links to My tasks.
 
 On desktop, the page fits the viewport beneath the shell breadcrumb and task actions. Task content and properties have independent keyboard-focusable scroll regions with contained overscroll. On mobile, both columns stack with normal page scrolling.
 

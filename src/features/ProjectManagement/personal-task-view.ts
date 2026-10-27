@@ -1,5 +1,4 @@
 import {
-  CATEGORY_LABELS,
   STATUS_LABELS,
   TASK_STATUSES,
   type ProjectWorkspace,
@@ -27,7 +26,6 @@ const choice = (
 };
 export function personalTaskView(params: URLSearchParams) {
   return {
-    search: params.get("search") ?? "",
     area: params.get("area") ?? "all",
     status: choice(params, "status", ["all", ...TASK_STATUSES], "all"),
     project: params.get("project") ?? "all",
@@ -88,18 +86,7 @@ export function personalTaskGroups(
             ? !task.milestoneId
             : task.milestoneId === options.milestone)) &&
         (options.completed || task.status !== "done") &&
-        (options.cancelled || task.status !== "cancelled") &&
-        [
-          task.title,
-          task.description,
-          task.partnerName,
-          projects.get(task.projectId ?? "")?.name,
-          milestones.get(task.milestoneId ?? "")?.title,
-          CATEGORY_LABELS[task.category],
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(options.search.toLowerCase()),
+        (options.cancelled || task.status !== "cancelled"),
     )
     .sort((a, b) => {
       const order =
