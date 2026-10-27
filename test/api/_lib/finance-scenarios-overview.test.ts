@@ -4,6 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createFinanceHandler } from "../../../api/_lib/finance-handler.js";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
+import { loadFundingScenarios } from "../../../api/_lib/finance-summary.js";
 import type { FinanceProfile, PublicBudgets, PublicOverview } from "../../../api/_lib/finance-types.js";
 import { MemberCvError, type CvDatabase, type WorkspaceIdentity } from "../../../api/_lib/member-cv-service.js";
 import { addCalendarDays, osloToday } from "../../../src/features/Finance/money.js";
@@ -20,6 +21,7 @@ const identities: Record<string, WorkspaceIdentity> = {
 
 let pg: PGlite;
 let handler: ReturnType<typeof createFinanceHandler>;
+let afterQuery: ((query: string) => Promise<void>) | null = null;
 
 function response() {
   let status = 0;
@@ -285,7 +287,11 @@ beforeAll(async () => {
   for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "016_finance_fulfillment.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
-  const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
+  const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => {
+    const rows = (await pg.query<T>(query, params)).rows;
+    if (afterQuery) await afterQuery(query);
+    return { rows };
+  } };
   handler = createFinanceHandler(() => createFinanceServices({
     db,
     authenticate: async (token) => {
@@ -301,6 +307,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  afterQuery = null;
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
@@ -339,6 +346,116 @@ beforeEach(async () => {
 });
 
 describe("FIN-09-A01 commitment sums", () => {
+  it("loads all scenario inputs with one statement and keeps bigint precision", async () => {
+    const seasonId = await openSeason();
+    const fundingId = await insertFunding({ seasonId, publicRef: "F-S27-001", sourceName: "Example", amountOre: 100, status: "secured" });
+    await sql("update finance.funding set amount_ore = $1::bigint where id = $2::uuid", ["9007199254740993", fundingId]);
+    let count = 0;
+    const query: CvDatabase["query"] = async <T>(statement: string, params?: unknown[]) => {
+      count += 1;
+      return { rows: (await pg.query<T>(statement, params)).rows };
+    };
+    const scenarios = await loadFundingScenarios(query, "S27", true);
+    expect(count).toBe(1);
+    expect(scenarios.map((scenario) => scenario.eligibleFundingNok)).toEqual([
+      "90071992547409.93", "90071992547409.93", "90071992547409.93",
+    ]);
+  });
+
+  it("retries the entire overview if a commit happens between its read statements", async () => {
+    const seasonId = await openSeason();
+    const budgetId = await insertBudget(seasonId, "approved");
+    const systemId = await insertSystem("mechanical-production", "SYS-AT", "Frame");
+    const itemId = await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
+    const fundingId = await insertFunding({ seasonId, publicRef: "F-S27-001", sourceName: "Example", amountOre: 10000, status: "secured" });
+    await grant("business");
+    let injections = 0;
+    afterQuery = async (query) => {
+      if (!query.includes("jsonb_agg(to_jsonb(items)")) return;
+      afterQuery = null;
+      injections += 1;
+      await pg.exec(`begin;
+        update finance.budget_items set planned_ore = 20000 where id = '${itemId}'::uuid;
+        update finance.funding set amount_ore = 20000 where id = '${fundingId}'::uuid;
+        select finance.bump_view_version(); commit;`);
+    };
+    const view = await readOverview();
+    expect(injections).toBe(1);
+    expect(view.departments[0].plannedNok).toBe("200.00");
+    expect(view.scenarios?.[0]).toMatchObject({ needNok: "200.00", eligibleFundingNok: "200.00" });
+    expect(view.viewVersion).toBe(await version());
+  });
+
+  it("does not return private financing if a capability is revoked while reading", async () => {
+    const seasonId = await openSeason();
+    const budgetId = await insertBudget(seasonId, "approved");
+    const systemId = await insertSystem("mechanical-production", "SYS-REVOKE", "Frame");
+    await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
+    await insertFunding({ seasonId, publicRef: "F-S27-001", sourceName: "Private source", amountOre: 10000, status: "secured" });
+    await grant("business");
+    afterQuery = async (query) => {
+      if (!query.includes("jsonb_agg(to_jsonb(items)")) return;
+      afterQuery = null;
+      await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'business', false, 'Test revoke')", [operatorId, memberId]);
+    };
+    const result = await call({ query: { action: "financing" }, token: "member" });
+    expect(result.status).toBe(403);
+    expect(JSON.stringify(result.body)).not.toContain("Private source");
+  });
+
+  it("retries a public overview without private fields when access is revoked during the read", async () => {
+    const seasonId = await openSeason();
+    const budgetId = await insertBudget(seasonId, "approved");
+    const systemId = await insertSystem("mechanical-production", "SYS-OVERVIEW", "Frame");
+    await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
+    await insertFunding({ seasonId, publicRef: "F-S27-001", sourceName: "Private source", amountOre: 10000, status: "secured" });
+    await grant("business");
+    afterQuery = async (query) => {
+      if (!query.includes("jsonb_agg(to_jsonb(items)")) return;
+      afterQuery = null;
+      await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'business', false, 'Test revoke')", [operatorId, memberId]);
+    };
+    const view = await readOverview();
+    expect(view.scenarios).toBeUndefined();
+    expect(JSON.stringify(view)).not.toContain("Private source");
+    expect(view.departments[0].plannedNok).toBe("100.00");
+  });
+
+  it("retries budget hierarchy and commitment reads when the version changes", async () => {
+    const seasonId = await openSeason();
+    const budgetId = await insertBudget(seasonId, "approved");
+    const systemId = await insertSystem("mechanical-production", "SYS-BUDGET", "Frame");
+    const itemId = await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
+    let injections = 0;
+    afterQuery = async (query) => {
+      if (!query.includes("i.id as item_id, i.public_ref")) return;
+      afterQuery = null;
+      injections += 1;
+      await pg.exec(`begin; update finance.budget_items set planned_ore = 20000 where id = '${itemId}'::uuid; select finance.bump_view_version(); commit;`);
+    };
+    const view = await readBudgets();
+    expect(injections).toBe(1);
+    expect(view.departments[0].plannedNok).toBe("200.00");
+    expect(view.viewVersion).toBe(await version());
+  });
+
+  it("returns a retryable conflict if the overview changes on every attempt", async () => {
+    const seasonId = await openSeason();
+    const budgetId = await insertBudget(seasonId, "approved");
+    const systemId = await insertSystem("mechanical-production", "SYS-BUSY", "Frame");
+    const itemId = await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
+    let injections = 0;
+    afterQuery = async (query) => {
+      if (!query.includes("jsonb_agg(to_jsonb(items)")) return;
+      injections += 1;
+      await pg.exec(`begin; update finance.budget_items set planned_ore = planned_ore + 1 where id = '${itemId}'::uuid; select finance.bump_view_version(); commit;`);
+    };
+    const result = await call({ query: { action: "overview" }, token: "member" });
+    afterQuery = null;
+    expect(injections).toBe(3);
+    expect(result.status).toBe(409);
+    expect(JSON.stringify(result.body)).toContain("Please try again");
+  });
   it("sums several open lines before comparing them with remaining plan and ignores closed lines", async () => {
     const seasonId = await openSeason();
     const budgetId = await insertBudget(seasonId, "approved");

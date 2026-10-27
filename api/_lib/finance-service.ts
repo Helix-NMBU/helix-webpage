@@ -192,39 +192,48 @@ export function createFinanceServices(deps: {
       return same ?? { viewVersion: current.viewVersion };
     },
     async overview(token, knownVersion) {
-      const current = await context(token);
-      const same = unchanged(current, knownVersion);
-      if (same) return same;
-      const budget = await budgetState(current.seasonCode);
-      return loadOverview(db.query.bind(db), {
-        viewVersion: current.viewVersion,
-        seasonCode: current.seasonCode,
-        budgetStatus: budget.status,
-        approvedOn: budget.approvedOn,
-        showAggregates: budget.status === "approved" || (budget.status === "draft" && current.capabilities.draftBudgetItems),
-        showPrivate: current.capabilities.financing,
-        includeDraftItems: current.capabilities.draftBudgetItems,
-        today: osloToday(),
-      });
-    },
-    async budgets(token, knownVersion) {
-      const current = await context(token);
-      const same = unchanged(current, knownVersion);
-      if (same) return same;
-      const budget = await budgetState(current.seasonCode);
-      const showItems = budget.status !== "draft" || current.capabilities.draftBudgetItems;
-      if (!budget.budgetId || !showItems) {
-        return {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await context(token);
+        const same = unchanged(current, knownVersion);
+        if (same) return same;
+        const budget = await budgetState(current.seasonCode);
+        const view = await loadOverview(db.query.bind(db), {
           viewVersion: current.viewVersion,
           seasonCode: current.seasonCode,
           budgetStatus: budget.status,
           approvedOn: budget.approvedOn,
-          revision: budget.revision,
-          departments: [],
-          choices: { systems: [], items: [] },
-        };
+          showAggregates: budget.status === "approved" || (budget.status === "draft" && current.capabilities.draftBudgetItems),
+          showPrivate: current.capabilities.financing,
+          includeDraftItems: current.capabilities.draftBudgetItems,
+          today: osloToday(),
+        });
+        // The other overview inputs use separate queries. Retry if any committed
+        // Finance change or capability revocation occurred while gathering them.
+        if ((await context(token)).viewVersion === current.viewVersion) return view;
       }
-      return attachCommitmentSummaries(db.query.bind(db), await loadBudgetHierarchy(db, current, budget), current.seasonCode);
+      throw new FinanceError(409, "Finance changed while loading the overview. Please try again.");
+    },
+    async budgets(token, knownVersion) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await context(token);
+        const same = unchanged(current, knownVersion);
+        if (same) return same;
+        const budget = await budgetState(current.seasonCode);
+        const showItems = budget.status !== "draft" || current.capabilities.draftBudgetItems;
+        const view: PublicBudgets = !budget.budgetId || !showItems
+          ? {
+            viewVersion: current.viewVersion,
+            seasonCode: current.seasonCode,
+            budgetStatus: budget.status,
+            approvedOn: budget.approvedOn,
+            revision: budget.revision,
+            departments: [],
+            choices: { systems: [], items: [] },
+          }
+          : await attachCommitmentSummaries(db.query.bind(db), await loadBudgetHierarchy(db, current, budget), current.seasonCode);
+        if ((await context(token)).viewVersion === current.viewVersion) return view;
+      }
+      throw new FinanceError(409, "Finance changed while loading budgets. Please try again.");
     },
     async purchases(token, knownVersion, requestRecordId, unpaidOnly = false) {
       const current = await context(token);
@@ -260,24 +269,29 @@ export function createFinanceServices(deps: {
       return presentPurchases(view, current.capabilities);
     },
     async financing(token, knownVersion) {
-      const current = await context(token);
-      if (!current.capabilities.financing) throw new FinanceError(403, "Financing access is required.");
-      const same = unchanged(current, knownVersion);
-      if (same) return same;
-      if (!current.seasonCode) {
-        return { viewVersion: current.viewVersion, seasonCode: null, funding: [], parts: [], scenarios: [] };
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await context(token);
+        if (!current.capabilities.financing) throw new FinanceError(403, "Financing access is required.");
+        const same = unchanged(current, knownVersion);
+        if (same) return same;
+        if (!current.seasonCode) {
+          return { viewVersion: current.viewVersion, seasonCode: null, funding: [], parts: [], scenarios: [] };
+        }
+        try {
+          const today = osloToday();
+          const [loaded, scenarios] = await Promise.all([
+            loadFundingRecords(db.query.bind(db), current.seasonCode, today, current.capabilities.draftBudgetItems),
+            loadFundingScenarios(db.query.bind(db), current.seasonCode, current.capabilities.draftBudgetItems),
+          ]);
+          if ((await context(token)).viewVersion === current.viewVersion) {
+            return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios };
+          }
+        } catch (error) {
+          if (error instanceof FinanceError) throw error;
+          throw new FinanceError(503, UNAVAILABLE);
+        }
       }
-      try {
-        const today = osloToday();
-        const [loaded, scenarios] = await Promise.all([
-          loadFundingRecords(db.query.bind(db), current.seasonCode, today, current.capabilities.draftBudgetItems),
-          loadFundingScenarios(db.query.bind(db), current.seasonCode, current.capabilities.draftBudgetItems),
-        ]);
-        return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios };
-      } catch (error) {
-        if (error instanceof FinanceError) throw error;
-        throw new FinanceError(503, UNAVAILABLE);
-      }
+      throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
       const current = await context(token);

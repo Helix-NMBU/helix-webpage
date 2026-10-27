@@ -84,9 +84,17 @@ function ore(value: string | null | undefined): bigint {
 }
 
 async function loadFacts(query: Query, seasonCode: string, includeDraftItems: boolean): Promise<{ items: ItemRow[]; systems: SystemRow[]; funding: FundingFact[]; parts: FundingPartFact[] }> {
-  const [items, systems, funding, parts] = await Promise.all([
-    query<ItemRow>(
-      `select i.id, i.priority, i.status, i.planned_ore::text as planned_ore, i.protected,
+  // All subqueries execute in one PostgreSQL statement snapshot, including on a pooled connection.
+  // Decimal values are cast to text before JSON aggregation to preserve integer precision.
+  const result = await query<{
+    items: ItemRow[];
+    systems: SystemRow[];
+    funding: { id: string; status: FundingStatus; confidence: FundingConfidence | null; amount_ore: string }[];
+    parts: { id: string; funding_id: string; amount_ore: string }[];
+  }>(
+    `select
+      coalesce((select jsonb_agg(to_jsonb(items) order by items.id) from (
+       select i.id, i.priority, i.status, i.planned_ore::text as planned_ore, i.protected,
               i.earmark_id, part.amount_ore::text as earmark_amount_ore,
               fund.id as funding_id, fund.status as funding_status, fund.confidence as funding_confidence,
               fund.amount_ore::text as funding_amount_ore, i.system_id,
@@ -105,38 +113,37 @@ async function loadFacts(query: Query, seasonCode: string, includeDraftItems: bo
          where a.budget_item_id = i.id
        ) act on true
        where s.code = $1
-         and ($2::boolean or b.status = 'approved')`,
-      [seasonCode, includeDraftItems],
-    ),
-    query<SystemRow>(
-      `select sys.id, sys.code, sys.name, sys.active,
+         and ($2::boolean or b.status = 'approved')
+       ) items), '[]'::jsonb) as items,
+      coalesce((select jsonb_agg(to_jsonb(systems) order by systems.sort_order, systems.department_name,
+                                 systems.department_key, systems.name, systems.code) from (
+       select sys.id, sys.code, sys.name, sys.active,
               d.department_key, d.name as department_name, d.sort_order
        from finance.systems sys
        join identity.departments d on d.department_key = sys.department_key
-       order by d.sort_order, d.name, d.department_key, sys.name, sys.code`,
-      [],
-    ),
-    query<{ id: string; status: FundingStatus; confidence: FundingConfidence | null; amount_ore: string }>(
-      `select f.id, f.status, f.confidence, f.amount_ore::text as amount_ore
+       ) systems), '[]'::jsonb) as systems,
+      coalesce((select jsonb_agg(to_jsonb(funding) order by funding.id) from (
+       select f.id, f.status, f.confidence, f.amount_ore::text as amount_ore
        from finance.funding f
        join finance.seasons s on s.id = f.season_id
-       where s.code = $1`,
-      [seasonCode],
-    ),
-    query<{ id: string; funding_id: string; amount_ore: string }>(
-      `select p.id, p.funding_id, p.amount_ore::text as amount_ore
+       where s.code = $1
+       ) funding), '[]'::jsonb) as funding,
+      coalesce((select jsonb_agg(to_jsonb(parts) order by parts.id) from (
+       select p.id, p.funding_id, p.amount_ore::text as amount_ore
        from finance.funding_parts p
        join finance.funding f on f.id = p.funding_id
        join finance.seasons s on s.id = f.season_id
-       where s.code = $1`,
-      [seasonCode],
-    ),
-  ]);
+       where s.code = $1
+       ) parts), '[]'::jsonb) as parts`,
+    [seasonCode, includeDraftItems],
+  );
+  const facts = result.rows[0];
+  if (!facts) throw new Error("Could not load finance scenario facts.");
   return {
-    items: items.rows,
-    systems: systems.rows,
-    funding: funding.rows.map((row) => ({ id: row.id, status: row.status, confidence: row.confidence, amountOre: ore(row.amount_ore) })),
-    parts: parts.rows.map((row) => ({ id: row.id, fundingId: row.funding_id, amountOre: ore(row.amount_ore) })),
+    items: facts.items,
+    systems: facts.systems,
+    funding: facts.funding.map((row) => ({ id: row.id, status: row.status, confidence: row.confidence, amountOre: ore(row.amount_ore) })),
+    parts: facts.parts.map((row) => ({ id: row.id, fundingId: row.funding_id, amountOre: ore(row.amount_ore) })),
   };
 }
 
