@@ -150,12 +150,26 @@ describe("finance capability matrix", () => {
         totalNok: "10.00",
         refundAccount: "private-account",
         refundPhone: "private-phone",
+        requesterMemberId: "member",
+        requesterName: "Member Example",
+        justification: "Workshop material",
+        documentKind: "receipt" as const,
+        documentNumber: null,
+        revision: 0,
+        voidReason: null,
+        unpaid: true,
+        invoice: null,
+        reimbursement: { paid: false, paidOn: null },
+        lines: [],
+        documents: [{ id: "doc", publicRef: "2026-0042-D1", kind: "receipt" as const, documentNumber: null, originalName: "receipt.pdf" }],
+        exceptions: [],
       }],
     };
     const registerOnly = { ...capabilitiesForProfiles(["finance"]), filesAndRefunds: false };
     const redacted = presentPurchases(view, registerOnly);
     expect(redacted.register?.[0]?.refundAccount).toBeNull();
     expect(redacted.register?.[0]?.refundPhone).toBeNull();
+    expect(redacted.register?.[0]?.documents).toEqual([]);
     expect(redacted.register?.[0]?.supplierName).toBe("Hidden Supplier");
     expect(presentPurchases(view, capabilitiesForProfiles([])).register).toBeUndefined();
     expect(presentPurchases(view, capabilitiesForProfiles(["finance"])).register?.[0]?.refundAccount).toBe("private-account");

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { PurchaseRegister } from "./PurchaseRegister";
 import { requiresLateReason } from "./request-domain";
 import type {
   BudgetChoiceItem,
@@ -79,6 +80,8 @@ export function PurchasesBoard() {
   const [closeReason, setCloseReason] = useState("");
   const [releasedNok, setReleasedNok] = useState("0.00");
   const [uploads, setUploads] = useState<UploadState[]>([]);
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const unpaidOnlyRef = useRef(false);
   const buyerDefault = "Member Example";
   const [purchase, setPurchase] = useState<PurchaseInput>(() => emptyPurchase(session.today ?? "", buyerDefault));
   const budgetChoices = session.budgets?.choices ?? { systems: [], items: [] };
@@ -105,6 +108,14 @@ export function PurchasesBoard() {
   const systems = budgetChoices.systems.filter((row) => row.active);
   const choices = purchases.choices?.items ?? [];
   const register = purchases.register ?? [];
+  const canReview = Boolean(session.capabilities?.paymentsVoidReview);
+
+  function purchaseLoadOptions(requestRecordId: string | null) {
+    return {
+      ...(requestRecordId ? { requestRecordId } : {}),
+      ...(unpaidOnlyRef.current ? { unpaidOnly: true } : {}),
+    };
+  }
 
   function updatePurchaseLine(index: number, patch: Partial<PurchaseLineInput>) {
     setPurchase((current) => {
@@ -172,7 +183,7 @@ export function PurchasesBoard() {
       notify("Purchase registered", saved.id ? "Reference saved." : "Your purchase was saved.", { id: "purchase-saved", variant: "success" });
       setPurchase(emptyPurchase(session.today ?? "", purchase.buyerName));
       setUploads([]);
-      await session.loadPage("purchases", selectedId ? { requestRecordId: selectedId } : undefined);
+      await session.loadPage("purchases", purchaseLoadOptions(selectedId));
       if (!budgetsLoaded) await session.loadPage("budgets");
     } catch (error) {
       requests.finish();
@@ -192,12 +203,12 @@ export function PurchasesBoard() {
       lateReason: "",
       lines: [emptyRequestLine()],
     });
-    void session.loadPage("purchases");
+    void session.loadPage("purchases", purchaseLoadOptions(null));
   }
 
   function openRequest(row: OwnRequestSummary) {
     setSelectedId(row.id);
-    void session.loadPage("purchases", { requestRecordId: row.id }).then(() => {
+    void session.loadPage("purchases", purchaseLoadOptions(row.id)).then(() => {
       const loaded = session.purchases?.detail;
       if (!loaded) return;
       setEditor({
@@ -218,7 +229,7 @@ export function PurchasesBoard() {
       await session.mutate({ ...action, requestId: requests.idFor(key) });
       requests.finish();
       notify("Request saved", success, { id: "request-saved", variant: "success" });
-      await session.loadPage("purchases", selectedId ? { requestRecordId: selectedId } : undefined);
+      await session.loadPage("purchases", purchaseLoadOptions(selectedId));
       return true;
     } catch (error) {
       requests.finish();
@@ -264,7 +275,7 @@ export function PurchasesBoard() {
         request: body,
       } as FinanceMutation, "The draft was saved.");
       if (!saved) return;
-      await session.loadPage("purchases");
+      await session.loadPage("purchases", purchaseLoadOptions(null));
       const own = session.purchases?.ownRequests ?? [];
       const created = own.length > 0 ? own[own.length - 1] : undefined;
       if (!created) return;
@@ -585,28 +596,24 @@ export function PurchasesBoard() {
         </Card>
       )}
       </div>
-      {register.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-xl font-medium">Purchase register</h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Reference</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {register.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.publicRef}</TableCell>
-                  <TableCell>{row.supplierName}</TableCell>
-                  <TableCell>{row.totalNok}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
+      {session.capabilities?.purchaseRegister ? (
+        <PurchaseRegister
+          register={register}
+          unpaidCount={purchases.unpaidCount ?? register.filter((row) => row.unpaid).length}
+          unpaidOnly={unpaidOnly}
+          today={today}
+          canAct={canReview}
+          onToggleUnpaid={(next) => {
+            unpaidOnlyRef.current = next;
+            setUnpaidOnly(next);
+            void session.loadPage("purchases", {
+              ...(selectedId ? { requestRecordId: selectedId } : {}),
+              ...(next ? { unpaidOnly: true } : {}),
+            });
+          }}
+          onMutate={session.mutate}
+          onChanged={() => session.loadPage("purchases", purchaseLoadOptions(selectedId))}
+        />
       ) : null}
     </div>
   );

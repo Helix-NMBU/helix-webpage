@@ -47,12 +47,18 @@ export function presentPurchases(view: PurchasesView, capabilities: FinanceCapab
   if (!capabilities.purchaseRegister) {
     const next = { ...view };
     delete next.register;
+    delete next.unpaidCount;
     return next;
   }
   if (!view.register || capabilities.filesAndRefunds) return view;
   return {
     ...view,
-    register: view.register.map((row: FinancePurchaseSummary) => ({ ...row, refundAccount: null, refundPhone: null })),
+    register: view.register.map((row: FinancePurchaseSummary) => ({
+      ...row,
+      refundAccount: null,
+      refundPhone: null,
+      documents: [],
+    })),
   };
 }
 
