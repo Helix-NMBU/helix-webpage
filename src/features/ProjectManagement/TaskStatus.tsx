@@ -52,9 +52,9 @@ const icons = {
 const colors = {
   backlog: "text-muted-foreground",
   todo: "text-muted-foreground",
-  in_progress: "text-yellow-400",
-  done: "text-primary",
-  blocked: "text-[oklch(0.577_0.245_27.325)]",
+  in_progress: "text-[#E8C141]",
+  done: "text-[#616ACB]",
+  blocked: "text-[#97A2B1]",
   cancelled: "text-muted-foreground",
 };
 
