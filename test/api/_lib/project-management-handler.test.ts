@@ -33,6 +33,14 @@ describe("project management HTTP boundaries", () => {
     for (const changes of [{}, null, [], { projectId: null }, { category: "marketing" }, { status: "done" }, { priority: "invalid" }, { deadline: null }, { deadline: "2026-02-30" }, { assigneeIds: [null] }, { assigneeIds: Array(21).fill(id) }]) expect(() => parseProjectMutation({ ...input, changes })).toThrow();
     expect(() => parseProjectMutation({ ...input, expectedRevision: 0 })).toThrow();
   });
+  it("validates project date ranges while preserving omitted starts for legacy callers",()=>{
+    const input={action:"save_project",id:"10000000-0000-4000-8000-000000000001",expectedRevision:0,project:{name:"Build",description:"",category:"production",departments:["Mechanical & Production"],deadline:"2026-12-01"}};
+    expect(parseProjectMutation(input)).toMatchObject({project:{deadline:"2026-12-01"}});
+    expect('startDate' in (parseProjectMutation(input) as {project:object}).project).toBe(false);
+    expect(parseProjectMutation({...input,project:{...input.project,startDate:null}})).toMatchObject({project:{startDate:null}});
+    expect(parseProjectMutation({...input,project:{...input.project,startDate:"2026-12-01"}})).toMatchObject({project:{startDate:"2026-12-01"}});
+    for(const startDate of ["2026-12-02","2026-02-30",false,"1999-01-01"]) expect(()=>parseProjectMutation({...input,project:{...input.project,startDate}})).toThrow();
+  });
   it("bounds department membership and requires its Lead to be a member", () => {
     const id = "10000000-0000-4000-8000-000000000001";
     const input = { action: "save_department", id, expectedRevision: 1, department: { name: " Mechanical & Production ", memberIds: [id, id], leadId: id } };

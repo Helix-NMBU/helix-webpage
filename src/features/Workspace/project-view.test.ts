@@ -33,8 +33,12 @@ describe("project views", () => {
     expect(range.start < "2025-12-01").toBe(true); expect(range.end > "2027-08-31").toBe(true);
     expect(range.months).toContain("2026-01-01"); expect(range.months).toContain("2027-09-01");
   });
+  it("includes the project start in the calendar even before every milestone", () => {
+    const project = { ...directoryFixture().projects[0], startDate:"2025-01-01", deadline:"2026-12-01" };
+    expect(timelineRange([project], "2026-10-27").start < "2025-01-01").toBe(true);
+  });
   it("keeps an undated project undated and uses a finite calendar window", () => {
-    const project = { ...directoryFixture().projects[0], deadline: null, milestones: [] };
+    const project = { ...directoryFixture().projects[0], startDate: null, deadline: null, milestones: [] };
     const range = timelineRange([project], "2026-10-27");
     expect(range.months.length).toBeGreaterThan(0); expect(range.months.length).toBeLessThan(12);
     expect(project.deadline).toBeNull();

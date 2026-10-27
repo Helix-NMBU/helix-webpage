@@ -27,8 +27,8 @@ export function initialLocalWorkspace(): ProjectWorkspace {
   return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
     departments: fixedDepartmentRecords([{ id: id(300), season: "S27", revision: 1, name: "Mechanical & Production", memberIds: [id(1), id(2)], leadId: id(1) }, { id: id(301), season: "S27", revision: 1, name: "Electronics", memberIds: [id(2)], leadId: id(2) }]),
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
-    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical & Production", "Electronics"], deadline: addDays(today, 35), revision: 1 },
-      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: fixedProjectDepartments([name]), deadline: addDays(today, 35), revision: 1 })),
+    projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical & Production", "Electronics"], startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 },
+      ...([['Marketing', 'marketing', 101], ['Partnerships', 'partnership-deliverables', 102], ['Operations', 'operations', 103]] as const).map(([name, category, number]) => ({ id: id(number), season: "S27", name, description: "", category, departments: fixedProjectDepartments([name]), startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 })),
     ],
     tasks,
     progressEvents: [
@@ -70,7 +70,8 @@ export function createLocalProjectRepository(): ProjectRepository {
         if (department.memberIds.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active platform members for this department.");
         workspace.departments = [...workspace.departments.filter(item => item.id !== mutation.id), { ...department, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
       } else if (mutation.action === "save_project") {
-        const project = validateProject(mutation.project);
+        const previousStart = workspace.projects.find(project => project.id === mutation.id)?.startDate ?? null;
+        const project = validateProject({ ...mutation.project, startDate: mutation.project.startDate === undefined ? previousStart : mutation.project.startDate });
         const ledDepartments = workspace.departments.filter(d => d.leadId === workspace.viewerId).map(d => d.name);
         const previousProject = workspace.projects.find(p => p.id === mutation.id);
         if (!workspace.canManage && (!project.departments.some(d => ledDepartments.includes(d)) || (previousProject && !previousProject.departments.some(d => ledDepartments.includes(d))))) throw new ProjectRequestError("Only project managers or a Lead for this department can manage projects.", 403);

@@ -21,3 +21,5 @@ On desktop, the project view fits the viewport below the shell breadcrumb. Proje
 Progress charts mark the stored project target date with a red vertical line and red hatching to its right. The date domain includes padding after the target so this region remains visible even for distant deadlines. An overdue deadline remains at its actual date; it is not moved to today. No red region is shown for an undated project. The overall Overview chart uses the latest project deadline. This shading indicates time after the deadline, not a forecast or a prediction of missed work.
 
 Task titles in the project list and Activity now open the [task detail page](task-detail.md). Returning via Back preserves the project’s URL-based milestone filter.
+
+Project Properties and the project editor include the optional start date. It is independent of observed progress history and must not be after the target date. Editing either date updates the project timeline after saving.

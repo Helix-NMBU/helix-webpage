@@ -2,7 +2,7 @@ import type { WorkspaceDirectory, WorkspaceProject } from "./types";
 
 export const PROJECT_COLUMNS = [
   ["milestones", "Milestones"], ["department", "Department"], ["priority", "Priority"],
-  ["leads", "Leads"], ["deadline", "Target date"], ["tasks", "Tasks"], ["status", "Status"],
+  ["leads", "Leads"], ["start", "Start date"], ["deadline", "Target date"], ["tasks", "Tasks"], ["status", "Status"],
 ] as const;
 export type ProjectColumn = typeof PROJECT_COLUMNS[number][0];
 export function projectView(params: URLSearchParams) {
@@ -30,7 +30,8 @@ export function visibleProjects(data: WorkspaceDirectory, options: ProjectView, 
     (options.completion === "all" || (options.completion === "completed" ? projectComplete(project) : options.completion === "empty" ? project.total === 0 : !projectComplete(project))) &&
     `${project.name} ${project.description} ${project.departments.join(" ")}`.toLowerCase().includes(search.toLowerCase()),
   ).sort((a, b) => {
-    const order = options.sort === "name" ? a.name.localeCompare(b.name)
+    const order = options.sort === "start" ? (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999")
+      : options.sort === "name" ? a.name.localeCompare(b.name)
       : options.sort === "priority" ? priorityOrder.indexOf(a.priority ?? "normal") - priorityOrder.indexOf(b.priority ?? "normal")
       : options.sort === "progress" ? (b.total ? b.done / b.total : 0) - (a.total ? a.done / a.total : 0)
       : (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999");

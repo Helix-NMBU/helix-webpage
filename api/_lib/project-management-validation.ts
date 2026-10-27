@@ -50,8 +50,11 @@ function project(value: unknown): ProjectInput {
   if (!Array.isArray(body.departments) || body.departments.length > 10) return invalid("Choose at most 10 departments.");
   if (body.departments.some(name => typeof name !== "string" || !ORGANIZATION_DEPARTMENTS.includes(name.trim() as typeof ORGANIZATION_DEPARTMENTS[number]))) return invalid("Choose departments from the organization list.");
   if (body.leadIds !== undefined && (!Array.isArray(body.leadIds) || body.leadIds.length > MAX_TASK_ASSIGNEES)) return invalid("Choose up to 20 project Leads.");
-  return { priority: body.priority === undefined ? "normal" : oneOf(body.priority, TASK_PRIORITIES), leadIds: body.leadIds === undefined ? [] : [...new Set((body.leadIds as unknown[]).map(uuid))], name: text(body.name, "project name", 200, true), description: text(body.description, "description", 2000),
-    category: oneOf(body.category, TASK_CATEGORIES), departments: [...new Set(body.departments.map(value => text(value, "department", 100, true)))], deadline: date(body.deadline) };
+  const startDate = body.startDate === undefined ? undefined : date(body.startDate);
+  const deadline = date(body.deadline);
+  if (startDate && deadline && startDate > deadline) return invalid("The start date must be on or before the deadline.");
+  return { ...(startDate !== undefined ? { startDate } : {}), priority: body.priority === undefined ? "normal" : oneOf(body.priority, TASK_PRIORITIES), leadIds: body.leadIds === undefined ? [] : [...new Set((body.leadIds as unknown[]).map(uuid))], name: text(body.name, "project name", 200, true), description: text(body.description, "description", 2000),
+    category: oneOf(body.category, TASK_CATEGORIES), departments: [...new Set(body.departments.map(value => text(value, "department", 100, true)))], deadline };
 }
 export function parseProjectMutation(value: unknown): ProjectMutation {
   const body = object(value);

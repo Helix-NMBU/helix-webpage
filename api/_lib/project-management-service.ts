@@ -18,7 +18,7 @@ const workspaceSql = `select a.can_manage as "canManage", a.member_id as "viewer
     'leadId',(select dm.member_id from project_management.department_members dm where dm.department_id=d.id and dm.is_lead)) order by lower(d.name),d.id)
     from project_management.departments d where d.season='S27'),'[]'::jsonb) as departments,
   coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,
-    'priority',p.priority,'leadIds',p.lead_ids,'category',p.category,'departments',p.departments,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
+    'priority',p.priority,'leadIds',p.lead_ids,'category',p.category,'departments',p.departments,'startDate',p.start_date,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
     from project_management.projects p where p.season = 'S27'),'[]'::jsonb) as projects,
   coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'season',t.season,'title',t.title,'description',t.description,
     'category',t.category,'projectId',t.project_id,'milestoneId',t.milestone_id,'assigneeIds',coalesce((select jsonb_agg(ta.member_id order by ta.member_id) from project_management.task_assignees ta where ta.task_id=t.id),'[]'::jsonb),'deadline',t.deadline,'startDate',t.start_date,

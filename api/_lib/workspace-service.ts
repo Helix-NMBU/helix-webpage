@@ -27,7 +27,7 @@ const snapshotSql = `with actor as (select m.id ${eligible} and m.id=$1::uuid an
  'memberIds',coalesce((select jsonb_agg(member_id order by member_id) from project_management.department_members where department_id=d.id),'[]'::jsonb),
  'leadId',(select member_id from project_management.department_members where department_id=d.id and is_lead))) from project_management.departments d where d.season='S27'),'[]'::jsonb) as departments,
  coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,'category',p.category,'departments',p.departments,
- 'deadline',p.deadline,'revision',p.revision,'priority',p.priority,'leadIds',p.lead_ids,
+ 'startDate',p.start_date,'deadline',p.deadline,'revision',p.revision,'priority',p.priority,'leadIds',p.lead_ids,
  'total',(select count(*) from project_management.tasks t where t.project_id=p.id and t.kind='task' and t.status<>'cancelled'),
  'done',(select count(*) from project_management.tasks t where t.project_id=p.id and t.kind='task' and t.status='done'),
  'milestones',coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'deadline',t.deadline,'priority',t.priority) order by t.deadline nulls last,t.id) from project_management.tasks t where t.project_id=p.id and t.kind='milestone' and t.status not in ('done','cancelled')),'[]'::jsonb)) order by lower(p.name),p.id) from project_management.projects p where p.season='S27'),'[]'::jsonb) as projects where exists(select 1 from actor)`;

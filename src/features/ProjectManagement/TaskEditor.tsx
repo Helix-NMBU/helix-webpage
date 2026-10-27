@@ -79,7 +79,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
 export function ProjectEditor({ project, category, members = [], busy, onSave, onClose }: { project: Project | null; category: TaskCategory; members?: ProjectWorkspace["members"]; busy: boolean; onSave: (mutation: ProjectMutation) => Promise<unknown>; onClose: () => void }) {
   const [id] = useState(() => project?.id ?? crypto.randomUUID());
   const [revision] = useState(project?.revision ?? 0);
-  const [draft, setDraft] = useState<ProjectInput>(() => project ? { ...project } : { name: "", description: "", category, departments: [], deadline: null });
+  const [draft, setDraft] = useState<ProjectInput>(() => project ? { ...project } : { name: "", description: "", category, departments: [], startDate: null, deadline: null });
   const notify = useNotify();
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -96,7 +96,8 @@ export function ProjectEditor({ project, category, members = [], busy, onSave, o
       <Field id="project-departments" label="Departments"><div id="project-departments" role="group" aria-label="Project departments" className="grid gap-2 sm:grid-cols-2">{ORGANIZATION_DEPARTMENTS.map(name => <label key={name} className="flex items-center gap-2 text-sm"><Checkbox checked={draft.departments.includes(name)} disabled={busy} aria-label={name} onCheckedChange={checked => setDraft(previous => ({ ...previous, departments: checked === true ? [...previous.departments, name] : previous.departments.filter(value => value !== name) }))} />{name}</label>)}</div></Field>
       <Field id="project-priority" label="Priority"><Choice id="project-priority" disabled={busy} value={draft.priority ?? "normal"} options={TASK_PRIORITIES.map(value => ({ value, label: value === "normal" ? "Medium" : value[0].toUpperCase() + value.slice(1) }))} onChange={value => setDraft({ ...draft, priority: value as ProjectInput["priority"] })} /></Field>
       {members.length > 0 && <Field id="project-leads" label="Leads"><AssigneePicker id="project-leads" triggerLabel="Choose project leads" assignmentRole="lead" members={members} value={draft.leadIds ?? []} disabled={busy} onChange={leadIds => setDraft({ ...draft, leadIds })} /></Field>}
-      <Field id="project-deadline" label="Project deadline"><Input id="project-deadline" type="date" min="2000-01-01" max="2100-12-31" value={draft.deadline ?? ""} onChange={event => setDraft({ ...draft, deadline: event.target.value || null })} /></Field>
+      <Field id="project-start" label="Start date"><Input id="project-start" type="date" min="2000-01-01" max={draft.deadline ?? "2100-12-31"} value={draft.startDate ?? ""} onChange={event => setDraft({ ...draft, startDate: event.target.value || null })} /></Field>
+      <Field id="project-deadline" label="Project deadline"><Input id="project-deadline" type="date" min={draft.startDate ?? "2000-01-01"} max="2100-12-31" value={draft.deadline ?? ""} onChange={event => setDraft({ ...draft, deadline: event.target.value || null })} /></Field>
     </fieldset><DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save project"}</Button></DialogFooter></form>
   </DialogContent></Dialog>;
 }

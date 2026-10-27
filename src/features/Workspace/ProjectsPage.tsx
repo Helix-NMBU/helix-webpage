@@ -55,6 +55,7 @@ export function ProjectRows({
           {show("department") && <TableHead>Department</TableHead>}
           {show("priority") && <TableHead>Priority</TableHead>}
           {show("leads") && <TableHead>Leads</TableHead>}
+          {show("start") && <TableHead>Start date</TableHead>}
           {show("deadline") && <TableHead>Target date</TableHead>}
           {show("tasks") && <TableHead>Tasks</TableHead>}
           {show("status") && <TableHead>Status</TableHead>}
@@ -104,6 +105,7 @@ export function ProjectRows({
                 showNames
               />
             </TableCell>}
+            {show("start") && <TableCell className="whitespace-nowrap">{p.startDate ? <TargetDate deadline={p.startDate} /> : <span className="text-muted-foreground">Not set</span>}</TableCell>}
             {show("deadline") && <TableCell className="whitespace-nowrap">
               <TargetDate deadline={p.deadline} />
             </TableCell>}

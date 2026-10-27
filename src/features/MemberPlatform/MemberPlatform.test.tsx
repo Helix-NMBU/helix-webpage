@@ -399,6 +399,31 @@ describe("internal member platform", () => {
     expect(`${router.state.location.pathname}${router.state.location.search}`).toBe(`/projects/${project.id}?milestone=first-goal`);
   });
 
+  it("saves a project start date from the creation form",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();workspace.load.mockResolvedValue(data);workspace.saveProject.mockResolvedValue(data);await open('/projects');
+    await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='+ New project')!.click());
+    for(const [id,value] of [['project-name','Scheduled build'],['project-start','2026-10-01'],['project-deadline','2026-12-01']]){
+      const field=document.getElementById(id) as HTMLInputElement;
+      await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(field,value);field.dispatchEvent(new Event('input',{bubbles:true}));});
+    }
+    await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(button=>button.textContent==='Save project')!.click());
+    expect(workspace.saveProject).toHaveBeenCalledWith(expect.objectContaining({action:'save_project',project:expect.objectContaining({startDate:'2026-10-01',deadline:'2026-12-01'})}));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("renders a dated project bar with milestones at their calendar positions",async()=>{
+    session.landing.mockResolvedValue(signedIn);const data=directoryFixture();const project=data.projects[0];project.startDate='2026-09-01';project.deadline='2026-12-01';
+    project.milestones=[{id:'design-review',title:'Design review',deadline:'2026-10-01',priority:'normal'}];
+    data.projects[1].startDate=null;workspace.load.mockResolvedValue(data);await open('/projects?view=timeline');
+    const bar=container.querySelector<HTMLElement>(`[data-project-bar="${project.id}"]`)!;
+    const milestone=container.querySelector<HTMLElement>('[aria-label="Open milestone Design review in Chassis & assembly"]')!;
+    expect(bar).not.toBeNull();
+    expect((parseFloat(milestone.style.left)-parseFloat(bar.style.left))/parseFloat(bar.style.width)).toBeCloseTo(30/91);
+    expect(milestone.style.top).toBe('26px');
+    expect(container.querySelector(`[data-project-bar="${data.projects[1].id}"]`)).toBeNull();
+    expect(container.querySelector(`[aria-label^="Open project ${data.projects[1].name}, target"]`)).not.toBeNull();
+  });
+
   it.each(['manager','lead'])("lets a %s open the project creation form",async role=>{
     session.landing.mockResolvedValue(signedIn);
     const data=directoryFixture();data.canAdmin=false;data.canManageProjects=role==='manager';workspace.load.mockResolvedValue(data);

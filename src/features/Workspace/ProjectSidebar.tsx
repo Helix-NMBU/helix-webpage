@@ -173,6 +173,7 @@ export function ProjectSidebar({
               showNames
             />
           </Property>
+          <Property label="Start date">{project.startDate ? <TargetDate deadline={project.startDate} /> : <span className="text-muted-foreground">Not set</span>}</Property>
           <Property label="Target date">
             <TargetDate deadline={project.deadline} />
           </Property>

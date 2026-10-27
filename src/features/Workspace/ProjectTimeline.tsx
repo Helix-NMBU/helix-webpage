@@ -15,7 +15,7 @@ const nextMonth = (date: string) => {
   return parsed.toISOString().slice(0, 10);
 };
 export function timelineRange(projects: WorkspaceProject[], today: string) {
-  const dates = projects.flatMap(project => [project.deadline, ...project.milestones.map(item => item.deadline)]).filter((date): date is string => Boolean(date));
+  const dates = projects.flatMap(project => [project.startDate, project.deadline, ...project.milestones.map(item => item.deadline)]).filter((date): date is string => Boolean(date));
   const start = monthStart(addDays([addDays(today, -30), ...dates].sort()[0], -14));
   const end = nextMonth(monthStart(addDays([addDays(today, 90), ...dates].sort().reverse()[0], 14)));
   const months: string[] = [];
@@ -45,7 +45,7 @@ export function ProjectTimeline({ projects, groups, scale, onScale }: {
   const monthLabel = (date: string) => new Intl.DateTimeFormat("en-GB", { month: "short", ...(date.slice(5, 7) === "01" || date === start ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
   return <section aria-label="Project timeline">
     <div className="flex flex-wrap items-center justify-between gap-3 border-y px-4 py-3">
-      <span className="text-xs text-muted-foreground">Target dates and milestones</span>
+      <span className="text-xs text-muted-foreground">Project schedules and milestones</span>
       <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={centerToday}>Today</Button><div className="w-28"><Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scale} onChange={onScale} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} /></div></div>
     </div>
     {!projects.length ? <p className="px-4 py-12 text-center text-sm text-muted-foreground">No projects to show.</p> : <div ref={scroll} tabIndex={0} role="region" aria-label="Project timeline calendar" className="max-h-[70svh] overflow-auto overscroll-contain [--timeline-label-width:10rem] sm:[--timeline-label-width:15rem]">
@@ -59,6 +59,7 @@ export function ProjectTimeline({ projects, groups, scale, onScale }: {
           {group.name && <div className="sticky left-0 w-[var(--timeline-label-width)] border-y bg-muted px-4 py-2 text-xs font-medium">{group.name}</div>}
           {group.projects.map(project => {
             const datedMilestones = project.milestones.filter(item => item.deadline);
+            const hasRange = Boolean(project.startDate && project.deadline);
             const lanes: number[] = [];
             for (const [index, milestone] of datedMilestones.entries()) {
               const occupied = new Set(datedMilestones.slice(0, index).flatMap((other, previous) => Math.abs(x(other.deadline!) - x(milestone.deadline!)) < 24 ? [lanes[previous]] : []));
@@ -73,8 +74,15 @@ export function ProjectTimeline({ projects, groups, scale, onScale }: {
               <ProgressRing label={project.name} done={project.done} total={project.total} percent={project.total ? Math.round(project.done / project.total * 100) : 0} showTotal={false} />
             </div>
             <div className="relative" style={{ width }}>
-              {project.deadline ? <Link to={`/projects/${project.id}`} aria-label={`Open project ${project.name}, target ${formatDate(project.deadline)}`} title={`${project.name}: target ${formatDate(project.deadline)}`} className="absolute top-3 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-3 py-1.5 text-xs hover:bg-accent" style={{ left: x(project.deadline) }}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.deadline}T12:00:00Z`))}</Link> : <span className="absolute left-4 top-5 text-xs text-muted-foreground">Target date not set</span>}
-              {datedMilestones.map((milestone, index) => <Link key={milestone.id} to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} aria-label={`Open milestone ${milestone.title} in ${project.name}`} title={`${milestone.title}: ${formatDate(milestone.deadline)}`} className="absolute -translate-x-1/2 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" style={{ left: x(milestone.deadline!), top: 56 + lanes[index] * 24 }}><IconDiamonds aria-hidden="true" className="size-4" /></Link>)}
+              {hasRange ? <><span aria-hidden="true" className="pointer-events-none absolute top-0 truncate text-xs" style={{ left: x(project.startDate!), maxWidth: Math.min(208, width - x(project.startDate!)) }}>{project.name}</span><Link
+                data-project-bar={project.id}
+                to={`/projects/${project.id}`}
+                aria-label={`Open project ${project.name}, ${formatDate(project.startDate!)} to ${formatDate(project.deadline)}`}
+                title={`${project.name}: ${formatDate(project.startDate!)} – ${formatDate(project.deadline)}`}
+                className="absolute top-6 flex h-7 items-center overflow-hidden rounded-md border border-primary/40 bg-primary/15 text-xs hover:bg-primary/25"
+                style={{ left: x(project.startDate!), width: Math.max(2, x(project.deadline!) - x(project.startDate!)) }}
+              ><span className="sr-only">{project.name}</span></Link></> : project.deadline ? <Link to={`/projects/${project.id}`} aria-label={`Open project ${project.name}, target ${formatDate(project.deadline)}`} title={`${project.name}: target ${formatDate(project.deadline)}`} className="absolute top-3 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-3 py-1.5 text-xs hover:bg-accent" style={{ left: x(project.deadline) }}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.deadline}T12:00:00Z`))}</Link> : project.startDate ? <Link to={`/projects/${project.id}`} className="absolute top-3 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-3 py-1.5 text-xs hover:bg-accent" style={{ left: x(project.startDate) }} title={`Start: ${formatDate(project.startDate)}; deadline not set`}>Start: {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.startDate}T12:00:00Z`))}</Link> : <span className="absolute left-4 top-5 text-xs text-muted-foreground">Dates not set</span>}
+              {datedMilestones.map((milestone, index) => <Link key={milestone.id} to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} aria-label={`Open milestone ${milestone.title} in ${project.name}`} title={`${milestone.title}: ${formatDate(milestone.deadline)}`} className="absolute -translate-x-1/2 z-10 rounded p-1 text-foreground hover:bg-accent" style={{ left: x(milestone.deadline!), top: (hasRange ? 26 : 56) + lanes[index] * 24 }}><IconDiamonds aria-hidden="true" className="size-4" /></Link>)}
             </div>
           </div>; })}
         </div>)}

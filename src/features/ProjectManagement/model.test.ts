@@ -3,6 +3,14 @@ import { initialLocalWorkspace } from "./local-repository";
 import { addDays, osloDate, summarize, taskUrgency, validateProject, validateTask } from "./model";
 
 describe("project progress and deadlines", () => {
+  it("validates optional project starts and their order against deadlines", () => {
+    const project = { name:"Build",description:"",category:"production" as const,departments:["Mechanical & Production"],deadline:"2026-12-01" };
+    expect(validateProject(project).startDate).toBeNull();
+    expect(validateProject({...project,startDate:"2026-12-01"}).startDate).toBe("2026-12-01");
+    expect(validateProject({...project,startDate:"2026-10-01",deadline:null}).startDate).toBe("2026-10-01");
+    for(const startDate of ["2026-12-02","2026-02-30","1999-01-01"]) expect(()=>validateProject({...project,startDate})).toThrow();
+  });
+
   it("uses the Oslo calendar date across midnight and daylight-saving changes", () => {
     expect(osloDate(new Date("2026-10-25T23:30:00Z"))).toBe("2026-10-26");
     expect(addDays("2026-10-24", 7)).toBe("2026-10-31");
