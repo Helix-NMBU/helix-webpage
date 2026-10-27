@@ -310,7 +310,7 @@ export function ProjectDetail({
               tabIndex={0}
               role="region"
               aria-label="Project content"
-              className="min-w-0 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:pb-2 md:pr-2"
+              className={`min-w-0 md:min-h-0 md:overscroll-y-contain md:pb-2 md:pr-2 ${tab === "tasks" && params.get("view") === "board" ? "md:overflow-hidden" : "md:overflow-y-auto"}`}
             >
               {tab === "overview" ? (
                 <section
@@ -412,6 +412,16 @@ export function ProjectDetail({
                   key={project.id}
                   tasks={filtered}
                   allTasks={tasks}
+                  milestones={milestones}
+                  selectedMilestone={selectedMilestone}
+                  onOpenMilestone={item => {
+                    const next = new URLSearchParams(params);
+                    next.set("milestone", item.id);
+                    next.set("view", "list");
+                    for (const key of ["status", "priority", "assignee"]) next.delete(key);
+                    setParams(next);
+                  }}
+                  onCreateMilestone={() => setComposer("milestone")}
                   workspace={workspace}
                   busy={busy}
                   canCreate={canCreate}

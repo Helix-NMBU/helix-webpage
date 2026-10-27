@@ -37,12 +37,14 @@ describe("shared task board", () => {
       "priority",
     ],
     busy = false,
+    kind: "task" | "milestone" = "task",
   ) {
     await act(async () =>
       root.render(
         <MemoryRouter>
           <TaskBoard
             tasks={data.tasks}
+            kind={kind}
             workspace={data}
             busy={busy}
             columns={columns}
@@ -273,11 +275,91 @@ describe("shared task board", () => {
     ).toContain("No tasks");
     expect(container.querySelector('a[href*="?milestone="]')).not.toBeNull();
   });
+  it("shows milestone cards with linked task progress and their own editable status", async () => {
+    const data = initialLocalWorkspace();
+    const milestone = data.tasks.find(
+      (item) => item.kind === "milestone" && item.category === "production",
+    )!;
+    const child = data.tasks.find(
+      (item) => item.kind === "task" && item.milestoneId === milestone.id,
+    )!;
+    child.status = "done";
+    // A malformed cross-project link must not inflate this milestone's count.
+    data.tasks.push({
+      ...child,
+      id: "foreign-task",
+      projectId: "another-project",
+    });
+    const linked = data.tasks.filter(
+      (item) =>
+        item.kind === "task" &&
+        item.milestoneId === milestone.id &&
+        item.projectId === milestone.projectId &&
+        item.status !== "cancelled",
+    );
+    await render(data, ["assignee", "deadline"], false, "milestone");
+    const card = container.querySelector(
+      `[role="article"][aria-label="${milestone.title}"]`,
+    )!;
+    expect(
+      container.querySelector('[aria-label="Milestone board"]'),
+    ).not.toBeNull();
+    expect(container.querySelectorAll('[role="article"]')).toHaveLength(
+      data.tasks.filter((item) => item.kind === "milestone").length,
+    );
+    expect(
+      container.querySelector(`[role="article"][aria-label="${child.title}"]`),
+    ).toBeNull();
+    const progress = card.querySelector('[role="progressbar"]')!;
+    expect(progress.textContent).toBe(
+      `${linked.filter((item) => item.status === "done").length}/${linked.length}`,
+    );
+    expect(progress.getAttribute("aria-valuetext")).toContain(
+      `${linked.length} tasks complete`,
+    );
+    const empty = data.tasks.find(
+      (item) =>
+        item.kind === "milestone" &&
+        !data.tasks.some(
+          (child) => child.kind === "task" && child.milestoneId === item.id,
+        ),
+    )!;
+    expect(
+      container.querySelector(
+        `[role="article"][aria-label="${empty.title}"] [role="progressbar"]`,
+      )?.textContent,
+    ).toBe("0/0");
+    await dropTask(milestone.title, "In progress");
+    expect(onSave).toHaveBeenCalledWith(milestone, "in_progress", "");
+  });
+  it("shows selected priority and milestone badges instead of a project badge", async () => {
+    const data = initialLocalWorkspace();
+    await render(data, ["priority", "milestone"]);
+    const child = data.tasks.find(
+      (item) => item.kind === "task" && item.milestoneId,
+    )!;
+    const card = container.querySelector(
+      `[role="article"][aria-label="${child.title}"]`,
+    )!;
+    expect(card.querySelector("a")?.getAttribute("href")).toContain(
+      `?milestone=${child.milestoneId}`,
+    );
+    expect(card.querySelector("a")?.textContent).toBe(
+      data.tasks.find((item) => item.id === child.milestoneId)!.title,
+    );
+    expect(card.querySelector('[aria-label$=" priority"]')).not.toBeNull();
+    expect(
+      container.querySelector(
+        'a[href="/projects/00000000-0000-4000-8000-000000000100"]',
+      ),
+    ).toBeNull();
+  });
   it("opens a card independently from status controls and honors display properties", async () => {
     const data = initialLocalWorkspace();
     await render(data, []);
     const task = data.tasks.find((task) => task.kind === "task")!;
     expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector('[aria-label$=" priority"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Assigned to"]')).toBeNull();
     const button = [
       ...container.querySelectorAll<HTMLButtonElement>(

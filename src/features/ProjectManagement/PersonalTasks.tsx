@@ -77,11 +77,11 @@ export function PersonalTasks({
   }
   return (
     <section
-      className={`mx-auto w-full py-5 ${options.view === "board" ? "min-w-0" : "max-w-7xl"}`}
+      className={`mx-auto w-full ${options.view === "board" ? "flex min-h-0 min-w-0 flex-1 flex-col pt-5" : "max-w-7xl py-5"}`}
       aria-labelledby="my-tasks-title"
       aria-busy={busy || loading}
     >
-      <div className="mb-5 flex items-center justify-between gap-3">
+      <div className="mb-5 flex shrink-0 items-center justify-between gap-3">
         <h1 id="my-tasks-title" className="text-2xl font-medium tracking-tight">
           My tasks
         </h1>
@@ -108,7 +108,7 @@ export function PersonalTasks({
       <div
         className={
           options.view === "board"
-            ? "min-w-0"
+            ? "flex min-h-0 min-w-0 flex-1 flex-col"
             : "overflow-hidden rounded-xl border bg-background"
         }
       >
@@ -297,10 +297,12 @@ export function PersonalTasks({
           </Empty>
         )}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Select a status icon to update a task for all its assignees. Department
-        Leads create and assign work in Project Management.
-      </p>
+      {options.view !== "board" && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Select a status icon to update a task for all its assignees.
+          Department Leads create and assign work in Project Management.
+        </p>
+      )}
     </section>
   );
 }

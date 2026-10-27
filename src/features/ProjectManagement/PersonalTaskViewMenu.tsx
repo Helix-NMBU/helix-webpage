@@ -197,7 +197,11 @@ export function PersonalTaskViewMenu({
             aria-label="Task display properties"
             className="flex flex-wrap gap-2"
           >
-            {PERSONAL_TASK_COLUMNS.map(([key, label]) => (
+            {PERSONAL_TASK_COLUMNS.filter(
+              ([key]) =>
+                options.view !== "board" ||
+                key !== "project",
+            ).map(([key, label]) => (
               <Button
                 key={key}
                 className="rounded-full"

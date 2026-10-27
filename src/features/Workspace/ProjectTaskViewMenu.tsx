@@ -75,13 +75,20 @@ export function ProjectTaskViewMenu({
               ]}
             />
           </Field>
-          <Field id="project-task-assignee" label="Assignee">
+          <Field
+            id="project-task-assignee"
+            label={options.view === "board" ? "Lead" : "Assignee"}
+          >
             <Choice
               id="project-task-assignee"
               value={options.assignee}
               onChange={(value) => onChange("assignee", value)}
               options={[
-                { value: "all", label: "All assignees" },
+                {
+                  value: "all",
+                  label:
+                    options.view === "board" ? "All leads" : "All assignees",
+                },
                 { value: "none", label: "Unassigned" },
                 ...workspace.members.map((member) => ({
                   value: member.id,
@@ -123,8 +130,20 @@ export function ProjectTaskViewMenu({
         </div>
         {(
           [
-            ["completed", "Completed tasks", options.completed],
-            ["cancelled", "Cancelled tasks", options.cancelled],
+            [
+              "completed",
+              options.view === "board"
+                ? "Completed milestones"
+                : "Completed tasks",
+              options.completed,
+            ],
+            [
+              "cancelled",
+              options.view === "board"
+                ? "Cancelled milestones"
+                : "Cancelled tasks",
+              options.cancelled,
+            ],
           ] as const
         ).map(([key, label, checked]) => (
           <div key={key} className="flex items-center justify-between gap-3">
@@ -141,7 +160,7 @@ export function ProjectTaskViewMenu({
           </div>
         ))}
         <Button variant="ghost" className="w-full border-t" onClick={onReset}>
-          Reset task filters
+          Reset {options.view === "board" ? "milestone" : "task"} filters
         </Button>
       </PopoverContent>
     </Popover>

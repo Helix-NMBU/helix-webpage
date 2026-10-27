@@ -15,6 +15,12 @@ export const PERSONAL_TASK_COLUMNS = [
 ] as const;
 export type PersonalTaskColumn = (typeof PERSONAL_TASK_COLUMNS)[number][0];
 const defaults: PersonalTaskColumn[] = ["deadline", "project", "assignee"];
+const boardDefaults: PersonalTaskColumn[] = [
+  "deadline",
+  "milestone",
+  "assignee",
+  "priority",
+];
 const choice = (
   params: URLSearchParams,
   key: string,
@@ -25,6 +31,16 @@ const choice = (
   return value && choices.includes(value) ? value : fallback;
 };
 export function personalTaskView(params: URLSearchParams) {
+  const board = params.get("view") === "board";
+  const selected = params.has("columns")
+    ? params.get("columns")!.split(",")
+    : board
+      ? boardDefaults
+      : defaults;
+  // Existing project-badge preferences now display the connected milestone on Board.
+  const columns = board
+    ? selected.map((key) => (key === "project" ? "milestone" : key))
+    : selected;
   return {
     view: params.get("view") === "board" ? "board" : "list",
     area: params.get("area") ?? "all",
@@ -46,9 +62,7 @@ export function personalTaskView(params: URLSearchParams) {
     completed: params.get("completed") !== "hide",
     cancelled: params.get("cancelled") === "show",
     columns: PERSONAL_TASK_COLUMNS.map(([key]) => key).filter((key) =>
-      params.has("columns")
-        ? params.get("columns")!.split(",").includes(key)
-        : defaults.includes(key),
+      columns.includes(key),
     ),
   };
 }

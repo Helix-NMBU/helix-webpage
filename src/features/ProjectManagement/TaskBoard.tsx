@@ -2,7 +2,7 @@ import { useId } from "react";
 import { useTaskBoardDrag } from "./useTaskBoardDrag";
 import { BlockedTaskDropDialog } from "./BlockedTaskDropDialog";
 import { Link } from "react-router-dom";
-import { IconCube, IconDiamonds } from "@tabler/icons-react";
+import { IconDiamonds } from "@tabler/icons-react";
 import { Card, CardContent } from "@libs/components/ui/card";
 import { AssigneeAvatars } from "./TaskAssignees";
 import {
@@ -11,6 +11,8 @@ import {
   type SaveTaskStatus,
 } from "./TaskStatus";
 import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
+import { ProgressRing } from "./ProgressRing";
+import { milestoneProgress } from "./progress";
 import { osloDate } from "./model";
 import {
   STATUS_LABELS,
@@ -22,6 +24,7 @@ import type { PersonalTaskColumn } from "./personal-task-view";
 
 export function TaskBoard({
   tasks,
+  kind = "task",
   workspace,
   busy,
   columns,
@@ -29,13 +32,15 @@ export function TaskBoard({
   onStatusChange,
 }: {
   tasks: Task[];
+  kind?: Task["kind"];
   workspace: ProjectWorkspace;
   busy: boolean;
   columns: readonly PersonalTaskColumn[];
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
 }) {
-  const drag = useTaskBoardDrag(tasks, workspace, busy, onStatusChange);
+  const records = tasks.filter((task) => task.kind === kind);
+  const drag = useTaskBoardDrag(records, workspace, busy, onStatusChange);
   const instructionsId = useId();
   const projects = new Map(
     workspace.projects.map((project) => [project.id, project]),
@@ -45,14 +50,13 @@ export function TaskBoard({
       .filter((task) => task.kind === "milestone")
       .map((task) => [task.id, task]),
   );
-  const records = tasks.filter((task) => task.kind === "task");
+  const noun = kind === "milestone" ? "milestone" : "task";
   const today = osloDate();
   const show = (property: PersonalTaskColumn) => columns.includes(property);
   return (
     <>
       <p id={instructionsId} className="sr-only">
-        Drag tasks between columns or use the status menu. Moving to Blocked
-        requires a reason.
+        {`Drag ${noun}s between columns or use the status menu. Moving to Blocked requires a reason.`}
       </p>
       <div
         ref={drag.boardRef}
@@ -61,9 +65,9 @@ export function TaskBoard({
         aria-describedby={instructionsId}
         aria-busy={busy || drag.pending}
         role="region"
-        aria-label="Task board"
+        aria-label={kind === "milestone" ? "Milestone board" : "Task board"}
         tabIndex={0}
-        className="flex h-[min(65svh,42rem)] min-h-72 min-w-0 gap-3 overflow-x-auto overscroll-x-contain pb-3"
+        className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto overscroll-x-contain pb-3"
       >
         {TASK_STATUSES.filter(
           (status) =>
@@ -85,7 +89,7 @@ export function TaskBoard({
                 {STATUS_LABELS[status]}
                 <span
                   className="text-xs tabular-nums text-muted-foreground"
-                  aria-label={`${group.length} task${group.length === 1 ? "" : "s"}`}
+                  aria-label={`${group.length} ${noun}${group.length === 1 ? "" : "s"}`}
                 >
                   {group.length}
                 </span>
@@ -114,12 +118,12 @@ export function TaskBoard({
                       onDragStart={(event) => drag.start(event, task)}
                       onDragEnd={drag.end}
                       onClickCapture={drag.preventDragClick}
-                      className={`relative h-32 min-h-32 shrink-0 gap-0 py-2.5 transition-colors hover:border-muted-foreground/40 dark:bg-muted dark:ring-foreground/20 dark:hover:ring-foreground/35 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
+                      className={`relative h-28 min-h-28 shrink-0 gap-0 py-2.5 transition-colors hover:border-muted-foreground/40 dark:bg-muted dark:ring-foreground/20 dark:hover:ring-foreground/35 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
                       role="article"
                       aria-label={task.title}
                     >
-                      <CardContent className="h-full min-w-0 justify-between gap-0 px-2.5">
-                        <div className="flex h-10 min-w-0 shrink-0 items-start gap-1.5">
+                      <CardContent className="h-full min-w-0 gap-1.5 px-2.5">
+                        <div className="flex min-w-0 shrink-0 items-start gap-1.5">
                           <div className="relative z-10 -ml-1 -mt-1">
                             <TaskStatusControl
                               task={task}
@@ -150,39 +154,42 @@ export function TaskBoard({
                         </div>
                         <div className="flex h-6 min-w-0 shrink-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground">
                           {show("priority") && (
-                            <span className="shrink-0">
+                            <span className="inline-flex h-6 shrink-0 items-center rounded-full border px-1.5">
                               <PriorityIndicator priority={task.priority} />
                             </span>
                           )}
-                          {show("project") && project && (
-                            <Link
-                              draggable={false}
-                              to={`/projects/${project.id}`}
-                              title={project.name}
-                              className="relative z-10 inline-flex h-6 min-w-0 max-w-40 flex-1 items-center gap-1 rounded-full border px-2 hover:bg-accent"
-                            >
-                              <IconCube
-                                aria-hidden="true"
-                                className="size-3.5 shrink-0"
+                          {kind === "task" &&
+                            show("milestone") &&
+                            milestone &&
+                            project && (
+                              <Link
+                                draggable={false}
+                                to={`/projects/${project.id}?milestone=${milestone.id}`}
+                                title={milestone.title}
+                                className="relative z-10 inline-flex h-6 min-w-0 max-w-40 flex-1 items-center gap-1 rounded-full border px-2 hover:bg-accent"
+                              >
+                                <IconDiamonds
+                                  aria-hidden="true"
+                                  className="size-3.5 shrink-0"
+                                />
+                                <span className="truncate">
+                                  {milestone.title}
+                                </span>
+                              </Link>
+                            )}
+                          {kind === "milestone" && (
+                            <span className="inline-flex h-6 shrink-0 items-center rounded-full border px-2">
+                              <ProgressRing
+                                {...milestoneProgress(
+                                  workspace.tasks.filter(
+                                    (item) => item.projectId === task.projectId,
+                                  ),
+                                  task.id,
+                                )}
+                                label={task.title}
+                                valueFormat="count"
                               />
-                              <span className="truncate">{project.name}</span>
-                            </Link>
-                          )}
-                          {show("milestone") && milestone && project && (
-                            <Link
-                              draggable={false}
-                              to={`/projects/${project.id}?milestone=${milestone.id}`}
-                              title={milestone.title}
-                              className="relative z-10 inline-flex h-6 min-w-0 max-w-40 flex-1 items-center gap-1 rounded-full border px-2 hover:bg-accent"
-                            >
-                              <IconDiamonds
-                                aria-hidden="true"
-                                className="size-3.5 shrink-0"
-                              />
-                              <span className="truncate">
-                                {milestone.title}
-                              </span>
-                            </Link>
+                            </span>
                           )}
                           {show("partner") && task.partnerName && (
                             <button
@@ -195,7 +202,7 @@ export function TaskBoard({
                             </button>
                           )}
                         </div>
-                        <div className="flex h-4 min-w-0 shrink-0 items-center gap-2 text-xs leading-4">
+                        <div className="mt-auto flex h-4 min-w-0 shrink-0 items-center gap-2 text-xs leading-4">
                           {task.status === "blocked" && task.blockedReason && (
                             <button
                               type="button"
@@ -224,7 +231,7 @@ export function TaskBoard({
                 })}
                 {!group.length && (
                   <p className="px-2 py-4 text-xs text-muted-foreground">
-                    No tasks
+                    {`No ${noun}s`}
                   </p>
                 )}
               </div>

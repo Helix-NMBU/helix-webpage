@@ -31,6 +31,10 @@ import {
 export function ProjectTaskList({
   tasks,
   allTasks,
+  milestones,
+  selectedMilestone,
+  onOpenMilestone,
+  onCreateMilestone,
   workspace,
   busy,
   canCreate,
@@ -42,6 +46,10 @@ export function ProjectTaskList({
 }: {
   tasks: Task[];
   allTasks: Task[];
+  milestones: Task[];
+  selectedMilestone: string | null;
+  onOpenMilestone: (milestone: Task) => void;
+  onCreateMilestone: () => void;
   workspace: ProjectWorkspace;
   busy: boolean;
   canCreate: boolean;
@@ -55,7 +63,19 @@ export function ProjectTaskList({
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [params, setParams] = useSearchParams();
   const options = projectTaskView(params);
-  const visible = visibleProjectTasks(tasks, options, search);
+  const board = options.view === "board";
+  const allRecords = board ? milestones : allTasks;
+  const records = board
+    ? milestones.filter(
+        (item) => !selectedMilestone || item.id === selectedMilestone,
+      )
+    : tasks;
+  const visible = visibleProjectTasks(
+    records,
+    options,
+    search,
+    board ? "milestone" : "task",
+  );
   function change(key: string, value: string) {
     setParams(
       (current) => {
@@ -105,14 +125,21 @@ export function ProjectTaskList({
       { replace: true },
     );
   }
-  const hidden = allTasks.length - visible.length;
+  const hidden = allRecords.length - visible.length;
   return (
-    <section aria-label="Project tasks" className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section
+      aria-label="Project tasks"
+      className={
+        board
+          ? "flex h-full min-h-0 min-w-0 flex-col gap-4"
+          : "min-w-0 space-y-4"
+      }
+    >
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-medium">
-          Tasks{" "}
+          {board ? "Milestones" : "Tasks"}{" "}
           <span className="ml-1 text-sm text-muted-foreground">
-            {allTasks.length}
+            {allRecords.length}
           </span>
         </h2>
         <div className="flex items-center gap-2">
@@ -127,17 +154,19 @@ export function ProjectTaskList({
               variant="outline"
               size="sm"
               disabled={busy}
-              onClick={onCreate}
+              onClick={board ? onCreateMilestone : onCreate}
             >
-              New task
+              {board ? "New milestone" : "New task"}
             </Button>
           )}
         </div>
       </div>
       <Input
-        aria-label="Search project tasks"
-        placeholder="Search tasks…"
-        className="h-8 max-w-sm"
+        aria-label={
+          board ? "Search project milestones" : "Search project tasks"
+        }
+        placeholder={board ? "Search milestones…" : "Search tasks…"}
+        className="h-8 max-w-sm shrink-0"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
@@ -153,10 +182,11 @@ export function ProjectTaskList({
       {options.view === "board" ? (
         <TaskBoard
           tasks={visible}
+          kind="milestone"
           workspace={workspace}
           busy={busy}
           columns={["priority", "milestone", "assignee", "deadline"]}
-          onOpen={onOpen}
+          onOpen={onOpenMilestone}
           onStatusChange={onStatusChange}
         />
       ) : (
@@ -265,9 +295,10 @@ export function ProjectTaskList({
         </Empty>
       )}
       {hidden > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-3 py-4 text-xs text-muted-foreground">
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 py-4 text-xs text-muted-foreground">
           <span>
-            {hidden} task{hidden === 1 ? "" : "s"} hidden by filters
+            {hidden} {board ? "milestone" : "task"}
+            {hidden === 1 ? "" : "s"} hidden by filters
           </span>
           <Button variant="ghost" size="sm" onClick={clearAll}>
             Clear filters

@@ -35,7 +35,9 @@ function Workspace({ children }: { children?: ReactNode }) {
   const profile = location.pathname === "/profile";
   const mail = location.pathname.startsWith("/mail");
   const taskDetail = /^\/tasks\/[^/]+\/?$/.test(location.pathname);
+  const taskBoard = location.pathname === "/tasks" && new URLSearchParams(location.search).get("view") === "board";
   const projectDetail = /^\/projects\/[^/]+\/?$/.test(location.pathname);
+  const bounded = projectDetail || taskDetail || taskBoard;
   const page = previewPage(location.pathname);
   const projectManagement = location.pathname.startsWith("/project-management");
   const projectSection = location.pathname.split("/")[2];
@@ -88,7 +90,7 @@ function Workspace({ children }: { children?: ReactNode }) {
         onSignOut={() => void logout()}
         disabled={disabled}
       />
-      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : (projectDetail || taskDetail) ? "md:h-svh md:min-h-0 md:overflow-hidden" : ""}`}>
+      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : bounded ? "md:h-svh md:min-h-0 md:overflow-hidden" : ""}`}>
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             {children ?? <Outlet />}
@@ -143,7 +145,7 @@ function Workspace({ children }: { children?: ReactNode }) {
                 </Breadcrumb>
               </div>
             </header>
-            <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 ${projectDetail || taskDetail ? "md:min-h-0 md:overflow-hidden" : ""}`}>
+            <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 ${bounded ? "md:min-h-0 md:overflow-hidden" : ""}`}>
               {children ?? <Outlet />}
             </div>
           </>

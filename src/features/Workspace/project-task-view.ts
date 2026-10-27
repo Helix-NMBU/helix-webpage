@@ -19,12 +19,13 @@ export function visibleProjectTasks(
   tasks: Task[],
   options: ProjectTaskView,
   search: string,
+  kind: Task["kind"] = "task",
 ) {
   const priorities = ["urgent", "high", "normal", "low"];
   return tasks
     .filter(
       (task) =>
-        task.kind === "task" &&
+        task.kind === kind &&
         (options.status === "all" || task.status === options.status) &&
         (options.priority === "all" || task.priority === options.priority) &&
         (options.assignee === "all" ||

@@ -32,7 +32,7 @@ export function BlockedTaskDropDialog({
     if (!reason.trim() || reason.trim().length > 500) {
       notify(
         "Add a blocking reason",
-        "Describe what is blocking this task in up to 500 characters.",
+        `Describe what is blocking this ${task.kind} in up to 500 characters.`,
         { variant: "warning", href: null },
       );
       return;
@@ -58,7 +58,7 @@ export function BlockedTaskDropDialog({
       >
         <form onSubmit={submit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>Move task to Blocked</DialogTitle>
+            <DialogTitle>Move {task.kind} to Blocked</DialogTitle>
             <DialogDescription>{task.title}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

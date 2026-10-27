@@ -40,6 +40,17 @@ describe("project task filters", () => {
       ),
     ).toBe(true);
   });
+  it("applies the same filters to milestone records only when explicitly requested", () => {
+    const data = initialLocalWorkspace();
+    const milestone = data.tasks.find((task) => task.kind === "milestone")!;
+    const query = options(
+      `view=board&status=${milestone.status}&priority=${milestone.priority}`,
+    );
+    expect(
+      visibleProjectTasks(data.tasks, query, milestone.title, "milestone"),
+    ).toEqual([milestone]);
+    expect(visibleProjectTasks(data.tasks, query, milestone.title)).toEqual([]);
+  });
   it("retains completion visibility and orders cards within status by priority", () => {
     const data = initialLocalWorkspace();
     const result = visibleProjectTasks(

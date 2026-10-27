@@ -563,32 +563,34 @@ describe("internal member platform", () => {
     await act(async()=>noMilestone.click());expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Legacy inspection');expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Verify dimensions');
   });
 
-  it("switches project tasks to Board, preserves milestone filters and moves cards after a status change",async()=>{
+  it("shows milestones on the project board, preserves filters and opens their linked task list",async()=>{
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
     const projectUrl='/projects/00000000-0000-4000-8000-000000000100?milestone=00000000-0000-4000-8000-000000000040';
     await open(projectUrl);
     await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Project task filters and view"]')!.click());
     await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[aria-label="Task layout"] button')].find(button=>button.textContent==='Board')!.click());
     expect(router.state.location.search).toContain('view=board');expect(router.state.location.search).toContain('milestone=');
-    const board=()=>container.querySelector('[aria-label="Task board"]')!;
+    const board=()=>container.querySelector('[aria-label="Milestone board"]')!;
     expect(board().querySelectorAll('[role="article"]')).toHaveLength(1);
-    expect(board().textContent).toContain('Verify dimensions');expect(board().textContent).not.toContain('Confirm material delivery');
-    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Verify dimensions')!;task.status='done';task.revision++;
+    expect(board().textContent).toContain('Manufacturing sign-off');expect(board().textContent).not.toContain('Confirm material delivery');
+    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Manufacturing sign-off')!;task.status='done';task.revision++;
     projectTasks.mutate.mockResolvedValue(next);
-    await act(async()=>board().querySelector<HTMLButtonElement>('[aria-label="Change status for Verify dimensions"]')!.click());
+    await act(async()=>board().querySelector<HTMLButtonElement>('[aria-label="Change status for Manufacturing sign-off"]')!.click());
     await act(async()=>document.querySelector<HTMLElement>('[role="option"][aria-label="Done"]')!.click());
-    expect(board().querySelector('[aria-label="Done column"] [role="article"]')?.getAttribute('aria-label')).toBe('Verify dimensions');
-    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('40');
+    expect(board().querySelector('[aria-label="Done column"] [role="article"]')?.getAttribute('aria-label')).toBe('Manufacturing sign-off');
+    expect(container.querySelector('[aria-label="Project details"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20');
+    expect(board().querySelector('[role="progressbar"]')?.textContent).toBe('0/1');
     await act(async()=>board().querySelector<HTMLButtonElement>('[role="article"] button:not([aria-label])')!.click());
-    expect(router.state.location.pathname).toBe(`/tasks/${task.id}`);
-    await act(async()=>[...container.querySelectorAll<HTMLAnchorElement>('a')].find(link=>link.textContent==='Back')!.click());
-    expect(container.querySelector('[aria-label="Task board"]')).not.toBeNull();
-    expect(router.state.location.search).toContain('view=board');
+    expect(router.state.location.pathname).toBe('/projects/00000000-0000-4000-8000-000000000100');
+    expect(router.state.location.search).toContain('view=list');
+    expect(router.state.location.search).toContain(`milestone=${task.id}`);
+    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).toContain('Verify dimensions');
+    expect(container.querySelector('[aria-label="Project tasks"]')?.textContent).not.toContain('Confirm material delivery');
   });
-  it("saves a dragged project task as Blocked only after receiving a reason",async()=>{
+  it("saves a dragged project milestone as Blocked only after receiving a reason",async()=>{
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
     await open('/projects/00000000-0000-4000-8000-000000000100?view=board&milestone=00000000-0000-4000-8000-000000000040');
-    const card=container.querySelector('[role="article"][aria-label="Verify dimensions"]')!;
+    const card=container.querySelector('[role="article"][aria-label="Manufacturing sign-off"]')!;
     const target=container.querySelector('[aria-label="Blocked column"]')!;
     const transfer={effectAllowed:'',dropEffect:'',setData:vi.fn()};
     for(const [element,type] of [[card,'dragstart'],[target,'dragover'],[target,'drop'],[card,'dragend']] as const){
@@ -596,10 +598,10 @@ describe("internal member platform", () => {
       await act(async()=>element.dispatchEvent(event));
     }
     expect(projectTasks.mutate).not.toHaveBeenCalled();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Move task to Blocked');
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Move milestone to Blocked');
     const field=document.querySelector<HTMLTextAreaElement>('[aria-label="Blocked reason"]')!;
     await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(field,'Waiting for measurements');field.dispatchEvent(new Event('input',{bubbles:true}));});
-    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Verify dimensions')!;task.status='blocked';task.blockedReason='Waiting for measurements';task.revision++;
+    const next=structuredClone(data);const task=next.tasks.find(task=>task.title==='Manufacturing sign-off')!;task.status='blocked';task.blockedReason='Waiting for measurements';task.revision++;
     projectTasks.mutate.mockResolvedValue(next);
     await act(async()=>document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
     expect(projectTasks.mutate).toHaveBeenCalledWith({action:'set_status',id:task.id,expectedRevision:1,status:'blocked',blockedReason:'Waiting for measurements'});
@@ -610,10 +612,10 @@ describe("internal member platform", () => {
   it("restores project Board filters and clears them while retaining the layout",async()=>{
     session.landing.mockResolvedValue(signedIn);projectTasks.load.mockResolvedValue(detailFixture());
     await open('/projects/00000000-0000-4000-8000-000000000100?view=board&status=blocked&priority=low');
-    expect(container.querySelectorAll('[aria-label="Task board"] [role="article"]')).toHaveLength(0);
+    expect(container.querySelectorAll('[aria-label="Milestone board"] [role="article"]')).toHaveLength(0);
     await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Clear filters')!.click());
     expect(router.state.location.search).toBe('?view=board');
-    expect(container.querySelectorAll('[aria-label="Task board"] [role="article"]')).toHaveLength(5);
+    expect(container.querySelectorAll('[aria-label="Milestone board"] [role="article"]')).toHaveLength(3);
   });
   it("updates task completion, milestone progress and project progress together",async()=>{
     session.landing.mockResolvedValue(signedIn);const data=detailFixture();projectTasks.load.mockResolvedValue(data);
