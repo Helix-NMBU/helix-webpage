@@ -1,5 +1,9 @@
 import type { DepartmentAccess, Project, ProjectDepartment, ProjectWorkspace, Task } from "./types";
 
+export function departmentMemberIds(department: ProjectDepartment): string[] {
+  return department.memberIds.filter(id => !department.viewerIds?.includes(id));
+}
+
 export function departmentAccess(department: ProjectDepartment, memberId: string): DepartmentAccess | null {
   if ((department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(memberId)) return "lead";
   if (!department.memberIds.includes(memberId)) return null;

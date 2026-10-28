@@ -684,6 +684,32 @@ describe("project management interface", () => {
     await click("Save department");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Mechanical & Production", memberIds: [initialLocalWorkspace().members[1].id], leadId: null, leadIds: [] } }));
   });
+  it("does not display Viewers as department members and preserves their access when saving", async () => {
+    const workspace = initialLocalWorkspace();
+    const [viewer, member] = workspace.members;
+    workspace.departments = workspace.departments.map(d => d.name === "Mechanical & Production" ? { ...d, memberIds: [viewer.id, member.id], viewerIds: [viewer.id], leadId: member.id, leadIds: [member.id] } : d);
+    load.mockResolvedValue(workspace);
+    await open();
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Mechanical & Production"]')!.click());
+    expect(document.getElementById("department-members-summary")?.textContent).toBe("Members: Sam Example.");
+    await click("Save department");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", department: expect.objectContaining({ memberIds: [member.id, viewer.id], viewerIds: [viewer.id], leadIds: [member.id] }) }));
+  });
+  it("changes a Viewer to a Member only when explicitly selected", async () => {
+    const workspace = initialLocalWorkspace();
+    const [viewer, member] = workspace.members;
+    workspace.departments = workspace.departments.map(d => d.name === "Mechanical & Production" ? { ...d, memberIds: [viewer.id, member.id], viewerIds: [viewer.id], leadId: member.id, leadIds: [member.id] } : d);
+    load.mockResolvedValue(workspace);
+    await open();
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Mechanical & Production"]')!.click());
+    await act(async () => document.getElementById("department-members")!.click());
+    const viewerChoice = document.querySelector<HTMLButtonElement>('[aria-label="Add Alex Example to department"]')!;
+    expect(viewerChoice.getAttribute("aria-checked")).toBe("false");
+    await act(async () => viewerChoice.click());
+    await click("Done");
+    await click("Save department");
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", department: expect.objectContaining({ memberIds: [member.id, viewer.id], viewerIds: [], leadIds: [member.id] }) }));
+  });
   it("retains a department draft after a save conflict", async () => {
     mutate.mockRejectedValueOnce(new ProjectRequestError("This department changed. Reload before saving.", 409));
     await open(); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Software & Autonomous"]')!.click()); await click("Save department");
