@@ -1,6 +1,6 @@
 import * as React from "react";
 import {
-  IconWallet,
+  IconChartBar,
   IconBell,
   IconLayoutKanban,
   IconSmartHome,
@@ -72,9 +72,10 @@ export function AppSidebar({
     ...(finance.access === "allowed" ? [{
       title: "Financials",
       url: "/finance",
-      icon: IconWallet,
+      icon: IconChartBar,
       isActive: location.pathname.startsWith("/finance"),
       defaultOpen: true,
+      subMenuClassName: "border-l-0",
       items: [
         { title: "Overview", url: "/finance" },
         { title: "Purchases", url: "/finance/purchases" },
