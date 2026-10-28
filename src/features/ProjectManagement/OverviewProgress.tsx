@@ -15,6 +15,7 @@ import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart
 import { ProgressRing } from "./ProgressRing";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { AssigneeAvatars } from "./TaskAssignees";
+import { departmentMemberIds } from "./permissions";
 import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
 import { OverviewColumnMenu, OVERVIEW_PROJECT_COLUMNS } from "./OverviewColumnMenu";
 import { ORGANIZATION_DEPARTMENTS, type ProjectDepartment, type ProjectWorkspace, type Task } from "./types";
@@ -196,7 +197,7 @@ function OverviewEventFilter({ startEvent, endEvent, eventDates, visibleEventIds
 function ProgressBreakdown({ rows, workspace, busy, onEdit }: { rows: AreaRow[]; workspace: ProjectWorkspace; busy: boolean; onEdit: (department: ProjectDepartment) => void }) {
   return <Table aria-label="Department progress"><TableHeader><TableRow><TableHead>Department</TableHead><TableHead>Members</TableHead><TableHead>Lead</TableHead><TableHead>Tasks</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const progress = summarize(row.tasks); return <TableRow key={row.id}>
     <TableCell>{workspace.canManage && row.department ? <button disabled={busy} className="text-left hover:underline" aria-label={`Edit department ${row.label}`} onClick={() => onEdit(row.department!)}>{row.label}</button> : row.label}</TableCell>
-    <TableCell className="tabular-nums text-muted-foreground">{row.department ? row.department.memberIds.filter(id => !row.department?.viewerIds?.includes(id)).length : <span title={row.id === "unallocated" ? "Work without a department" : "Department membership has not been set up"}>—</span>}</TableCell>
+    <TableCell className="tabular-nums text-muted-foreground">{row.department ? departmentMemberIds(row.department).length : <span title={row.id === "unallocated" ? "Work without a department" : "Department membership has not been set up"}>—</span>}</TableCell>
     <TableCell>{row.department && (row.department.leadIds?.length || row.department.leadId) ? <AssigneeAvatars assigneeIds={row.department.leadIds ?? (row.department.leadId ? [row.department.leadId] : [])} members={workspace.members} assignmentRole="lead" showNames /> : <span className="text-muted-foreground">{row.id === "unallocated" ? "—" : "No Lead"}</span>}</TableCell>
     <TableCell className="tabular-nums"><span aria-label={`${row.label}: ${progress.done} of ${progress.total} tasks complete`}>{progress.done} / {progress.total}</span></TableCell>
     <TableCell><ProgressRing {...progress} label={row.label} showTotal={false} /></TableCell>

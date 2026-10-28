@@ -1,4 +1,4 @@
-import { departmentAccess } from "../ProjectManagement/permissions";
+import { departmentMemberIds } from "../ProjectManagement/permissions";
 import {
   useCallback,
   useEffect,
@@ -218,10 +218,9 @@ export function DepartmentWorkspace({
   const notify = useNotify();
   const navigate = useNavigate();
   const DepartmentIcon = getDepartmentIcon(department.name);
-  const members = data.members.filter((member) =>
-    department.memberIds.includes(member.id),
-  );
-  const memberCount = department.memberIds.filter(id => !department.viewerIds?.includes(id)).length;
+  const memberIds = departmentMemberIds(department);
+  const members = data.members.filter((member) => memberIds.includes(member.id));
+  const memberCount = memberIds.length;
   const projects = data.projects.filter((project) =>
     project.departments.includes(department.name),
   );
@@ -617,7 +616,7 @@ export function DepartmentWorkspace({
                       {(department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(member.id) ? (
                         <Badge variant="secondary">Lead</Badge>
                       ) : (
-                        departmentAccess(department, member.id) === "viewer" ? "Viewer" : "Member"
+                        "Member"
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">

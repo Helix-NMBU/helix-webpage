@@ -1,4 +1,4 @@
-import { departmentAccess } from "../ProjectManagement/permissions";
+import { departmentAccess, departmentMemberIds } from "../ProjectManagement/permissions";
 import {
   Table,
   TableBody,
@@ -95,9 +95,8 @@ export function DepartmentsPage() {
           {departments.map((d) => {
             const DepartmentIcon = getDepartmentIcon(d.name);
             const joined = d.memberIds.includes(data.viewerId);
-            const members = d.memberIds.filter((id) =>
-              !d.viewerIds?.includes(id) && data.members.some((m) => m.id === id),
-            );
+            const memberIds = departmentMemberIds(d);
+            const members = memberIds.filter((id) => data.members.some((m) => m.id === id));
             return (
               <TableRow
                 key={d.id}
@@ -148,7 +147,7 @@ export function DepartmentsPage() {
                       assignmentRole="member"
                     />
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {d.memberIds.filter((id) => !d.viewerIds?.includes(id)).length}
+                      {memberIds.length}
                     </span>
                   </div>
                 </TableCell>
