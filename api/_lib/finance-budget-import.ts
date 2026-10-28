@@ -16,7 +16,7 @@ type Snapshot = { version: number; budgetId: string; budgetRevision: number; bud
 const MAX_PREVIEW_BYTES = 1024 * 1024;
 const MAX_RELATED_SNAPSHOT_ROWS = 5_000;
 const byId = <T extends { id: string }>(a: T, b: T) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-async function snapshot(db: CvDatabase, caller: BudgetCaller, department: string): Promise<Snapshot> {
+async function snapshot(db: CvDatabase, department: string): Promise<Snapshot> {
   const [budget] = (await db.query<{ version: string; id: string; revision: number; status: string; season_id: string }>(
     `select v.version::text, b.id, b.revision, b.status, b.season_id from finance.view_versions v
      join finance.settings st on st.setting_key = 'current_season' join finance.seasons s on s.code = st.setting_value #>> '{}'
@@ -154,7 +154,7 @@ export async function performBudgetImport(db: CvDatabase, caller: BudgetCaller, 
       const replay = (await db.query<{ result: FinanceMutationResult | null }>("select finance.replay_budget_mutation($1::uuid,$2::uuid,$3,$4) as result", [caller.memberId, body.requestId, action, hash])).rows[0]?.result;
       if (replay) return replay;
     }
-    const data = await snapshot(db, caller, body.departmentKey);
+    const data = await snapshot(db, body.departmentKey);
     const prepared = preview(body.csv, body.departmentKey, data, parsed);
     if (Buffer.byteLength(JSON.stringify(prepared.result), "utf8") > MAX_PREVIEW_BYTES) {
       throw new FinanceError(413, "The preview exceeds 1 MiB. Reduce the department budget size or contact an administrator.");
