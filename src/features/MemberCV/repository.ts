@@ -1,5 +1,6 @@
 import { validateCvData, validateSharing } from "./model";
 import type { CvEnvelope, CvMutation } from "./types";
+import { financeReturnPath } from "../Finance/routes";
 import { isMemberPlatform, memberPaths } from "../MemberPlatform/routes";
 import { isProjectTaskPath, isWorkspacePath } from "../ProjectManagement/routes";
 
@@ -142,6 +143,10 @@ export function memberLoginDestination(state: unknown): string {
         ? from.pathname
         : null;
   if (isMemberPlatform()) {
+    if (typeof from === "string") {
+      const financePath = financeReturnPath(from);
+      if (financePath) return financePath;
+    }
     if (pathname === "/recruiting") return pathname;
     if (typeof pathname === "string" && (isProjectTaskPath(pathname) || isWorkspacePath(pathname))) return pathname;
     return pathname === paths.profile || pathname === "/member/profile" ? paths.profile : paths.home;

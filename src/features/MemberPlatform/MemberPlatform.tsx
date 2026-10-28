@@ -31,6 +31,8 @@ import { clearGmailSessionCache } from "./gmail-session-cache";
 import { MailWorkspace } from "./MailWorkspace";
 import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
+import { FinanceAccessProvider } from "./FinanceAccess";
+import { FinanceEntry } from "../Finance/FinancePages";
 import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
 import { MembersPage, ProjectsPage, DepartmentsPage } from "../Workspace/WorkspacePages";
 import { DepartmentProjectsPage, DepartmentTasksPage } from "../Workspace/DepartmentViews";
@@ -125,7 +127,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
       <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
         <MemberFeatureAccessProvider key={landing.userId} userId={landing.userId}>
           <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>
-            <WorkspaceProvider key={landing.userId}>{children ?? <Outlet />}</WorkspaceProvider>
+            <WorkspaceProvider key={landing.userId}><FinanceAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</FinanceAccessProvider></WorkspaceProvider>
           </RecruitmentAccessProvider>
         </MemberFeatureAccessProvider>
       </MemberNotificationsProvider>
@@ -171,6 +173,14 @@ export default function MemberPlatform() {
                 <Route path="profile" element={<MemberCV />} />
                 <Route path="notifications" element={<MemberNotificationsPage />} />
                 <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
+                <Route path="finance" element={<FinanceEntry page="overview" />} />
+                <Route path="finance/purchases" element={<FinanceEntry page="purchases" />} />
+                <Route path="finance/budgets" element={<FinanceEntry page="budgets" />} />
+                <Route path="finance/financing" element={<FinanceEntry page="financing" />} />
+                <Route path="teams/finance" element={<LegacyMemberRedirect to="/finance" />} />
+                <Route path="teams/finance/budget" element={<LegacyMemberRedirect to="/finance/budgets" />} />
+                <Route path="teams/finance/expenses" element={<LegacyMemberRedirect to="/finance/purchases" />} />
+                <Route path="teams/finance/*" element={<LegacyMemberRedirect to="/finance" />} />
                 <Route path="admin/access" element={<MemberAccessFeatureRoute />} />
                 <Route path="mail" element={<MailWorkspace />} />
                 <Route path="members" element={<MembersPage />} />

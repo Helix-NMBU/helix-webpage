@@ -38,6 +38,7 @@ export function NavMain({
     url: string;
     icon?: TablerIcon;
     isActive?: boolean;
+    defaultOpen?: boolean;
     badge?: number;
     subMenuClassName?: string;
     items?: {
@@ -75,7 +76,7 @@ export function NavMain({
           <Collapsible
             key={`${item.title}:${item.isActive ? "active" : "idle"}`}
             asChild
-            defaultOpen={item.isActive}
+            defaultOpen={item.defaultOpen ?? item.isActive}
             className="group/collapsible"
           >
             <SidebarMenuItem>

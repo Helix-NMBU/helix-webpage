@@ -6,7 +6,7 @@ import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "./local-mode";
 import { useNotify } from "./MemberNotifications";
 
-export type PlatformRoleKey = "project_manager" | "department_lead" | "team_member" | "platform_administrator";
+export type PlatformRoleKey = "project_manager" | "department_lead" | "team_member" | "platform_administrator" | "financials";
 export type PlatformRole = { key: PlatformRoleKey; label: string };
 export type MemberFeatureState = {
   memberId: string;
@@ -39,7 +39,7 @@ const LOCAL_MEMBER: MemberFeatureState = {
     { key: "platform_administrator", label: "Platform administrator" },
   ],
   features: [
-    "team.business-marketing", "team.finance", "team.mechanical-production", "team.electrical",
+    "team.business-marketing", "team.mechanical-production", "team.electrical",
     "team.software-autonomous", "team.logistics", "recruitment.manage", "member_access.manage",
   ],
 };

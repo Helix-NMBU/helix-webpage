@@ -193,7 +193,7 @@ describe('repository API integration', () => {
   it('executes existing protected handlers and Gmail rewrites without authenticating a user', async () => {
     const repo = await harness(projectRoot, { useProjectConfig: true });
     expect((await request(repo.port, '/@vite/client')).status).toBe(200);
-    for (const path of ['/api/partner?action=session', '/api/website?action=session', '/api/member-cv', '/api/gmail-status?action=connect', '/api/projects']) {
+    for (const path of ['/api/partner?action=session', '/api/website?action=session', '/api/member-cv', '/api/finance', '/api/projects', '/api/gmail-status?action=connect']) {
       const response = await request(repo.port, path);
       expect(response.status, path).toBe(401);
       expect(response.json()).toEqual({ error: 'Log in to continue.' });

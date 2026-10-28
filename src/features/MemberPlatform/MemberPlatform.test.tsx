@@ -32,6 +32,27 @@ vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
   return <p>Private CV editor</p>;
 } }));
 
+const memberCapabilities = {
+  publicBudgets: true, publicEarmarks: true, registerActual: true, ownRequests: true,
+  financing: false, manageFunding: false, purchaseRegister: false, filesAndRefunds: false, paymentsVoidReview: false,
+  draftBudgetItems: false, permittedImports: false, createBudget: false, approveBudget: false, protectedBudgetEdits: false, decideRequests: false,
+};
+let financialsAllowed = true;
+function financeResponse(url: string): Response {
+  const action = new URL(url, "https://member.example").searchParams.get("action");
+  if (!financialsAllowed) return { ok: false, status: 403, json: async () => ({ error: "Financials access is required." }) } as unknown as Response;
+  if (action === "financing") return { ok: false, status: 403, json: async () => ({ error: "Financing access is required." }) } as unknown as Response;
+  const body = action === "capabilities"
+    ? { memberId: "member", viewVersion: 0, profiles: [], capabilities: memberCapabilities, seasonCode: null, approvalThresholdNok: null, today: "2026-10-26" }
+    : action === "overview"
+      ? { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] }
+      : action === "budgets"
+        ? { viewVersion: 0, seasonCode: null, budgetStatus: "absent", departments: [] }
+        : action === "purchases"
+          ? { viewVersion: 0, ownRequests: [] }
+          : {};
+  return { ok: true, status: 200, json: async () => body } as unknown as Response;
+}
 const signedOut = { phase: "signed-out", token: null, userId: null, status: 401, error: null };
 const signedIn = { phase: "signed-in", token: "test-token", userId: "member", status: 200, error: null, account: { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" } };
 let selfAccess = {
@@ -67,8 +88,10 @@ describe("internal member platform", () => {
       roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
     };
     workspaceDirectory.departments = [...departmentDirectory];
+    financialsAllowed = true;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.startsWith("/api/finance")) return financeResponse(url);
       const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/member-login?__module=workspace" ? workspaceDirectory : url === "/api/gmail-status" ? { connected: false } : {};
       return { ok: true, status: 200, json: async () => body } as unknown as Response;
     }));
@@ -139,9 +162,27 @@ describe("internal member platform", () => {
     await open("/");
     expect(container.textContent).toContain("Finance");
     expect(container.textContent).not.toContain("Business & Marketing");
+    expect(container.textContent).not.toContain("Financing");
     await act(async () => router.navigate("/teams/business-marketing/campaigns"));
     expect(router.state.location.pathname).toBe("/");
     expect(container.textContent).not.toContain("Partner Spotlight");
+  });
+
+  it.each([
+    { department: true, financials: true },
+    { department: true, financials: false },
+    { department: false, financials: true },
+    { department: false, financials: false },
+  ])("shows Finance and Financials in Your spaces according to independent access: $department / $financials", async ({ department, financials }) => {
+    session.landing.mockResolvedValue(signedIn);
+    workspaceDirectory.departments = department ? departmentDirectory.filter((item) => item.name === "Finance") : [];
+    financialsAllowed = financials;
+    await open("/");
+    const group = [...container.querySelectorAll('[data-sidebar="group"]')].find((item) => item.querySelector('[data-sidebar="group-label"]')?.textContent === "Your spaces");
+    expect(group).toBeTruthy();
+    const names = [...group!.querySelectorAll("button")].map((button) => button.textContent?.trim());
+    expect(names.includes("Finance")).toBe(department);
+    expect(names.includes("Financials")).toBe(financials);
   });
 
   it("redirects legacy recruitment links to the Recruiting route", async () => {
@@ -204,6 +245,36 @@ describe("internal member platform", () => {
   it("preserves recruitment as a safe member login destination", () => {
     expect(memberLoginDestination({ from: "/recruiting" })).toBe("/recruiting");
     expect(googleSignInRequest("/recruiting", "https://internal.helixnmbu.no").callbackURL).toBe("https://internal.helixnmbu.no/recruiting");
+  });
+
+  it("opens financial pages for an authorized member and keeps financing capability checks", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    selfAccess = { ...selfAccess, features: ["*"] };
+    await open("/");
+    expect(container.querySelector('a[href="/finance/budgets"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/finance/purchases"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();
+    expect(container.textContent).not.toContain("Expenses");
+    await act(async () => router.navigate("/finance/financing"));
+    expect(router.state.location.pathname).toBe("/finance");
+    expect(container.textContent).toContain("No season is configured yet");
+    expect(container.textContent).not.toContain("Hidden Supplier");
+    await act(async () => router.navigate("/teams/finance/budget?season=S27#items"));
+    expect(router.state.location.pathname).toBe("/finance/budgets");
+    expect(router.state.location.search).toBe("?season=S27");
+    expect(router.state.location.hash).toBe("#items");
+    await act(async () => router.navigate("/teams/finance/expenses?view=open#claims"));
+    expect(router.state.location.pathname).toBe("/finance/purchases");
+    expect(router.state.location.search).toBe("?view=open");
+    expect(router.state.location.hash).toBe("#claims");
+  });
+
+  it("preserves finance pages as member login destinations", () => {
+    const origin = "https://internal.helixnmbu.no";
+    expect(memberLoginDestination({ from: "/finance/budgets?season=S27#items" })).toBe("/finance/budgets?season=S27#items");
+    expect(memberLoginDestination({ from: "/teams/finance/expenses?legacy=1#claims" })).toBe("/finance/purchases?legacy=1#claims");
+    expect(googleSignInRequest("/finance/purchases", origin).callbackURL).toBe(`${origin}/finance/purchases`);
+    expect(googleSignInRequest("/teams/finance/budget", origin).callbackURL).toBe(`${origin}/teams/finance/budget`);
   });
 
   it("opens Notifications from below Home and shows an honest empty state", async () => {

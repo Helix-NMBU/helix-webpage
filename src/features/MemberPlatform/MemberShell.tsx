@@ -21,6 +21,7 @@ import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
+import { financePageTitle } from "../Finance/routes";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { departmentPath } from "../Workspace/types";
 import { MemberPagePreferences } from "./MemberPagePreferences";
@@ -47,7 +48,7 @@ function Workspace({ children }: { children?: ReactNode }) {
     ? location.pathname.slice(departmentPath(department.name).length + 1).split("/")[0]
     : null;
   const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department ? departmentSubpage ? departmentSubpage[0].toUpperCase() + departmentSubpage.slice(1) : department.name : "Departments" : null;
-  const pageTitle = workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
+  const pageTitle = financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"

@@ -1,0 +1,65 @@
+import { createHash, randomBytes } from "node:crypto";
+import type { FinanceObjectStorage } from "../../../api/_lib/finance-storage.js";
+
+export function createMemoryFinanceStorage(): FinanceObjectStorage & { objects: Map<string, Uint8Array> } {
+  const objects = new Map<string, Uint8Array>();
+  return {
+    objects,
+    stagingKey(memberId, uploadId) {
+      return `${memberId}/staging/${uploadId}/${createHash("sha256").update(`${uploadId}-staging`).digest("hex").slice(0, 32)}`;
+    },
+    finalKey(memberId, uploadId) {
+      return `${memberId}/final/${uploadId}/${randomBytes(16).toString("hex")}`;
+    },
+    async presignPut(stagingKey) {
+      return `memory://put/${stagingKey}`;
+    },
+    exportKey(memberId, exportId) {
+      return `exports/${memberId}/${exportId}/${createHash("sha256").update(`${exportId}-export`).digest("hex").slice(0, 32)}`;
+    },
+    async putObject(key, bytes) {
+      objects.set(key, bytes);
+    },
+    async exists(key) {
+      return objects.has(key) ? "present" : "absent";
+    },
+    async presignGet(storageKey) {
+      return `memory://get/${storageKey}?X-Amz-Signature=memory`;
+    },
+    async headObject(key) {
+      const bytes = objects.get(key);
+      if (!bytes) throw new Error("missing");
+      return { byteSize: bytes.byteLength, contentType: "application/pdf" };
+    },
+    async readSignature(key, length) {
+      return this.readObject(key, length);
+    },
+    async readObject(key, byteSize) {
+      const bytes = objects.get(key);
+      if (!bytes) throw new Error("missing");
+      return bytes.subarray(0, byteSize + 1);
+    },
+    async putFinalObject(finalKey, bytes) {
+      objects.set(finalKey, bytes.slice());
+    },
+    async remove(key) {
+      objects.delete(key);
+    },
+  };
+}
+
+export async function putMemoryPdf(storage: ReturnType<typeof createMemoryFinanceStorage>, key: string) {
+  const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+  storage.objects.set(key, bytes);
+  return bytes.byteLength;
+}
+
+export function putSizedPdf(storage: ReturnType<typeof createMemoryFinanceStorage>, key: string, byteSize: number) {
+  const bytes = new Uint8Array(byteSize);
+  bytes[0] = 0x25;
+  bytes[1] = 0x50;
+  bytes[2] = 0x44;
+  bytes[3] = 0x46;
+  storage.objects.set(key, bytes);
+  return byteSize;
+}

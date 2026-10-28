@@ -37,7 +37,7 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const { memberId } = await identityAndId(token);
       await requireAdmin(memberId);
       const [departmentRows, roleRows, memberRows] = await Promise.all([
-        db.query<{ id: string; name: string }>("select department_key as id, name from identity.departments order by sort_order"),
+        db.query<{ id: string; name: string }>("select department_key as id, name from identity.departments order by sort_order, name, department_key"),
         db.query<AccessRole>("select role_key as key, label from identity.platform_roles order by sort_order"),
         db.query<{ id: string; email: string; name: string; department_id: string | null; role_keys: string[] }>(`select m.id, lower(m.email) as email, coalesce(nullif(m.full_name, ''), m.email) as name, md.department_key as department_id,
           coalesce((select array_agg(mr.role_key order by r.sort_order) from identity.member_roles mr join identity.platform_roles r using (role_key) where mr.member_id = m.id), array[]::text[]) as role_keys
@@ -51,7 +51,7 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberId)) throw new MemberCvError(400, "A valid member ID is required.");
       if (actorId === memberId) throw new MemberCvError(403, "You cannot change your own access assignments.");
       if (departmentId !== null && (typeof departmentId !== "string" || departmentId.length > 80)) throw new MemberCvError(400, "Choose a valid department.");
-      if (!Array.isArray(roleKeys) || roleKeys.length > 4 || roleKeys.some(key => typeof key !== "string") || new Set(roleKeys).size !== roleKeys.length) throw new MemberCvError(400, "Choose valid platform roles.");
+      if (!Array.isArray(roleKeys) || roleKeys.length > 5 || roleKeys.some(key => typeof key !== "string") || new Set(roleKeys).size !== roleKeys.length) throw new MemberCvError(400, "Choose valid platform roles.");
       try { await db.query("select identity.save_member_access($1::uuid, $2::text, $3::text[])", [memberId, departmentId, roleKeys]); }
       catch (error) {
         const message = error instanceof Error ? error.message : "";

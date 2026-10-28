@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  IconChartBar,
   IconBell,
   IconLayoutKanban,
   IconSmartHome,
@@ -26,6 +27,7 @@ import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
 import { getDepartmentIcon } from "@/features/Workspace/department-icons";
 import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
+import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 
 export type MemberSidebarActions = {
@@ -43,6 +45,7 @@ export function AppSidebar({
   const location = useLocation();
   const notifications = useMemberNotifications();
   const recruitment = useRecruitmentAccess();
+  const finance = useFinanceAccess();
   const featureAccess = useMemberFeatureAccess();
   const workspace = useWorkspace()?.data;
   const spaceItems = [
@@ -66,6 +69,20 @@ export function AppSidebar({
           },
         ]
       : []),
+    ...(finance.access === "allowed" ? [{
+      title: "Financials",
+      url: "/finance",
+      icon: IconChartBar,
+      isActive: location.pathname.startsWith("/finance"),
+      defaultOpen: true,
+      subMenuClassName: "border-l-0",
+      items: [
+        { title: "Overview", url: "/finance" },
+        { title: "Purchases", url: "/finance/purchases" },
+        { title: "Budgets", url: "/finance/budgets" },
+        ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
+      ],
+    }] : []),
     ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId))
       .map((department) => {
         const url = departmentPath(department.name);

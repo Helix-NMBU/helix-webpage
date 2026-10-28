@@ -11,6 +11,7 @@ const roleOptions: PlatformRole[] = [
   { key: "department_lead", label: "Department Lead" },
   { key: "team_member", label: "Team Member" },
   { key: "platform_administrator", label: "Platform administrator" },
+  { key: "financials", label: "Financials" },
 ];
 const departmentOptions: AccessDepartment[] = [
   { id: "finance", name: "Finance" },
@@ -31,6 +32,10 @@ let localDirectory: AccessDirectory = {
     departmentId: "finance", roleKeys: ["team_member"],
   }],
 };
+
+export function localMemberHasFinancials(): boolean {
+  return localDirectory.members.some((member) => member.id === "local-member" && member.roleKeys.includes("financials"));
+}
 
 async function getToken(owner: { current: string | null }) {
   return memberSessionToken(owner);
