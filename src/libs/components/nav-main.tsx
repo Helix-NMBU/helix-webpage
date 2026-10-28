@@ -55,20 +55,27 @@ function NavEntry({ item, activeUrl, onNavigate, disabled, reorder }: EntryProps
     "aria-describedby": reorder.hintId,
     style: { touchAction: "none" },
   } : {};
+  const preventDragClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (dragged.current) { event.preventDefault(); dragged.current = false; return true; }
+    return false;
+  };
   const navigate = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (dragged.current) { event.preventDefault(); dragged.current = false; return; }
-    onNavigate(item.url, event.currentTarget);
+    if (!preventDragClick(event)) onNavigate(item.url, event.currentTarget);
   };
   const content = !item.items ? <>
-    <SidebarMenuButton tooltip={item.title} aria-label={item.title} isActive={item.isActive} disabled={disabled} {...buttonProps} onClick={navigate}>
+    <SidebarMenuButton tooltip={item.title} aria-label={item.title} isActive={item.isActive} disabled={disabled} className={reorder ? "active:cursor-grabbing" : undefined} {...buttonProps} onClick={navigate}>
       {item.icon && <item.icon aria-hidden="true" />}<span>{item.title}</span>
     </SidebarMenuButton>
     {Boolean(item.badge) && <SidebarMenuBadge aria-label={`${item.badge} unread notifications`}>{item.badge}</SidebarMenuBadge>}
   </> : <Collapsible key={`${item.title}:${item.isActive ? "active" : "idle"}`} defaultOpen={item.defaultOpen ?? item.isActive} className="group/collapsible">
     <div className="flex min-w-0 items-center rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-      <SidebarMenuButton tooltip={item.title} disabled={disabled} className="min-w-0 flex-1 bg-transparent hover:bg-transparent hover:text-sidebar-accent-foreground active:bg-transparent" {...buttonProps} onClick={navigate}>
-        {item.icon && <item.icon aria-hidden="true" />}<span>{item.title}</span>
-      </SidebarMenuButton>
+      <CollapsibleTrigger asChild>
+        <SidebarMenuButton tooltip={item.title} disabled={disabled} className={`min-w-0 flex-1 bg-transparent hover:bg-transparent hover:text-sidebar-accent-foreground active:bg-transparent ${reorder ? "active:cursor-grabbing" : ""}`} {...buttonProps} onClick={event => {
+          if (!preventDragClick(event) && state === "collapsed") setOpen(true);
+        }}>
+          {item.icon && <item.icon aria-hidden="true" />}<span>{item.title}</span>
+        </SidebarMenuButton>
+      </CollapsibleTrigger>
       <CollapsibleTrigger asChild>
         <button type="button" aria-label={`Toggle ${item.title} pages`} disabled={disabled} className="flex size-7 shrink-0 items-center justify-center rounded-md bg-transparent text-sidebar-foreground/70 outline-none transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:pointer-events-none disabled:opacity-50" onClick={() => { if (state === "collapsed") setOpen(true); }}>
           <IconChevronRight aria-hidden="true" className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -89,7 +96,7 @@ function NavEntry({ item, activeUrl, onNavigate, disabled, reorder }: EntryProps
     as="li" value={item.url} dragListener={false} dragControls={controls} dragMomentum={false}
     data-sidebar="menu-item" data-slot="sidebar-menu-item"
     className="group/menu-item relative"
-    whileDrag={{ zIndex: 10, scale: reduceMotion ? 1 : 1.02, boxShadow: "0 6px 18px rgb(0 0 0 / 0.15)", backgroundColor: "var(--sidebar-accent)", borderRadius: "0.375rem" }}
+    whileDrag={{ zIndex: 10, scale: reduceMotion ? 1 : 1.02, boxShadow: "0 6px 18px rgb(0 0 0 / 0.15)", backgroundColor: "var(--sidebar-accent)", cursor: "grabbing", borderRadius: "0.375rem" }}
     transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 38 }}
     onDragStart={() => { dragged.current = true; reorder.start(); }}
     onDragEnd={() => { reorder.end(); window.setTimeout(() => { dragged.current = false; }, 0); }}
