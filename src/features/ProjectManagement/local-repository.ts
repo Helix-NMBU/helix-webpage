@@ -55,7 +55,8 @@ export function createLocalProjectRepository(): ProjectRepository {
       ...department,
       memberIds: [...new Set([...department.memberIds, workspace.viewerId])],
       viewerIds: [...new Set([...(department.viewerIds ?? []), workspace.viewerId])],
-      leadId: department.leadId === workspace.viewerId ? null : department.leadId,
+      leadIds: (department.leadIds ?? (department.leadId ? [department.leadId] : [])).filter(id => id !== workspace.viewerId),
+      leadId: (department.leadIds ?? (department.leadId ? [department.leadId] : [])).find(id => id !== workspace.viewerId) ?? null,
     } : department);
     return { ...workspace, tasks, projects: workspace.projects.map(project => ({ ...project, departments: fixedProjectDepartments(project.departments) })), departments, progressEvents: workspace.progressEvents ?? tasks.map(item => progressEvent(item)), taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
   }
@@ -88,7 +89,7 @@ export function createLocalProjectRepository(): ProjectRepository {
       } else if (mutation.action === "save_project") {
         const previousStart = workspace.projects.find(project => project.id === mutation.id)?.startDate ?? null;
         const project = validateProject({ ...mutation.project, startDate: mutation.project.startDate === undefined ? previousStart : mutation.project.startDate });
-        const ledDepartments = workspace.departments.filter(d => d.leadId === workspace.viewerId).map(d => d.name);
+        const ledDepartments = workspace.departments.filter(d => (d.leadIds ?? (d.leadId ? [d.leadId] : [])).includes(workspace.viewerId)).map(d => d.name);
         const previousProject = workspace.projects.find(p => p.id === mutation.id);
         if (!workspace.canManage && (!project.departments.some(d => ledDepartments.includes(d)) || (previousProject && !previousProject.departments.some(d => ledDepartments.includes(d))))) throw new ProjectRequestError("Only project managers or a Lead for this department can manage projects.", 403);
         if (project.leadIds?.some(id => !workspace.members.some(member => member.id === id))) throw new Error("Choose active members for all project Leads.");

@@ -58,7 +58,7 @@ export interface TaskProgressEvent {
 }
 export interface ProjectMember { id: string; name: string; avatarUrl?: string | null; }
 export type DepartmentAccess = "member" | "viewer" | "lead";
-export interface DepartmentInput { name: string; memberIds: string[]; viewerIds?: string[]; leadId: string | null; }
+export interface DepartmentInput { name: string; memberIds: string[]; viewerIds?: string[]; leadId: string | null; leadIds?: string[]; }
 export interface ProjectDepartment extends DepartmentInput { id: string; season: string; revision: number; }
 export interface ProjectWorkspace {
   season: string;

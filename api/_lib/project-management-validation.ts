@@ -73,12 +73,14 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
     if (!Array.isArray(input.memberIds) || input.memberIds.length > MAX_DEPARTMENT_MEMBERS) return invalid(`Choose up to ${MAX_DEPARTMENT_MEMBERS} department members.`);
     const memberIds = [...new Set(input.memberIds.map(uuid))];
     const viewerIds = input.viewerIds === undefined ? undefined : Array.isArray(input.viewerIds) ? [...new Set(input.viewerIds.map(uuid))] : invalid();
-    if (viewerIds?.some(id => !memberIds.includes(id) || id === input.leadId)) return invalid("Choose Viewers from department members.");
+    const leadIds = input.leadIds === undefined ? undefined : Array.isArray(input.leadIds) && input.leadIds.length <= MAX_DEPARTMENT_MEMBERS ? [...new Set(input.leadIds.map(uuid))] : invalid();
+    if (leadIds?.some(id => !memberIds.includes(id))) return invalid("Department Leads must be members of the department.");
+    if (viewerIds?.some(id => !memberIds.includes(id) || id === input.leadId || leadIds?.includes(id))) return invalid("Choose Viewers from department members.");
     const leadId = input.leadId === null ? null : uuid(input.leadId);
     if (leadId && !memberIds.includes(leadId)) return invalid("The department Lead must be a member of the department.");
     const name = text(input.name, "department name", 100, true);
     if (!ORGANIZATION_DEPARTMENTS.includes(name as typeof ORGANIZATION_DEPARTMENTS[number])) return invalid("Choose an organization department.");
-    return { action: body.action, id, expectedRevision, department: { name, memberIds, leadId, ...(viewerIds ? { viewerIds } : {}) } };
+    return { action: body.action, id, expectedRevision, department: { name, memberIds, leadId, ...(leadIds ? { leadIds } : {}), ...(viewerIds ? { viewerIds } : {}) } };
   }
   if (body.action === "update_milestone") {
     if (expectedRevision < 1) return invalid("A saved milestone revision is required.");

@@ -31,7 +31,7 @@ export function createLocalDepartmentHomeRepository(): DepartmentHomeRepository 
       driveFolderUrl: null,
       ...saved,
       canEdit:
-        department.leadId === workspace.viewerId ||
+        (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(workspace.viewerId) ||
         workspace.canManage,
     };
   }

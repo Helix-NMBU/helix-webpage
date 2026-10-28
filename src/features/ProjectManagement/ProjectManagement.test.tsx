@@ -663,11 +663,15 @@ describe("project management interface", () => {
     await act(async () => document.getElementById("department-members")!.click());
     for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Add ${name} to department"]`)!.click());
     await click("Done");
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
     await act(async () => document.getElementById("department-lead")!.click());
-    await act(async () => [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === "Sam Example")!.click());
+    const samLead = document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example as lead"]');
+    expect(samLead).not.toBeNull();
+    await act(async () => samLead!.click());
+    await click("Done");
     await click("Save department");
     const workspace = initialLocalWorkspace();
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Software & Autonomous", memberIds: workspace.members.map(member => member.id), leadId: workspace.members[1].id } }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Software & Autonomous", memberIds: workspace.members.map(member => member.id), leadId: workspace.members[1].id, leadIds: [workspace.members[1].id] } }));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it("removes the Lead when that member is removed from a department", async () => {
@@ -676,9 +680,9 @@ describe("project management interface", () => {
     await act(async () => document.getElementById("department-members")!.click());
     await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Add Alex Example to department"]')!.click());
     await click("Done");
-    expect(document.getElementById("department-lead")?.textContent).toBe("No Lead");
+    expect(document.getElementById("department-lead")?.textContent).toBe("Add leads…");
     await click("Save department");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Mechanical & Production", memberIds: [initialLocalWorkspace().members[1].id], leadId: null } }));
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Mechanical & Production", memberIds: [initialLocalWorkspace().members[1].id], leadId: null, leadIds: [] } }));
   });
   it("retains a department draft after a save conflict", async () => {
     mutate.mockRejectedValueOnce(new ProjectRequestError("This department changed. Reload before saving.", 409));

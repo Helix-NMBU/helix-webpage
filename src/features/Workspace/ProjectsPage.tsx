@@ -145,7 +145,7 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
     : null;
   if (projectId && !selected) return <Navigate to="/projects" replace />;
   const leadDepartments = data.departments
-    .filter((d) => d.leadId === data.viewerId)
+    .filter((d) => (d.leadIds ?? (d.leadId ? [d.leadId] : [])).includes(data.viewerId))
     .map((d) => d.name);
   const options = projectView(params);
   const scopedOptions = departmentIdScope
@@ -154,7 +154,7 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
   const departmentId = departmentIdScope ?? (options.department === "all" ? null : options.department);
   const department = data.departments.find((item) => item.id === departmentId);
   const canCreate = departmentIdScope
-    ? data.canManageProjects || department?.leadId === data.viewerId
+    ? data.canManageProjects || department && (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(data.viewerId)
     : data.canManageProjects || leadDepartments.length > 0;
   const projects = visibleProjects(data, scopedOptions, search);
   const groups = projectGroups(projects, data, scopedOptions.group);

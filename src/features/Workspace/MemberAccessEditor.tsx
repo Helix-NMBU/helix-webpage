@@ -26,7 +26,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
   const [loading, setLoading] = useState(true);
   const [originalSpaces, setOriginalSpaces] = useState<WorkspaceSpace[] | null>(null);
   const [spaceKeys, setSpaceKeys] = useState<WorkspaceSpace[]>([]);
-  const [departments, setDepartments] = useState(() => data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id, access: departmentAccess(d, member.id) })));
+  const [departments, setDepartments] = useState(() => data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: departmentAccess(d, member.id) === "lead", access: departmentAccess(d, member.id) })));
   const [roleOverride, setRoleOverride] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt(value => value + 1), []);
@@ -76,7 +76,6 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
       {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department access is set to Viewer.</p>}
       {data.departments.map(department => {
         const choice = departments.find(d => d.id === department.id)!;
-        const occupied = !!department.leadId && department.leadId !== member.id;
         return <div key={department.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm">
           <Label htmlFor={`department-access-${department.id}`} className="font-normal">{department.name}</Label>
           <Select value={roleOverride ? "viewer" : choice.access ?? "none"} disabled={busy || roleOverride} onValueChange={value => {
@@ -84,7 +83,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
             setDepartments(values => values.map(item => item.id === department.id ? { ...item, access: level, member: level !== null, lead: level === "lead" } : item));
           }}>
             <SelectTrigger id={`department-access-${department.id}`} aria-label={`Access to ${department.name}`} className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="none">No access</SelectItem><SelectItem value="member">Member</SelectItem><SelectItem value="viewer">Viewer</SelectItem><SelectItem value="lead" disabled={occupied}>Lead</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="none">No access</SelectItem><SelectItem value="member">Member</SelectItem><SelectItem value="viewer">Viewer</SelectItem><SelectItem value="lead">Lead</SelectItem></SelectContent>
           </Select>
         </div>;
       })}

@@ -94,20 +94,7 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
       change.departments.length !== 7
     )
       throw new Error("Check the member details.");
-    if (
-      change.departments.some(
-        (c) =>
-          c.lead &&
-          (!c.member ||
-            (data.departments.find((d) => d.id === c.id)?.leadId &&
-              data.departments.find((d) => d.id === c.id)?.leadId !==
-                change.id)),
-      )
-    )
-      throw new WorkspaceRequestError(
-        "This department already has a Lead. Remove their Lead assignment first.",
-        409,
-      );
+    if (change.departments.some(c => c.lead && !c.member)) throw new Error("A Lead must be a member.");
     // Validate all changes before writing the fixture snapshot.
     const raw = await projects.load();
     raw.members = raw.members.map((m) =>
@@ -118,11 +105,9 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
       const memberIds = c.member
         ? [...new Set([...d.memberIds, member.id])]
         : d.memberIds.filter((id) => id !== member.id);
-      const leadId = c.lead
-        ? member.id
-        : d.leadId === member.id
-          ? null
-          : d.leadId;
+      const leadIds = (d.leadIds ?? (d.leadId ? [d.leadId] : [])).filter(id => id !== member.id);
+      if (c.lead) leadIds.push(member.id);
+      const leadId = leadIds[0] ?? null;
       const level = c.access !== undefined ? c.access : c.lead ? "lead" : c.member ? departmentAccess(d, member.id) ?? "member" : null;
       const viewerIds = [...(d.viewerIds ?? []).filter(id => id !== member.id), ...(level === "viewer" ? [member.id] : [])];
       return {
@@ -130,9 +115,10 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
         viewerIds,
         memberIds,
         leadId,
+        leadIds,
         revision:
           d.revision +
-          (departmentAccess(d, member.id) !== level || d.leadId !== leadId
+          (departmentAccess(d, member.id) !== level
             ? 1
             : 0),
       };
