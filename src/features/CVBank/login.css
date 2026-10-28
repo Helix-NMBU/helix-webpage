@@ -2,9 +2,12 @@
 .member-login.portal-root {
   display: grid;
   min-height: 100svh;
+  background: #fff;
   font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+html[data-member-theme="dark"] .member-login.portal-root { background: #000; }
 
 .member-login-panel {
   display: flex;
@@ -103,12 +106,30 @@
 @media (min-width: 1024px) {
   .member-login { grid-template-columns: 1fr 1fr; }
   .member-login-brand-panel {
+    position: relative;
     display: grid;
     place-items: center;
-    background: var(--primary);
+    overflow: hidden;
+  }
+  html[data-member-theme] .member-login .member-login-brand-panel { background: inherit; }
+  .member-login-brand-panel::before {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 1px;
+    height: 50svh;
+    background: #555;
+    content: "";
+    transform: translateY(-50%);
   }
   .member-login-brand-panel img {
-    width: 88px;
-    height: auto;
+    width: 50%;
+    height: 50svh;
+    object-fit: contain;
   }
+  .member-login-brand-panel .member-login-art-light { filter: contrast(1.1); }
+  .member-login-brand-panel .member-login-art-dark { display: none; }
+  :root[data-member-theme="dark"] .member-login-art-light { display: none; }
+  :root[data-member-theme="dark"] .member-login-brand-panel::before { background: #999; }
+  :root[data-member-theme="dark"] .member-login-brand-panel .member-login-art-dark { display: block; }
 }

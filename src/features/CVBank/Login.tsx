@@ -96,7 +96,8 @@ export default function CVBankLogin() {
         </div>
       </div>
       <div className="member-login-brand-panel" aria-hidden="true">
-        <img src="/Vector.png" alt="" />
+        <img className="member-login-art-light" src="/images/member-login-light.png" alt="" />
+        <img className="member-login-art-dark" src="/images/member-login-dark.png" alt="" />
       </div>
     </main>
   );
