@@ -21,6 +21,7 @@ export function createMemberAccessHandler(getServices: () => MemberAccessService
         throw new MemberCvError(400, "Unknown request.");
       }
       const body = websiteBody(req.body);
+      if (body.action === "save_workspace_access") return res.status(200).json(await services.saveWorkspace(token, body));
       if (body.action !== "save") throw new MemberCvError(400, "Unknown request.");
       if (typeof body.memberId !== "string" || (body.departmentId !== null && typeof body.departmentId !== "string") || !Array.isArray(body.roleKeys)) throw new MemberCvError(400, "Check the member access details.");
       return res.status(200).json(await services.save(token, body.memberId, body.departmentId as string | null, body.roleKeys as string[]));

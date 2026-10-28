@@ -39,6 +39,18 @@ The first command only reports pending migrations. The second runs them with an 
 
 Schemas: `identity` for verified members, `cv` for CV drafts and publications, `identity.gmail_connections` for encrypted Gmail connection metadata, `partner` for approved partner organizations and memberships, and `website` for new applications and contact messages. Browser database roles have no direct access to the new private schemas; authenticated server APIs enforce authorization.
 
+## Workspace schema recovery
+
+The member directory, project directory, department pages, tasks, and Season Overview require the `project_management` schema. Deploying application code does not apply SQL migrations. A database that only has the earlier member and recruitment schemas cannot load these workspaces.
+
+Before releasing workspace changes, use the intended branch's direct connection in the untracked `.env.local`, run `npm run neon:setup`, and review all pending filenames. Apply them with `npm run neon:setup -- --apply` after production authorization. Preserve the migration ledger and existing member records. Run the dry check again afterward, then verify Members, Projects, Departments, and an assigned department with a real authorized account. A schema migration does not grant project access or department membership.
+
+`test/workspace-migration-upgrade.test.ts` applies the full ordered migration chain to an isolated database containing an existing member and verifies that the workspace loads with that member preserved. It does not access Neon.
+
+Production verification on 28 October 2026: the 15 workspace migrations from `009_project_management.sql` through `023_project_requires_lead.sql` were tested on the temporary Neon branch `workspace-migration-validation-20261028` (`br-still-poetry-baylswss`), then applied atomically to main (`br-super-resonance-ba0eq1wt`). All 15 repository checksums match `helix_migrations.applied`. Both existing members and both CV documents remain present. Members, Projects, and Departments were verified in the signed-in production browser; the directory shows seven departments and no projects. Tasks returns the expected project-access denial because no project grants exist. No department memberships were added, and no frontend deployment was performed. The validation branch is retained for inspection.
+
+Platform access is managed from **Workspace → Members → edit → Access**. The former `/admin/access` route redirects to `/members`. The Access tab has separate Department access and Space access sections. Space access controls Season Overview, Recruiting, and Financials independently. Saving uses the administrator-authorized member-access API and updates memberships and space permissions in one transaction with revision checks. Existing management and administrator roles are preserved. Recruiting can be explicitly revoked even when a role would otherwise grant it. Another administrator must change your own access. Details contains the name and Helix title. Migration `025_workspace_space_access.sql` must be applied before releasing these controls. Financials also requires the existing finance migrations, including `024_financials_member_role.sql`.
+
 Keep both storage buckets private:
 
 - `NEON_STORAGE_BUCKET=member-cvs` for published member CV PDFs.
@@ -104,3 +116,11 @@ Contact messages are saved before optional notification delivery. Application su
 Run `npm run typecheck`, `npm run typecheck:api:runtime`, `npm run typecheck:api`, the relevant Vitest tests, and `npm run build`. Verify the affected UI locally. Before production release, verify real Google sign-in, an approved partner's OTP delivery, ordinary-member recruitment denial, approved-recruiter access, revocation, and private file downloads against the chosen Neon services.
 
 Attach `partner.helixnmbu.no` to the production Vercel project and configure its DNS before publishing the partner portal. Set the production bucket/email variables and confirm dedicated Neon SMTP. Code changes remain local until publishing is authorized.
+
+## Member access production release, 28 October 2026
+
+Applied the 12 existing Financials migrations (`011_finance_core.sql` through `021_finance_final_candidate_ledger.sql`, plus `024_financials_member_role.sql`) and `025_workspace_space_access.sql` atomically to Neon main after validation on `br-still-poetry-baylswss` and explicit production approval. All 13 ledger checksums match the repository. The migrations added no member space grants. Both existing member and CV records remain present.
+
+Published immutable Vercel deployment `dpl_Gf6RoT3Fd61KFkBs4WwDmoxUJuHW` from the tested working tree on `codex/workspace-loading-member-access`, based on main `87b1749`. The source snapshot preserves the production finance implementation. Later concurrent department-permission edits in the local checkout are outside this deployment. Validation passed 1,558 tests, three deployment guards, lint, TypeScript checks, and the production build. Six environment-dependent tests were skipped. Static output is 9.56 MB and the function count is 11.
+
+Production browser verification confirmed that Member access is absent from the sidebar, `/admin/access` redirects to `/members`, and pencil edit controls open Department access and Space access inside Members. Space access lists Season Overview, Recruiting, and Financials. Permission writes were exercised locally and on the isolated validation branch; no real member permissions were changed to test the published UI.
