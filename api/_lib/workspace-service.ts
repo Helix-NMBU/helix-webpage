@@ -19,6 +19,7 @@ const eligible = `from identity.members m join neon_auth."user" u on u.id=m.auth
 const snapshotSql = `with actor as (select m.id ${eligible} and m.id=$1::uuid and m.google_sub=$2 and m.email=$3),
  seen as (update identity.members set last_seen_at=now() where id=(select id from actor) and (last_seen_at is null or last_seen_at<now()-interval '5 minutes') returning id,last_seen_at)
  select $1::uuid as "viewerId",
+ coalesce((select space_order from identity.member_preferences where member_id=$1::uuid), '[]'::jsonb) as "spaceOrder",
  ((select active from project_management.access where member_id=$1::uuid) is true or project_management.is_department_manager($1::uuid) or exists(select 1 from project_management.department_members where member_id=$1::uuid)) as "projectAccess",
  coalesce((select to_jsonb(task_lead_categories) from project_management.access where member_id=$1::uuid and active),'[]'::jsonb) as "taskLeadCategories",
  project_management.is_department_manager($1::uuid) as "canManageProjects",
@@ -124,7 +125,13 @@ export function createWorkspaceServices(deps: {
     async mutate(token, body) {
       try {
         const identity = await deps.authenticate(token);
-        if (
+        if (body && typeof body === "object" && "action" in body && body.action === "save_space_order") {
+          const order = (body as { order?: unknown }).order;
+          if (!Array.isArray(order) || order.length > 32 || order.some(value => typeof value !== "string" || value.length > 160 || !/^\/[a-z0-9/-]+$/.test(value)) || new Set(order).size !== order.length) throw new MemberCvError(400, "Invalid space order.");
+          // Authenticate against the eligible workspace identity before writing its preference.
+          await read(identity);
+          await deps.db.query("insert into identity.member_preferences (member_id, space_order) values ($1::uuid, $2::jsonb) on conflict (member_id) do update set space_order=excluded.space_order", [identity.userId, JSON.stringify(order)]);
+        } else if (
           body &&
           typeof body === "object" &&
           "action" in body &&

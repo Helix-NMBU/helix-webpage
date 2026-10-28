@@ -35,7 +35,27 @@ export function createProjectRepository(token?: () => Promise<string>, request: 
   return { load: () => call(), mutate: mutation => call(mutation) };
 }
 
+let cached: { data: ProjectWorkspace; at: number } | null = null;
+let pending: Promise<ProjectWorkspace> | null = null;
+let cacheGeneration = 0;
+export function clearProjectWorkspaceCache() { cached = null; pending = null; cacheGeneration++; }
 export async function projectRepository(): Promise<ProjectRepository> {
-  if (isLocalMemberMode()) return (await import("./local-repository")).createLocalProjectRepository();
-  return createProjectRepository();
+  const base = isLocalMemberMode() ? (await import("./local-repository")).createLocalProjectRepository() : createProjectRepository();
+  return {
+    load() {
+      if (cached && Date.now() - cached.at < 30_000) return Promise.resolve(cached.data);
+      if (pending) return pending;
+      const generation = cacheGeneration;
+      const request = base.load().then(data => { if (generation === cacheGeneration) cached = { data, at: Date.now() }; return data; }).finally(() => { if (pending === request) pending = null; });
+      pending = request;
+      return request;
+    },
+    async mutate(change) {
+      clearProjectWorkspaceCache();
+      const generation = cacheGeneration;
+      const data = await base.mutate(change);
+      if (generation === cacheGeneration) cached = { data, at: Date.now() };
+      return data;
+    },
+  };
 }

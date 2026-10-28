@@ -22,7 +22,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@libs/components/ui/sidebar";
-import { useMemberNotifications } from "@/features/MemberPlatform/MemberNotifications";
+import { useMemberNotifications, useNotify } from "@/features/MemberPlatform/MemberNotifications";
 import { useWorkspace } from "@/features/Workspace/WorkspaceContext";
 import { getDepartmentIcon } from "@/features/Workspace/department-icons";
 import { departmentPath } from "@/features/Workspace/types";
@@ -47,7 +47,10 @@ export function AppSidebar({
   const recruitment = useRecruitmentAccess();
   const finance = useFinanceAccess();
   const featureAccess = useMemberFeatureAccess();
-  const workspace = useWorkspace()?.data;
+  const workspaceSession = useWorkspace();
+  const workspace = workspaceSession?.data;
+  const notify = useNotify();
+  const [savingOrder, setSavingOrder] = React.useState(false);
   const spaceItems = [
     ...(workspace?.projectAccess
       ? [
@@ -100,6 +103,24 @@ export function AppSidebar({
         };
       }) ?? []),
   ];
+  const order = workspace?.spaceOrder ?? [];
+  spaceItems.sort((a, b) => {
+    const ai = order.indexOf(a.url), bi = order.indexOf(b.url);
+    return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
+  });
+  async function reorder(source: string, target: string) {
+    if (!workspaceSession || savingOrder) return;
+    const urls = spaceItems.map(item => item.url);
+    const from = urls.indexOf(source), to = urls.indexOf(target);
+    if (from < 0 || to < 0 || from === to) return;
+    urls.splice(from, 1); urls.splice(to, 0, source);
+    // Keep preferences for spaces temporarily unavailable to the member.
+    const next = [...urls, ...order.filter(url => !urls.includes(url))];
+    setSavingOrder(true);
+    try { await workspaceSession.saveSpaceOrder(next); }
+    catch { notify("Could not save space order", "Try rearranging your spaces again.", { variant: "error", href: null }); }
+    finally { setSavingOrder(false); }
+  }
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -167,6 +188,8 @@ export function AppSidebar({
         />
         <NavMain
           title="Your spaces"
+          collapsible
+          onReorder={(source, target) => void reorder(source, target)}
           items={spaceItems}
           activeUrl={location.pathname}
           onNavigate={onNavigate}

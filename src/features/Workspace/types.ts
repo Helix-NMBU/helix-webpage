@@ -25,6 +25,7 @@ export interface WorkspaceProject extends Project {
 }
 export interface WorkspaceDirectory {
   viewerId: string;
+  spaceOrder?: string[];
   canAdmin: boolean;
   projectAccess: boolean;
   canManageProjects: boolean;
@@ -49,6 +50,7 @@ export interface MemberChange {
 }
 export interface WorkspaceRepository {
   load(): Promise<WorkspaceDirectory>;
+  saveSpaceOrder(order: string[]): Promise<WorkspaceDirectory>;
   saveMember(change: MemberChange): Promise<WorkspaceDirectory>;
   saveProject(
     change: Extract<

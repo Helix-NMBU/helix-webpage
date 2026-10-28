@@ -53,7 +53,7 @@ export function DepartmentsPage() {
         { variant: "error", href: null },
       );
   }, [denied, notify]);
-  if (!data) return <LoadDirectory />;
+  if (!data) return <LoadDirectory title="Departments" columns={5} />;
   if (denied) return <Navigate to="/departments" replace />;
   if (selected)
     return (
@@ -95,7 +95,7 @@ export function DepartmentsPage() {
             const DepartmentIcon = getDepartmentIcon(d.name);
             const joined = d.memberIds.includes(data.viewerId);
             const members = d.memberIds.filter((id) =>
-              data.members.some((m) => m.id === id),
+              !d.viewerIds?.includes(id) && data.members.some((m) => m.id === id),
             );
             return (
               <TableRow
@@ -147,7 +147,7 @@ export function DepartmentsPage() {
                       assignmentRole="member"
                     />
                     <span className="text-xs tabular-nums text-muted-foreground">
-                      {members.length}
+                      {d.memberIds.filter((id) => !d.viewerIds?.includes(id)).length}
                     </span>
                   </div>
                 </TableCell>

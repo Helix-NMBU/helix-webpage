@@ -153,7 +153,7 @@ export function MembersPage() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<WorkspaceMember | null>(null);
   const [busy, setBusy] = useState(false);
-  if (!data) return <LoadDirectory />;
+  if (!data) return <LoadDirectory title="Members" columns={4} />;
   const canEdit = data.canAdmin || canManageAccess;
   const memberDepartments = (memberId: string) =>
     data.departments.filter((department) => {

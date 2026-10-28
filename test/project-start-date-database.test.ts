@@ -19,7 +19,7 @@ describe("project start dates in Postgres",()=>{
     await db.query("insert into project_management.projects(id,season,name,category,deadline) values($1,'S27','Legacy project','production','2026-12-01')",[id(90)]);
     await db.exec(migration("020_project_start_dates"));
     await db.exec(migration("021_project_creation_milestones"));
-    for (const name of ["018_department_homes","019_department_settings_permissions","025_workspace_space_access","026_department_access_levels"]) await db.exec(migration(name));
+    for (const name of ["018_department_homes","019_department_settings_permissions","025_workspace_space_access","026_department_access_levels","028_member_preferences"]) await db.exec(migration(name));
     for(const person of identities){
       await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[person.userId,person.name,person.email]);
       await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[person.googleSub,person.userId]);
