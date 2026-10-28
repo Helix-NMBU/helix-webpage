@@ -26,7 +26,6 @@ import { MemberShell } from "./MemberShell";
 import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
 import { MemberFeatureAccessProvider, RequireMemberFeature } from "./MemberFeatureAccess";
-import { MemberAccessPage } from "./MemberAccessPage";
 import { clearGmailSessionCache } from "./gmail-session-cache";
 import { MailWorkspace } from "./MailWorkspace";
 import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
@@ -154,10 +153,6 @@ function RecruitmentFeatureRoute() {
   return <RequireMemberFeature feature="recruitment.manage"><RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess></RequireMemberFeature>;
 }
 
-function MemberAccessFeatureRoute() {
-  return <RequireMemberFeature feature="member_access.manage"><MemberAccessPage /></RequireMemberFeature>;
-}
-
 export default function MemberPlatform() {
   return (
     <MemberThemeProvider>
@@ -181,7 +176,7 @@ export default function MemberPlatform() {
                 <Route path="teams/finance/budget" element={<LegacyMemberRedirect to="/finance/budgets" />} />
                 <Route path="teams/finance/expenses" element={<LegacyMemberRedirect to="/finance/purchases" />} />
                 <Route path="teams/finance/*" element={<LegacyMemberRedirect to="/finance" />} />
-                <Route path="admin/access" element={<MemberAccessFeatureRoute />} />
+                <Route path="admin/access" element={<LegacyMemberRedirect to="/members" />} />
                 <Route path="mail" element={<MailWorkspace />} />
                 <Route path="members" element={<MembersPage />} />
                 <Route path="projects" element={<ProjectsPage />} />

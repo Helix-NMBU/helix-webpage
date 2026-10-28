@@ -161,6 +161,18 @@ describe("workspace request boundary", () => {
     expect(result.status).toBe(503);
     expect(JSON.stringify(result)).not.toContain("private connection");
   });
+  it("identifies missing database setup without exposing database details", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const services = fixture();
+      services.load.mockRejectedValue(Object.assign(new Error("relation private.table does not exist"), { code: "42P01" }));
+      const result = await call(services);
+      expect(result.status).toBe(503);
+      expect(result.result).toEqual({ error: "Workspace setup is incomplete. Contact a platform administrator." });
+      expect(log).toHaveBeenCalledWith("Workspace request failed.", { code: "42P01" });
+      expect(JSON.stringify(result)).not.toContain("private.table");
+    } finally { log.mockRestore(); }
+  });
   it("validates member fields, department revisions, and Lead membership", () => {
     const input = memberChange();
     expect(

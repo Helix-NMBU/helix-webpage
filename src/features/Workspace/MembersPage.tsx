@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { IconPencil } from "@tabler/icons-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@libs/components/ui/tabs";
+import { useMemberFeatureAccess } from "../MemberPlatform/MemberFeatureAccess";
+import { MemberAccessEditor } from "./MemberAccessEditor";
 import { Button } from "@libs/components/ui/button";
 import {
   Table,
@@ -20,7 +24,6 @@ import {
 import type { FormEvent } from "react";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
-import { Checkbox } from "@libs/components/ui/checkbox";
 import { Badge } from "@libs/components/ui/badge";
 import {
   Dialog,
@@ -30,7 +33,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@libs/components/ui/dialog";
-import { ORGANIZATION_DEPARTMENTS } from "../ProjectManagement/types";
 import type {
   MemberChange,
   WorkspaceDirectory,
@@ -43,7 +45,13 @@ function MemberEditor({
   busy,
   onSave,
   onClose,
+  canManageAccess,
+  setBusy,
+  onAccessSaved,
 }: {
+  canManageAccess: boolean;
+  setBusy: (busy: boolean) => void;
+  onAccessSaved: () => void;
   member: WorkspaceMember;
   data: WorkspaceDirectory;
   busy: boolean;
@@ -52,14 +60,6 @@ function MemberEditor({
 }) {
   const [name, setName] = useState(member.name);
   const [helixRole, setHelixRole] = useState(member.helixRole ?? "");
-  const [departments, setDepartments] = useState(() =>
-    data.departments.map((d) => ({
-      id: d.id,
-      revision: d.revision,
-      member: d.memberIds.includes(member.id),
-      lead: d.leadId === member.id,
-    })),
-  );
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!busy)
@@ -69,7 +69,7 @@ function MemberEditor({
         expectedRevision: member.revision,
         name,
         helixRole: helixRole.trim() || null,
-        departments,
+        departments: data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id })),
       });
   }
   return (
@@ -86,106 +86,58 @@ function MemberEditor({
         <DialogHeader>
           <DialogTitle>Edit member</DialogTitle>
           <DialogDescription>
-            Update their name, Helix title, and department membership.
+            Manage member details, department access, and space access.
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-4" onSubmit={(event) => void submit(event)}>
-          <fieldset disabled={busy} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="member-name">Name</Label>
-              <Input
-                autoFocus
-                id="member-name"
-                maxLength={160}
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="member-title">Helix title</Label>
-              <Input
-                id="member-title"
-                maxLength={150}
-                value={helixRole}
-                onChange={(e) => setHelixRole(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Departments</Label>
-              {ORGANIZATION_DEPARTMENTS.map((department) => {
-                const d = data.departments.find((d) => d.name === department);
-                const choice = departments.find((c) => c.id === d?.id);
-                if (!d || !choice) return null;
-                const occupied = !!d.leadId && d.leadId !== member.id;
-                return (
-                  <div
-                    key={d.id}
-                    className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm"
-                  >
-                    <label className="flex items-center gap-2">
-                      <Checkbox
-                        aria-label={`Member of ${d.name}`}
-                        checked={choice.member}
-                        onCheckedChange={(checked) =>
-                          setDepartments((values) =>
-                            values.map((v) =>
-                              v.id === d.id
-                                ? {
-                                    ...v,
-                                    member: checked === true,
-                                    lead: checked === true && v.lead,
-                                  }
-                                : v,
-                            ),
-                          )
-                        }
-                      />
-                      {d.name}
-                    </label>
-                    <label
-                      className="flex items-center gap-2 text-muted-foreground"
-                      title={
-                        occupied
-                          ? "This department already has a Lead"
-                          : undefined
-                      }
-                    >
-                      <Checkbox
-                        aria-label={`Lead of ${d.name}`}
-                        checked={choice.lead}
-                        disabled={!choice.member || occupied || busy}
-                        onCheckedChange={(checked) =>
-                          setDepartments((values) =>
-                            values.map((v) =>
-                              v.id === d.id
-                                ? { ...v, lead: checked === true }
-                                : v,
-                            ),
-                          )
-                        }
-                      />
-                      Lead
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          </fieldset>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={onClose}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Saving…" : "Save member"}
-            </Button>
-          </DialogFooter>
-        </form>
+        <Tabs defaultValue={canManageAccess ? "access" : "details"}>
+          <TabsList aria-label="Member settings">
+            {data.canAdmin && <TabsTrigger value="details" disabled={busy}>Details</TabsTrigger>}
+            {canManageAccess && <TabsTrigger value="access" disabled={busy}>Access</TabsTrigger>}
+          </TabsList>
+          {data.canAdmin && <TabsContent value="details">
+            <form className="space-y-4" onSubmit={(event) => void submit(event)}>
+              <fieldset disabled={busy} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="member-name">Name</Label>
+                  <Input
+                    autoFocus
+                    id="member-name"
+                    maxLength={160}
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="member-title">Helix title</Label>
+                  <Input
+                    id="member-title"
+                    maxLength={150}
+                    value={helixRole}
+                    onChange={(e) => setHelixRole(e.target.value)}
+                  />
+                </div>
+
+              </fieldset>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={onClose}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={busy}>
+                  {busy ? "Saving…" : "Save member"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </TabsContent>}
+          {canManageAccess && <TabsContent value="access">
+            <MemberAccessEditor member={member} data={data} busy={busy} setBusy={setBusy} onSaved={onAccessSaved} />
+          </TabsContent>}
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
@@ -193,12 +145,15 @@ function MemberEditor({
 
 export function MembersPage() {
   const workspace = useWorkspace();
+  const access = useMemberFeatureAccess();
+  const canManageAccess = access.canAccess("member_access.manage");
   const data = workspace?.data;
   const notify = useNotify();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<WorkspaceMember | null>(null);
   const [busy, setBusy] = useState(false);
   if (!data) return <LoadDirectory />;
+  const canEdit = data.canAdmin || canManageAccess;
   const matches = data.members.filter((m) =>
     `${m.name} ${m.helixRole ?? ""} ${m.role} ${data.departments
       .filter((d) => d.memberIds.includes(m.id))
@@ -242,7 +197,7 @@ export function MembersPage() {
               <TableHead>Joined</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Last seen</TableHead>
-              {data.canAdmin && (
+              {canEdit && (
                 <TableHead className="w-20">
                   <span className="sr-only">Actions</span>
                 </TableHead>
@@ -288,31 +243,35 @@ export function MembersPage() {
                 <TableCell className="text-muted-foreground">
                   {seenDate(m.lastSeenAt)}
                 </TableCell>
-                {data.canAdmin && (
+                {canEdit && (
                   <TableCell>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
+                      title={`Edit ${m.name}`}
                       aria-label={`Edit ${m.name}`}
                       onClick={() => setEditing(m)}
                     >
-                      Edit
+                      <IconPencil className="size-4" aria-hidden="true" />
                     </Button>
                   </TableCell>
                 )}
               </TableRow>
             ))}
             {!matches.length && (
-              <NoResults columns={data.canAdmin ? 6 : 5}>
+              <NoResults columns={canEdit ? 6 : 5}>
                 No members match your search.
               </NoResults>
             )}
           </TableBody>
         </Table>
       </Directory>
-      {editing && data.canAdmin && (
+      {editing && canEdit && (
         <MemberEditor
           key={editing.id}
+          canManageAccess={canManageAccess}
+          setBusy={setBusy}
+          onAccessSaved={() => { setEditing(null); void workspace?.refresh(); }}
           member={editing}
           data={data}
           busy={busy}

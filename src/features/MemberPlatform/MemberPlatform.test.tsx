@@ -8,6 +8,7 @@ import { isMemberPlatform, memberPaths } from "./routes";
 import { googleSignInRequest } from "../MemberCV/session";
 import { memberLoginDestination } from "../MemberCV/repository";
 import { useMemberNavigation } from "./MemberNavigation";
+import type { WorkspaceMember } from "../Workspace/types";
 
 const recruitment = vi.hoisted(() => ({ session: vi.fn(), list: vi.fn(), positions: vi.fn() }));
 vi.mock("../Recruitment/website-api", async original => ({ ...await original<typeof import("../Recruitment/website-api")>(), createRecruitmentApi: () => recruitment }));
@@ -64,7 +65,7 @@ const departmentDirectory = ["Business & Marketing", "Finance", "Mechanical & Pr
 }));
 const workspaceDirectory = {
   viewerId: "member", canAdmin: false, projectAccess: true, canManageProjects: false,
-  members: [], projects: [],
+  members: [] as WorkspaceMember[], projects: [],
   departments: [...departmentDirectory],
 };
 
@@ -89,6 +90,7 @@ describe("internal member platform", () => {
     };
     workspaceDirectory.departments = [...departmentDirectory];
     financialsAllowed = true;
+    workspaceDirectory.members = [];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("/api/finance")) return financeResponse(url);
@@ -112,6 +114,66 @@ describe("internal member platform", () => {
   async function profileMenu() {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Profile menu"]')?.click());
   }
+
+  it("redirects old access links to Members and removes the separate sidebar entry", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/admin/access");
+    expect(router.state.location.pathname).toBe("/members");
+    expect(container.querySelector("h1")?.textContent).toBe("Members");
+    expect(container.querySelector('[aria-label="Member access"]')).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=members"))).toBe(false);
+  });
+
+  it("retains the workspace directory across navigation", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/members");
+    await act(async () => router.navigate("/departments"));
+    await act(async () => router.navigate("/members"));
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/member-login?__module=workspace")).toHaveLength(1);
+    await act(async () => window.dispatchEvent(new Event("helix-workspace-updated")));
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/member-login?__module=workspace")).toHaveLength(2);
+  });
+
+  it("lets a granted platform administrator edit access from an icon in Members", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    workspaceDirectory.members = [{ id: "other", name: "Other Member", helixRole: null, role: "Member", joinedAt: null, lastSeenAt: null, revision: 1 }];
+    const request = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input) === "/api/member-access?action=members") return new Response(JSON.stringify({
+        departments: [{ id: "finance", name: "Finance" }],
+        roles: [{ key: "team_member", label: "Team Member" }, { key: "platform_administrator", label: "Platform administrator" }],
+        members: [{ id: "other", name: "Other Member", email: "other@example.test", departmentId: "finance", roleKeys: ["team_member"], spaceKeys: [] }],
+      }));
+      if (String(input) === "/api/member-access" && init?.method === "POST") return new Response(JSON.stringify({ saved: true }));
+      return request(input, init);
+    });
+    await open("/members");
+    const edit = container.querySelector<HTMLButtonElement>('[aria-label="Edit Other Member"]')!;
+    expect(edit.querySelector("svg")).not.toBeNull();
+    expect(edit.textContent).toBe("");
+    await act(async () => edit.click());
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Department access");
+    expect(dialog.textContent).toContain("Space access");
+    for (const space of ["Season Overview", "Recruiting", "Financials"]) expect(dialog.textContent).toContain(space);
+    expect(dialog.textContent).not.toContain("Helix title");
+    const adminLabel = [...dialog.querySelectorAll("label")].find(label => label.textContent === "Financials")!;
+    await act(async () => adminLabel.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+    await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/member-access", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ action: "save_workspace_access", memberId: "other", expectedRevision: 1, departments: departmentDirectory.map(d => ({ id: d.id, revision: d.revision, member: false, lead: false })), spaceKeys: ["financials"] }),
+    }));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("hides member editing from members without an administrator grant", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    selfAccess = { ...selfAccess, features: [] };
+    workspaceDirectory.members = [{ id: "other", name: "Other Member", helixRole: null, role: "Member", joinedAt: null, lastSeenAt: null, revision: 1 }];
+    await open("/members");
+    expect(container.textContent).toContain("Other Member");
+    expect(container.querySelector('[aria-label="Edit Other Member"]')).toBeNull();
+  });
 
   it.each([
     { name: "Henrik Engdal", email: "henrik.engdal@helixnmbu.no", role: "Admin" },

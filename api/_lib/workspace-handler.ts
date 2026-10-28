@@ -47,13 +47,19 @@ export function createWorkspaceHandler(
             : await services.mutate(token, req.body),
         );
     } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : null;
+      // Log only the database error class, never SQL, credentials, or member data.
+      if (!(error instanceof MemberCvError)) console.error("Workspace request failed.", { code });
+      const missingSchema = code === "42P01" || code === "42703" || code === "3F000";
       return res
         .status(error instanceof MemberCvError ? error.status : 503)
         .json({
           error:
             error instanceof MemberCvError
               ? error.message
-              : "Could not load workspace. Try again.",
+              : missingSchema
+                ? "Workspace setup is incomplete. Contact a platform administrator."
+                : "Could not load workspace. Try again.",
         });
     }
   };

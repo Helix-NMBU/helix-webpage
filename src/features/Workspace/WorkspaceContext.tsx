@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { workspaceRepository, WorkspaceRequestError } from "./repository";
 import type { WorkspaceDirectory, WorkspaceRepository } from "./types";
@@ -26,7 +26,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const alive = useRef(false);
   const notify = useNotify();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const getRepository = useCallback(
     () => (repository.current ??= workspaceRepository()),
     [],
@@ -35,15 +36,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     (error: unknown) => {
       if (error instanceof WorkspaceRequestError && error.status === 401) {
         setData(null);
-        navigate("/login", { replace: true });
+        navigateRef.current("/login", { replace: true });
       }
       notify(
         "Could not load workspace",
         error instanceof Error ? error.message : "Try again.",
-        { variant: "error", href: null },
+        { id: "workspace-load", variant: "error", href: null,
+          action: { label: "Try again", onClick: () => void refreshRef.current() } },
       );
     },
-    [navigate, notify],
+    [notify],
   );
   const refresh = useCallback(async () => {
     const current = ++generation.current;
@@ -60,6 +62,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (alive.current && current === generation.current) setLoading(false);
     }
   }, [getRepository, failure]);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   useEffect(() => {
     alive.current = true;
     void refresh();
@@ -67,7 +71,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       alive.current = false;
       generation.current++;
     };
-  }, [refresh, pathname]);
+  }, [refresh]);
   useEffect(() => {
     const updated = () => void refresh();
     window.addEventListener("helix-workspace-updated", updated);

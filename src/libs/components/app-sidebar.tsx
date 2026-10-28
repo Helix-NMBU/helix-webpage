@@ -99,10 +99,6 @@ export function AppSidebar({
           ],
         };
       }) ?? []),
-    ...(featureAccess.canAccess("member_access.manage") ? [{
-      title: "Member access", url: "/admin/access", icon: IconUsers,
-      isActive: location.pathname === "/admin/access",
-    }] : []),
   ];
   return (
     <Sidebar collapsible="icon" {...props}>

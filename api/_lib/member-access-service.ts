@@ -3,10 +3,14 @@ import { createCvServices, type CvDatabase, type WorkspaceIdentity } from "./mem
 import { MemberCvError } from "./member-cv-error.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
 
+import { WORKSPACE_SPACES, type WorkspaceSpace } from "../../src/features/Workspace/access.js";
+import { parseMemberChange } from "./workspace-service.js";
+
 export type AccessRole = { key: string; label: string };
 export interface MemberAccessServices {
   self(token: string): Promise<{ memberId: string; email: string; name: string; departmentId: string | null; roles: AccessRole[]; features: string[] }>;
-  members(token: string): Promise<{ departments: { id: string; name: string }[]; roles: AccessRole[]; members: { id: string; email: string; name: string; departmentId: string | null; roleKeys: string[] }[] }>;
+  members(token: string): Promise<{ departments: { id: string; name: string }[]; roles: AccessRole[]; members: { id: string; email: string; name: string; departmentId: string | null; roleKeys: string[]; spaceKeys: WorkspaceSpace[] }[] }>;
+  saveWorkspace(token: string, body: unknown): Promise<{ saved: true }>;
   save(token: string, memberId: string, departmentId: string | null, roleKeys: string[]): Promise<{ saved: true }>;
 }
 
@@ -39,11 +43,38 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const [departmentRows, roleRows, memberRows] = await Promise.all([
         db.query<{ id: string; name: string }>("select department_key as id, name from identity.departments order by sort_order, name, department_key"),
         db.query<AccessRole>("select role_key as key, label from identity.platform_roles order by sort_order"),
-        db.query<{ id: string; email: string; name: string; department_id: string | null; role_keys: string[] }>(`select m.id, lower(m.email) as email, coalesce(nullif(m.full_name, ''), m.email) as name, md.department_key as department_id,
+        db.query<{ id: string; email: string; name: string; department_id: string | null; role_keys: string[]; space_keys: WorkspaceSpace[] }>(`select m.id, lower(m.email) as email, coalesce(nullif(m.full_name, ''), m.email) as name, md.department_key as department_id,
           coalesce((select array_agg(mr.role_key order by r.sort_order) from identity.member_roles mr join identity.platform_roles r using (role_key) where mr.member_id = m.id), array[]::text[]) as role_keys
+           , array_remove(array[
+            case when exists(select 1 from project_management.access where member_id=m.id and active) then 'season-overview' end,
+            case when identity.member_has_feature(m.id,'recruitment.manage') then 'recruiting' end,
+            case when exists(select 1 from identity.member_roles where member_id=m.id and role_key='financials') then 'financials' end
+          ], null) as space_keys
           from identity.members m left join identity.member_departments md on md.member_id = m.id order by lower(m.email)`),
       ]);
-      return { departments: departmentRows.rows, roles: roleRows.rows, members: memberRows.rows.map(({ role_keys, department_id, ...m }) => ({ ...m, departmentId: department_id, roleKeys: role_keys })) };
+      return { departments: departmentRows.rows, roles: roleRows.rows, members: memberRows.rows.map(({ role_keys, department_id, space_keys, ...m }) => ({ ...m, departmentId: department_id, roleKeys: role_keys, spaceKeys: space_keys })) };
+    },
+    async saveWorkspace(token, body) {
+      const { identity, memberId: actorId } = await identityAndId(token);
+      await requireAdmin(actorId);
+      if (!body || typeof body !== "object") throw new MemberCvError(400, "Check the member access details.");
+      const input = body as Record<string, unknown>;
+      const change = parseMemberChange({ action: "save_member", id: input.memberId, expectedRevision: input.expectedRevision, name: "Access update", helixRole: null, departments: input.departments });
+      if (actorId === change.id) throw new MemberCvError(403, "You cannot change your own access assignments.");
+      const spaces = input.spaceKeys;
+      if (!Array.isArray(spaces) || spaces.length > WORKSPACE_SPACES.length || new Set(spaces).size !== spaces.length || spaces.some(key => !WORKSPACE_SPACES.some(space => space.key === key))) throw new MemberCvError(400, "Choose valid spaces.");
+      try {
+        await db.query("select identity.save_workspace_access($1::uuid,$2,$3,$4::jsonb)", [actorId, identity.googleSub, identity.email, JSON.stringify({ memberId: change.id, expectedRevision: change.expectedRevision, departments: change.departments, spaceKeys: spaces })]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (/forbidden/.test(message)) throw new MemberCvError(403, "Platform administrator access is required.");
+        if (/not_found/.test(message)) throw new MemberCvError(404, "This member is no longer available.");
+        if (/lead_conflict/.test(message)) throw new MemberCvError(409, "This department already has a Lead. Remove their Lead assignment first.");
+        if (/conflict/.test(message)) throw new MemberCvError(409, "This record changed. Reload Members before saving again.");
+        if (/invalid/.test(message)) throw new MemberCvError(400, "Check the member access details.");
+        throw error;
+      }
+      return { saved: true };
     },
     async save(token, memberId, departmentId, roleKeys) {
       const { memberId: actorId } = await identityAndId(token);
