@@ -37,8 +37,10 @@ const memberCapabilities = {
   financing: false, manageFunding: false, purchaseRegister: false, filesAndRefunds: false, paymentsVoidReview: false,
   draftBudgetItems: false, permittedImports: false, createBudget: false, approveBudget: false, protectedBudgetEdits: false, decideRequests: false,
 };
+let financialsAllowed = true;
 function financeResponse(url: string): Response {
   const action = new URL(url, "https://member.example").searchParams.get("action");
+  if (!financialsAllowed) return { ok: false, status: 403, json: async () => ({ error: "Financials access is required." }) } as unknown as Response;
   if (action === "financing") return { ok: false, status: 403, json: async () => ({ error: "Financing access is required." }) } as unknown as Response;
   const body = action === "capabilities"
     ? { memberId: "member", viewVersion: 0, profiles: [], capabilities: memberCapabilities, seasonCode: null, approvalThresholdNok: null, today: "2026-10-26" }
@@ -86,6 +88,7 @@ describe("internal member platform", () => {
       roles: [], features: ["team.business-marketing", "team.finance", "team.mechanical-production", "recruitment.manage", "member_access.manage"],
     };
     workspaceDirectory.departments = [...departmentDirectory];
+    financialsAllowed = true;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("/api/finance")) return financeResponse(url);
@@ -165,6 +168,23 @@ describe("internal member platform", () => {
     expect(container.textContent).not.toContain("Partner Spotlight");
   });
 
+  it.each([
+    { department: true, financials: true },
+    { department: true, financials: false },
+    { department: false, financials: true },
+    { department: false, financials: false },
+  ])("shows Finance and Financials in Your spaces according to independent access: $department / $financials", async ({ department, financials }) => {
+    session.landing.mockResolvedValue(signedIn);
+    workspaceDirectory.departments = department ? departmentDirectory.filter((item) => item.name === "Finance") : [];
+    financialsAllowed = financials;
+    await open("/");
+    const group = [...container.querySelectorAll('[data-sidebar="group"]')].find((item) => item.querySelector('[data-sidebar="group-label"]')?.textContent === "Your spaces");
+    expect(group).toBeTruthy();
+    const names = [...group!.querySelectorAll("button")].map((button) => button.textContent?.trim());
+    expect(names.includes("Finance")).toBe(department);
+    expect(names.includes("Financials")).toBe(financials);
+  });
+
   it("redirects legacy recruitment links to the Recruiting route", async () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
@@ -227,7 +247,7 @@ describe("internal member platform", () => {
     expect(googleSignInRequest("/recruiting", "https://internal.helixnmbu.no").callbackURL).toBe("https://internal.helixnmbu.no/recruiting");
   });
 
-  it("opens public finance pages for every verified member and keeps financing private", async () => {
+  it("opens financial pages for an authorized member and keeps financing capability checks", async () => {
     session.landing.mockResolvedValue(signedIn);
     selfAccess = { ...selfAccess, features: ["*"] };
     await open("/");

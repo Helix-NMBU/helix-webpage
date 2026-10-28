@@ -69,6 +69,19 @@ export function AppSidebar({
           },
         ]
       : []),
+    ...(finance.access === "allowed" ? [{
+      title: "Financials",
+      url: "/finance",
+      icon: IconWallet,
+      isActive: location.pathname.startsWith("/finance"),
+      defaultOpen: true,
+      items: [
+        { title: "Overview", url: "/finance" },
+        { title: "Purchases", url: "/finance/purchases" },
+        { title: "Budgets", url: "/finance/budgets" },
+        ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
+      ],
+    }] : []),
     ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId))
       .map((department) => {
         const url = departmentPath(department.name);
@@ -123,19 +136,6 @@ export function AppSidebar({
               icon: IconCheckbox,
               isActive: location.pathname === "/tasks" || location.pathname.startsWith("/tasks/"),
             },
-            ...(finance.access === "denied" ? [] : [{
-              title: "Finance",
-              url: "/finance",
-              icon: IconWallet,
-              isActive: location.pathname.startsWith("/finance"),
-              defaultOpen: true,
-              items: [
-                { title: "Overview", url: "/finance" },
-                { title: "Purchases", url: "/finance/purchases" },
-                { title: "Budgets", url: "/finance/budgets" },
-                ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
-              ],
-            }]),
           ]}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
