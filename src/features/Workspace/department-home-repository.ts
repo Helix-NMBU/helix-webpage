@@ -56,10 +56,49 @@ export function createDepartmentHomeRepository(
     save: (change) => call(change.departmentId, change),
   };
 }
-export async function departmentHomeRepository(): Promise<DepartmentHomeRepository> {
-  return isLocalMemberMode()
-    ? (
-        await import("./local-department-home")
-      ).createLocalDepartmentHomeRepository()
+// Keep recently visited departments in memory for the current member only.
+// Never persist these records across sessions; authorization is checked on each miss.
+const CACHE_MS = 15_000;
+const homeCache = new Map<string, { data: DepartmentHome; expires: number }>();
+const pending = new Map<string, Promise<DepartmentHome>>();
+let cacheGeneration = 0;
+export function clearDepartmentHomeCache() {
+  cacheGeneration++;
+  homeCache.clear();
+  pending.clear();
+}
+export function cacheDepartmentHomeRepository(viewerId: string, repository: DepartmentHomeRepository): DepartmentHomeRepository {
+  const keyFor = (id: string) => JSON.stringify([viewerId, id]);
+  return {
+    load(id) {
+      const key = keyFor(id);
+      const cached = homeCache.get(key);
+      if (cached && cached.expires > Date.now()) return Promise.resolve(cached.data);
+      homeCache.delete(key);
+      const existing = pending.get(key);
+      if (existing) return existing;
+      const generation = cacheGeneration;
+      const request = repository.load(id).then(data => {
+        if (generation === cacheGeneration) homeCache.set(key, { data, expires: Date.now() + CACHE_MS });
+        return data;
+      }).catch(error => {
+        if (generation === cacheGeneration && error instanceof WorkspaceRequestError && [401, 403].includes(error.status)) clearDepartmentHomeCache();
+        throw error;
+      }).finally(() => { if (pending.get(key) === request) pending.delete(key); });
+      pending.set(key, request);
+      return request;
+    },
+    async save(change) {
+      clearDepartmentHomeCache();
+      const result = await repository.save(change);
+      clearDepartmentHomeCache();
+      return result;
+    },
+  };
+}
+export async function departmentHomeRepository(viewerId: string): Promise<DepartmentHomeRepository> {
+  const repository = isLocalMemberMode()
+    ? (await import("./local-department-home")).createLocalDepartmentHomeRepository()
     : createDepartmentHomeRepository();
+  return cacheDepartmentHomeRepository(viewerId, repository);
 }

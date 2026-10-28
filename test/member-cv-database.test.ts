@@ -71,6 +71,14 @@ describe("member CV schema", () => {
     expect((await db.query("select has_function_privilege('public', 'identity.onboard_member(uuid,text,text,text,jsonb,jsonb)', 'EXECUTE') as allowed")).rows[0]).toEqual({ allowed: false });
   });
 
+  it("authenticates linked members with the combined identity read and still enforces account revocation", async () => {
+    const services = createCvServices({ db, storage: { putPdf: async () => undefined, remove: async () => undefined, presign: async () => "unused" }, verifySession: async () => ({ userId: authUser }) });
+    expect(await services.authenticate("verified")).toMatchObject({ userId: member, email: "ase@helixnmbu.no", googleSub: "google-member" });
+    await db.query('update neon_auth."user" set banned=true where id=$1', [authUser]);
+    try { await expect(services.authenticate("verified")).rejects.toMatchObject({ status: 403 }); }
+    finally { await db.query('update neon_auth."user" set banned=false where id=$1', [authUser]); }
+  });
+
   it("refuses an account that is not the linked Google identity", async () => {
     await expect(onboard(authUser, "made-up", "ase@helixnmbu.no", "Åse")).rejects.toThrow("Identity mismatch");
     await expect(onboard(otherAuth, "google-other", "person@gmail.com", "Other")).rejects.toThrow("Identity mismatch");

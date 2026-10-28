@@ -6,7 +6,7 @@ import { Button } from "@libs/components/ui/button";
 import { Badge } from "@libs/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Input } from "@libs/components/ui/input";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { SeasonOverviewSkeleton, TaskListSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@libs/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
@@ -180,7 +180,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   }
   const changeStatus: SaveTaskStatus = (task, status, blockedReason) => save({ action: "set_status", id: task.id, expectedRevision: task.revision, status, blockedReason });
   if (!valid) return <Navigate to="/season-overview" replace />;
-  if (!workspace) return loading ? <div role="status" aria-label={personal ? "Loading tasks" : "Loading Season Overview"} className="space-y-6 py-8"><Skeleton className="h-10 w-64" /><div className="grid gap-4 sm:grid-cols-4">{[1, 2, 3, 4].map(item => <Skeleton key={item} className="h-28" />)}</div><Skeleton className="h-80 w-full" /></div> : <div className="py-8"><Button variant="outline" onClick={() => void load()}>Try again</Button></div>;
+  if (!workspace) return loading ? (personal ? <TaskListSkeleton label="Loading tasks" title="My tasks" personal board={searchParams.get("view") === "board"} /> : <SeasonOverviewSkeleton />) : <div className="py-8"><Button variant="outline" onClick={() => void load()}>Try again</Button></div>;
   const scope = workspace.tasks.filter(task => personal ? task.assigneeIds.includes(workspace.viewerId) : !category || task.category === category);
   const projects = workspace.projects.filter(project => !category || project.category === category);
   const stats = summarize(scope);

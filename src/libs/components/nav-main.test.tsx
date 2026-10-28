@@ -32,7 +32,15 @@ describe("space navigation", () => {
     expect(navigate).not.toHaveBeenCalled();
     await act(async () => { first.click(); });
     expect(navigate).toHaveBeenCalledWith("/first", first);
+    const group = [...container.querySelectorAll("button")].find(button => button.textContent === "Second")!;
     const toggle = container.querySelector<HTMLButtonElement>('button[aria-label="Toggle Second pages"]')!;
+    expect(group.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => { group.click(); });
+    expect(group.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(navigate).toHaveBeenCalledTimes(1);
+    await act(async () => { group.click(); });
+    expect(group.getAttribute("aria-expanded")).toBe("false");
     await act(async () => { toggle.click(); });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });

@@ -20,8 +20,8 @@ describe("Neon member access", () => {
   it("uses the stored administrator name and re-reads assignments after onboarding", async () => {
     let reads = 0;
     const db: CvDatabase = { query: async <T,>(sql: string, params?: unknown[]) => {
-      if (sql.includes("neon_auth")) return { rows: [{ email: "ase@helixnmbu.no", name: "Google name", email_verified: true, banned: false, account_id: "google-ase", id_token: null }] as T[] };
-      if (sql.includes("from identity.members")) return { rows: [{ id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: ++reads === 1 ? "Stored admin name" : "New admin name", helix_role: "Mechanical lead" }] as T[] };
+      if (sql.includes("neon_auth")) { reads++; return { rows: [{ email: "ase@helixnmbu.no", name: "Google name", email_verified: true, banned: false, account_id: "google-ase", id_token: null, member: { id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: "Stored admin name", helix_role: "Mechanical lead" } }] as T[] }; }
+      if (sql.includes("from identity.members")) { reads++; return { rows: [{ id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: "New admin name", helix_role: "Mechanical lead" }] as T[] }; }
       if (sql.includes("onboard_member")) {
         expect(params?.[3]).toBe("Stored admin name");
         return { rows: [{ onboard_member: memberId }] as T[] };
@@ -50,7 +50,7 @@ describe("Neon member access", () => {
   it("does not require a fresh Google ID token after the Workspace link is stored", async () => {
     const verifyGoogle = vi.fn();
     const db: CvDatabase = { query: async <T,>(sql: string) => {
-      if (sql.includes("neon_auth")) return { rows: [{ email: "ase@helixnmbu.no", name: "Åse", email_verified: true, banned: false, account_id: "google-ase", id_token: null }] as T[] };
+      if (sql.includes("neon_auth")) return { rows: [{ email: "ase@helixnmbu.no", name: "Åse", email_verified: true, banned: false, account_id: "google-ase", id_token: null, member: { id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: "Åse", helix_role: "Mechanical lead" } }] as T[] };
       if (sql.includes("from identity.members")) return { rows: [{ id: memberId, google_sub: "google-ase", email: "ase@helixnmbu.no", full_name: "Åse", helix_role: "Mechanical lead" }] as T[] };
       if (sql.includes("onboard_member")) return { rows: [{ onboard_member: memberId }] as T[] };
       throw new Error(sql);

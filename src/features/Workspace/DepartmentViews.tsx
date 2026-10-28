@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { TaskListSkeleton } from "../MemberPlatform/LoadingSkeletons";
+import { Button } from "@libs/components/ui/button";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { projectRepository, ProjectRequestError } from "../ProjectManagement/repository";
 import type { ProjectWorkspace, Task } from "../ProjectManagement/types";
@@ -36,12 +37,14 @@ function useDepartmentAccess() {
 
 export function DepartmentProjectsPage() {
   const { department, denied } = useDepartmentAccess();
-  if (!department) return denied ? null : <LoadDirectory />;
+  if (!department) return denied ? null : <LoadDirectory title="Projects" columns={5} />;
   return <ProjectsPage departmentIdScope={department.id} />;
 }
 
 export function DepartmentTasksPage() {
   const { directory, department, denied } = useDepartmentAccess();
+  const directorySession = useWorkspace();
+  const [params] = useSearchParams();
   const [workspace, setWorkspace] = useState<ProjectWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -112,9 +115,9 @@ export function DepartmentTasksPage() {
     }
   };
 
-  if (!directory) return <LoadDirectory />;
+  if (!directory) return directorySession?.loading ? <TaskListSkeleton label="Loading department tasks" board={params.get("view") === "board"} /> : <Button variant="outline" onClick={() => void directorySession?.refresh()}>Try again</Button>;
   if (denied || !department) return null;
-  if (!workspace) return <Skeleton className="h-64 w-full" aria-label="Loading department tasks" />;
+  if (!workspace) return loading ? <TaskListSkeleton label="Loading department tasks" board={params.get("view") === "board"} /> : <Button variant="outline" onClick={() => void load()}>Try again</Button>;
 
   const projectIds = new Set(
     directory.projects

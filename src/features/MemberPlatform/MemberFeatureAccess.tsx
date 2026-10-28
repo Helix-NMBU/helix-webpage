@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { RecruitmentPageSkeleton, TeamPageSkeleton } from "./LoadingSkeletons";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "./local-mode";
 import { useNotify } from "./MemberNotifications";
@@ -106,7 +106,7 @@ export function RequireMemberFeature({ feature, children }: { feature: string; c
       notify("Feature access required", "Your account does not have access to this area.", { id: `feature-denied:${feature}`, variant: "error", href: null });
     }
   }, [access.status, access.canAccess, feature, notify]);
-  if (access.status === "loading") return <div role="status" aria-label="Loading feature access" className="space-y-4"><Skeleton className="h-9 w-48" /><Skeleton className="h-40 w-full" /></div>;
+  if (access.status === "loading") return feature === "recruitment.manage" ? <RecruitmentPageSkeleton label="Loading feature access" /> : <TeamPageSkeleton />;
   if (access.status === "unavailable") return <Button className="self-start" variant="outline" onClick={access.reload}>Try again</Button>;
   if (!access.canAccess(feature)) return <Navigate to="/" replace />;
   return children;

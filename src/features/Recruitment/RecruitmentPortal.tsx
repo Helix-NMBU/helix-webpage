@@ -4,7 +4,7 @@ import { IconBriefcase, IconRefresh } from "@tabler/icons-react";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useRecruitmentAccess } from "../MemberPlatform/RecruitmentAccess";
 import { Button } from "../../libs/components/ui/button";
-import { Skeleton } from "../../libs/components/ui/skeleton";
+import { RecruitmentListSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Input } from "../../libs/components/ui/input";
 import { Label } from "../../libs/components/ui/label";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../libs/components/ui/empty";
@@ -86,7 +86,7 @@ export default function RecruitmentPortal() {
           <TabsList aria-label="Recruiting views"><TabsTrigger value="applications">Applications</TabsTrigger><TabsTrigger value="positions">Positions</TabsTrigger></TabsList>
           <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} onVisibilityChange={setPositionVisibility} /></TabsContent>
           <TabsContent value="applications" className="space-y-6">
-        {loading && <div role="status" aria-label="Loading applications" className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-20 w-full" />)}</div>}
+        {loading && <RecruitmentListSkeleton />}
         {ready && !loading && <>
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-2"><Label htmlFor="application-season">Season</Label><Select value={season} onValueChange={setSeason}><SelectTrigger id="application-season" className="w-20"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All seasons</SelectItem>{seasons.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select></div>

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { MemberRouteSkeleton } from "./LoadingSkeletons";
 import { IconCube } from "@tabler/icons-react";
 import { useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -97,7 +99,7 @@ function Workspace({ children }: { children?: ReactNode }) {
       <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : bounded ? "md:h-svh md:min-h-0 md:overflow-hidden" : ""}`}>
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-            {children ?? <Outlet />}
+            <Suspense fallback={<MemberRouteSkeleton />}>{children ?? <Outlet />}</Suspense>
           </div>
         ) : (
           <>
@@ -158,7 +160,7 @@ function Workspace({ children }: { children?: ReactNode }) {
               </div>
             </header>
             <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 ${bounded ? "md:min-h-0 md:overflow-hidden" : ""}`}>
-              {children ?? <Outlet />}
+              <Suspense fallback={<MemberRouteSkeleton />}>{children ?? <Outlet />}</Suspense>
             </div>
           </>
         )}

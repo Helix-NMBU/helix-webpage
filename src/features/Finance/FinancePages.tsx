@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { FinanceContentSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { BudgetsBoard } from "./BudgetsPage";
 import { FinancingPage } from "./FinancingPage";
@@ -71,10 +71,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
         ))}
       </nav>
       {page === "financing" ? <FinancingPage /> : !loaded ? (
-        <div role="status" aria-label="Loading finance page" className="space-y-4">
-          <Skeleton className="h-9 w-48" />
-          <Skeleton className="h-40 w-full" />
-        </div>
+        <FinanceContentSkeleton page={page} canRegister={Boolean(session.capabilities?.registerActual)} />
       ) : budgetsReady ? (
         <BudgetsBoard />
       ) : purchasesReady ? (

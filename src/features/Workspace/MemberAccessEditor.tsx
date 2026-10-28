@@ -67,7 +67,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
     } finally { setBusy(false); }
   }
 
-  if (loading) return <Skeleton className="h-48 w-full" aria-label="Loading member access" />;
+  if (loading) return <div role="status" aria-label="Loading member access" className="space-y-5"><div className="space-y-3"><h3 className="font-medium">Department access</h3><Skeleton className="h-4 w-4/5" />{data.departments.map(department => <div key={department.id} className="flex items-center justify-between rounded-md border p-2"><span className="text-sm">{department.name}</span><Skeleton className="h-9 w-36" /></div>)}</div><div className="space-y-3"><h3 className="font-medium">Space access</h3>{WORKSPACE_SPACES.map(space => <div key={space.key} className="flex items-center gap-2"><Skeleton className="size-4" /><span className="text-sm">{space.label}</span></div>)}</div><div className="flex justify-end"><Skeleton className="h-9 w-24" /></div></div>;
   if (!originalSpaces) return <Button variant="outline" onClick={retry}>Try again</Button>;
   return <form className="space-y-5" onSubmit={event => void save(event)}>
     <fieldset disabled={busy} className="space-y-3">

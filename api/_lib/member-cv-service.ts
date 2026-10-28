@@ -29,6 +29,7 @@ export interface CvDatabase {
 }
 type AuthRow = { email: string; name: string; email_verified: boolean; banned: boolean; account_id: string; id_token: string | null };
 type MemberRow = { id: string; google_sub: string; email: string; full_name: string; helix_role?: string | null };
+type AuthWithMemberRow = AuthRow & { member: MemberRow | null };
 const memberIdentityQuery = "select id, google_sub, email, full_name, to_jsonb(m)->>'helix_role' as helix_role from identity.members m where auth_user_id = $1";
 
 let pool: pg.Pool | undefined;
@@ -91,21 +92,23 @@ export function createCvServices(deps: {
       let auth: AuthRow | undefined;
       let member: MemberRow | undefined;
       try {
-        auth = (await db.query<AuthRow>(
+        const row = (await db.query<AuthWithMemberRow>(
           `select lower(u.email) as email, u.name, u."emailVerified" as email_verified, coalesce(u.banned, false) as banned,
-                  a."accountId" as account_id, a."idToken" as id_token
+                  a."accountId" as account_id, a."idToken" as id_token,
+                  case when m.id is null then null else jsonb_build_object(
+                    'id', m.id, 'google_sub', m.google_sub, 'email', m.email,
+                    'full_name', m.full_name, 'helix_role', to_jsonb(m)->>'helix_role'
+                  ) end as member
            from neon_auth."user" u
            join neon_auth.account a on a."userId" = u.id and a."providerId" = 'google'
+           left join identity.members m on m.auth_user_id = u.id
            where u.id = $1
            order by a."createdAt" asc
            limit 1`,
           [session.userId],
         )).rows[0];
-        member = (await db.query<MemberRow>(
-          // JSON extraction stays compatible while migration 002 rolls out.
-          memberIdentityQuery,
-          [session.userId],
-        )).rows[0];
+        auth = row;
+        member = row?.member ?? undefined;
       } catch {
         throw new MemberCvError(503, "Could not verify member access.");
       }
