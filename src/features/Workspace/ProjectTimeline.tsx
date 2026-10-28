@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { IconCube, IconDiamonds } from "@tabler/icons-react";
+import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import { Button } from "@libs/components/ui/button";
 import { Choice } from "../ProjectManagement/TaskEditor";
 import { addDays, formatDate, osloDate } from "../ProjectManagement/model";
@@ -48,7 +49,7 @@ export function ProjectTimeline({ projects, groups, scale, onScale }: {
       <span className="text-xs text-muted-foreground">Project schedules and milestones</span>
       <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={centerToday}>Today</Button><div className="w-28"><Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scale} onChange={onScale} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} /></div></div>
     </div>
-    {!projects.length ? <p className="px-4 py-12 text-center text-sm text-muted-foreground">No projects to show.</p> : <div ref={scroll} tabIndex={0} role="region" aria-label="Project timeline calendar" className="max-h-[70svh] overflow-auto overscroll-contain [--timeline-label-width:10rem] sm:[--timeline-label-width:15rem]">
+    {!projects.length ? <div className="px-4 py-8 text-center text-sm text-muted-foreground"><EmptyIllustration kind="cube" /><p className="mt-2">No projects to show.</p></div> : <div ref={scroll} tabIndex={0} role="region" aria-label="Project timeline calendar" className="max-h-[70svh] overflow-auto overscroll-contain [--timeline-label-width:10rem] sm:[--timeline-label-width:15rem]">
       <div className="relative min-h-80" style={{ width: `calc(${width}px + var(--timeline-label-width))` }}>
         <div className="pointer-events-none absolute inset-y-0 left-[var(--timeline-label-width)]" style={{ width }}>{months.map(month => <div key={month} className="absolute inset-y-0 border-l border-dashed border-border/70" style={{ left: x(month) }} />)}<div aria-label={`Today: ${formatDate(today)}`} className="absolute inset-y-0 border-l border-primary/70" style={{ left: x(today) }} /></div>
         <div className="sticky top-0 z-20 flex h-12 border-b bg-card">

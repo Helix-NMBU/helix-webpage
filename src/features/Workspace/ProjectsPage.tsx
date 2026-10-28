@@ -12,6 +12,7 @@ import { AssigneeAvatars } from "../ProjectManagement/TaskAssignees";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "./WorkspaceContext";
 import { ProjectDetailSkeleton } from "../MemberPlatform/LoadingSkeletons";
+import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import {
   Directory,
   Search,
@@ -123,7 +124,7 @@ export function ProjectRows({
           </TableRow>
         ))}
         {!projects.length && (
-          <NoResults columns={1 + columns.filter(column => column !== "milestones").length}>No projects to show.</NoResults>
+          <NoResults columns={1 + columns.filter(column => column !== "milestones").length}><div className="py-4"><EmptyIllustration kind="cube" /><p className="mt-2">No projects to show.</p></div></NoResults>
         )}
       </TableBody>
     </Table>
