@@ -22,7 +22,6 @@ import type {
   PublicBudgetItem,
   PublicBudgets,
   PublicDepartmentBudget,
-  PublicSystemBudget,
   UnallocatedBudgetItem,
 } from "./finance-types.js";
 

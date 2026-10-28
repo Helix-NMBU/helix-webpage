@@ -6,7 +6,6 @@ import { isOwnedFinalKey, type FinanceObjectStorage } from "./finance-storage.js
 import { allowedUpload, verifyFileSignature } from "../../src/features/Finance/purchase-domain.js";
 import {
   MAX_PURCHASE_FILE_BYTES,
-  MAX_PURCHASE_FILES,
   normalizePurchaseInput,
   registerPurchaseIdempotencySubject,
   registrationYear,
@@ -19,7 +18,6 @@ import type {
   FinanceCapabilitySet,
   FinanceFieldError,
   FinanceMutationResult,
-  FinanceWarning,
   PurchaseInput,
 } from "./finance-types.js";
 import { loadBudgetHierarchy } from "./finance-budgets.js";

@@ -20,7 +20,7 @@
     "test": "vitest run --maxWorkers=2 --exclude scripts/deployment-guards.test.mjs && node --test scripts/deployment-guards.test.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:api": "tsc --project tsconfig.api.json",
-    "typecheck:api:runtime": "tsc --project tsconfig.api.runtime.json",
+    "typecheck:api:runtime": "tsc --project tsconfig.api.runtime.json --noUnusedLocals --noUnusedParameters",
     "preview": "vite preview",
     "check:deployment-size": "node scripts/check-deployment-size.mjs",
     "neon:setup": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/neon-setup.mjs"
