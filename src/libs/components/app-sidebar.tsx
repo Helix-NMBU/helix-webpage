@@ -108,12 +108,8 @@ export function AppSidebar({
     const ai = order.indexOf(a.url), bi = order.indexOf(b.url);
     return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
   });
-  async function reorder(source: string, target: string) {
+  async function reorder(urls: string[]) {
     if (!workspaceSession || savingOrder) return;
-    const urls = spaceItems.map(item => item.url);
-    const from = urls.indexOf(source), to = urls.indexOf(target);
-    if (from < 0 || to < 0 || from === to) return;
-    urls.splice(from, 1); urls.splice(to, 0, source);
     // Keep preferences for spaces temporarily unavailable to the member.
     const next = [...urls, ...order.filter(url => !urls.includes(url))];
     setSavingOrder(true);
@@ -189,7 +185,7 @@ export function AppSidebar({
         <NavMain
           title="Your spaces"
           collapsible
-          onReorder={(source, target) => void reorder(source, target)}
+          onReorder={reorder}
           items={spaceItems}
           activeUrl={location.pathname}
           onNavigate={onNavigate}
