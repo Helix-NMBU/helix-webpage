@@ -227,7 +227,7 @@ export function ProjectDetail({
     directory.canManageProjects ||
     directory.departments.some(
       (department) =>
-        department.leadId === directory.viewerId &&
+        (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(directory.viewerId) &&
         project.departments.includes(department.name),
     );
   const counts = workspace

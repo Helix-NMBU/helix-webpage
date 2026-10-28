@@ -69,7 +69,7 @@ export function DepartmentsPage() {
   )
     .filter((department) => department !== undefined)
     .filter((department) =>
-      `${department.name} ${data.members.find((member) => member.id === department.leadId)?.name ?? ""}`
+      `${department.name} ${data.members.filter(member => (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(member.id)).map(member => member.name).join(" ")}`
         .toLowerCase()
         .includes(search.toLowerCase()),
     )
@@ -124,7 +124,7 @@ export function DepartmentsPage() {
                 </TableCell>
                 <TableCell>
                   <AssigneeAvatars
-                    assigneeIds={d.leadId ? [d.leadId] : []}
+                    assigneeIds={d.leadIds ?? (d.leadId ? [d.leadId] : [])}
                     members={data.members}
                     assignmentRole="lead"
                     showNames

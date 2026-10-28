@@ -16,7 +16,7 @@ const workspaceSql = `select project_management.is_department_manager(viewer.id)
   coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'season',d.season,'name',d.name,'revision',d.revision,
     'memberIds',coalesce((select jsonb_agg(dm.member_id order by dm.member_id) from project_management.department_members dm where dm.department_id=d.id),'[]'::jsonb),
     'viewerIds',coalesce((select jsonb_agg(dm.member_id) from project_management.department_members dm where dm.department_id=d.id and dm.access_level='viewer'),'[]'::jsonb),
-    'leadId',(select dm.member_id from project_management.department_members dm where dm.department_id=d.id and dm.is_lead)) order by lower(d.name),d.id)
+    'leadIds',coalesce((select jsonb_agg(dm.member_id order by dm.member_id) from project_management.department_members dm where dm.department_id=d.id and dm.is_lead),'[]'::jsonb),'leadId',(select dm.member_id from project_management.department_members dm where dm.department_id=d.id and dm.is_lead order by dm.member_id limit 1)) order by lower(d.name),d.id)
     from project_management.departments d where d.season='S27'),'[]'::jsonb) as departments,
   coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,
     'priority',p.priority,'leadIds',p.lead_ids,'category',p.category,'departments',p.departments,'startDate',p.start_date,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
@@ -31,9 +31,9 @@ const workspaceSql = `select project_management.is_department_manager(viewer.id)
     from project_management.task_progress_events e where e.season = 'S27' and (project_management.is_department_manager(viewer.id) or project_management.can_access_task(viewer.id,e.task_id))),'[]'::jsonb) as "progressEvents",
   coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name,'avatarUrl',to_jsonb(u)->>'image') order by m.full_name,m.id)
     from identity.members m left join project_management.access eligible on m.id=eligible.member_id
-    join neon_auth."user" u on u.id = m.auth_user_id
-    where (eligible.active or exists(select 1 from project_management.department_members dm where dm.member_id=m.id)) and u.banned is not true and u."emailVerified" is true and lower(u.email) = m.email
-      and exists(select 1 from neon_auth.account linked where linked."userId" = u.id and linked."providerId" = 'google' and linked."accountId" = m.google_sub)),'[]'::jsonb) as members
+    left join neon_auth."user" u on u.id = m.auth_user_id
+    where (eligible.active or exists(select 1 from project_management.department_members dm where dm.member_id=m.id)) and ((m.auth_user_id is null and m.google_sub is null) or (u.banned is not true and u."emailVerified" is true and lower(u.email) = m.email
+      and exists(select 1 from neon_auth.account linked where linked."userId" = u.id and linked."providerId" = 'google' and linked."accountId" = m.google_sub)))),'[]'::jsonb) as members
   from identity.members viewer left join project_management.access a on viewer.id=a.member_id
   join neon_auth."user" auth on auth.id = viewer.auth_user_id
   where viewer.id = $1::uuid and (a.active or project_management.is_department_manager(viewer.id) or exists(select 1 from project_management.department_members dm where dm.member_id=viewer.id)) and viewer.google_sub = $2 and viewer.email = $3

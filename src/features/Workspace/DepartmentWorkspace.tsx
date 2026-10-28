@@ -495,7 +495,7 @@ export function DepartmentWorkspace({
                   Lead
                 </h2>
                 <AssigneeAvatars
-                  assigneeIds={department.leadId ? [department.leadId] : []}
+                  assigneeIds={(department.leadIds ?? (department.leadId ? [department.leadId] : []))}
                   members={data.members}
                   assignmentRole="lead"
                   showNames
@@ -614,7 +614,7 @@ export function DepartmentWorkspace({
                       />
                     </TableCell>
                     <TableCell>
-                      {department.leadId === member.id ? (
+                      {(department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(member.id) ? (
                         <Badge variant="secondary">Lead</Badge>
                       ) : (
                         departmentAccess(department, member.id) === "viewer" ? "Viewer" : "Member"

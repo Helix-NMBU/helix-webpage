@@ -58,11 +58,13 @@ export function validateDepartment(input: DepartmentInput): DepartmentInput {
     return uuidOrNull(id)!.toLowerCase();
   }))];
   const leadId = uuidOrNull(input.leadId)?.toLowerCase() ?? null;
+  const leadIds = input.leadIds?.map(id => uuidOrNull(id)!.toLowerCase());
+  if (leadIds?.some(id => !memberIds.includes(id))) throw new Error("Department Leads must be members of the department.");
   if (leadId && !memberIds.includes(leadId)) throw new Error("The department Lead must be a member of the department.");
   const name = text(input.name, "Department name", 100, true);
   if (!ORGANIZATION_DEPARTMENTS.includes(name as typeof ORGANIZATION_DEPARTMENTS[number])) throw new Error("Choose an organization department.");
-  const viewerIds = input.viewerIds?.filter(id => memberIds.includes(id) && id !== leadId);
-  return { name, memberIds, leadId, ...(viewerIds ? { viewerIds } : {}) };
+  const viewerIds = input.viewerIds?.filter(id => memberIds.includes(id) && id !== leadId && !leadIds?.includes(id));
+  return { name, memberIds, leadId, ...(leadIds ? { leadIds: [...new Set(leadIds)] } : {}), ...(viewerIds ? { viewerIds } : {}) };
 }
 
 export function validateMilestoneChanges(input: MilestoneChanges): MilestoneChanges {

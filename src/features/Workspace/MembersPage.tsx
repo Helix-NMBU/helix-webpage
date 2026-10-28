@@ -70,7 +70,7 @@ function MemberEditor({
         expectedRevision: member.revision,
         name,
         helixRole: helixRole.trim() || null,
-        departments: data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id, access: departmentAccess(d, member.id) })),
+        departments: data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: (d.leadIds ?? (d.leadId ? [d.leadId] : [])).includes(member.id), access: departmentAccess(d, member.id) })),
       });
   }
   return (

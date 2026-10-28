@@ -36,8 +36,8 @@ export function AssigneeAvatars({ assigneeIds, members, maxVisible = 3, assignme
   return showNames ? <div className={`inline-flex items-center gap-2 ${showNamesAtAllSizes ? "max-w-full" : "max-w-64 gap-0 xl:gap-2"}`} title={assigned.map(member => member.name).join(", ")}>{avatars}<span data-assignee-names className={`${showNamesAtAllSizes ? "inline min-w-0 whitespace-normal break-words" : "hidden truncate xl:inline"} text-sm`} title={assigned.map(member => member.name).join(", ")} aria-hidden="true">{assigned.map(member => member.name).join(", ")}</span></div> : avatars;
 }
 
-export function AssigneePicker({ id, value, members, onChange, disabled = false, assignmentRole = "assignee", inline = false, inlineShowNames = true, triggerLabel, onOpenChange, onCommit, maxSelected = MAX_TASK_ASSIGNEES }: {
-  id: string; value: string[]; members: ProjectMember[]; onChange: (ids: string[]) => void; disabled?: boolean; assignmentRole?: "assignee" | "lead" | "member"; inline?: boolean; inlineShowNames?: boolean; triggerLabel?: string; onOpenChange?: (open: boolean) => void; onCommit?: (ids: string[]) => Promise<boolean>; maxSelected?: number;
+export function AssigneePicker({ id, value, members, onChange, disabled = false, assignmentRole = "assignee", inline = false, inlineShowNames = true, triggerLabel, groupLabel, onOpenChange, onCommit, maxSelected = MAX_TASK_ASSIGNEES }: {
+  id: string; value: string[]; members: ProjectMember[]; onChange: (ids: string[]) => void; disabled?: boolean; assignmentRole?: "assignee" | "lead" | "member"; inline?: boolean; inlineShowNames?: boolean; triggerLabel?: string; groupLabel?: string; onOpenChange?: (open: boolean) => void; onCommit?: (ids: string[]) => Promise<boolean>; maxSelected?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -57,7 +57,7 @@ export function AssigneePicker({ id, value, members, onChange, disabled = false,
     </Button></PopoverTrigger>
     <span id={`${id}-summary`} className="sr-only">{value.length ? `${assignmentRole === "member" ? "Members:" : assignmentRole === "lead" ? "Leads:" : "Assigned to"} ${value.map(key => options.find(member => member.id === key)?.name).join(", ")}.` : assignmentRole === "member" ? "No members." : assignmentRole === "lead" ? "No leads." : "Unassigned."}</span>
     <PopoverContent align="start" className="w-72 p-2"><div className="p-1"><Input autoFocus aria-label="Search members to assign" placeholder="Search members…" value={search} onChange={event => setSearch(event.target.value)} /></div>
-      <div className="mt-1 max-h-64 overflow-y-auto" role="group" aria-label={assignmentRole === "member" ? "Department members" : assignmentRole === "lead" ? "Milestone leads" : "Task assignees"}>
+      <div className="mt-1 max-h-64 overflow-y-auto" role="group" aria-label={groupLabel ?? (assignmentRole === "member" ? "Department members" : assignmentRole === "lead" ? "Milestone leads" : "Task assignees")}>
         {filtered.map(member => <label key={member.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent">
           <Checkbox aria-label={assignmentRole === "member" ? `Add ${member.name} to department` : `Assign ${member.name}${assignmentRole === "lead" ? " as lead" : ""}`} checked={value.includes(member.id)} disabled={disabled} onCheckedChange={() => toggle(member.id)} /><MemberAvatar member={member} /><span className="truncate">{member.name}</span>
         </label>)}
