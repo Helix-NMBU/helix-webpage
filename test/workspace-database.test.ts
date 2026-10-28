@@ -86,6 +86,7 @@ describe("Workspace directory authorization and persistence", () => {
       "023_project_requires_lead",
       "025_workspace_space_access",
       "026_department_access_levels",
+      "028_member_preferences",
     ])
       await db.exec(migration(name));
     for (const person of identities) {

@@ -23,6 +23,7 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
     >;
     return {
       viewerId: data.viewerId,
+      spaceOrder: JSON.parse(localStorage.getItem(`helix-space-order:${data.viewerId}`) ?? "[]") as string[],
       taskLeadCategories: data.taskLeadCategories,
       canAdmin: true,
       projectAccess: true,
@@ -149,6 +150,11 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
   return {
     load: read,
     saveMember,
+    async saveSpaceOrder(order) {
+      const data = await projects.load();
+      localStorage.setItem(`helix-space-order:${data.viewerId}`, JSON.stringify(order));
+      return read();
+    },
     async saveProject(change) {
       validateProject(change.project);
       await projects.mutate(change);

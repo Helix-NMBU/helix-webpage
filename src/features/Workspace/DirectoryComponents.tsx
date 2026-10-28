@@ -69,10 +69,17 @@ export function NoResults({
     </TableRow>
   );
 }
-export function LoadDirectory() {
+export function LoadDirectory({ title = "Workspace", columns = 5 }: { title?: string; columns?: number }) {
   const workspace = useWorkspace();
   return workspace?.loading ? (
-    <Skeleton className="h-64 w-full" aria-label="Loading workspace" />
+    <section role="status" aria-label={`Loading ${title}`} className="space-y-4">
+      <Skeleton className="h-7 w-40" />
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="p-3"><Skeleton className="h-8 w-56 max-w-full" /></div>
+        <div className="grid gap-4 border-y px-4 py-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>{Array.from({ length: columns }, (_, i) => <Skeleton key={i} className="h-3 w-3/4" />)}</div>
+        {Array.from({ length: 5 }, (_, row) => <div key={row} className="grid gap-4 border-b px-4 py-5 last:border-0" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>{Array.from({ length: columns }, (_, col) => <Skeleton key={col} className="h-4 w-3/4" />)}</div>)}
+      </div>
+    </section>
   ) : (
     <Button variant="outline" onClick={() => void workspace?.refresh()}>
       Try again

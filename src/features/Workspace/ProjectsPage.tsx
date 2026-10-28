@@ -137,7 +137,7 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
   const search = params.get("search") ?? "";
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  if (!data) return <LoadDirectory />;
+  if (!data) return <LoadDirectory title="Projects" columns={5} />;
   const selected = projectId
     ? data.projects.find((p) => p.id === projectId)
     : null;

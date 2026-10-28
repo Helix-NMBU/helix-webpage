@@ -221,6 +221,7 @@ export function DepartmentWorkspace({
   const members = data.members.filter((member) =>
     department.memberIds.includes(member.id),
   );
+  const memberCount = department.memberIds.filter(id => !department.viewerIds?.includes(id)).length;
   const projects = data.projects.filter((project) =>
     project.departments.includes(department.name),
   );
@@ -481,7 +482,7 @@ export function DepartmentWorkspace({
                 <button
                   type="button"
                   className="rounded-md text-left focus-visible:outline focus-visible:outline-2"
-                  aria-label={`View ${members.length} department members`}
+                  aria-label={`View ${memberCount} department members`}
                   onClick={() => selectTab("members")}
                 >
                   <AssigneeAvatars
@@ -591,7 +592,7 @@ export function DepartmentWorkspace({
           <h1 className="text-xl font-medium">
             Members{" "}
             <span className="ml-1 text-sm text-muted-foreground">
-              {members.length}
+              {memberCount}
             </span>
           </h1>
           <div className="overflow-hidden rounded-xl border">

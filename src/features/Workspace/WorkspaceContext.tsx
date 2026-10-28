@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { clearProjectWorkspaceCache, projectRepository } from "../ProjectManagement/repository";
 import { workspaceRepository, WorkspaceRequestError } from "./repository";
 import type { WorkspaceDirectory, WorkspaceRepository } from "./types";
 const Context = createContext<{
@@ -17,6 +18,7 @@ const Context = createContext<{
   refresh: () => Promise<void>;
   saveMember: WorkspaceRepository["saveMember"];
   saveProject: WorkspaceRepository["saveProject"];
+  saveSpaceOrder: WorkspaceRepository["saveSpaceOrder"];
 } | null>(null);
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<WorkspaceDirectory | null>(null);
@@ -55,7 +57,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (alive.current && current === generation.current) setData(next);
     } catch (error) {
       if (alive.current && current === generation.current) {
-        setData(null);
+        if (error instanceof WorkspaceRequestError && [401, 403].includes(error.status)) setData(null);
         failure(error);
       }
     } finally {
@@ -70,13 +72,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       alive.current = false;
       generation.current++;
+      clearProjectWorkspaceCache();
     };
   }, [refresh]);
   useEffect(() => {
-    const updated = () => void refresh();
+    const updated = () => { clearProjectWorkspaceCache(); void refresh(); };
     window.addEventListener("helix-workspace-updated", updated);
     return () => window.removeEventListener("helix-workspace-updated", updated);
   }, [refresh]);
+  useEffect(() => {
+    if (data?.projectAccess) void projectRepository().then(repo => repo.load()).catch(() => {});
+  }, [data?.viewerId, data?.projectAccess]);
   const saveMember: WorkspaceRepository["saveMember"] = async (change) => {
     const current = ++generation.current;
     const next = await (await getRepository()).saveMember(change);
@@ -95,9 +101,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     return next;
   };
+  const saveSpaceOrder: WorkspaceRepository["saveSpaceOrder"] = async (order) => {
+    const next = await (await getRepository()).saveSpaceOrder(order);
+    if (alive.current) setData(current => current ? { ...current, spaceOrder: next.spaceOrder } : next);
+    return next;
+  };
   return (
     <Context.Provider
-      value={{ data, loading, refresh, saveMember, saveProject }}
+      value={{ data, loading, refresh, saveMember, saveProject, saveSpaceOrder }}
     >
       {children}
     </Context.Provider>

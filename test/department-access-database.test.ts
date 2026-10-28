@@ -34,11 +34,20 @@ beforeAll(async () => {
   departmentId = (await db.query<{id: string}>("select id from project_management.departments where name='Mechanical & Production'")).rows[0].id;
   await db.query("insert into project_management.department_members(department_id,member_id,is_lead) values($1,$2,true),($1,$3,false)", [departmentId,id(1),id(2)]);
   await db.exec(readFileSync(new URL("../db/migrations/026_department_access_levels.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../db/migrations/028_member_preferences.sql", import.meta.url), "utf8"));
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) values($1,$2,'viewer')", [departmentId,id(3)]);
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Electronics'", [id(7)]);
 }, 60000);
 afterAll(async () => { await db?.close(); });
 describe("department access authorization", () => {
+  it("stores space order separately for each verified member and rejects invalid orders", async () => {
+    expect((await directory.mutate("lead", { action: "save_space_order", order: ["/season-overview", "/departments/electronics"] })).spaceOrder).toEqual(["/season-overview", "/departments/electronics"]);
+    expect((await directory.load("member")).spaceOrder).toEqual([]);
+    await directory.mutate("member", { action: "save_space_order", order: ["/recruiting"] });
+    expect((await directory.load("lead")).spaceOrder).toEqual(["/season-overview", "/departments/electronics"]);
+    await expect(directory.mutate("lead", { action: "save_space_order", order: ["/tasks", "/tasks"] })).rejects.toMatchObject({ status: 400 });
+    await expect(directory.mutate("lead", { action: "save_space_order", order: ["https://example.com"] })).rejects.toMatchObject({ status: 400 });
+  });
   it("lets a department Lead create a project, milestones and assigned tasks without space or category grants", async () => {
     await projects.mutate("lead", {action: "save_project", id: id(100), expectedRevision: 0, project, milestones: [{ id: id(101), title: "Milestone", description: "", deadline: "2027-05-01", partnerName: "" }] });
     const result = await projects.mutate("lead", {action: "save_task", id: id(102), expectedRevision: 0, task });

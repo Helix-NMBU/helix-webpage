@@ -21,7 +21,7 @@ export function createWorkspaceRepository(
 ): WorkspaceRepository {
   const owner = { current: null as string | null };
   async function call(
-    change?: MemberChange | ProjectMutation,
+    change?: MemberChange | ProjectMutation | { action: "save_space_order"; order: string[] },
   ): Promise<WorkspaceDirectory> {
     let accessToken: string;
     try {
@@ -55,7 +55,7 @@ export function createWorkspaceRepository(
     }
     return body as WorkspaceDirectory;
   }
-  return { load: () => call(), saveMember: call, saveProject: call };
+  return { load: () => call(), saveMember: call, saveProject: call, saveSpaceOrder: order => call({ action: "save_space_order", order }) };
 }
 export async function workspaceRepository(): Promise<WorkspaceRepository> {
   return isLocalMemberMode()
