@@ -1,0 +1,18 @@
+.member-empty-illustration {
+  display: block;
+  width: 112px;
+  height: 112px;
+  flex: none;
+  margin-inline: auto;
+}
+
+.member-empty-illustration img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.member-empty-illustration-light { mix-blend-mode: multiply; filter: contrast(1.1); }
+.member-empty-illustration-dark { display: none; mix-blend-mode: screen; }
+html[data-member-theme="dark"] .member-empty-illustration-light { display: none; }
+html[data-member-theme="dark"] .member-empty-illustration-dark { display: block; }

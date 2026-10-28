@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { useSearchParams } from "react-router-dom";
 import { IconChevronDown, IconCube, IconDiamonds, IconFilter2 } from "@tabler/icons-react";
+import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import { Card, CardContent } from "@libs/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@libs/components/ui/collapsible";
 import { Button } from "@libs/components/ui/button";
@@ -252,7 +253,7 @@ export function OverviewProgress({ workspace, busy, projectColumns, onToggleProj
         {projectColumns.includes("tasks") && <TableCell className="tabular-nums">{progress.total}</TableCell>}
         {projectColumns.includes("status") && <TableCell><ProgressRing {...progress} label={project.name} showTotal={false} /></TableCell>}
       </TableRow>; })}
-      {!projects.length && <TableRow><TableCell colSpan={1 + projectColumns.length} className="h-24 text-center text-sm text-muted-foreground">No projects yet.</TableCell></TableRow>}
+      {!projects.length && <TableRow><TableCell colSpan={1 + projectColumns.length} className="py-6 text-center text-sm text-muted-foreground"><EmptyIllustration kind="cube" /><p className="mt-2">No projects yet.</p></TableCell></TableRow>}
     </TableBody></Table></CardContent></Card></section>
   </div>;
 }

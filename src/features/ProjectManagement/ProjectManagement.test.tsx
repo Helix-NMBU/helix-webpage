@@ -589,6 +589,8 @@ describe("project management interface", () => {
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scoped0Started0Completed0");
     expect(container.querySelectorAll('table[aria-label="Department progress"] tbody tr')).toHaveLength(7);
     expect(container.textContent).toContain("No projects yet.");
+    expect(container.querySelector('[data-empty-illustration="cube"]')).not.toBeNull();
+    expect(container.querySelector('[data-empty-illustration="diamond"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="New milestone"]')).toBeNull();
   });
 

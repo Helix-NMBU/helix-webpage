@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router-dom";
+import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import { TaskBoard } from "../ProjectManagement/TaskBoard";
 import { ProjectTaskViewMenu } from "./ProjectTaskViewMenu";
 import { projectTaskView, visibleProjectTasks } from "./project-task-view";
@@ -210,6 +211,7 @@ export function ProjectTaskList({
           </Button>
         </div>
       )}
+      {board && boardKind === "milestone" && !milestones.length && <EmptyIllustration kind="diamond" />}
       {options.view === "board" ? (
         <TaskBoard
           tasks={visible}
@@ -308,6 +310,7 @@ export function ProjectTaskList({
       )}
       {!visible.length && options.view !== "board" && (
         <Empty className="min-h-48 border">
+          {!milestones.length && !allTasks.length && <EmptyIllustration kind="diamond" />}
           <EmptyHeader>
             <EmptyTitle>
               {allTasks.length ? "No matching tasks" : "No tasks yet"}
