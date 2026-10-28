@@ -10,6 +10,7 @@ const manager: WorkspaceIdentity = { userId: id(1), googleSub: "google-manager",
 const member: WorkspaceIdentity = { userId: id(2), googleSub: "google-member", email: "member@helixnmbu.no", name: "Member" };
 const outsider: WorkspaceIdentity = { userId: id(3), googleSub: "google-outsider", email: "outsider@helixnmbu.no", name: "Outsider" };
 let db: PGlite;
+let departmentAccessInstalled = false;
 const service = (identity = manager) => createProjectServices({ db, authenticate: async () => identity });
 const task = (overrides: Partial<TaskInput> = {}): TaskInput => {
   const category = overrides.category ?? "production";
@@ -21,6 +22,12 @@ const task = (overrides: Partial<TaskInput> = {}): TaskInput => {
 };
 const save = (taskId: number, input = task(), revision = 0, identity = manager) => service(identity).mutate("verified", { action: "save_task", id: id(taskId), expectedRevision: revision, task: input });
 
+async function restoreCurrentMutations() {
+  if (!departmentAccessInstalled) return;
+  const migration = readFileSync(new URL("../db/migrations/026_department_access_levels.sql", import.meta.url), "utf8");
+  await db.exec(migration.slice(migration.indexOf("create or replace function project_management.mutate"), migration.indexOf("create or replace function identity.save_workspace_access")));
+}
+
 describe("project management database and authorization", () => {
   beforeAll(async () => {
     db = new PGlite();
@@ -29,6 +36,8 @@ describe("project management database and authorization", () => {
       create table neon_auth.account (id uuid primary key default gen_random_uuid(), "accountId" text, "providerId" text, "userId" uuid references neon_auth."user"(id), "idToken" text, "createdAt" timestamptz default now());`);
     await db.exec(readFileSync(new URL("../db/migrations/001_member_cv.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/009_project_management.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/002_member_helix_role.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
     // Reapplying an additive migration must preserve existing records.
     await db.exec(readFileSync(new URL("../db/migrations/009_project_management.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/010_department_lead_tasks.sql", import.meta.url), "utf8"));
@@ -57,12 +66,19 @@ describe("project management database and authorization", () => {
     await db.query("insert into project_management.task_assignees values($1,$2)", [id(805), member.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     await db.exec(readFileSync(new URL("../db/migrations/015_project_departments.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/017_workspace_directory.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/020_project_start_dates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     await db.query("update project_management.projects set lead_ids=array[$1::uuid]", [manager.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/023_project_requires_lead.sql", import.meta.url), "utf8"));
+    for (const name of ["018_department_homes", "019_department_settings_permissions", "025_workspace_space_access", "026_department_access_levels"]) await db.exec(readFileSync(new URL(`../db/migrations/${name}.sql`, import.meta.url), "utf8"));
+    departmentAccessInstalled = true;
+    await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[manager.userId]);
+    await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name in ('Mechanical & Production','Business & Marketing')",[member.userId]);
+    await db.query("update project_management.projects set departments=case when category='marketing' then array['Business & Marketing'] else array['Mechanical & Production'] end");
 
   }, 60000);
   afterAll(async () => { await db?.close(); });
@@ -79,8 +95,10 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/012_project_milestones.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     // Reinstall the latest project mutation function after replaying older migration definitions.
     await db.exec(readFileSync(new URL("../db/migrations/020_project_start_dates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     expect((await service().load("verified")).tasks.find(item => item.id === id(800))?.assigneeIds).toEqual([manager.userId]);
     expect((await service().load("verified")).progressEvents.filter(event => event.taskId === id(800))).toHaveLength(1);
     await db.query("delete from project_management.tasks where id=$1", [id(800)]);
@@ -92,7 +110,7 @@ describe("project management database and authorization", () => {
     await expect(service(outsider).load("verified")).rejects.toMatchObject({ status: 403 });
     await expect(save(10, task(), 0, outsider)).rejects.toMatchObject({ status: 403 });
     const workspace = await service().load("verified");
-    expect(workspace).toMatchObject({ season: "S27", viewerId: manager.userId, canManage: true, taskLeadCategories: ["production", "partnership-deliverables", "marketing", "operations"] });
+    expect(workspace).toMatchObject({ season: "S27", viewerId: manager.userId, canManage: true, taskLeadCategories: [] });
     expect(workspace.members).toEqual([{ id: manager.userId, name: "Manager", avatarUrl: null }, { id: member.userId, name: "Member", avatarUrl: null }]);
     expect(JSON.stringify(workspace)).not.toContain("@helixnmbu.no");
   });
@@ -127,12 +145,14 @@ describe("project management database and authorization", () => {
     await expect(service(member).mutate("verified", { action: "set_status", id: id(10), expectedRevision: 4, status: "done", blockedReason: "" })).rejects.toMatchObject({ status: 409 });
   });
   it("rechecks revoked grants and identity bindings on every read and write", async () => {
+    await db.query("delete from project_management.department_members where member_id=$1",[member.userId]);
     await db.query("update project_management.access set active=false where member_id=$1", [member.userId]);
     await expect(service(member).load("verified")).rejects.toMatchObject({ status: 403 });
     await expect(service(member).mutate("verified", { action: "set_status", id: id(10), expectedRevision: 5, status: "done", blockedReason: "" })).rejects.toMatchObject({ status: 403 });
     await expect(save(12)).rejects.toMatchObject({ status: 400 });
     expect((await service().load("verified")).members).toEqual([{ id: manager.userId, name: "Manager", avatarUrl: null }]);
     await db.query("update project_management.access set active=true where member_id=$1", [member.userId]);
+    await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name in ('Mechanical & Production','Business & Marketing')",[member.userId]);
     await expect(service({ ...manager, googleSub: "switched-google" }).load("verified")).rejects.toMatchObject({ status: 403 });
     await expect(save(12, task(), 0, { ...manager, email: "another@helixnmbu.no" })).rejects.toMatchObject({ status: 403 });
   });
@@ -169,18 +189,16 @@ describe("project management database and authorization", () => {
     expect((await db.query("select has_function_privilege('public','project_management.mutate(uuid,text,text,jsonb)','EXECUTE') as allowed")).rows[0]).toEqual({ allowed: false });
     expect((await db.query("select relrowsecurity from pg_class where oid='project_management.tasks'::regclass")).rows[0]).toEqual({ relrowsecurity: true });
   });
-  it("requires a current Department Lead grant for the task area, independently of project management access", async () => {
-    await db.query("insert into project_management.access(member_id,active,can_manage) values($1,true,true)", [outsider.userId]);
-    expect(await service(outsider).load("verified")).toMatchObject({ canManage: true, taskLeadCategories: [] });
+  it("requires department Lead access and ignores legacy category and management flags", async () => {
+    await db.query("insert into project_management.access(member_id,active,can_manage,task_lead_categories) values($1,true,true,array['production'])", [outsider.userId]);
+    expect(await service(outsider).load("verified")).toMatchObject({ canManage: false, taskLeadCategories: [] });
     await expect(save(90, task(), 0, outsider)).rejects.toMatchObject({ status: 403 });
-    await expect(save(10, task({ assigneeIds: [outsider.userId] }), 5, outsider)).rejects.toMatchObject({ status: 403 });
-    await db.query("update project_management.access set can_manage=false,task_lead_categories=array['production'] where member_id=$1", [outsider.userId]);
-    await expect(save(12, task({ category: "production" }), 1, outsider)).rejects.toMatchObject({ status: 403 });
+    await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Mechanical & Production'",[outsider.userId]);
     await save(90, task({ assigneeIds: [outsider.userId] }), 0, outsider);
     await expect(save(91, task({ category: 'marketing' }), 0, outsider)).rejects.toMatchObject({ status: 403 });
     const workspace = await save(90, task({ assigneeIds: [member.userId] }), 1, outsider);
     expect(workspace.tasks.find(item => item.id === id(90))?.assigneeIds).toEqual([member.userId]);
-    await db.query("update project_management.access set task_lead_categories='{}' where member_id=$1", [outsider.userId]);
+    await db.query("update project_management.department_members set access_level='member' where member_id=$1", [outsider.userId]);
     await expect(save(90, task(), 2, outsider)).rejects.toMatchObject({ status: 403 });
     await expect(service(outsider).mutate("verified", { action: "set_status", id: id(90), expectedRevision: 2, status: "done", blockedReason: "" })).rejects.toMatchObject({ status: 403 });
   });
@@ -208,7 +226,7 @@ describe("project management database and authorization", () => {
     await save(201, task({ projectId: id(20), milestoneId: id(200) }));
     const workspace = await service(member).mutate("verified", { action: "set_status", id: id(201), expectedRevision: 1, status: "done", blockedReason: "" });
     expect(workspace.tasks.find(item => item.id === id(201))).toMatchObject({ milestoneId: id(200), status: "done" });
-    expect(workspace.tasks.find(item => item.id === id(202))).toMatchObject({ milestoneId: null });
+    expect(workspace.tasks.find(item => item.id === id(202))).toBeUndefined();
     expect(workspace.progressEvents.filter(event => event.taskId === id(201)).map(event => event.status)).toEqual(["todo", "done"]);
     await expect(save(201, task({ projectId: id(20), milestoneId: id(960) }), 2, member)).rejects.toMatchObject({ status: 403 });
     expect((await service().load("verified")).tasks.find(item => item.id === id(201))?.milestoneId).toBe(id(200));
@@ -273,6 +291,7 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/012_project_milestones.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     expect((await service().load("verified")).progressEvents.filter(event => event.taskId === id(220))).toHaveLength(count);
   });
   it("rolls history back with failed writes and protects events from public access and mutation", async () => {
@@ -298,13 +317,15 @@ describe("project management database and authorization", () => {
     expect(before.tasks.find(item => item.id === id(804))).toMatchObject({ projectId: id(950), milestoneId: null });
     await db.exec(readFileSync(new URL("../db/migrations/013_project_hierarchy.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     const after = await service().load("verified");
     expect(after.tasks).toEqual(before.tasks);
     expect(after.progressEvents).toEqual(before.progressEvents);
   });
-  it("lets legacy assignees update status but requires Lead placement before full saves", async () => {
+  it("requires role management for unplaced legacy tasks and full placement before detail saves", async () => {
     for (const taskId of [202, 802, 803, 804]) {
-      await service(member).mutate("verified", { action: "set_status", id: id(taskId), expectedRevision: 1, status: "done", blockedReason: "" });
+      if (taskId === 202 || taskId === 802) await expect(service(member).mutate("verified", {action:"set_status",id:id(taskId),expectedRevision:1,status:"done",blockedReason:""})).rejects.toMatchObject({status:403});
+      await service(taskId === 202 || taskId === 802 ? manager : member).mutate("verified", { action: "set_status", id: id(taskId), expectedRevision: 1, status: "done", blockedReason: "" });
       const row = (await service().load("verified")).tasks.find(item => item.id === id(taskId))!;
       await expect(save(taskId, { ...row, title: "Unplaced details" }, 2)).rejects.toMatchObject({ status: 400 });
       expect((await service().load("verified")).tasks.find(item => item.id === id(taskId))).toMatchObject({ title: "Ungrouped task", revision: 2, status: "done" });
@@ -341,6 +362,7 @@ describe("project management database and authorization", () => {
   it("reapplies the field-update migration without modifying existing work", async () => {
     const before = await service().load("verified");
     for (let attempt = 0; attempt < 2; attempt++) await db.exec(readFileSync(new URL("../db/migrations/014_milestone_field_updates.sql", import.meta.url), "utf8"));
+    await restoreCurrentMutations();
     expect(await service().load("verified")).toEqual(before);
   });
   it("updates unorganized milestone fields without rewriting hierarchy, children or history", async () => {
@@ -365,13 +387,12 @@ describe("project management database and authorization", () => {
     await expect(service().mutate("verified", { ...change, id: id(9999), changes: { priority: "high" } })).rejects.toMatchObject({ status: 404 });
     expect(await service().load("verified")).toEqual(before);
   });
-  it("requires an active scoped Lead grant for partial updates, even for managers and assigned members", async () => {
+  it("requires a management role for unplaced milestone fields despite legacy category grants", async () => {
     const change = { action: "update_milestone", id: id(805), expectedRevision: 2, changes: { priority: "low" } };
     await expect(service(member).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
-    await db.query("update project_management.access set can_manage=true,task_lead_categories=array['marketing'] where member_id=$1", [outsider.userId]);
-    await expect(service(outsider).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
     await db.query("update project_management.access set task_lead_categories=array['production'] where member_id=$1", [member.userId]);
-    const updated = await service(member).mutate("verified", change);
+    await expect(service(member).mutate("verified", change)).rejects.toMatchObject({status:403});
+    const updated = await service().mutate("verified", change);
     expect(updated.tasks.find(item => item.id === id(805))).toMatchObject({ priority: "low", projectId: null, revision: 3 });
     await db.query("update project_management.access set task_lead_categories='{}' where member_id=$1", [member.userId]);
     await expect(service(member).mutate("verified", { ...change, expectedRevision: 3 })).rejects.toMatchObject({ status: 403 });
@@ -389,7 +410,8 @@ describe("project management database and authorization", () => {
     expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
     expect((await db.query("select * from project_management.access order by member_id")).rows).toEqual(grants);
     await expect(service().mutate("verified", { action: "save_department", id: id(501), expectedRevision: 0, department })).rejects.toMatchObject({ status: 400 });
-    await expect(db.query("update project_management.department_members set is_lead=true where department_id=$1 and member_id=$2", [target.id, manager.userId])).rejects.toThrow();
+    await db.query("update project_management.department_members set is_lead=true where department_id=$1 and member_id=$2", [target.id, manager.userId]);
+    expect((await db.query("select is_lead,access_level from project_management.department_members where department_id=$1 and member_id=$2",[target.id,manager.userId])).rows[0]).toEqual({is_lead:false,access_level:"viewer"});
   });
   it("rejects stale department revisions, nonmember Leads, ineligible members and additional departments", async () => {
     const before = await service().load("verified");
@@ -418,7 +440,7 @@ describe("project management database and authorization", () => {
   it("maps older departments and project links, preserves memberships and archives conflicting or unknown metadata", async () => {
     const before = await service().load("verified");
     await db.exec("alter table project_management.departments drop constraint organization_department_name; alter table project_management.projects drop constraint organization_project_departments");
-    for (const [number, name, lead] of [[701, "Business", manager.userId], [702, "Marketing", member.userId], [703, "Unknown", manager.userId]] as const) {
+    for (const [number, name, lead] of [[701, "Business", outsider.userId], [702, "Marketing", member.userId], [703, "Unknown", manager.userId]] as const) {
       await db.query("insert into project_management.departments(id,season,name) values($1,'S27',$2)", [id(number), name]);
       await db.query("insert into project_management.department_members(department_id,member_id,is_lead) values($1,$2,true)", [id(number), lead]);
     }
@@ -426,7 +448,7 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/016_fixed_departments.sql", import.meta.url), "utf8"));
     const after = await service().load("verified");
     expect(after.departments.map(item => item.name).sort()).toEqual([...ORGANIZATION_DEPARTMENTS].sort());
-    expect(after.departments.find(item => item.name === "Business & Marketing")).toMatchObject({ memberIds: [manager.userId, member.userId], leadId: null });
+    expect(after.departments.find(item => item.name === "Business & Marketing")).toMatchObject({ memberIds: [manager.userId, member.userId, outsider.userId], leadId: null });
     expect(after.projects.find(item => item.id === id(703))?.departments).toEqual(["Business & Marketing"]);
     expect((await db.query("select count(*)::int as count from project_management.department_catalog_backup where id=any($1::uuid[])", [[id(701), id(702), id(703)]])).rows[0]).toEqual({ count: 3 });
     expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);

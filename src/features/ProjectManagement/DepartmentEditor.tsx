@@ -21,7 +21,7 @@ export function DepartmentEditor({ department, workspace, busy, onSave, onClose 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || !workspace.canManage) return;
-    try { await onSave({ action: "save_department", id, expectedRevision: department.revision, department: validateDepartment({ name, memberIds, leadId }) }); }
+    try { await onSave({ action: "save_department", id, expectedRevision: department.revision, department: validateDepartment({ name, memberIds, leadId, viewerIds: department.viewerIds }) }); }
     catch (error) { notify("Could not save department", error instanceof Error ? error.message : "Check the department details.", { variant: "error", href: null }); }
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>Edit department</DialogTitle><DialogDescription>Manage the department's members and Lead for {workspace.season}.</DialogDescription></DialogHeader><form className="space-y-5" onSubmit={event => void submit(event)}><fieldset disabled={busy} className="space-y-4">

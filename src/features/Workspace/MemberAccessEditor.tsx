@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Checkbox } from "@libs/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
+import { departmentAccess } from "../ProjectManagement/permissions";
+import type { DepartmentAccess } from "../ProjectManagement/types";
 import { Label } from "@libs/components/ui/label";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { useMemberFeatureAccess } from "../MemberPlatform/MemberFeatureAccess";
@@ -23,7 +26,8 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
   const [loading, setLoading] = useState(true);
   const [originalSpaces, setOriginalSpaces] = useState<WorkspaceSpace[] | null>(null);
   const [spaceKeys, setSpaceKeys] = useState<WorkspaceSpace[]>([]);
-  const [departments, setDepartments] = useState(() => data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id })));
+  const [departments, setDepartments] = useState(() => data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id, access: departmentAccess(d, member.id) })));
+  const [roleOverride, setRoleOverride] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt(value => value + 1), []);
   useEffect(() => {
@@ -33,6 +37,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
       if (!active) return;
       const assignment = result.members.find(item => item.id === member.id);
       if (!assignment || !Array.isArray(assignment.spaceKeys)) throw new Error("This member's access is unavailable. Reload Members and try again.");
+      setRoleOverride(assignment.roleKeys.some(role => role === "project_manager" || role === "platform_administrator"));
       setOriginalSpaces(assignment.spaceKeys);
       setSpaceKeys(assignment.spaceKeys);
     }).catch(error => {
@@ -48,7 +53,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
   const isSelf = member.id === data.viewerId;
   const changed = originalSpaces && (spaceKeys.length !== originalSpaces.length || spaceKeys.some(key => !originalSpaces.includes(key)) || departments.some(choice => {
     const d = data.departments.find(d => d.id === choice.id)!;
-    return choice.member !== d.memberIds.includes(member.id) || choice.lead !== (d.leadId === member.id);
+    return choice.access !== departmentAccess(d, member.id);
   }));
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -68,12 +73,20 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
   return <form className="space-y-5" onSubmit={event => void save(event)}>
     <fieldset disabled={busy || isSelf} className="space-y-3">
       <legend className="mb-2 font-medium">Department access</legend>
+      <p className="text-sm text-muted-foreground">Leads manage department content and work. Members can update their assigned task statuses. Viewers have read-only access.</p>
+      {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department access is set to Viewer.</p>}
       {data.departments.map(department => {
         const choice = departments.find(d => d.id === department.id)!;
         const occupied = !!department.leadId && department.leadId !== member.id;
         return <div key={department.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm">
-          <Label className="flex items-center gap-2 font-normal"><Checkbox checked={choice.member} aria-label={`Access to ${department.name}`} onCheckedChange={checked => setDepartments(values => values.map(value => value.id === department.id ? { ...value, member: checked === true, lead: checked === true && value.lead } : value))} />{department.name}</Label>
-          <Label className="flex items-center gap-2 font-normal text-muted-foreground" title={occupied ? "This department already has a Lead" : undefined}><Checkbox aria-label={`Lead of ${department.name}`} checked={choice.lead} disabled={busy || isSelf || !choice.member || occupied} onCheckedChange={checked => setDepartments(values => values.map(value => value.id === department.id ? { ...value, lead: checked === true } : value))} />Lead</Label>
+          <Label htmlFor={`department-access-${department.id}`} className="font-normal">{department.name}</Label>
+          <Select value={roleOverride ? "viewer" : choice.access ?? "none"} disabled={busy || isSelf || roleOverride} onValueChange={value => {
+            const level = value === "none" ? null : value as DepartmentAccess;
+            setDepartments(values => values.map(item => item.id === department.id ? { ...item, access: level, member: level !== null, lead: level === "lead" } : item));
+          }}>
+            <SelectTrigger id={`department-access-${department.id}`} aria-label={`Access to ${department.name}`} className="w-36"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="none">No access</SelectItem><SelectItem value="member">Member</SelectItem><SelectItem value="viewer">Viewer</SelectItem><SelectItem value="lead" disabled={occupied}>Lead</SelectItem></SelectContent>
+          </Select>
         </div>;
       })}
     </fieldset>

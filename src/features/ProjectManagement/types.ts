@@ -57,7 +57,8 @@ export interface TaskProgressEvent {
   status: TaskStatus;
 }
 export interface ProjectMember { id: string; name: string; avatarUrl?: string | null; }
-export interface DepartmentInput { name: string; memberIds: string[]; leadId: string | null; }
+export type DepartmentAccess = "member" | "viewer" | "lead";
+export interface DepartmentInput { name: string; memberIds: string[]; viewerIds?: string[]; leadId: string | null; }
 export interface ProjectDepartment extends DepartmentInput { id: string; season: string; revision: number; }
 export interface ProjectWorkspace {
   season: string;
@@ -72,6 +73,8 @@ export interface ProjectWorkspace {
 }
 export type MilestoneChanges = Partial<Pick<TaskInput, "priority" | "assigneeIds" | "deadline">>;
 export type ProjectMutation =
+  | { action: "delete_task"; id: string; expectedRevision: number }
+  | { action: "delete_project"; id: string; expectedRevision: number }
   | { action: "save_department"; id: string; expectedRevision: number; department: DepartmentInput }
   | { action: "update_milestone"; id: string; expectedRevision: number; changes: MilestoneChanges }
   | { action: "save_task"; id: string; expectedRevision: number; task: TaskInput }

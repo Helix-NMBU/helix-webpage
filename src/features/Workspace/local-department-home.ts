@@ -1,6 +1,5 @@
 import {
   isLocalMemberMode,
-  localMemberAccount,
 } from "../MemberPlatform/local-mode";
 import { createLocalProjectRepository } from "../ProjectManagement/local-repository";
 import { googleDriveFolder, type DepartmentHome } from "./department-home";
@@ -33,8 +32,7 @@ export function createLocalDepartmentHomeRepository(): DepartmentHomeRepository 
       ...saved,
       canEdit:
         department.leadId === workspace.viewerId ||
-        workspace.canManage ||
-        localMemberAccount.role === "Admin",
+        workspace.canManage,
     };
   }
   return {

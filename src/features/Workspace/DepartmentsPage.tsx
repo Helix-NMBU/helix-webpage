@@ -1,3 +1,4 @@
+import { departmentAccess } from "../ProjectManagement/permissions";
 import {
   Table,
   TableBody,
@@ -132,7 +133,7 @@ export function DepartmentsPage() {
                   {joined ? (
                     <Badge variant="outline" className="gap-1 font-normal">
                       <IconCheck aria-hidden="true" className="size-3" />
-                      Joined
+                      {departmentAccess(d, data.viewerId) === "lead" ? "Lead" : departmentAccess(d, data.viewerId) === "viewer" ? "Viewer" : "Member"}
                     </Badge>
                   ) : (
                     <span className="text-muted-foreground">Not a member</span>

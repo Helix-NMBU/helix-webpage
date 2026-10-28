@@ -13,6 +13,11 @@ import { createProjectRepository, ProjectRequestError } from "./repository";
 import { addDays, formatDate, osloDate } from "./model";
 import { CvRequestError } from "../MemberCV/repository";
 
+function departmentWorkspace(leadDepartments: string[] = []) {
+  const workspace = initialLocalWorkspace();
+  return { ...workspace, canManage: false, taskLeadCategories: [], departments: workspace.departments.map(department => ({ ...department, leadId: leadDepartments.includes(department.name) ? workspace.viewerId : null, memberIds: leadDepartments.includes(department.name) ? [...new Set([...department.memberIds, workspace.viewerId])] : department.memberIds })) };
+}
+
 function NotificationProbe() {
   const notifications = useMemberNotifications();
   return <output data-testid="notifications">{notifications?.items.map(item => `${item.title} ${item.description} ${item.action?.label ?? ""}`).join(" ")}</output>;
@@ -156,7 +161,7 @@ describe("project management interface", () => {
     expect(button("Try again")).toBeDefined();
   });
   it("limits an assignee's editor to status updates", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
+    load.mockResolvedValue(departmentWorkspace());
     await open("production");
     expect(button("New task")).toBeUndefined();
     await click("Confirm material delivery"); await editTask();
@@ -165,10 +170,10 @@ describe("project management interface", () => {
     await click("Save task");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "set_status", status: "blocked" }));
   });
-  it("keeps creation out of Overview and restricts each subfolder to its Department Lead grant", async () => {
+  it("keeps creation out of Overview and restricts creation to the Lead’s departments", async () => {
     await open();
     expect(button("New task")).toBeUndefined();
-    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: true, taskLeadCategories: ["marketing"] });
+    load.mockResolvedValue(departmentWorkspace(["Business & Marketing"]));
     await open("production");
     expect(button("New task")).toBeUndefined();
     await open("marketing");
@@ -342,7 +347,7 @@ describe("project management interface", () => {
     expect(load).toHaveBeenCalledTimes(3);
   });
   it("hides project editing controls from members without management access", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
+    load.mockResolvedValue(departmentWorkspace());
     await open();
     expect(container.querySelector('[aria-label="Create project"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Edit project"]')).toBeNull();
@@ -482,9 +487,9 @@ describe("project management interface", () => {
     expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Set a deadline");
     expect(document.getElementById(`milestone-date-${goal.id}`)).not.toBeNull();
   });
-  it("requires a scoped Department Lead grant but allows legacy placement for inline editing", async () => {
+  it("requires department management access and lets role overrides edit legacy placement", async () => {
     const workspace = inlineWorkspace();
-    load.mockResolvedValue({ ...workspace, canManage: true, taskLeadCategories: ["marketing"] }); await open();
+    load.mockResolvedValue({ ...workspace, ...departmentWorkspace(["Business & Marketing"]), tasks: workspace.tasks }); await open();
     expect(inlineButton("priority")).toBeNull();
     expect(inlineButton("leads")).toBeNull();
     expect(inlineButton("target date")).toBeNull();
@@ -553,7 +558,7 @@ describe("project management interface", () => {
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", task: expect.objectContaining({ title: "Campaign launch", kind: "milestone", milestoneId: null, category: "marketing", deadline: "2026-12-15" }) }));
   });
   it("shows the milestone link read-only for an assigned member", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: [] });
+    load.mockResolvedValue(departmentWorkspace());
     await open("overview", true); await click("Confirm material delivery"); await editTask();
     const field = document.getElementById("task-milestone");
     expect(field?.hasAttribute("disabled")).toBe(true);
@@ -563,7 +568,7 @@ describe("project management interface", () => {
   });
 
   it("opens a routed milestone composer only inside an authorized area", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), taskLeadCategories: ["marketing"] });
+    load.mockResolvedValue(departmentWorkspace(["Business & Marketing"]));
     await open("production", false, "?create=milestone");
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     await open("marketing", false, "?create=milestone");

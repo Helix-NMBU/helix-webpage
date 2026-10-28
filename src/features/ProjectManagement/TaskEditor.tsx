@@ -1,3 +1,4 @@
+import { canManageTask, canUpdateTaskStatus } from "./permissions";
 import { TaskStatusSelect } from "./TaskStatus";
 import { ProjectComposer } from "./ProjectComposer";
 import { AssigneePicker } from "./TaskAssignees";
@@ -33,9 +34,9 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
   const [revision] = useState(task?.revision ?? 0);
   const [draft, setDraft] = useState<TaskInput>(() => task ? { ...task } : { title: "", description: "", category, projectId: null, milestoneId: null, assigneeIds: [], deadline: null, startDate: null, status: "todo", priority: "normal", kind: "task", partnerName: "", blockedReason: "" });
   const notify = useNotify();
-  const canLeadTask = workspace.taskLeadCategories.includes(task?.category ?? category);
+  const canLeadTask = canManageTask(task ?? { projectId: draft.projectId }, workspace);
   const manager = !statusOnly && canLeadTask;
-  const canEdit = canLeadTask || workspace.canManage || (task?.assigneeIds.includes(workspace.viewerId) ?? false);
+  const canEdit = canLeadTask || (!!task && canUpdateTaskStatus(task, workspace));
   const change = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) => setDraft(previous => updateTaskDraft(previous, key, value, workspace.tasks));
   const milestones = compatibleMilestones(workspace.tasks, draft, id);
   const selectedMilestone = workspace.tasks.find(item => item.id === draft.milestoneId);
@@ -49,7 +50,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
     } catch (error) { notify("Could not save task", error instanceof Error ? error.message : "Check the task details and try again.", { variant: "error", href: null }); }
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl" showCloseButton={!busy}>
-    <DialogHeader><DialogTitle>{task ? (canEdit ? "Edit task" : "Task details") : "New task"}</DialogTitle><DialogDescription>{manager ? "Assign work, set a deadline, and keep progress up to date." : "Assigned members can update their task status and blocked reason."}</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{task ? (canEdit ? task.kind === "milestone" ? "Edit milestone" : "Edit task" : "Task details") : "New task"}</DialogTitle><DialogDescription>{manager ? "Assign work, set a deadline, and keep progress up to date." : "Assigned members can update their task status and blocked reason."}</DialogDescription></DialogHeader>
     <form onSubmit={event => void submit(event)} className="space-y-5">
       {manager && (!draft.projectId || (draft.kind === "task" && !milestones.some(item => item.id === draft.milestoneId))) && <p className="text-sm text-muted-foreground">Choose a project{draft.kind === "task" ? " and milestone" : ""} to place this work in the season hierarchy before saving details.</p>}
       <fieldset disabled={busy || !manager} className="space-y-4">
@@ -57,7 +58,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
         <Field id="task-description" label="Description"><Textarea id="task-description" maxLength={2000} rows={3} value={draft.description} onChange={event => change("description", event.target.value)} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="task-category" label="Area"><Input id="task-category" readOnly value={CATEGORY_LABELS[draft.category]} /></Field>
-          <Field id="task-project" label="Project"><Choice id="task-project" disabled={busy || !manager} value={draft.projectId ?? "none"} onChange={value => change("projectId", value === "none" ? null : value)} options={[{ value: "none", label: "Choose project" }, ...workspace.projects.filter(project => project.category === draft.category).map(project => ({ value: project.id, label: project.name }))]} /></Field>
+          <Field id="task-project" label="Project"><Choice id="task-project" disabled={busy || !manager} value={draft.projectId ?? "none"} onChange={value => change("projectId", value === "none" ? null : value)} options={[{ value: "none", label: "Choose project" }, ...workspace.projects.filter(project => project.category === draft.category && canManageTask({ projectId: project.id }, workspace)).map(project => ({ value: project.id, label: project.name }))]} /></Field>
           <Field id="task-assignee" label={draft.kind === "milestone" ? "Leads" : "Assignees"}><AssigneePicker assignmentRole={draft.kind === "milestone" ? "lead" : "assignee"} id="task-assignee" disabled={busy || !manager} value={draft.assigneeIds} onChange={value => change("assigneeIds", value)} members={workspace.members} /></Field>
           <Field id="task-kind" label="Type"><Choice id="task-kind" disabled={busy || !manager || workspace.tasks.some(item => item.milestoneId === id)} value={draft.kind} onChange={value => change("kind", value as TaskInput["kind"])} options={[{ value: "task", label: "Task" }, { value: "milestone", label: "Milestone" }]} /></Field>
           {draft.kind === "task" && <Field id="task-milestone" label="Milestone"><Choice id="task-milestone" disabled={busy || !manager} value={draft.milestoneId ?? "none"} onChange={value => change("milestoneId", value === "none" ? null : value)} options={milestoneOptions} /></Field>}

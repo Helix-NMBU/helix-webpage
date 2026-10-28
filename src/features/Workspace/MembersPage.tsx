@@ -1,3 +1,4 @@
+import { departmentAccess } from "../ProjectManagement/permissions";
 import { useState } from "react";
 import { IconPencil } from "@tabler/icons-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@libs/components/ui/tabs";
@@ -69,7 +70,7 @@ function MemberEditor({
         expectedRevision: member.revision,
         name,
         helixRole: helixRole.trim() || null,
-        departments: data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id })),
+        departments: data.departments.map(d => ({ id: d.id, revision: d.revision, member: d.memberIds.includes(member.id), lead: d.leadId === member.id, access: departmentAccess(d, member.id) })),
       });
   }
   return (
@@ -109,7 +110,7 @@ function MemberEditor({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="member-title">Helix title</Label>
+                  <Label htmlFor="member-title">Assigned Helix Position</Label>
                   <Input
                     id="member-title"
                     maxLength={150}
@@ -154,9 +155,13 @@ export function MembersPage() {
   const [busy, setBusy] = useState(false);
   if (!data) return <LoadDirectory />;
   const canEdit = data.canAdmin || canManageAccess;
+  const memberDepartments = (memberId: string) =>
+    data.departments.filter((department) => {
+      const level = departmentAccess(department, memberId);
+      return level === "member" || level === "lead";
+    });
   const matches = data.members.filter((m) =>
-    `${m.name} ${m.helixRole ?? ""} ${m.role} ${data.departments
-      .filter((d) => d.memberIds.includes(m.id))
+    `${m.name} ${m.helixRole ?? ""} ${m.role} ${memberDepartments(m.id)
       .map((d) => d.name)
       .join(" ")}`
       .toLowerCase()
@@ -235,8 +240,7 @@ export function MembersPage() {
                   {monthDate(m.joinedAt)}
                 </TableCell>
                 <TableCell className="max-w-xs whitespace-normal text-muted-foreground">
-                  {data.departments
-                    .filter((d) => d.memberIds.includes(m.id))
+                  {memberDepartments(m.id)
                     .map((d) => d.name)
                     .join(", ") || "—"}
                 </TableCell>

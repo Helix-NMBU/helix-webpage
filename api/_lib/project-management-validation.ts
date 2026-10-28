@@ -63,16 +63,22 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
   const id = uuid(body.id);
   const expectedRevision = body.expectedRevision;
   if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
+  if (body.action === "delete_task" || body.action === "delete_project") {
+    if (expectedRevision < 1) return invalid("A saved revision is required.");
+    return { action: body.action, id, expectedRevision };
+  }
   if (body.action === "save_department") {
     if (expectedRevision < 1) return invalid("Organization departments are fixed.");
     const input = object(body.department);
     if (!Array.isArray(input.memberIds) || input.memberIds.length > MAX_DEPARTMENT_MEMBERS) return invalid(`Choose up to ${MAX_DEPARTMENT_MEMBERS} department members.`);
     const memberIds = [...new Set(input.memberIds.map(uuid))];
+    const viewerIds = input.viewerIds === undefined ? undefined : Array.isArray(input.viewerIds) ? [...new Set(input.viewerIds.map(uuid))] : invalid();
+    if (viewerIds?.some(id => !memberIds.includes(id) || id === input.leadId)) return invalid("Choose Viewers from department members.");
     const leadId = input.leadId === null ? null : uuid(input.leadId);
     if (leadId && !memberIds.includes(leadId)) return invalid("The department Lead must be a member of the department.");
     const name = text(input.name, "department name", 100, true);
     if (!ORGANIZATION_DEPARTMENTS.includes(name as typeof ORGANIZATION_DEPARTMENTS[number])) return invalid("Choose an organization department.");
-    return { action: body.action, id, expectedRevision, department: { name, memberIds, leadId } };
+    return { action: body.action, id, expectedRevision, department: { name, memberIds, leadId, ...(viewerIds ? { viewerIds } : {}) } };
   }
   if (body.action === "update_milestone") {
     if (expectedRevision < 1) return invalid("A saved milestone revision is required.");

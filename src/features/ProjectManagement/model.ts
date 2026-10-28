@@ -61,7 +61,8 @@ export function validateDepartment(input: DepartmentInput): DepartmentInput {
   if (leadId && !memberIds.includes(leadId)) throw new Error("The department Lead must be a member of the department.");
   const name = text(input.name, "Department name", 100, true);
   if (!ORGANIZATION_DEPARTMENTS.includes(name as typeof ORGANIZATION_DEPARTMENTS[number])) throw new Error("Choose an organization department.");
-  return { name, memberIds, leadId };
+  const viewerIds = input.viewerIds?.filter(id => memberIds.includes(id) && id !== leadId);
+  return { name, memberIds, leadId, ...(viewerIds ? { viewerIds } : {}) };
 }
 
 export function validateMilestoneChanges(input: MilestoneChanges): MilestoneChanges {

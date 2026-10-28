@@ -1,3 +1,4 @@
+import { departmentAccess } from "../ProjectManagement/permissions";
 import {
   useCallback,
   useEffect,
@@ -599,7 +600,7 @@ export function DepartmentWorkspace({
                 <TableRow>
                   <TableHead className="pl-4">Name</TableHead>
                   <TableHead>Department role</TableHead>
-                  <TableHead>Helix title</TableHead>
+                  <TableHead>Assigned Helix Position</TableHead>
                   <TableHead>Joined</TableHead>
                 </TableRow>
               </TableHeader>
@@ -618,7 +619,7 @@ export function DepartmentWorkspace({
                       {department.leadId === member.id ? (
                         <Badge variant="secondary">Lead</Badge>
                       ) : (
-                        "Member"
+                        departmentAccess(department, member.id) === "viewer" ? "Viewer" : "Member"
                       )}
                     </TableCell>
                     <TableCell className="text-muted-foreground">

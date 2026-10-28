@@ -238,7 +238,7 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
           project={null}
           category="production"
           members={data.members}
-          taskLeadCategories={data.taskLeadCategories ?? []}
+          taskLeadCategories={canCreate ? ["production", "marketing", "operations", "partnership-deliverables"] : []}
           initialDepartments={departmentIdScope && department ? [department.name] : []}
           busy={busy}
           onSave={save}

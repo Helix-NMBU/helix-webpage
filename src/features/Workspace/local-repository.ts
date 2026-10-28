@@ -1,3 +1,4 @@
+import { departmentAccess } from "../ProjectManagement/permissions";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { createLocalProjectRepository } from "../ProjectManagement/local-repository";
 import { validateProject } from "../ProjectManagement/model";
@@ -121,13 +122,16 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
         : d.leadId === member.id
           ? null
           : d.leadId;
+      const level = c.access !== undefined ? c.access : c.lead ? "lead" : c.member ? departmentAccess(d, member.id) ?? "member" : null;
+      const viewerIds = [...(d.viewerIds ?? []).filter(id => id !== member.id), ...(level === "viewer" ? [member.id] : [])];
       return {
         ...d,
+        viewerIds,
         memberIds,
         leadId,
         revision:
           d.revision +
-          (d.memberIds.includes(member.id) !== c.member || d.leadId !== leadId
+          (departmentAccess(d, member.id) !== level || d.leadId !== leadId
             ? 1
             : 0),
       };

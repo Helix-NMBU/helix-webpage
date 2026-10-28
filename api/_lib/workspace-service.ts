@@ -19,19 +19,20 @@ const eligible = `from identity.members m join neon_auth."user" u on u.id=m.auth
 const snapshotSql = `with actor as (select m.id ${eligible} and m.id=$1::uuid and m.google_sub=$2 and m.email=$3),
  seen as (update identity.members set last_seen_at=now() where id=(select id from actor) and (last_seen_at is null or last_seen_at<now()-interval '5 minutes') returning id,last_seen_at)
  select $1::uuid as "viewerId",
- exists(select 1 from project_management.access where member_id=$1::uuid and active) as "projectAccess",
+ ((select active from project_management.access where member_id=$1::uuid) is true or project_management.is_department_manager($1::uuid) or exists(select 1 from project_management.department_members where member_id=$1::uuid)) as "projectAccess",
  coalesce((select to_jsonb(task_lead_categories) from project_management.access where member_id=$1::uuid and active),'[]'::jsonb) as "taskLeadCategories",
- exists(select 1 from project_management.access where member_id=$1::uuid and active and can_manage) as "canManageProjects",
+ project_management.is_department_manager($1::uuid) as "canManageProjects",
  coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name,'avatarUrl',to_jsonb(u)->>'image','helixRole',m.helix_role,
  'role',case when m.email='henrik.engdal@helixnmbu.no' then 'Admin' else 'Member' end,'joinedAt',m.created_at,'lastSeenAt',coalesce((select seen.last_seen_at from seen where seen.id=m.id),m.last_seen_at),'revision',m.directory_revision) order by lower(m.full_name),m.id) ${eligible}),'[]'::jsonb) as members,
  coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'season',d.season,'name',d.name,'revision',d.revision,
  'memberIds',coalesce((select jsonb_agg(member_id order by member_id) from project_management.department_members where department_id=d.id),'[]'::jsonb),
+ 'viewerIds',coalesce((select jsonb_agg(member_id) from project_management.department_members where department_id=d.id and access_level='viewer'),'[]'::jsonb),
  'leadId',(select member_id from project_management.department_members where department_id=d.id and is_lead))) from project_management.departments d where d.season='S27'),'[]'::jsonb) as departments,
  coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,'category',p.category,'departments',p.departments,
  'startDate',p.start_date,'deadline',p.deadline,'revision',p.revision,'priority',p.priority,'leadIds',p.lead_ids,
  'total',(select count(*) from project_management.tasks t where t.project_id=p.id and t.kind='task' and t.status<>'cancelled'),
  'done',(select count(*) from project_management.tasks t where t.project_id=p.id and t.kind='task' and t.status='done'),
- 'milestones',coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'deadline',t.deadline,'priority',t.priority) order by t.deadline nulls last,t.id) from project_management.tasks t where t.project_id=p.id and t.kind='milestone' and t.status not in ('done','cancelled')),'[]'::jsonb)) order by lower(p.name),p.id) from project_management.projects p where p.season='S27'),'[]'::jsonb) as projects where exists(select 1 from actor)`;
+ 'milestones',coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'deadline',t.deadline,'priority',t.priority) order by t.deadline nulls last,t.id) from project_management.tasks t where t.project_id=p.id and t.kind='milestone' and t.status not in ('done','cancelled')),'[]'::jsonb)) order by lower(p.name),p.id) from project_management.projects p where p.season='S27' and project_management.can_access_project($1::uuid,p.departments)),'[]'::jsonb) as projects where exists(select 1 from actor)`;
 
 function invalid(): never {
   throw new MemberCvError(400, "Check the member details and try again.");
@@ -70,7 +71,9 @@ export function parseMemberChange(body: unknown): MemberChange {
         !revision(d.revision) ||
         typeof d.member !== "boolean" ||
         typeof d.lead !== "boolean" ||
-        (d.lead && !d.member),
+        (d.lead && !d.member) ||
+        (d.access !== undefined && ![null, "member", "viewer", "lead"].includes(d.access)) ||
+        (d.access !== undefined && (d.member !== (d.access !== null) || d.lead !== (d.access === "lead"))),
     )
   )
     return invalid();
@@ -80,11 +83,12 @@ export function parseMemberChange(body: unknown): MemberChange {
     expectedRevision: input.expectedRevision,
     name: input.name.trim(),
     helixRole: input.helixRole?.trim() || null,
-    departments: input.departments.map(({ id, revision, member, lead }) => ({
+    departments: input.departments.map(({ id, revision, member, lead, access }) => ({
       id,
       revision,
       member,
       lead,
+      ...(access !== undefined ? { access } : {}),
     })),
   };
 }
