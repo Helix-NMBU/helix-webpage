@@ -15,15 +15,17 @@ describe("project start dates in Postgres",()=>{
   beforeAll(async()=>{
     db=new PGlite();
     await db.exec('create schema neon_auth;create table neon_auth."user"(id uuid primary key,name text,email text,"emailVerified" boolean,banned boolean);create table neon_auth.account(id uuid primary key default gen_random_uuid(),"accountId" text,"providerId" text,"userId" uuid references neon_auth."user"(id),"createdAt" timestamptz default now());');
-    for(const name of ["001_member_cv","002_member_helix_role","009_project_management","010_department_lead_tasks","011_task_assignees","012_project_milestones","013_project_hierarchy","014_milestone_field_updates","015_project_departments","016_fixed_departments","017_workspace_directory"]) await db.exec(migration(name));
+    for(const name of ["001_member_cv","002_member_helix_role","009_platform_access_and_managed_positions","009_project_management","010_department_lead_tasks","011_task_assignees","012_project_milestones","013_project_hierarchy","014_milestone_field_updates","015_project_departments","016_fixed_departments","017_workspace_directory"]) await db.exec(migration(name));
     await db.query("insert into project_management.projects(id,season,name,category,deadline) values($1,'S27','Legacy project','production','2026-12-01')",[id(90)]);
     await db.exec(migration("020_project_start_dates"));
     await db.exec(migration("021_project_creation_milestones"));
+    for (const name of ["018_department_homes","019_department_settings_permissions","025_workspace_space_access","026_department_access_levels"]) await db.exec(migration(name));
     for(const person of identities){
       await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[person.userId,person.name,person.email]);
       await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[person.googleSub,person.userId]);
       await db.query('insert into identity.members(id,auth_user_id,google_sub,email,full_name) values($1,$1,$2,$3,$4)',[person.userId,person.googleSub,person.email,person.name]);
     }
+    await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
     await db.query('insert into project_management.access(member_id,active,can_manage) values($1,true,true)',[id(1)]);
     await db.query("insert into project_management.department_members(department_id,member_id,is_lead) select id,$1,true from project_management.departments where name='Mechanical & Production'",[id(2)]);
   },60000);
@@ -79,10 +81,10 @@ describe("project start dates in Postgres",()=>{
     expect((await db.query('select id from project_management.tasks where id=$1',[id(213)])).rows).toHaveLength(0);
     expect((await db.query('select task_id from project_management.task_progress_events where task_id=$1',[id(213)])).rows).toHaveLength(0);
   });
-  it("does not give project managers milestone creation rights, and rejects batch edits",async()=>{
+  it("gives project managers full milestone creation rights and rejects batch edits",async()=>{
     const input={...project(113),milestones:[{id:id(214),title:"Unauthorized",description:"",deadline:"2026-11-01",partnerName:""}]};
-    await expect(service().mutate("verified",input)).rejects.toMatchObject({status:403});
-    expect((await service().load("verified")).projects.some(p=>p.id===input.id)).toBe(false);
+    const saved = await service().mutate("verified",input);
+    expect(saved.projects.some(p=>p.id===input.id)).toBe(true);
     await expect(service(2).mutate("verified",input)).rejects.toMatchObject({status:403});
     await expect(service(1).mutate("verified",{...input,expectedRevision:1})).rejects.toMatchObject({status:400});
   });

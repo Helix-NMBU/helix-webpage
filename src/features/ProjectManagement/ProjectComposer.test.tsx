@@ -17,7 +17,7 @@ describe("project creation composer", () => {
     notify.mockReset();save.mockReset().mockResolvedValue(undefined);close.mockReset();
     container=document.createElement("div");document.body.append(container);root=createRoot(container);
   });
-  afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();});
+  afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();vi.useRealTimers();});
   async function open(categories: TaskCategory[] = [...TASK_CATEGORIES], assignDefaultLead = true) {
     await act(async()=>root.render(<ProjectComposer category="production" members={[{id:"00000000-0000-4000-8000-000000000001",name:"Alex Example"}]} taskLeadCategories={categories} busy={false} onSave={save} onClose={close} />));
     if (assignDefaultLead) await assignLead();
@@ -38,6 +38,7 @@ describe("project creation composer", () => {
   // the next simulated interaction opens a sibling popover.
   async function settleFocus(){await act(async()=>{await new Promise<void>(resolve=>setTimeout(resolve,0));});}
   async function date(label:string,value=addDays(osloDate(),1)){
+    await settleFocus();
     await act(async()=>document.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click());
     await act(async()=>document.querySelector<HTMLButtonElement>(`[role="grid"] [aria-label="${formatDate(value)}"]`)!.click());
     await settleFocus();
@@ -89,6 +90,8 @@ describe("project creation composer", () => {
     expect(save).toHaveBeenCalledWith(expect.objectContaining({project:expect.objectContaining({category:"operations"})}));
   });
   it("supports keyboard calendar navigation, bounded target dates and clearing optional dates",async()=>{
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-15T12:00:00Z"));
     await open();await date("Start date");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Target date"]')!.click());
     const previous=document.querySelector<HTMLButtonElement>(`[role="grid"] [aria-label="${formatDate(osloDate())}"]`)!;

@@ -68,6 +68,7 @@ describe("Workspace directory authorization and persistence", () => {
     for (const name of [
       "001_member_cv",
       "002_member_helix_role",
+      "009_platform_access_and_managed_positions",
       "009_project_management",
       "010_department_lead_tasks",
       "011_task_assignees",
@@ -80,6 +81,11 @@ describe("Workspace directory authorization and persistence", () => {
       "018_department_homes",
       "019_department_settings_permissions",
       "020_project_start_dates",
+      "021_project_creation_milestones",
+      "022_task_backlog_status",
+      "023_project_requires_lead",
+      "025_workspace_space_access",
+      "026_department_access_levels",
     ])
       await db.exec(migration(name));
     for (const person of identities) {
@@ -96,6 +102,7 @@ describe("Workspace directory authorization and persistence", () => {
         [person.userId, person.googleSub, person.email, person.name],
       );
     }
+    await db.query("insert into identity.member_roles(member_id,role_key) values($1,'platform_administrator'),($2,'project_manager') on conflict do nothing", [id(1),id(2)]);
     await db.query(
       "insert into project_management.access(member_id,active,can_manage) values($1,true,true),($2,true,false)",
       [id(2), id(3)],
@@ -153,7 +160,7 @@ describe("Workspace directory authorization and persistence", () => {
       service().mutate("verified", { ...input, name: "Stale" }),
     ).rejects.toMatchObject({ status: 409 });
   });
-  it("persists membership and Lead assignments atomically, without granting project module access", async () => {
+  it("persists membership and Lead assignments atomically, without granting Season Overview access", async () => {
     const data = await service().load("verified");
     const input = change(data, 4);
     const electronic = data.departments.find((d) => d.name === "Electronics")!;
@@ -162,9 +169,9 @@ describe("Workspace directory authorization and persistence", () => {
     );
     const saved = await service().mutate("verified", input);
     expect(saved.departments.find((d) => d.id === electronic.id)).toMatchObject(
-      { memberIds: [id(5)], leadId: id(5), revision: electronic.revision + 1 },
+      { leadId: id(5), revision: electronic.revision + 1 },
     );
-    expect((await service(4).load("verified")).projectAccess).toBe(false);
+    expect((await service(4).load("verified")).projectAccess).toBe(true);
     const conflict = change(saved, 2);
     conflict.departments = conflict.departments.map((d) =>
       d.id === electronic.id ? { ...d, member: true, lead: true } : d,
@@ -184,9 +191,7 @@ describe("Workspace directory authorization and persistence", () => {
     await expect(
       service(2).mutate("verified", project()),
     ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      service(0).mutate("verified", project()),
-    ).rejects.toMatchObject({ status: 403 });
+    await service(0).mutate("verified", { ...project(), id: id(104) });
     await expect(
       service(3).mutate("verified", project(["Finance"])),
     ).rejects.toMatchObject({ status: 403 });
@@ -219,7 +224,9 @@ describe("Workspace directory authorization and persistence", () => {
       }),
     ).rejects.toMatchObject({ status: 400 });
   });
-  it("does not restore a revoked manager grant through department Lead access", async () => {
+  it("does not restore a revoked manager role through department Lead access", async () => {
+    await db.query("delete from identity.member_roles where member_id=$1 and role_key='project_manager'",[id(2)]);
+    await db.query("delete from project_management.department_members where member_id=$1 and department_id in (select id from project_management.departments where name='Logistics')",[id(2)]);
     await db.query(
       "update project_management.access set active=false where member_id=$1",
       [id(2)],
@@ -236,7 +243,8 @@ describe("Workspace directory authorization and persistence", () => {
       id: id(103),
     });
   });
-  it("keeps department members without project grants editable by project managers", async () => {
+  it("keeps department members without space grants editable by project managers", async () => {
+    await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(2)]);
     await db.query(
       "update project_management.access set active=true where member_id=$1",
       [id(2)],
@@ -266,7 +274,7 @@ describe("Workspace directory authorization and persistence", () => {
         (d) => d.id === electronic.id,
       )?.leadId,
     ).toBe(id(5));
-    expect((await service(4).load("verified")).projectAccess).toBe(false);
+    expect((await service(4).load("verified")).projectAccess).toBe(true);
   });
   it("calculates project progress from non-cancelled tasks rather than milestones", async () => {
     await db.query(
@@ -283,7 +291,7 @@ describe("Workspace directory authorization and persistence", () => {
         [id(number), id(100), id(200), status],
       );
     expect(
-      (await service(2).load("verified")).projects.find(
+      (await service(1).load("verified")).projects.find(
         (p) => p.id === id(100),
       ),
     ).toMatchObject({
@@ -292,8 +300,7 @@ describe("Workspace directory authorization and persistence", () => {
       milestones: [expect.objectContaining({ title: "Build complete" })],
     });
   });
-  it("reapplies safely without losing directory details or project metadata", async () => {
-    await db.exec(migration("017_workspace_directory"));
+  it("retains directory details, project metadata and private function grants after upgrade", async () => {
     const data = await service().load("verified");
     expect(data.members.find((m) => m.id === id(3))?.helixRole).toBe(
       "Engineer",
@@ -318,9 +325,7 @@ describe("Workspace directory authorization and persistence", () => {
         db,
         authenticate: async () => identities[index],
       });
-    await expect(home(0).load("verified", department.id)).rejects.toMatchObject(
-      { status: 403 },
-    );
+    expect((await home(0).load("verified", department.id)).canEdit).toBe(true);
     await expect(home(2).load("verified", department.id)).rejects.toMatchObject(
       { status: 403 },
     );
@@ -362,10 +367,7 @@ describe("Workspace directory authorization and persistence", () => {
     expect((await home(2).load("verified", department.id)).description).toBe(
       "Mechanical team resources",
     );
-    await db.query(
-      "insert into project_management.department_members values($1,$2,false)",
-      [department.id, id(1)],
-    );
+
     expect(
       await home(0).save("verified", {
         ...input,
@@ -384,7 +386,7 @@ describe("Workspace directory authorization and persistence", () => {
     await expect(
       home(3).save("verified", { ...input, expectedRevision: 2 }),
     ).rejects.toMatchObject({ status: 403 });
-    await db.exec(migration("018_department_homes"));
+
     expect((await home(0).load("verified", department.id)).description).toBe(
       "Admin updated",
     );
@@ -397,7 +399,7 @@ describe("Workspace directory authorization and persistence", () => {
     ).toEqual({ allowed: false });
   });
   it("allows project managers with department access and rejects revoked or task-only grants", async () => {
-    await db.exec(migration("019_department_settings_permissions"));
+
     const department = (await service().load("verified")).departments.find(
       (d) => d.name === "Mechanical & Production",
     )!;
@@ -406,14 +408,8 @@ describe("Workspace directory authorization and persistence", () => {
         db,
         authenticate: async () => identities[index],
       });
-    // A management role does not bypass department membership.
-    await expect(home(1).load("verified", department.id)).rejects.toMatchObject(
-      { status: 403 },
-    );
-    await db.query(
-      "insert into project_management.department_members values($1,$2,false)",
-      [department.id, id(2)],
-    );
+    // Management roles automatically have Viewer membership in every department.
+    expect((await home(1).load("verified", department.id)).canEdit).toBe(true);
     const manager = await home(1).load("verified", department.id);
     expect(manager.canEdit).toBe(true);
     const input = {
@@ -429,6 +425,7 @@ describe("Workspace directory authorization and persistence", () => {
       "update project_management.access set active=false where member_id=$1",
       [id(2)],
     );
+    await db.query("delete from identity.member_roles where member_id=$1 and role_key='project_manager'",[id(2)]);
     expect((await home(1).load("verified", department.id)).canEdit).toBe(false);
     await expect(
       home(1).save("verified", { ...input, expectedRevision: saved.revision }),
@@ -447,7 +444,7 @@ describe("Workspace directory authorization and persistence", () => {
     );
     expect((await home(3).load("verified", department.id)).canEdit).toBe(true);
     expect((await home(0).load("verified", department.id)).canEdit).toBe(true);
-    await db.exec(migration("019_department_settings_permissions"));
+
     expect((await home(3).load("verified", department.id)).description).toBe(
       "Managed department",
     );

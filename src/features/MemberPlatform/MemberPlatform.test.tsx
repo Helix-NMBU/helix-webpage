@@ -156,12 +156,12 @@ describe("internal member platform", () => {
     expect(dialog.textContent).toContain("Department access");
     expect(dialog.textContent).toContain("Space access");
     for (const space of ["Season Overview", "Recruiting", "Financials"]) expect(dialog.textContent).toContain(space);
-    expect(dialog.textContent).not.toContain("Helix title");
+    expect(dialog.textContent).not.toContain("Assigned Helix Position");
     const adminLabel = [...dialog.querySelectorAll("label")].find(label => label.textContent === "Financials")!;
     await act(async () => adminLabel.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
     await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/member-access", expect.objectContaining({
-      method: "POST", body: JSON.stringify({ action: "save_workspace_access", memberId: "other", expectedRevision: 1, departments: departmentDirectory.map(d => ({ id: d.id, revision: d.revision, member: false, lead: false })), spaceKeys: ["financials"] }),
+      method: "POST", body: JSON.stringify({ action: "save_workspace_access", memberId: "other", expectedRevision: 1, departments: departmentDirectory.map(d => ({ id: d.id, revision: d.revision, member: false, lead: false, access: null })), spaceKeys: ["financials"] }),
     }));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });

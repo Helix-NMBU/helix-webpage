@@ -17,6 +17,6 @@ export function fixedDepartmentRecords(existing: ProjectDepartment[]): ProjectDe
     const previous = matching.find(department => department.name === name) ?? matching[0];
     const memberIds = [...new Set(matching.flatMap(department => department.memberIds))];
     const leads = [...new Set(matching.flatMap(department => department.leadId && memberIds.includes(department.leadId) ? [department.leadId] : []))];
-    return { id: previous?.id ?? `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, season: "S27", memberIds, leadId: leads.length === 1 ? leads[0] : null, revision: previous ? previous.revision + (previous.name !== name || matching.length > 1 ? 1 : 0) : 1 };
+    return { id: previous?.id ?? `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, name, season: "S27", memberIds, ...(matching.some(d => d.viewerIds) ? { viewerIds: [...new Set(matching.flatMap(d => d.viewerIds ?? []))] } : {}), leadId: leads.length === 1 ? leads[0] : null, revision: previous ? previous.revision + (previous.name !== name || matching.length > 1 ? 1 : 0) : 1 };
   });
 }

@@ -1,3 +1,4 @@
+import { canManageTask } from "./permissions";
 import type { ReactNode } from "react";
 import {
   IconCube,
@@ -140,7 +141,7 @@ export function TaskComposerAttributes({
         options={[
           { value: "none", label: "Choose project" },
           ...workspace.projects
-            .filter((project) => project.category === draft.category)
+            .filter((project) => project.category === draft.category && canManageTask({ projectId: project.id }, workspace))
             .map((project) => ({ value: project.id, label: project.name })),
         ]}
       />

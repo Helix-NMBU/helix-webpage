@@ -44,6 +44,7 @@ export interface MemberChange {
     revision: number;
     member: boolean;
     lead: boolean;
+    access?: import("../ProjectManagement/types.js").DepartmentAccess | null;
   }[];
 }
 export interface WorkspaceRepository {

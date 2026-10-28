@@ -1,3 +1,5 @@
+import { DeleteWorkButton } from "./DeleteWorkButton";
+import { canManageTask, canUpdateTaskStatus } from "./permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { IconCube, IconDiamonds } from "@tabler/icons-react";
@@ -62,13 +64,18 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   }, [load]);
 
   async function save(change: ProjectMutation) {
-    if (saving.current || change.id !== taskId || !["save_task", "set_status"].includes(change.action)) return false;
+    if (saving.current || change.id !== taskId || !["save_task", "set_status", "delete_task"].includes(change.action)) return false;
     saving.current = true; setBusy(true); generation.current++;
     try {
       const next = await (await getRepository()).mutate(change);
       if (!alive.current) return false;
       setWorkspace(next); setEditing(false);
       window.dispatchEvent(new Event("helix-workspace-updated"));
+      if (change.action === "delete_task") {
+        notify("Task deleted", "The task has been removed.", { variant: "success", href: null });
+        navigate("/tasks", { replace: true });
+        return true;
+      }
       notify("Task saved", "Task details and project progress have been updated.", { variant: "success", href: null });
       return true;
     } catch (error) {
@@ -90,8 +97,8 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   if (!task || !workspace) return <Empty className="min-h-64"><EmptyHeader><EmptyTitle>{denied || !access ? "Task access required" : workspace ? "Task not found" : "Could not load task"}</EmptyTitle><EmptyDescription>{denied || !access ? "Ask a platform administrator for project access." : workspace ? "This task may have been removed or is no longer available to you." : "Try loading this task again."}</EmptyDescription></EmptyHeader><div className="flex gap-2"><Button variant="outline" asChild><Link to="/tasks">My tasks</Link></Button>{!denied && !workspace && <Button onClick={() => void load()}>Try again</Button>}</div></Empty>;
   const from = (location.state as { from?: unknown } | null)?.from;
   const personalOrigin = typeof from === "string" && /^\/tasks(?:\?|$)/.test(from);
-  const canLead = workspace.taskLeadCategories.includes(task.category);
-  const canUpdate = canLead || workspace.canManage || task.assigneeIds.includes(workspace.viewerId);
+  const canLead = canManageTask(task, workspace);
+  const canUpdate = canUpdateTaskStatus(task, workspace);
   const project = workspace.projects.find(item => item.id === task.projectId);
   const milestone = workspace.tasks.find(item => item.kind === "milestone" && item.id === task.milestoneId && item.projectId === task.projectId);
   const members = directory?.data?.members ?? workspace.members;
@@ -99,7 +106,8 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   return <section aria-label="Task details" aria-busy={busy} className="flex min-h-0 min-w-0 flex-1 flex-col">
     <div className="flex shrink-0 items-center justify-between gap-3 pb-4">
       <Button variant="ghost" size="sm" asChild><Link to={backTo}>Back</Link></Button>
-      {canUpdate && <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing(true)}>{canLead && !personalOrigin ? "Edit task" : "Update status"}</Button>}
+      <div className="flex gap-2">{canLead && <DeleteWorkButton kind="task" title={task.title} busy={busy} onDelete={() => save({ action: "delete_task", id: task.id, expectedRevision: task.revision })} />}
+      {canUpdate && <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing(true)}>{canLead && !personalOrigin ? "Edit task" : "Update status"}</Button>}</div>
     </div>
     <div className="grid min-w-0 flex-1 gap-6 md:min-h-0 md:grid-cols-[minmax(0,1fr)_18rem] md:overflow-hidden xl:grid-cols-[minmax(0,1fr)_21rem]">
       <article tabIndex={0} aria-label="Task content" className="min-w-0 space-y-7 px-2 pb-8 pt-4 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:px-6">

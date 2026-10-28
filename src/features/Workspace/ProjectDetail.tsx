@@ -1,3 +1,6 @@
+import { TaskEditor } from "../ProjectManagement/TaskEditor";
+import { DeleteWorkButton } from "../ProjectManagement/DeleteWorkButton";
+import { canManageProject } from "../ProjectManagement/permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -120,6 +123,7 @@ export function ProjectDetail({
   const [loading, setLoading] = useState(directory.projectAccess);
   const [denied, setDenied] = useState(!directory.projectAccess);
   const [busy, setBusy] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Task | null>(null);
   const [composer, setComposer] = useState<TaskInput["kind"] | null>(null);
   const repository = useRef<Promise<ProjectRepository> | null>(null);
   const generation = useRef(0);
@@ -217,7 +221,7 @@ export function ProjectDetail({
         ? !item.milestoneId
         : item.milestoneId === selectedMilestone),
   );
-  const canCreate = !!workspace?.taskLeadCategories.includes(project.category);
+  const canCreate = !!workspace && canManageProject(project, workspace);
   const canEdit =
     directory.canAdmin ||
     directory.canManageProjects ||
@@ -271,6 +275,16 @@ export function ProjectDetail({
         if (!alive.current || generation.current !== current) return false;
         setWorkspace(next);
         void directorySession?.refresh();
+      }
+      if (change.action === "delete_project") {
+        notify("Project deleted", "The project and its work have been removed.", { variant: "success", href: null });
+        void directorySession?.refresh();
+        navigate("/projects", { replace: true });
+        return true;
+      }
+      if (change.action === "delete_task") {
+        notify("Milestone deleted", "The milestone and its tasks have been removed.", { variant: "success", href: null });
+        return true;
       }
       notify(
         change.action === "save_project" ? "Project saved" : "Task saved",
@@ -498,6 +512,8 @@ export function ProjectDetail({
                   )}
                 </section>
               ) : (
+                <div className="space-y-3">
+                {selected && canCreate && <div className="flex justify-end gap-2"><Button variant="outline" size="sm" disabled={busy} onClick={() => setEditingMilestone(selected)}>Edit milestone</Button><DeleteWorkButton kind="milestone" title={selected.title} busy={busy} onDelete={() => save({ action: "delete_task", id: selected.id, expectedRevision: selected.revision })} /></div>}
                 <ProjectTaskList
                   key={project.id}
                   tasks={filtered}
@@ -525,6 +541,7 @@ export function ProjectDetail({
                   onStatusChange={changeStatus}
                   onCreate={() => setComposer("task")}
                 />
+                </div>
               )}
             </div>
             <ProjectSidebar
@@ -544,6 +561,8 @@ export function ProjectDetail({
           </div>
         </TabsContent>
       </Tabs>
+      {canEdit && workspace && <div className="pt-4"><DeleteWorkButton kind="project" title={project.name} busy={busy} onDelete={() => save({ action: "delete_project", id: project.id, expectedRevision: project.revision })} /></div>}
+      {editingMilestone && workspace && canCreate && <TaskEditor task={editingMilestone} workspace={workspace} category={project.category} busy={busy} onSave={async change => { const saved = await save(change); if (saved) setEditingMilestone(null); return saved; }} onClose={() => setEditingMilestone(null)} />}
       {composer && workspace && canCreate && (
         <TaskComposer
           initialKind={composer}

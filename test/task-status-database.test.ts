@@ -51,6 +51,7 @@ describe("task workflow persistence", () => {
     for (const name of [
       "001_member_cv",
       "002_member_helix_role",
+      "009_platform_access_and_managed_positions",
       "009_project_management",
       "010_department_lead_tasks",
       "011_task_assignees",
@@ -62,6 +63,10 @@ describe("task workflow persistence", () => {
       "017_workspace_directory",
       "020_project_start_dates",
       "021_project_creation_milestones",
+      "018_department_homes",
+      "019_department_settings_permissions",
+      "025_workspace_space_access",
+      "026_department_access_levels",
     ])
       await db.exec(migration(name));
     for (const [index, person] of identities.entries()) {
@@ -83,6 +88,9 @@ describe("task workflow persistence", () => {
         [person.userId, index === 0, index === 1 ? ["production"] : []],
       );
     }
+    await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
+    await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Mechanical & Production'",[id(2)]);
+    await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Mechanical & Production'",[id(3)]);
     await service(0).mutate("verified", {
       action: "save_project",
       id: id(100),
@@ -146,14 +154,10 @@ describe("task workflow persistence", () => {
     await expect(
       service(2).mutate("verified", { ...change, status: "blocked" }),
     ).rejects.toMatchObject({ status: 400 });
-    await expect(
-      service(0).mutate("verified", {
-        action: "save_task",
-        id: id(202),
-        expectedRevision: 0,
-        task: input("backlog"),
-      }),
-    ).rejects.toMatchObject({ status: 403 });
+    const managed = await service(0).mutate("verified", {
+      action: "save_task", id: id(202), expectedRevision: 0, task: input("backlog"),
+    });
+    expect(managed.tasks.some(task => task.id === id(202))).toBe(true);
     expect((await service().load("verified")).tasks.find((t) => t.id === id(201))).toMatchObject({
       status: "backlog",
       revision: 1,

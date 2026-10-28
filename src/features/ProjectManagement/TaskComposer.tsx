@@ -1,3 +1,4 @@
+import { canManageTask } from "./permissions";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import {
@@ -49,7 +50,7 @@ export function TaskComposer({
   onClose: () => void;
 }) {
   const areaProjects = workspace.projects.filter(
-    (project) => project.category === category,
+    (project) => project.category === category && canManageTask({ projectId: project.id }, workspace),
   );
   const initialProjectId =
     projectId ?? (areaProjects.length === 1 ? areaProjects[0].id : null);
@@ -97,7 +98,7 @@ export function TaskComposer({
   const milestones = compatibleMilestones(workspace.tasks, draft);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy || !workspace.taskLeadCategories.includes(category)) return;
+    if (busy || !canManageTask({ projectId: draft.projectId }, workspace)) return;
     try {
       const saved = await onSave({
         action: "save_task",

@@ -56,7 +56,7 @@ describe("dedicated local project mode", () => {
     expect(saved.projects.find(p=>p.id===change.id)?.name).toBe("Batch build");
     expect(saved.tasks.find(t=>t.id===change.milestones[0].id)).toMatchObject({projectId:change.id,kind:"milestone",status:"todo"});
     expect(saved.progressEvents.filter(e=>e.taskId===change.milestones[0].id)).toHaveLength(1);
-    localStorage.setItem("helix-member-local-projects-v1",JSON.stringify({...saved,taskLeadCategories:[]}));
+    localStorage.setItem("helix-member-local-projects-v1",JSON.stringify({...saved,canManage:false,taskLeadCategories:[]}));
     const withoutLead=localStorage.getItem("helix-member-local-projects-v1");
     await expect(repository.mutate({...change,id:crypto.randomUUID(),milestones:[{...change.milestones[0],id:crypto.randomUUID()}]})).rejects.toMatchObject({status:403});
     expect(localStorage.getItem("helix-member-local-projects-v1")).toBe(withoutLead);
@@ -133,12 +133,15 @@ describe("dedicated local project mode", () => {
     await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 2, changes: { assigneeIds: ["00000000-0000-4000-8000-000000009999"] } })).rejects.toThrow("active");
     expect(await repository.load()).toEqual(updated);
   });
-  it("denies field updates to management-only members and rejects ordinary task targets", async () => {
+  it("honors management role overrides, denies Viewers, and rejects ordinary task targets", async () => {
     const repository = createLocalProjectRepository();
     const workspace = await repository.load();
     const goal = workspace.tasks.find(task => task.kind === "milestone")!;
     localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...workspace, canManage: true, taskLeadCategories: [] }));
-    await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { priority: "high" } })).rejects.toMatchObject({ status: 403 });
+    const saved = await repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { priority: "high" } });
+    expect(saved.tasks.find(task => task.id === goal.id)?.priority).toBe("high");
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...saved, canManage: false }));
+    await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 2, changes: { priority: "low" } })).rejects.toMatchObject({ status: 403 });
     await expect(repository.mutate({ action: "update_milestone", id: workspace.tasks[0].id, expectedRevision: 1, changes: { priority: "high" } })).rejects.toThrow("Milestone");
   });
 
@@ -158,7 +161,7 @@ describe("dedicated local project mode", () => {
   it("does not invent department membership when upgrading older local workspaces", async () => {
     const repository = createLocalProjectRepository(); const before = await repository.load();
     const { departments: _departments, ...older } = before;
-    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify(older));
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...older, canManage: false }));
     const after = await repository.load();
     expect(after.departments).toHaveLength(7); expect(after.departments.every(department => department.memberIds.length === 0 && !department.leadId)).toBe(true); expect(after.tasks).toEqual(before.tasks); expect(after.progressEvents).toEqual(before.progressEvents);
   });
