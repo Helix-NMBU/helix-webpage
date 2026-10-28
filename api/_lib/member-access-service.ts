@@ -60,7 +60,6 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       if (!body || typeof body !== "object") throw new MemberCvError(400, "Check the member access details.");
       const input = body as Record<string, unknown>;
       const change = parseMemberChange({ action: "save_member", id: input.memberId, expectedRevision: input.expectedRevision, name: "Access update", helixRole: null, departments: input.departments });
-      if (actorId === change.id) throw new MemberCvError(403, "You cannot change your own access assignments.");
       const spaces = input.spaceKeys;
       if (!Array.isArray(spaces) || spaces.length > WORKSPACE_SPACES.length || new Set(spaces).size !== spaces.length || spaces.some(key => !WORKSPACE_SPACES.some(space => space.key === key))) throw new MemberCvError(400, "Choose valid spaces.");
       try {
@@ -80,7 +79,6 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const { memberId: actorId } = await identityAndId(token);
       await requireAdmin(actorId);
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberId)) throw new MemberCvError(400, "A valid member ID is required.");
-      if (actorId === memberId) throw new MemberCvError(403, "You cannot change your own access assignments.");
       if (departmentId !== null && (typeof departmentId !== "string" || departmentId.length > 80)) throw new MemberCvError(400, "Choose a valid department.");
       if (!Array.isArray(roleKeys) || roleKeys.length > 5 || roleKeys.some(key => typeof key !== "string") || new Set(roleKeys).size !== roleKeys.length) throw new MemberCvError(400, "Choose valid platform roles.");
       try { await db.query("select identity.save_member_access($1::uuid, $2::text, $3::text[])", [memberId, departmentId, roleKeys]); }

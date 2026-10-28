@@ -50,14 +50,13 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
     return () => { active = false; };
   }, [attempt, member.id, notify, retry]);
 
-  const isSelf = member.id === data.viewerId;
   const changed = originalSpaces && (spaceKeys.length !== originalSpaces.length || spaceKeys.some(key => !originalSpaces.includes(key)) || departments.some(choice => {
     const d = data.departments.find(d => d.id === choice.id)!;
     return choice.access !== departmentAccess(d, member.id);
   }));
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (busy || isSelf || !changed) return;
+    if (busy || !changed) return;
     setBusy(true);
     try {
       await saveWorkspaceAccess(owner, { memberId: member.id, expectedRevision: member.revision, departments, spaceKeys });
@@ -71,7 +70,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
   if (loading) return <Skeleton className="h-48 w-full" aria-label="Loading member access" />;
   if (!originalSpaces) return <Button variant="outline" onClick={retry}>Try again</Button>;
   return <form className="space-y-5" onSubmit={event => void save(event)}>
-    <fieldset disabled={busy || isSelf} className="space-y-3">
+    <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-medium">Department access</legend>
       <p className="text-sm text-muted-foreground">Leads manage department content and work. Members can update their assigned task statuses. Viewers have read-only access.</p>
       {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department access is set to Viewer.</p>}
@@ -80,7 +79,7 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
         const occupied = !!department.leadId && department.leadId !== member.id;
         return <div key={department.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm">
           <Label htmlFor={`department-access-${department.id}`} className="font-normal">{department.name}</Label>
-          <Select value={roleOverride ? "viewer" : choice.access ?? "none"} disabled={busy || isSelf || roleOverride} onValueChange={value => {
+          <Select value={roleOverride ? "viewer" : choice.access ?? "none"} disabled={busy || roleOverride} onValueChange={value => {
             const level = value === "none" ? null : value as DepartmentAccess;
             setDepartments(values => values.map(item => item.id === department.id ? { ...item, access: level, member: level !== null, lead: level === "lead" } : item));
           }}>
@@ -90,13 +89,12 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
         </div>;
       })}
     </fieldset>
-    <fieldset disabled={busy || isSelf} className="space-y-3">
+    <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-medium">Space access</legend>
       {WORKSPACE_SPACES.map(space => <Label key={space.key} className="flex items-center gap-2 font-normal">
         <Checkbox checked={spaceKeys.includes(space.key)} onCheckedChange={checked => setSpaceKeys(keys => checked === true ? [...keys, space.key] : keys.filter(key => key !== space.key))} />{space.label}
       </Label>)}
     </fieldset>
-    {isSelf && <p className="text-sm text-muted-foreground">Another platform administrator must change your access.</p>}
-    <div className="flex justify-end"><Button type="submit" disabled={busy || isSelf || !changed}>{busy ? "Saving…" : "Save access"}</Button></div>
+    <div className="flex justify-end"><Button type="submit" disabled={busy || !changed}>{busy ? "Saving…" : "Save access"}</Button></div>
   </form>;
 }

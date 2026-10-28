@@ -51,7 +51,8 @@ describe("member role and feature access", () => {
   it("limits the member directory and role writes to platform administrators", async () => {
     await expect(services.members("member")).rejects.toMatchObject({ status: 403 });
     await expect(services.save("member", memberId, "finance", ["project_manager"])).rejects.toMatchObject({ status: 403 });
-    await expect(services.save("admin", adminId, null, [])).rejects.toMatchObject({ status: 403 });
+    await expect(services.save("admin", adminId, null, [])).rejects.toMatchObject({ status: 400, message: "The last Platform administrator cannot be removed" });
+    await expect(services.save("admin", adminId, null, ["platform_administrator", "project_manager"])).resolves.toEqual({ saved: true });
     const directory = await services.members("admin");
     expect(directory.departments).toHaveLength(6);
     expect(directory.roles.map((role) => role.key)).toEqual(["project_manager", "department_lead", "team_member", "platform_administrator"]);
