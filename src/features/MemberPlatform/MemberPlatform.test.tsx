@@ -264,7 +264,7 @@ describe("internal member platform", () => {
     expect(link).not.toBeNull();
     await act(async () => link!.click());
     expect(router.state.location.pathname).toBe("/recruiting");
-    expect(container.querySelector("h1")?.textContent).toBe("Applications");
+    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Applications"));
     expect(container.querySelector('[aria-label="Profile menu"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
@@ -277,7 +277,7 @@ describe("internal member platform", () => {
     expect(recruitment.list).toHaveBeenCalledOnce();
     expect(recruitment.positions).toHaveBeenCalledOnce();
     await act(async () => router.navigate("/recruiting"));
-    expect(container.textContent).toContain("Applicant One");
+    await vi.waitFor(() => expect(container.textContent).toContain("Applicant One"));
     await act(async () => router.navigate("/profile"));
     await act(async () => window.dispatchEvent(new Event("focus")));
     await act(async () => router.navigate("/recruiting"));
