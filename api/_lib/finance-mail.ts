@@ -142,14 +142,8 @@ function paragraph(lines: string[]): { text: string; html: string } {
 async function recipient(db: CvDatabase, memberId: string): Promise<RecipientRow | null> {
   const rows = await db.query<RecipientRow>(
     `select m.email,
-            exists (
-              select 1 from finance.member_grants g
-              where g.member_id = m.id and g.active and g.profile = 'head_of_finance'
-            ) as active_head,
-            exists (
-              select 1 from finance.member_grants g
-              where g.member_id = m.id and g.active and g.profile in ('finance', 'head_of_finance')
-            ) as active_finance
+            coalesce((finance.capability_flags(m.id) ->> 'decideRequests')::boolean, false) as active_head,
+            coalesce((finance.capability_flags(m.id) ->> 'purchaseRegister')::boolean, false) as active_finance
      from identity.members m
      where m.id = $1::uuid`,
     [memberId],

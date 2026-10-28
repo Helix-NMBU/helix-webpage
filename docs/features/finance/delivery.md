@@ -10,6 +10,8 @@ An isolated PostgreSQL instance on loopback is used with synthetic data for mult
 
 ## Historical access and contracts record
 
+The access description below reflects the original slice. The current rule requires the Financials role for all finance pages and APIs; Finance department membership alone does not grant it.
+
 ## Scope
 
 This area adds the member finance entry point, the access contract, and season budgets. It does not register purchases, import items, manage funding, or send email.
@@ -22,7 +24,7 @@ This area adds the member finance entry point, the access contract, and season b
 
 ## Capability matrix
 
-A verified active member can open the public pages, see public earmarks, register an actual later, and see their own requests. Those flags do not require a finance profile.
+The original access slice allowed every verified member to open the public pages and register purchases. This was superseded by the Financials role requirement above.
 
 | Profile | Adds |
 | --- | --- |
@@ -30,13 +32,13 @@ A verified active member can open the public pages, see public earmarks, registe
 | finance | Business access, plus the purchase register, files, refunds, payments, void, review, draft budget items, and permitted imports |
 | head_of_finance | Finance access, plus creating and approving a budget, protected budget edits, and request decisions |
 
-Active profiles are a union. The server reads them only from `finance.member_grants`. Title, department, `team.finance`, the platform administrator wildcard, and recruiting grants do not add a profile.
+Active profiles are a union of explicit `finance.member_grants` and the Financials role assigned in Member access. Financials adds the finance profile; it does not add head-of-finance privileges. The Finance department and Financials access are independent. Title, department, `team.finance`, the platform administrator wildcard, and recruiting grants do not add a profile.
 
 Ordinary members receive public budget fields. An earmark's purpose and amount are included only when its funding is secured or received. A profile with financing still receives the purpose and amount for every linked part. Notes, funding sources, earmark conditions, and refund account or phone values stay out of the ordinary member response. A draft budget's items are omitted unless the draft-items capability is true. The purchase register is present only when the purchase-register capability is true. Refund account and phone values are present only when the files-and-refunds capability is true, and only for the current season.
 
 ## Operator path
 
-Grants are not edited in the product UI and a member cannot grant themselves.
+Financials is assigned by a platform administrator in Member access; members cannot change their own assignment. Other explicit profiles use the operator path below.
 
 - `finance.set_member_grant(operator, member, profile, active, reason)` grants or revokes one profile and writes an audit row. The trusted operator must verify the administrator identity and account status; the database function checks the administrator role in `identity.member_roles` but does not independently verify account status. A member still cannot grant or revoke their own profile.
 - `scripts/finance-grants.mjs` parses the same request. Without `--apply` it prints a dry run, states the administrator requirement, and does not connect. `--apply` calls the function with `DATABASE_URL`. The database check rejects an operator without the administrator role; it does not independently verify account status.
@@ -72,6 +74,6 @@ The local member development mode stays on loopback and does not call the financ
 
 - Map each system to an existing department key.
 - Choose the current season.
-- Grant business, finance, and head profiles explicitly.
+- Assign Financials in Member access for the finance profile; grant business and head profiles explicitly through the operator path.
 - Set the approval threshold and the unused annual reference start before any production reference is issued.
 - Purchase files use the private finance bucket. Notification mail, purchase export, and upload cleanup are documented in `docs/features/finance/notifications-exports.md`.

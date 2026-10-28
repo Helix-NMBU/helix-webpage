@@ -6,7 +6,7 @@ import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "./local-mode";
 import { useNotify } from "./MemberNotifications";
 
-export type PlatformRoleKey = "project_manager" | "department_lead" | "team_member" | "platform_administrator";
+export type PlatformRoleKey = "project_manager" | "department_lead" | "team_member" | "platform_administrator" | "financials";
 export type PlatformRole = { key: PlatformRoleKey; label: string };
 export type MemberFeatureState = {
   memberId: string;

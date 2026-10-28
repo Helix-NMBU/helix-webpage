@@ -1,10 +1,10 @@
 # Finance access verification
 
-Finance is available from the member shell. Overview, Purchases, and Budgets load for every verified active member. Financing loads only for an active business, finance, or head profile. Signed-out visitors, banned sessions, partner-only identities, and unrelated identities are denied. A replaced Google account is denied even when the member id still exists.
+Finance is available from the member shell only to verified active members assigned the Financials role. The role grants the finance profile; head-of-finance privileges remain a separate grant. Finance department membership alone does not grant access. Signed-out visitors, banned sessions, partner-only identities, and unrelated identities are denied. A replaced Google account is denied even when the member id still exists.
 
 ## Finance integration evidence, 27 October 2026
 
-FIN-04 import, purchase processing, approvals, notifications, recovery and the PR #113 overview and scenarios are integrated locally on `feat/finance`. Unit and database tests use synthetic data. Six opt-in multi-connection tests run against an isolated loopback PostgreSQL database with an in-memory object store; they cover idempotent retries, approval and void races, import concurrency, upload finalization and cleanup, and purchase quotas. The test database is created and dropped by the test. Scenario consistency is also tested with injected interleavings in PGlite; it depends on Finance mutations incrementing the view version transactionally.
+FIN-04 import, purchase processing, approvals, notifications, recovery and the PR #113 overview and scenarios are integrated locally on `feat/finance`. Migration 024 adds the Financials role and requires it for all finance API actions; role changes invalidate finance views. Focused tests cover denial, assignment, revocation and a transactional purchase notification. Unit and database tests use synthetic data. Six opt-in multi-connection tests run against an isolated loopback PostgreSQL database with an in-memory object store; they cover idempotent retries, approval and void races, import concurrency, upload finalization and cleanup, and purchase quotas. The test database is created and dropped by the test. Scenario consistency is also tested with injected interleavings in PGlite; it depends on Finance mutations incrementing the view version transactionally.
 
 The serial Vitest run passed 1,287 tests (six opt-in PostgreSQL tests skipped), followed by three passing deployment guards. All three typechecks and lint passed.
 

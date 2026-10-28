@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
+import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
 
 export class FinanceRequestError extends Error {
   constructor(message: string, readonly status: number, readonly errors: FinanceFieldError[] = []) { super(message); }
@@ -22,8 +23,8 @@ function localCapabilities(): FinanceCapabilitiesResponse {
   return {
     memberId: "local-member",
     viewVersion: 0,
-    profiles: [],
-    capabilities: capabilitiesForProfiles([]),
+    profiles: ["finance"],
+    capabilities: capabilitiesForProfiles(["finance"]),
     seasonCode: null,
     approvalThresholdNok: null,
     today: osloToday(),
@@ -72,7 +73,7 @@ export function createFinanceApi(owner: { current: string | null }) {
     return body as FinanceMutationResult;
   }
   return {
-    capabilities: () => local() ? Promise.resolve(localCapabilities()) : request<FinanceCapabilitiesResponse>("capabilities"),
+    capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
     version: () => local() ? Promise.resolve({ viewVersion: 0 } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
     recovery: (deliveryAfter?: string, uploadAfter?: string) => {
       if (local()) return Promise.reject(new FinanceRequestError("Finance access is required.", 403));
@@ -93,7 +94,7 @@ export function createFinanceApi(owner: { current: string | null }) {
       return request<PurchasesView>(extra ? `purchases&${extra}` : "purchases");
     },
     financing: () => local()
-      ? Promise.reject(new FinanceRequestError("Financing access is required.", 403))
+      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: 0, seasonCode: null, funding: [], parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
       : request<FinancingView>("financing"),
     mutate,
   };

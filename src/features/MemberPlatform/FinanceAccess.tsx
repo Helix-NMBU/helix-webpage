@@ -276,7 +276,7 @@ export function FinanceGate({ page, children }: { page: FinancePageId; children:
     if (announced.current === key) return;
     announced.current = key;
     if (session.access === "denied") {
-      notify("Finance access required", "Sign in with a verified Helix member account to open finance.", { id: "finance-denied", variant: "error", href: null });
+      notify("Financials access required", "Sign in with your Helix account and ask an administrator for the Financials role.", { id: "finance-denied", variant: "error", href: null });
     }
     if (session.access === "unavailable") {
       notify("Could not check finance access", "Please try again.", { id: "finance-unavailable", variant: "error", href: null, action: { label: "Try again", onClick: session.retry } });

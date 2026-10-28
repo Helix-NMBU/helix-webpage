@@ -51,7 +51,7 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(memberId)) throw new MemberCvError(400, "A valid member ID is required.");
       if (actorId === memberId) throw new MemberCvError(403, "You cannot change your own access assignments.");
       if (departmentId !== null && (typeof departmentId !== "string" || departmentId.length > 80)) throw new MemberCvError(400, "Choose a valid department.");
-      if (!Array.isArray(roleKeys) || roleKeys.length > 4 || roleKeys.some(key => typeof key !== "string") || new Set(roleKeys).size !== roleKeys.length) throw new MemberCvError(400, "Choose valid platform roles.");
+      if (!Array.isArray(roleKeys) || roleKeys.length > 5 || roleKeys.some(key => typeof key !== "string") || new Set(roleKeys).size !== roleKeys.length) throw new MemberCvError(400, "Choose valid platform roles.");
       try { await db.query("select identity.save_member_access($1::uuid, $2::text, $3::text[])", [memberId, departmentId, roleKeys]); }
       catch (error) {
         const message = error instanceof Error ? error.message : "";

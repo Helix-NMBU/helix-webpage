@@ -135,6 +135,7 @@ export function createFinanceServices(deps: {
     const flags = row?.flags;
     const viewVersion = Number(row?.version);
     if (!flags || !Array.isArray(flags.profiles) || !Number.isSafeInteger(viewVersion)) throw new FinanceError(503, UNAVAILABLE);
+    if (!flags.publicBudgets) throw new FinanceError(403, "Financials access is required.");
     let approvalThresholdNok: string | null = null;
     if (row.threshold_ore != null) {
       if (!/^[0-9]+$/.test(row.threshold_ore)) throw new FinanceError(503, UNAVAILABLE);

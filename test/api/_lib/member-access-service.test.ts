@@ -64,4 +64,17 @@ describe("member role and feature access", () => {
       features: ["team.software-autonomous", "recruitment.manage"],
     });
   });
+
+  it("allows an administrator to assign Financials alongside the other roles", async () => {
+    await db.query("insert into identity.platform_roles (role_key, label, sort_order) values ('financials', 'Financials', 5) on conflict do nothing");
+    try {
+      await services.save("admin", memberId, "finance", ["team_member", "project_manager", "department_lead", "platform_administrator", "financials"]);
+      const directory = await services.members("admin");
+      expect(directory.roles).toContainEqual({ key: "financials", label: "Financials" });
+      expect(directory.members.find((member) => member.id === memberId)?.roleKeys).toContain("financials");
+    } finally {
+      await db.query("delete from identity.member_roles where role_key = 'financials'");
+      await db.query("delete from identity.platform_roles where role_key = 'financials'");
+    }
+  });
 });
