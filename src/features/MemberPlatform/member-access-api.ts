@@ -87,7 +87,6 @@ export async function saveWorkspaceAccess(owner: { current: string | null }, inp
     const { createLocalWorkspaceRepository } = await import("../Workspace/local-repository");
     const repository = createLocalWorkspaceRepository();
     const workspace = await repository.load();
-    if (input.memberId === workspace.viewerId) throw new Error("You cannot change your own access assignments.");
     const member = workspace.members.find(item => item.id === input.memberId);
     if (!member) throw new Error("This member is no longer available.");
     const directory = await localAccessDirectory();
