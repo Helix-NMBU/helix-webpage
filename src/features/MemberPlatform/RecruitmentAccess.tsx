@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { RecruitmentPageSkeleton } from "./LoadingSkeletons";
 import { createRecruitmentApi } from "../Recruitment/website-api";
 import type { ApplicationRow } from "../Recruitment/website-api";
 import type { RecruitmentPosition } from "../Recruitment/positions";
@@ -50,7 +50,7 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
   const generation = useRef(0);
   const dataRevision = useRef(0);
   const positionVersions = useRef(new Map<string, number>());
-  const bootstrap = useRef<Promise<RecruitmentState & { error?: unknown }> | null>(null);
+  const bootstrap = useRef<Promise<{ access: "allowed" | "denied" | "unavailable"; error?: unknown }> | null>(null);
   const refreshPending = useRef<Promise<void> | null>(null);
   const notify = useNotify();
   const navigate = useNavigate();
@@ -58,6 +58,7 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
   const deny = useCallback(() => {
     generation.current += 1;
+    refreshPending.current = null;
     setState({ ...initialState, access: "denied", loading: false });
   }, []);
   const recovery = useRef<() => void>(() => undefined);
@@ -77,24 +78,20 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
     return { applications, positions };
   }, [api]);
   const [attempt, setAttempt] = useState(0);
-  const retry = useCallback(() => { bootstrap.current = null; setAttempt(value => value + 1); }, []);
+  const retry = useCallback(() => { bootstrap.current = null; refreshPending.current = null; setState(initialState); setAttempt(value => value + 1); }, []);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     active.current = true;
     const current = ++generation.current;
-    bootstrap.current ??= api.session().then(async () => {
-      try { return { access: "allowed" as const, ...await readData(), ready: true, loading: false }; }
-      catch (error) {
-        if ([401, 403].includes(errorStatus(error))) throw error;
-        return { ...initialState, access: "allowed" as const, loading: false, error };
-      }
-    }).catch(error => ({ ...initialState, loading: false,
+    bootstrap.current ??= api.session().then(() => ({ access: "allowed" as const })).catch(error => ({
       access: [401, 403].includes(errorStatus(error)) ? "denied" as const : "unavailable" as const, error,
     }));
     void bootstrap.current.then(next => {
       if (!active.current || generation.current !== current) return;
-      setState(next);
+      setState({ ...initialState, access: next.access, loading: next.access === "allowed" });
       if (next.error && next.access !== "denied") failure(next.error);
       if (errorStatus(next.error) === 401) navigateRef.current("/login", { replace: true });
+      if (next.access === "allowed") void refreshRef.current();
     });
     return () => { active.current = false; generation.current += 1; };
   }, [api, readData, failure, attempt]);
@@ -106,12 +103,13 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
     const run = readData().then(data => {
       if (active.current && generation.current === current && dataRevision.current === revision) setState(value => ({ ...value, ...data, ready: true }));
     }).catch(error => { if (active.current && generation.current === current) failure(error); }).finally(() => {
-      refreshPending.current = null;
+      if (refreshPending.current === run) refreshPending.current = null;
       if (active.current && generation.current === current) setState(value => ({ ...value, loading: false }));
     });
     refreshPending.current = run;
     return run;
   }, [readData, failure]);
+  refreshRef.current = refresh;
   useEffect(() => { recovery.current = state.access === "unavailable" ? retry : () => { void refresh(); }; }, [state.access, retry, refresh]);
   const removeApplication = useCallback(async (id: string, reject: boolean) => {
     const current = generation.current;
@@ -163,9 +161,7 @@ export function RecruitmentAccessProvider({ children, userId }: { children: Reac
   }, [api, failure, notify]);
   const value = useMemo(() => ({ ...state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition, setPositionVisibility }),
     [state, api, retry, deny, refresh, removeApplication, savePosition, deletePosition, setPositionVisibility]);
-  return <RecruitmentContext.Provider value={value}>{state.access === "loading"
-    ? <div role="status" aria-label="Loading your workspace" className="p-8"><Skeleton className="h-40 w-full" /></div>
-    : children}</RecruitmentContext.Provider>;
+  return <RecruitmentContext.Provider value={value}>{children}</RecruitmentContext.Provider>;
 }
 
 export function useRecruitmentAccess() {
@@ -186,6 +182,6 @@ export function RecruitmentAccess({ children }: { children: ReactNode }) {
   }, [access, notify, retry]);
   if (access === "denied") return <Navigate to="/" replace />;
   if (access === "unavailable") return <Button className="self-start" variant="outline" onClick={retry}>Try again</Button>;
-  if (access === "loading") return <div role="status" aria-label="Checking recruitment access" className="space-y-4"><Skeleton className="h-9 w-48" /><Skeleton className="h-40 w-full" /></div>;
+  if (access === "loading") return <RecruitmentPageSkeleton />;
   return children;
 }

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { RecruitmentListSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Switch } from "@libs/components/ui/switch";
 import { Textarea } from "@libs/components/ui/textarea";
 import type { RecruitmentPosition } from "./positions";
@@ -69,7 +69,7 @@ export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibil
       <div className="space-y-1"><h2 className="text-xl font-medium">Positions</h2><p className="text-sm text-muted-foreground">Manage the positions available on the website.</p></div>
       <Button disabled={loading || busy} onClick={() => setDraft(emptyDraft())}>Create position</Button>
     </header>
-    {loading ? <div role="status" aria-label="Loading positions" className="space-y-3">{[0, 1, 2].map(index => <Skeleton key={index} className="h-20 w-full" />)}</div>
+    {loading ? <RecruitmentListSkeleton positions />
       : positions.length ? <div className="divide-y rounded-lg border">{positions.map(position => <article key={position.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
         <div><h3 className="font-medium">{position.title}</h3><p className="text-sm text-muted-foreground">{position.department}</p></div>
         <div className="flex flex-wrap items-center gap-3">

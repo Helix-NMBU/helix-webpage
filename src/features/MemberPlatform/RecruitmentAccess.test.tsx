@@ -27,6 +27,28 @@ async function mount() {
   router = createMemoryRouter([{ element: <RecruitmentAccessProvider userId="member"><Outlet /></RecruitmentAccessProvider>, children: [{ path: "/", element: <Probe /> }, { path: "/elsewhere", element: <p>Another page</p> }] }], { initialEntries: ["/"] });
   await act(async () => root.render(<StrictMode><RouterProvider router={router} /></StrictMode>));
 }
+it("renders unrelated pages while the recruitment check is pending", async () => {
+  const check = deferred<{ email: string }>();
+  mocks.api.session.mockReturnValueOnce(check.promise);
+  await mount();
+  expect(session.access).toBe("loading");
+  await act(async () => router.navigate("/elsewhere"));
+  expect(container.textContent).toContain("Another page");
+  expect(mocks.api.list).not.toHaveBeenCalled();
+  await act(async () => { check.resolve({ email: "recruiter@example.test" }); await check.promise; });
+  expect(mocks.api.list).toHaveBeenCalledOnce();
+});
+it("grants the recruitment shell after its access check while data continues loading", async () => {
+  const rows = deferred<ApplicationRow[]>();
+  mocks.api.list.mockReturnValueOnce(rows.promise);
+  await mount();
+  expect(session.access).toBe("allowed");
+  expect(session.loading).toBe(true);
+  expect(session.applications).toEqual([]);
+  await act(async () => { rows.resolve([application]); await rows.promise; });
+  expect(session.applications).toEqual([application]);
+  expect(session.loading).toBe(false);
+});
 it("deduplicates StrictMode bootstrap and retains data while routed content unmounts", async () => {
   await mount(); expect(mocks.api.session).toHaveBeenCalledOnce(); expect(mocks.api.list).toHaveBeenCalledOnce(); expect(mocks.api.positions).toHaveBeenCalledOnce();
   await act(async () => router.navigate("/elsewhere")); await act(async () => router.navigate("/"));

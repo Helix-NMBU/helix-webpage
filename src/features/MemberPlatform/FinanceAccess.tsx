@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { FinancePageSkeleton } from "./LoadingSkeletons";
 import { presentPurchases } from "../Finance/access";
 import { createFinanceApi, FinanceRequestError } from "../Finance/repository";
 import { CvRequestError } from "../MemberCV/repository";
@@ -285,7 +285,7 @@ export function FinanceGate({ page, children }: { page: FinancePageId; children:
       notify("Financing access required", "Financing is available to business and finance profiles.", { id: "finance-financing-denied", variant: "error", href: "/finance" });
     }
   }, [financingDenied, notify, page, session.access, session.retry]);
-  if (session.access === "loading") return <div role="status" aria-label="Loading finance" className="space-y-4"><Skeleton className="h-9 w-48" /><Skeleton className="h-40 w-full" /></div>;
+  if (session.access === "loading") return <FinancePageSkeleton page={page} />;
   if (session.access === "denied") return <Navigate to="/" replace />;
   if (session.access === "unavailable") return <Button className="self-start" variant="outline" onClick={session.retry}>Try again</Button>;
   if (financingDenied) return <Navigate to="/finance" replace />;

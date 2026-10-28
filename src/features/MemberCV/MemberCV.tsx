@@ -21,6 +21,7 @@ import { validateProfileMutation } from "./validate-profile-mutation";
 import { Button } from "@libs/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@libs/components/ui/empty";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { ProfileContentSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Switch } from "@libs/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@libs/components/ui/dropdown-menu";
 import { Input } from "@libs/components/ui/input";
@@ -1017,7 +1018,7 @@ export default function MemberCV() {
           <h1>Profile</h1>
           <p>Manage your profile, CV and sponsor visibility.</p>
         </div>
-        {(account || envelope) && <Card className="mcv-profile-identity shadow-none" id="mcv-contact" aria-labelledby="mcv-contact-title">
+        {busy === "load" && !draft ? <ProfileContentSkeleton /> : (account || envelope) && <Card className="mcv-profile-identity shadow-none" id="mcv-contact" aria-labelledby="mcv-contact-title">
           <CardContent className="space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">

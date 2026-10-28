@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { IconLoader2 } from "@tabler/icons-react";
+import { lazy, useCallback, useEffect, useState, type ReactNode } from "react";
+import { WorkspaceShellSkeleton } from "./LoadingSkeletons";
 import {
   Navigate,
   Outlet,
@@ -27,16 +27,9 @@ import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificatio
 import { MemberAccountProvider } from "./MemberAccountContext";
 import { MemberFeatureAccessProvider, RequireMemberFeature } from "./MemberFeatureAccess";
 import { clearGmailSessionCache } from "./gmail-session-cache";
-import { MailWorkspace } from "./MailWorkspace";
-import RecruitmentPortal from "../Recruitment/RecruitmentPortal";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
 import { FinanceAccessProvider } from "./FinanceAccess";
-import { FinanceEntry } from "../Finance/FinancePages";
 import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
-import { MembersPage, ProjectsPage, DepartmentsPage } from "../Workspace/WorkspacePages";
-import { DepartmentProjectsPage, DepartmentTasksPage } from "../Workspace/DepartmentViews";
-import ProjectManagement from "../ProjectManagement/ProjectManagement";
-import TaskDetailPage from "../ProjectManagement/TaskDetail";
 import {
   MemberSettingsPreview,
   TeamWorkspacePreview,
@@ -45,6 +38,17 @@ import {
 import "@fontsource-variable/geist";
 import "./member-platform.css";
 import "./member-theme.css";
+
+const MailWorkspace = lazy(() => import("./MailWorkspace").then(module => ({ default: module.MailWorkspace })));
+const RecruitmentPortal = lazy(() => import("../Recruitment/RecruitmentPortal"));
+const FinanceEntry = lazy(() => import("../Finance/FinancePages").then(module => ({ default: module.FinanceEntry })));
+const MembersPage = lazy(() => import("../Workspace/MembersPage").then(module => ({ default: module.MembersPage })));
+const ProjectsPage = lazy(() => import("../Workspace/ProjectsPage").then(module => ({ default: module.ProjectsPage })));
+const DepartmentsPage = lazy(() => import("../Workspace/DepartmentsPage").then(module => ({ default: module.DepartmentsPage })));
+const DepartmentProjectsPage = lazy(() => import("../Workspace/DepartmentViews").then(module => ({ default: module.DepartmentProjectsPage })));
+const DepartmentTasksPage = lazy(() => import("../Workspace/DepartmentViews").then(module => ({ default: module.DepartmentTasksPage })));
+const ProjectManagement = lazy(() => import("../ProjectManagement/ProjectManagement"));
+const TaskDetailPage = lazy(() => import("../ProjectManagement/TaskDetail"));
 
 export function MemberAccess({ children }: { children?: ReactNode }) {
   const location = useLocation();
@@ -94,9 +98,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
 
   if (!landing)
     return (
-      <main className="member-platform-status">
-        <IconLoader2 className="size-6 animate-spin" aria-label="Verifying your Helix account" />
-      </main>
+      <WorkspaceShellSkeleton label="Verifying your Helix account" />
     );
   if (landing.phase === "signed-out") {
     return (

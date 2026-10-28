@@ -11,6 +11,7 @@ import {
 import { AssigneeAvatars } from "../ProjectManagement/TaskAssignees";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "./WorkspaceContext";
+import { ProjectDetailSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import {
   Directory,
   Search,
@@ -137,7 +138,7 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
   const search = params.get("search") ?? "";
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  if (!data) return <LoadDirectory title="Projects" columns={5} />;
+  if (!data) return projectId && workspace?.loading ? <ProjectDetailSkeleton tab={params.get("tab")} board={params.get("view") === "board"} /> : <LoadDirectory title="Projects" columns={5} />;
   const selected = projectId
     ? data.projects.find((p) => p.id === projectId)
     : null;

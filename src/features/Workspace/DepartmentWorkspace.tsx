@@ -18,7 +18,7 @@ import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Textarea } from "@libs/components/ui/textarea";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { ResourceSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import {
   Tabs,
   TabsContent,
@@ -230,8 +230,8 @@ export function DepartmentWorkspace({
     if (!descriptionEditing) setDescriptionDraft(home?.description ?? "");
   }, [descriptionEditing, home?.description]);
   const getRepository = useCallback(
-    () => (repository.current ??= departmentHomeRepository()),
-    [],
+    () => (repository.current ??= departmentHomeRepository(data.viewerId)),
+    [data.viewerId],
   );
   const load = useCallback(async () => {
     if (saving.current) return;
@@ -453,10 +453,7 @@ export function DepartmentWorkspace({
                   )}
                 </div>
                 {loading && !home ? (
-                  <Skeleton
-                    className="h-20 w-full"
-                    aria-label="Loading department resources"
-                  />
+                  <ResourceSkeleton />
                 ) : home ? (
                   <DriveResource
                     home={home}
@@ -575,7 +572,7 @@ export function DepartmentWorkspace({
             </p>
           </div>
           {loading && !home ? (
-            <Skeleton className="h-20 w-full" />
+            <ResourceSkeleton />
           ) : home ? (
             <DriveResource
               home={home}

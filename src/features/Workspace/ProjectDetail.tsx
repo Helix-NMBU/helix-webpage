@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { TaskListSkeleton, ActivitySkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Textarea } from "@libs/components/ui/textarea";
 import {
   Tabs,
@@ -458,10 +458,7 @@ export function ProjectDetail({
                   </Button>
                 </section>
               ) : loading && !workspace ? (
-                <Skeleton
-                  aria-label="Loading project tasks"
-                  className="h-80 w-full"
-                />
+                tab === "activity" ? <ActivitySkeleton /> : <TaskListSkeleton label="Loading project tasks" board={params.get("view") === "board"} />
               ) : !workspace ? (
                 accessState
               ) : tab === "activity" ? (

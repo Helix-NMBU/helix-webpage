@@ -6,7 +6,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/componen
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { FinanceContentSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Switch } from "@libs/components/ui/switch";
 import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
@@ -230,10 +230,7 @@ export function FinancingPage() {
 
   if (!session.financing && session.pageLoading) {
     return (
-      <div role="status" aria-label="Loading financing" className="space-y-4">
-        <Skeleton className="h-9 w-48" />
-        <Skeleton className="h-40 w-full" />
-      </div>
+      <FinanceContentSkeleton page="financing" label="Loading financing" />
     );
   }
 

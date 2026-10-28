@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { IconSearch } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
@@ -71,13 +72,16 @@ export function NoResults({
 }
 export function LoadDirectory({ title = "Workspace", columns = 5 }: { title?: string; columns?: number }) {
   const workspace = useWorkspace();
+  const { search } = useLocation();
+  const timeline = title === "Projects" && new URLSearchParams(search).get("view") === "timeline";
+  const headings = title === "Departments" ? ["Name", "Leads", "Membership", "Members", "Active projects"] : title === "Members" ? ["Name", "Role", "Joined", "Department", "Last seen"] : title === "Projects" ? ["Name", "Department", "Priority", "Leads", "Target date", "Tasks", "Status"] : Array.from({ length: columns }, () => "");
   return workspace?.loading ? (
     <section role="status" aria-label={`Loading ${title}`} className="space-y-4">
-      <Skeleton className="h-7 w-40" />
+      <div className="flex min-h-9 items-center justify-between"><h1 className="text-lg font-medium">{title}</h1>{title === "Projects" && <Skeleton className="h-8 w-24" />}</div>
       <div className="overflow-hidden rounded-xl border bg-card">
         <div className="p-3"><Skeleton className="h-8 w-56 max-w-full" /></div>
-        <div className="grid gap-4 border-y px-4 py-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>{Array.from({ length: columns }, (_, i) => <Skeleton key={i} className="h-3 w-3/4" />)}</div>
-        {Array.from({ length: 5 }, (_, row) => <div key={row} className="grid gap-4 border-b px-4 py-5 last:border-0" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>{Array.from({ length: columns }, (_, col) => <Skeleton key={col} className="h-4 w-3/4" />)}</div>)}
+        {timeline ? <div className="space-y-3 border-t p-4"><div className="flex justify-between"><Skeleton className="h-4 w-32" /><Skeleton className="h-8 w-32" /></div>{[0, 1, 2, 3].map(i => <div key={i} className="flex items-center gap-4 border-t py-3"><Skeleton className="h-4 w-36" /><Skeleton className={`h-6 ${i % 2 ? "w-1/3" : "w-1/2"}`} /></div>)}</div> : <div className="overflow-x-auto"><div className="min-w-[42rem]"><div className="grid gap-4 border-y px-4 py-3" style={{ gridTemplateColumns: `2fr repeat(${headings.length - 1}, minmax(0, 1fr))` }}>{headings.map((heading, i) => <span key={i} className="text-xs font-medium text-muted-foreground">{heading || <Skeleton className="h-3 w-3/4" />}</span>)}</div>
+        {Array.from({ length: 5 }, (_, row) => <div key={row} className="grid items-center gap-4 border-b px-4 py-4 last:border-0" style={{ gridTemplateColumns: `2fr repeat(${headings.length - 1}, minmax(0, 1fr))` }}>{headings.map((_, col) => <div key={col} className="flex items-center gap-2">{col === 0 && title === "Members" && <Skeleton className="size-7 shrink-0 rounded-full" />}<Skeleton className="h-4 w-3/4" /></div>)}</div>)}</div></div>}
       </div>
     </section>
   ) : (

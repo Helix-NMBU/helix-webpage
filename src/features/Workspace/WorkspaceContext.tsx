@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { clearProjectWorkspaceCache, projectRepository } from "../ProjectManagement/repository";
 import { workspaceRepository, WorkspaceRequestError } from "./repository";
+import { clearDepartmentHomeCache } from "./department-home-repository";
 import type { WorkspaceDirectory, WorkspaceRepository } from "./types";
 const Context = createContext<{
   data: WorkspaceDirectory | null;
@@ -57,7 +58,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (alive.current && current === generation.current) setData(next);
     } catch (error) {
       if (alive.current && current === generation.current) {
-        if (error instanceof WorkspaceRequestError && [401, 403].includes(error.status)) setData(null);
+        if (error instanceof WorkspaceRequestError && [401, 403].includes(error.status)) { clearDepartmentHomeCache(); setData(null); }
         failure(error);
       }
     } finally {
@@ -73,10 +74,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       alive.current = false;
       generation.current++;
       clearProjectWorkspaceCache();
+      clearDepartmentHomeCache();
     };
   }, [refresh]);
   useEffect(() => {
-    const updated = () => { clearProjectWorkspaceCache(); void refresh(); };
+    const updated = () => { clearProjectWorkspaceCache(); clearDepartmentHomeCache(); void refresh(); };
     window.addEventListener("helix-workspace-updated", updated);
     return () => window.removeEventListener("helix-workspace-updated", updated);
   }, [refresh]);
@@ -85,6 +87,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [data?.viewerId, data?.projectAccess]);
   const saveMember: WorkspaceRepository["saveMember"] = async (change) => {
     const current = ++generation.current;
+    clearDepartmentHomeCache();
     const next = await (await getRepository()).saveMember(change);
     if (alive.current && generation.current === current) {
       setData(next);

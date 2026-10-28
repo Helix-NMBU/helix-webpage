@@ -10,6 +10,7 @@ import {
 import { AssigneeAvatars } from "../ProjectManagement/TaskAssignees";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "./WorkspaceContext";
+import { DepartmentHomeSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import {
   Directory,
   Search,
@@ -53,7 +54,7 @@ export function DepartmentsPage() {
         { variant: "error", href: null },
       );
   }, [denied, notify]);
-  if (!data) return <LoadDirectory title="Departments" columns={5} />;
+  if (!data) return departmentId && workspace?.loading ? <DepartmentHomeSkeleton tab={params.get("tab")} /> : <LoadDirectory title="Departments" columns={5} />;
   if (denied) return <Navigate to="/departments" replace />;
   if (selected)
     return (

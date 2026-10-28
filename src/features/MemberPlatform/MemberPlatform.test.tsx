@@ -119,7 +119,7 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     await open("/admin/access");
     expect(router.state.location.pathname).toBe("/members");
-    expect(container.querySelector("h1")?.textContent).toBe("Members");
+    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Members"));
     expect(container.querySelector('[aria-label="Member access"]')).toBeNull();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=members"))).toBe(false);
   });
@@ -318,8 +318,8 @@ describe("internal member platform", () => {
     expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();
     expect(container.textContent).not.toContain("Expenses");
     await act(async () => router.navigate("/finance/financing"));
-    expect(router.state.location.pathname).toBe("/finance");
-    expect(container.textContent).toContain("No season is configured yet");
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/finance"));
+    await vi.waitFor(() => expect(container.textContent).toContain("No season is configured yet"));
     expect(container.textContent).not.toContain("Hidden Supplier");
     await act(async () => router.navigate("/teams/finance/budget?season=S27#items"));
     expect(router.state.location.pathname).toBe("/finance/budgets");

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { IconCube, IconDiamonds } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { TaskDetailSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
@@ -92,7 +92,7 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
     } finally { saving.current = false; if (alive.current) setBusy(false); }
   }
 
-  if (loading && !workspace) return <div role="status" aria-label="Loading task" className="space-y-6 py-8"><Skeleton className="h-10 w-2/3" /><Skeleton className="h-64 w-full" /></div>;
+  if (loading && !workspace) return <TaskDetailSkeleton />;
   const task = access ? workspace?.tasks.find(item => item.id === taskId && item.kind === "task") : undefined;
   if (!task || !workspace) return <Empty className="min-h-64"><EmptyHeader><EmptyTitle>{denied || !access ? "Task access required" : workspace ? "Task not found" : "Could not load task"}</EmptyTitle><EmptyDescription>{denied || !access ? "Ask a platform administrator for project access." : workspace ? "This task may have been removed or is no longer available to you." : "Try loading this task again."}</EmptyDescription></EmptyHeader><div className="flex gap-2"><Button variant="outline" asChild><Link to="/tasks">My tasks</Link></Button>{!denied && !workspace && <Button onClick={() => void load()}>Try again</Button>}</div></Empty>;
   const from = (location.state as { from?: unknown } | null)?.from;

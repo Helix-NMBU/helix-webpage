@@ -35,7 +35,7 @@ import {
 import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
 import { useMemberFeatureAccess } from "./MemberFeatureAccess";
-import { GmailLogo } from "./MailWorkspace";
+import { GmailLogo } from "./GmailLogo";
 import { EmailSignatureSettings } from "./EmailSignatureSettings";
 import { memberGmailRequest } from "./gmail-api";
 import {

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Switch } from "@libs/components/ui/switch";
-import { Skeleton } from "@libs/components/ui/skeleton";
+import { SignatureSkeleton } from "./LoadingSkeletons";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@libs/components/ui/collapsible";
 import { EmailHtmlFrame } from "./EmailHtmlFrame";
@@ -83,7 +83,7 @@ export function EmailSignatureSettings() {
       <CardDescription className="text-xs leading-5">Shared across all members. Only Platform Administrators can edit the design.</CardDescription>
     </CardHeader>
     <CardContent className="gap-4">
-      {loading ? <div role="status" aria-label="Loading signature"><Skeleton className="h-32 w-full" /></div> : !draft ? <Button variant="outline" onClick={() => void load()}>Reload signature</Button> : <>
+      {loading ? <SignatureSkeleton editor={isAdmin} /> : !draft ? <Button variant="outline" onClick={() => void load()}>Reload signature</Button> : <>
         {isAdmin ? <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <fieldset disabled={busy} className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
