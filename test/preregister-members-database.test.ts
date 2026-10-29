@@ -14,6 +14,7 @@ beforeAll(async () => {
   db = new PGlite();
   await db.exec('create schema neon_auth; create table neon_auth."user"(id uuid primary key,name text,email text,"emailVerified" boolean,banned boolean); create table neon_auth.account(id uuid primary key default gen_random_uuid(),"accountId" text,"providerId" text,"userId" uuid references neon_auth."user"(id),"idToken" text,"createdAt" timestamptz default now());');
   for (const file of files) await db.exec(readFileSync(new URL(`../db/migrations/${file}.sql`, import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../db/migrations/033_project_status.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../db/migrations/011_finance_core.sql", import.meta.url), "utf8"));
   const operator = "10000000-0000-4000-8000-000000000003";
   await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)', [operator,"Test Operator","operator@helixnmbu.no"]);

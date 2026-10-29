@@ -24,6 +24,7 @@ describe("project start dates in Postgres",()=>{
     await db.exec(migration("030_pending_project_leads"));
     await db.exec(migration("031_pending_milestone_leads"));
     await db.exec(migration("032_estimated_task_history"));
+    await db.exec(migration("033_project_status"));
     for(const person of identities){
       await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[person.userId,person.name,person.email]);
       await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[person.googleSub,person.userId]);
