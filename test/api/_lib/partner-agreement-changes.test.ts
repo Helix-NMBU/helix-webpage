@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review','054_partner_manual_finance_review']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review','054_partner_manual_finance_review','055_partner_manual_review_gate']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -120,6 +120,8 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  await db.query("update finance.funding set amount_ore=9000,revision=revision+1 where id=$1",[manualFunding]);
  const later=await dealService(0).recordAgreementChange('test',id(101),5,'amendment','Correct another detail',{...followupTerms,title:'Second correction'},true);
  await expect(dealService(0).resolveAgreementChange('test',later.id,'Review changed funding',true,false)).rejects.toMatchObject({status:409});
+ await expect(dealService(0).resolveAgreementChange('test',later.id,'Business cannot bypass Finance',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('Finance review')});
+ expect((await db.query("select * from partner_deals.manual_reconciliation_items where change_id=$1",[later.id])).rows).toHaveLength(0);
  const findManual=async(n:number)=>{const view=await dealService(n).load('test','shared');return (view.deals as {id:string;contributions:{id:string;seasonId:string;fundingNeedsReview:boolean;manualReviewToken:string|null}[]}[]).find(d=>d.id===id(101))!.contributions.find(c=>c.seasonId===id(21))!;};
  const businessChanged=await findManual(0);expect(businessChanged.fundingNeedsReview).toBe(true);expect(businessChanged.manualReviewToken).toBeNull();
  const financeChanged=await findManual(1);expect(financeChanged.fundingNeedsReview).toBe(true);expect(financeChanged.manualReviewToken).toBeNull();
@@ -284,6 +286,15 @@ it('requires documented manual handling for cancellation of received funding and
  expect((await db.query("select * from finance.funding where id=$1 and status='received'",[funding])).rows).toHaveLength(1);
  expect((await db.query("select t.id from project_management.tasks t join partner_deals.task_links l on l.task_id=t.id where l.deal_id=$1 and t.status='done'",[id(231)])).rows).toHaveLength(2);
  expect((await db.query("select * from partner_deals.manual_reconciliation_items where change_id=$1",[cancel.id])).rows).toHaveLength(2);
+ await db.query("update finance.funding set amount_ore=9000,revision=revision+1 where id=$1",[funding]);
+ const reopened=await dealService(0).recordAgreementChange('test',id(231),3,'reopening','Renewed',null,true);
+ await expect(dealService(0).resolveAgreementChange('test',reopened.id,'Cannot bypass Finance',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('Finance review')});
+ await dealService(0).requestFinanceReview('test',id(231),4);const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number}}[];const review=queue.find(x=>x.partner==='CompletedCo')!;
+ await dealService(1).resolveFinanceReview('test',review.id,'verified',review.linkedFunding.id,review.linkedFunding.revision,null,true);
+ await dealService(0).resolveAgreementChange('test',reopened.id,'Finance reviewed the change',true,true);
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[funding])).rows[0].amount_ore).toBe('9000');
+ expect((await db.query("select t.id from project_management.tasks t join partner_deals.task_links l on l.task_id=t.id where l.deal_id=$1 and t.status='done'",[id(231)])).rows).toHaveLength(2);
+
 });
 
 it('requires an obsolete open invoice to be handled before manual received-funding changes',async()=>{
@@ -299,6 +310,30 @@ it('requires an obsolete open invoice to be handled before manual received-fundi
  await dealService(0).resolveAgreementChange('test',amendment.id,'Finance handled the obsolete invoice',true,true);
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[funding])).rows[0].amount_ore).toBe('10000');
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from partner_deals.contributions where id=$1",[c.id])).rows[0].amount_ore).toBe('15000');
+ await db.query("update finance.funding set amount_ore=9200,revision=revision+1 where id=$1",[funding]);
+ const follow=await dealService(0).recordAgreementChange('test',id(241),3,'amendment','Correct terms',{...terms,title:'Corrected name',cashChanges:[{id:c.id,amountOre:'17000',invoiceDate:c.invoice_date}]},true);
+ await expect(dealService(0).resolveAgreementChange('test',follow.id,'Cannot bypass Finance',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('Finance review')});
+ await dealService(0).requestFinanceReview('test',id(241),4);const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number}}[];const review=queue.find(x=>x.partner==='PaidCo')!;
+ await dealService(1).resolveFinanceReview('test',review.id,'verified',review.linkedFunding.id,review.linkedFunding.revision,null,true);
+ await dealService(0).resolveAgreementChange('test',follow.id,'Finance reviewed the change',true,true);
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[funding])).rows[0].amount_ore).toBe('9200');
+ expect((await db.query<{title:string}>("select title from partner_deals.deals where id=$1",[id(241)])).rows[0].title).toBe('Corrected name');
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from partner_deals.contributions where id=$1",[c.id])).rows[0].amount_ore).toBe('17000');
+ await db.query("update finance.funding set amount_ore=9300,revision=revision+1 where id=$1",[funding]);
+ const cancellation=await dealService(0).recordAgreementChange('test',id(241),5,'cancellation','End agreement',null,true);
+ await expect(dealService(0).resolveAgreementChange('test',cancellation.id,'Cannot bypass Finance',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('Finance review')});
+ await expect(dealService(2).requestFinanceReview('test',id(241),6)).rejects.toMatchObject({status:403});
+ await dealService(0).requestFinanceReview('test',id(241),6);const cancelledQueue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number}}[];const cancelledReview=cancelledQueue.find(x=>x.partner==='PaidCo')!;expect(cancelledReview).toBeDefined();
+ const cancelledEvent=(await db.query<{id:string}>("select id from partner_deals.review_notification_events where review_id=$1 and kind='requested' order by event_time desc limit 1",[cancelledReview.id])).rows[0].id;
+ const finAlerts=(await db.query<{alerts:{id:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(2),'finance','finance@helixnmbu.no'])).rows[0].alerts;const markAlerts=(await db.query<{alerts:{id:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(3),'marketing','marketing@helixnmbu.no'])).rows[0].alerts;expect(finAlerts.some(x=>x.id===cancelledEvent)).toBe(true);expect(markAlerts.some(x=>x.id===cancelledEvent)).toBe(false);
+
+ await dealService(1).resolveFinanceReview('test',cancelledReview.id,'verified',cancelledReview.linkedFunding.id,cancelledReview.linkedFunding.revision,null,true);
+ await expect(dealService(0).resolveAgreementChange('test',cancellation.id,'Finance reviewed',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('Marketing')});
+ await db.query("update project_management.tasks set status='cancelled' where id=(select task_id from partner_deals.task_links where deliverable_id=$1)",[d.id]);
+ await dealService(0).resolveAgreementChange('test',cancellation.id,'Finance and Marketing reviewed',true,true);
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[funding])).rows[0].amount_ore).toBe('9300');
+
+
 });
 
 it('routes mixed manual and ordinary discrepancies through Finance without replacing received history',async()=>{
@@ -360,6 +395,26 @@ it('restores a missing historical link for a legacy manual review only from audi
  const workspace=await dealService(0).load('test','shared');const item=(workspace.deals as {id:string;contributions:{id:string;manualReviewToken:string}[]}[]).find(x=>x.id===id(271))!.contributions.find(x=>x.id===c.id)!;
  await dealService(0).acknowledgeManualFunding('test',id(271),3,c.id,item.manualReviewToken,'Finance restored the audited original link',true);
  expect((await db.query("select * from partner_deals.funding_links where contribution_id=$1 and funding_id=$2",[c.id,funding])).rows).toHaveLength(1);
+});
+
+it('lets Finance verify deleted unreceived funding during a pending cancellation',async()=>{
+ await setupDeal(280,'CancelledCashCo',[21]);await confirm(0,281);
+ const c=(await db.query<{id:string;amount_ore:string;invoice_date:string}>("select id,amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(281)])).rows[0];
+ const d=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(281)])).rows[0];
+ const funding=(await db.query<{funding_id:string}>("select funding_id from partner_deals.funding_links where contribution_id=$1",[c.id])).rows[0].funding_id;
+ await db.query("update project_management.tasks set status='done',completed_at=now() where id=(select task_id from partner_deals.task_links where contribution_id=$1)",[c.id]);
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[{id:c.id,amountOre:'15000',invoiceDate:c.invoice_date}],inKindChanges:[],deliverableChanges:[{id:d.id,title:d.title,description:d.description,dueDate:d.due_date}]};
+ const amendment=await dealService(0).recordAgreementChange('test',id(281),1,'amendment','Manual change',terms,true);await dealService(0).resolveAgreementChange('test',amendment.id,'Handled completed invoice',true,true);
+ const cancellation=await dealService(0).recordAgreementChange('test',id(281),3,'cancellation','Agreement ended',null,true);
+ await db.query("update finance.funding set status='deleted',prior_status='secured',revision=revision+1 where id=$1",[funding]);
+ await expect(dealService(0).resolveAgreementChange('test',cancellation.id,'Manual review',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('Finance review')});
+ await dealService(0).requestFinanceReview('test',id(281),4);const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number;matchesAgreement:boolean;canUnlink:boolean}}[];const review=queue.find(x=>x.partner==='CancelledCashCo')!;expect(review.linkedFunding).toMatchObject({matchesAgreement:true,canUnlink:false});
+ await dealService(1).resolveFinanceReview('test',review.id,'verified',funding,review.linkedFunding.revision,null,true);
+ await db.query("update project_management.tasks set status='cancelled' where id=(select task_id from partner_deals.task_links where deliverable_id=$1)",[d.id]);
+ await dealService(0).resolveAgreementChange('test',cancellation.id,'Finance verified the retirement',true,true);
+ expect((await db.query("select * from finance.funding where id=$1 and status='deleted'",[funding])).rows).toHaveLength(1);
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id=$1 and funding_id=$2",[c.id,funding])).rows).toHaveLength(1);
+ expect((await dealService(1).financeReviewQueue('test') as {partner:string}[]).some(x=>x.partner==='CancelledCashCo')).toBe(false);
 });
 
 it('keeps cancellation unresolved when a closed season still has active records',async()=>{
