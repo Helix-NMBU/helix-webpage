@@ -90,7 +90,7 @@ it("withdraws an incorrect pending proposal only after explicit confirmation",as
 
 it("keeps a draft and requires review of the latest revision before retry",async()=>{
  const latest={...deal,title:"Updated by colleague",revision:3};
- const request=vi.fn().mockResolvedValueOnce({ok:false,status:409,json:async()=>({error:"This deal changed or has been won. Reload it before saving."})}).mockResolvedValueOnce({ok:true,json:async()=>({deals:[latest]})}).mockResolvedValueOnce({ok:true,json:async()=>({})});vi.stubGlobal("fetch",request);
+ const request=vi.fn().mockResolvedValueOnce({ok:false,status:409,json:async()=>({error:"This agreement changed. Reload it before continuing."})}).mockResolvedValueOnce({ok:true,json:async()=>({deals:[latest]})}).mockResolvedValueOnce({ok:true,json:async()=>({})});vi.stubGlobal("fetch",request);
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);await act(async()=>root.render(<AgreementChanges deal={deal} canManage onReload={()=>{}}/>));
  await act(async()=>button("Propose amendment").click());
  const reason=[...document.querySelectorAll("label")].find(x=>x.textContent?.startsWith("Reason"))!.querySelector("textarea")!;
