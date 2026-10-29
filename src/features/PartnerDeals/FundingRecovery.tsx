@@ -34,22 +34,39 @@ export function FundingRecovery({ contributionId, api, onResolved }: { contribut
   const account = useMemberAccount();
   const tokenOwner = useRef<string | null>(null);
   const generation = useRef(0);
+  const active = useRef(false);
+  // Update synchronously during render so an old promise cannot affect a new
+  // contribution or account before the old effect cleanup runs.
+  const current = useRef({ contributionId, accountEmail: account?.email, api });
+  current.current = { contributionId, accountEmail: account?.email, api };
+  const isCurrent = useCallback((id: number, key: typeof current.current) => active.current && generation.current === id &&
+    current.current.contributionId === key.contributionId && current.current.accountEmail === key.accountEmail && current.current.api === key.api, []);
   const [result, setResult] = useState<CandidateResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const load = useCallback(async () => {
+    const key = { contributionId, accountEmail: account?.email, api };
+    if (!active.current || current.current.contributionId !== key.contributionId || current.current.accountEmail !== key.accountEmail || current.current.api !== key.api) return;
     const id = ++generation.current;
     setResult(null); setAcknowledged(false); setBusy(true);
-    try { const next = await (api ?? apiFor(tokenOwner)).candidates(contributionId); if (generation.current === id) setResult(next); }
-    catch (error) { if (generation.current === id) notify("Could not load funding", error instanceof Error ? error.message : "Please try again.", { variant: "error", action: { label: "Try again", onClick: () => { void load(); } } }); }
-    finally { if (generation.current === id) setBusy(false); }
-  }, [api, contributionId, notify]);
-  useEffect(() => { tokenOwner.current = null; void load(); return () => { generation.current++; }; }, [load, account?.email]);
+    try { const next = await (api ?? apiFor(tokenOwner)).candidates(contributionId); if (isCurrent(id, key)) setResult(next); }
+    catch (error) { if (isCurrent(id, key)) notify("Could not load funding", error instanceof Error ? error.message : "Please try again.", { variant: "error", action: { label: "Try again", onClick: () => { void load(); } } }); }
+    finally { if (isCurrent(id, key)) setBusy(false); }
+  }, [api, contributionId, account?.email, notify, isCurrent]);
+  useEffect(() => { active.current = true; tokenOwner.current = null; void load(); return () => { active.current = false; generation.current++; }; }, [load, account?.email]);
   const act = async (operation: () => Promise<void>, message: string) => {
+    const key = { contributionId, accountEmail: account?.email, api };
+    const id = ++generation.current;
     setBusy(true);
-    try { await operation(); notify(message, "", { variant: "success" }); onResolved?.(); await load(); }
-    catch (error) { setResult(null); notify("Could not update funding", error instanceof Error ? error.message : "Please try again.", { variant: "error", action: { label: "Reload funding", onClick: () => { void load(); } } }); }
-    finally { setBusy(false); }
+    try {
+      await operation();
+      if (!isCurrent(id, key)) return;
+      notify(message, "", { variant: "success" });
+      onResolved?.();
+      if (isCurrent(id, key)) await load();
+    } catch (error) {
+      if (isCurrent(id, key)) { setResult(null); notify("Could not update funding", error instanceof Error ? error.message : "Please try again.", { variant: "error", action: { label: "Reload funding", onClick: () => { void load(); } } }); }
+    } finally { if (isCurrent(id, key)) setBusy(false); }
   };
   const client = api ?? apiFor(tokenOwner);
   return <section className="space-y-3" aria-label="Review sponsor funding">
