@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Toaster } from "@libs/components/ui/sonner";
@@ -7,6 +7,7 @@ import { Button } from "@libs/components/ui/button";
 import { Card, CardContent } from "@libs/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { useMemberTheme } from "./MemberTheme";
+import { createReviewNotificationsApi, type ReviewNotificationsApi } from "./review-notifications-api";
 
 type NotificationOptions = {
   id?: string;
@@ -39,18 +40,57 @@ export function MemberNotificationToaster() {
 }
 
 /** Session-scoped messages. Remount this provider when the verified member changes. */
-export function MemberNotificationsProvider({ children, renderToaster = true }: { children: ReactNode; renderToaster?: boolean }) {
-  const [items, setItems] = useState<MemberNotification[]>([]);
+export function MemberNotificationsProvider({ children, renderToaster = true, reviewApi }: { children: ReactNode; renderToaster?: boolean; reviewApi?: ReviewNotificationsApi }) {
+  const [localItems, setLocalItems] = useState<MemberNotification[]>([]);
+  const [reviewItems, setReviewItems] = useState<MemberNotification[]>([]);
+  const api = useMemo(() => reviewApi ?? createReviewNotificationsApi(), [reviewApi]);
+  const active = useRef(false);
+  const generation = useRef(0);
+  const pendingReads = useRef(new Set<string>());
   const toastIds = useRef(new Set<string | number>());
   const notify = useCallback<Notify>((title, description, options = {}) => {
     const notification = { href: "/profile", ...options, id: options.id ?? crypto.randomUUID(), title, description, createdAt: new Date().toISOString() };
-    setItems((previous) => [notification, ...previous.filter((item) => item.id !== notification.id)].slice(0, 50));
+    setLocalItems((previous) => [notification, ...previous.filter((item) => item.id !== notification.id)].slice(0, 50));
     toastIds.current.add(showNotification(title, description, { ...options, id: notification.id }));
   }, []);
+  const refreshReviews = useCallback(async () => {
+    const current = ++generation.current;
+    try {
+      const result = await api.list();
+      if (active.current && current === generation.current) setReviewItems(result.filter(item => !pendingReads.current.has(item.id)).map(item => ({...item,id:`review:${item.id}`})));
+    } catch {
+      if (active.current && current === generation.current) setReviewItems([]);
+    }
+  }, [api]);
+  useEffect(() => {
+    active.current = true;
+    void refreshReviews();
+    const timer = window.setInterval(() => { void refreshReviews(); }, 30000);
+    const refresh = () => { if (document.visibilityState !== "hidden") void refreshReviews(); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { active.current = false; generation.current++; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [refreshReviews]);
   const markRead = useCallback((ids: readonly string[]) => {
     const selected = new Set(ids);
-    setItems((previous) => previous.filter((item) => !selected.has(item.id)));
-  }, []);
+    setLocalItems(previous => previous.filter(item => !selected.has(item.id)));
+    const durable = ids.filter(id => id.startsWith("review:")).map(id => id.slice("review:".length));
+    if (!durable.length) return;
+    durable.forEach(id => pendingReads.current.add(id));
+    setReviewItems(previous => previous.filter(item => !selected.has(item.id)));
+    const batches = Array.from({length: Math.ceil(durable.length / 100)}, (_, index) => durable.slice(index * 100, (index + 1) * 100));
+    void Promise.all(batches.map(batch => api.markRead(batch))).then(() => {
+      durable.forEach(id => pendingReads.current.delete(id));
+      if (active.current) void refreshReviews();
+    }).catch(() => {
+      durable.forEach(id => pendingReads.current.delete(id));
+      if (active.current) {
+        notify("Could not mark notifications as read", "Please try again.", { variant: "error", href: null, action: { label: "Refresh", onClick: () => { void refreshReviews(); } } });
+        void refreshReviews();
+      }
+    });
+  }, [api, notify, refreshReviews]);
+  const items = [...reviewItems, ...localItems].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   useEffect(() => () => { toastIds.current.forEach((id) => toast.dismiss(id)); }, []);
   return <NotificationsContext.Provider value={{ items, unread: items.length, notify, markRead }}>
     {children}

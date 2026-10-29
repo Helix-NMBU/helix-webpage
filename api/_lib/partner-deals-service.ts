@@ -11,6 +11,8 @@ export type FundingCandidate = { id: string; revision: number; reference: string
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
   load(token: string, view: DealView): Promise<DealWorkspace>;
+  reviewNotifications(token: string): Promise<unknown[]>;
+  markReviewNotificationsRead(token: string, ids: unknown): Promise<{ ok: true }>;
   requestFinanceReview(token: string, dealId: unknown, revision: unknown): Promise<{ count: number }>;
   financeReviewQueue(token: string): Promise<unknown[]>;
   resolveFinanceReview(token: string, reviewId: unknown, action: unknown, fundingId: unknown, revision: unknown, snapshot: unknown, confirmed: unknown): Promise<{ ok: true }>;
@@ -124,6 +126,26 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         }
         return { ...result.rows[0], canManage: current.pipeline, canReviewFunding: view === "pipeline" && current.can_review_funding };
       } catch (error) { return errorFor(error); }
+    },
+    async reviewNotifications(token) {
+      try {
+        const actor=await identity(token);
+        const query="select partner_deals.review_notifications($1::uuid,$2,$3) as value";
+        const args=[actor.userId,actor.googleSub,actor.email];
+        // Re-read after the projection to discard results if grants were revoked.
+        await deps.db.query(query,args);
+        const current=await deps.db.query<{value:unknown[]}>(query,args);
+        if (!Array.isArray(current.rows[0]?.value)) throw new Error("Missing notifications");
+        return current.rows[0].value;
+      } catch(error) { return errorFor(error); }
+    },
+    async markReviewNotificationsRead(token, ids) {
+      try {
+        if (!Array.isArray(ids) || ids.length>100 || ids.some(id=>typeof id!=="string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) throw new MemberCvError(400,"Choose valid notifications.");
+        const actor=await identity(token);
+        await deps.db.query("select partner_deals.mark_review_notifications_read($1::uuid,$2,$3,$4::uuid[])",[actor.userId,actor.googleSub,actor.email,ids]);
+        return {ok:true};
+      } catch(error) { return errorFor(error); }
     },
     async requestFinanceReview(token, dealId, revision) {
       try {
