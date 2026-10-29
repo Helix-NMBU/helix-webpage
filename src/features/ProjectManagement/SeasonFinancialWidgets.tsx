@@ -119,8 +119,8 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
         </dl>
         <p className="text-xs text-muted-foreground">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
       </CardContent></Card>
-      <Card className="min-h-56 gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription></CardHeader><CardContent className="flex flex-1 flex-col px-5">
-        <div className="flex flex-1 items-center text-sm text-muted-foreground">{snapshot ? <span>As of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</span> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</div>
+      <Card className="min-h-56 gap-2 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Bank balance</CardTitle></CardHeader><CardContent className="flex flex-1 flex-col px-5">
+        <div className="flex flex-1 items-center text-lg font-semibold">{snapshot ? <span>As of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</span> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</div>
         <CardTitle className="self-end break-words text-right text-4xl font-medium tabular-nums sm:text-5xl">{loading && !summary ? <Skeleton className="h-12 w-48" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle>
       </CardContent></Card>
       <Card className="gap-4 py-5 md:col-span-2"><CardContent className="space-y-4 px-5">
