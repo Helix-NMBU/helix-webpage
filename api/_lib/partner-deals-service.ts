@@ -124,6 +124,7 @@ function errorFor(error: unknown): never {
   if (message.includes("deal_marketing_lead_missing")) throw new MemberCvError(409, "Assign an active Business & Marketing lead or a deliverable owner before confirming the deal.");
   if (message.includes("deal_marketing_department_missing")) throw new MemberCvError(409, "Set up the Business & Marketing department before confirming the deal.");
   if (message.includes("deal_finance_lead_missing")) throw new MemberCvError(409, "Assign an active Finance lead before confirming the deal.");
+  if (message.includes("deal_won_funding_correct_first")) throw new MemberCvError(409, "Correct the existing funding in Financing before confirming this review.");
   if (message.includes("deal_finance_department_missing")) throw new MemberCvError(409, "Set up the Finance department before confirming the deal.");
   if (message.includes("deal_invalid_marketing_owner")) throw new MemberCvError(409, "Choose a deliverable owner in the Business & Marketing department.");
   if (message.includes("deal_funding_unavailable")) throw new MemberCvError(503, "Funding is not configured. Ask an administrator to complete setup, then try again.");
@@ -232,9 +233,9 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
     },
     async resolveFinanceReview(token, reviewId, action, fundingId, revision, snapshot, confirmed) {
       try {
-        if(confirmed!==true || typeof reviewId!=="string" || !["link","unlink","separate"].includes(String(action)) || (["link","unlink"].includes(String(action)) && (typeof fundingId!=="string" || !Number.isSafeInteger(revision) || Number(revision)<0)) || (action==="separate" && (!Array.isArray(snapshot) || snapshot.length>100))) throw new MemberCvError(400,"Review the funding before continuing.");
+        if(confirmed!==true || typeof reviewId!=="string" || !["link","unlink","separate","verified"].includes(String(action)) || (["link","unlink","verified"].includes(String(action)) && (typeof fundingId!=="string" || !Number.isSafeInteger(revision) || Number(revision)<0)) || (action==="separate" && (!Array.isArray(snapshot) || snapshot.length>100))) throw new MemberCvError(400,"Review the funding before continuing.");
         const actor=await identity(token);
-        await deps.db.query("select partner_deals.resolve_finance_review($1::uuid,$2,$3,$4::uuid,$5,$6::uuid,$7::integer,$8::jsonb)",[actor.userId,actor.googleSub,actor.email,reviewId,action,action==="link"||action==="unlink"?fundingId:null,action==="link"||action==="unlink"?revision:null,action==="separate"?JSON.stringify(snapshot):null]);
+        await deps.db.query("select partner_deals.resolve_finance_review($1::uuid,$2,$3,$4::uuid,$5,$6::uuid,$7::integer,$8::jsonb)",[actor.userId,actor.googleSub,actor.email,reviewId,action,action==="link"||action==="unlink"||action==="verified"?fundingId:null,action==="link"||action==="unlink"||action==="verified"?revision:null,action==="separate"?JSON.stringify(snapshot):null]);
         return {ok:true};
       } catch(error) { return errorFor(error); }
     },

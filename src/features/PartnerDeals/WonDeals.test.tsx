@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { expect, it, vi } from "vitest";
 import { WonDeals, type WonDeal } from "./WonDeals";
 const notify = vi.fn();
+vi.mock("../MemberCV/session",()=>({memberSessionToken:async()=>"test-token"}));
 vi.mock("../MemberPlatform/MemberNotifications",()=>({ useNotify: () => notify }));
 it("shows agreed contributions and work, but only links authorized tasks",async()=>{
  const item:WonDeal={ id:'1',title:'Partnership',organizationName:'Acme',startsOn:'2026-08-01',endsOn:'2027-07-31',contactName:'Pat',contactEmail:'pat@example.test',agreementLink:'https://example.test/agreement',contributions:[{id:'c',seasonId:'s',seasonCode:'S27',seasonName:'Season 27',kind:'cash',description:'Cash contribution',amountOre:'125000',invoiceDate:'2026-11-01'},{id:'p',seasonId:'s',seasonCode:'S27',seasonName:'Season 27',kind:'product',description:'Parts',amountOre:'2000',invoiceDate:null}],deliverables:[{id:'d',title:'Logo on car',description:'Side panel',dueDate:'2026-12-01'}],tasks:[{id:'visible',title:'Logo task',status:'todo',kind:'marketing',deliverableId:'d',seasonId:null,contributionId:null,canOpen:true},{id:'private',title:'Invoice task',status:'in_progress',kind:'invoice',deliverableId:null,seasonId:'s',contributionId:'c',canOpen:false}]};
@@ -41,4 +42,15 @@ it("shows a planned invoice for a later season only when no task exists",async()
  expect(el.textContent).toContain("Planned · 200,00 NOK · Invoice date: 2027-11-01");
  expect(el.textContent).not.toContain("Invoice Partner · S27");
  await act(async()=>root.unmount());el.remove();
+});
+
+it("lets Business request a limited Finance review for a mismatched won deal",async()=>{
+ const item:WonDeal={id:"deal-review",revision:3,title:"Agreement",organizationName:"Partner",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[{id:"cash",seasonId:"a",seasonCode:"S27",seasonName:"S27",kind:"cash",description:"",amountOre:"10000",invoiceDate:"2026-11-01",fundingNeedsReview:true}],deliverables:[],tasks:[]};
+ const request=vi.fn().mockResolvedValue({ok:true,json:async()=>({count:1})});vi.stubGlobal("fetch",request);
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal-review"]}><WonDeals loadShared={async()=>({deals:[item],canManage:true})}/></MemoryRouter>));
+ const btn=[...el.querySelectorAll("button")].find(b=>b.textContent==="Request Finance review")!;expect(btn).toBeDefined();
+ await act(async()=>btn.click());
+ expect(request).toHaveBeenCalledWith("/api/partner-deals",expect.objectContaining({method:"POST",body:JSON.stringify({action:"requestFinanceReview",dealId:"deal-review",expectedRevision:3})}));
+ await act(async()=>root.unmount());el.remove();vi.unstubAllGlobals();
 });

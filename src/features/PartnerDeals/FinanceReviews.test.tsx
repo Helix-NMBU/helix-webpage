@@ -43,3 +43,25 @@ it("lets Finance remove a mismatched linked draft record with its revision",asyn
  expect(repo.resolve).toHaveBeenCalledWith("review","unlink","old-fund",9,undefined);
  await act(async()=>root.unmount());el.remove();
 });
+
+it("lets Finance verify corrected won-deal funding without unlinking it",async()=>{
+ const linked={id:"fund",revision:10,reference:"F-S27-300",status:"secured",amountOre:"10000",matchesAgreement:true,canUnlink:false};
+ const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",partner:"Acme",season:"S27",amountOre:"10000",candidates:[],linkedFunding:linked}]),resolve:vi.fn().mockResolvedValue(undefined)};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<FinanceReviews repository={repo}/>));
+ expect(el.textContent).not.toContain("Remove mismatched link");
+ await act(async()=>[...el.querySelectorAll("button")].find(b=>b.textContent==="Confirm corrected funding")!.click());
+ expect(repo.resolve).toHaveBeenCalledWith("review","verified","fund",10,undefined);
+ await act(async()=>root.unmount());el.remove();
+});
+
+it("directs Finance to correct an active won-deal record instead of unlinking it",async()=>{
+ const linked={id:"fund",revision:10,reference:"F-S27-300",status:"secured",amountOre:"20000",matchesAgreement:false,canUnlink:false};
+ const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",partner:"Acme",season:"S27",amountOre:"10000",candidates:[],linkedFunding:linked}]),resolve:vi.fn()};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ const {MemoryRouter}=await import("react-router-dom");
+ await act(async()=>root.render(<MemoryRouter><FinanceReviews repository={repo}/></MemoryRouter>));
+ expect(el.textContent).toContain("Correct the existing record");expect(el.querySelector('a[href="/finance/financing"]')).not.toBeNull();
+ expect(el.textContent).not.toContain("Remove mismatched link");
+ await act(async()=>root.unmount());el.remove();
+});

@@ -63,6 +63,20 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
     return () => { generation.current++; window.removeEventListener("focus", onFocus); };
   }, [load, account?.email]);
   const deal = deals?.find(item => item.id === selected);
+  async function requestReview() {
+    if (!deal || deal.revision === undefined) return;
+    const requestGeneration = generation.current;
+    try {
+      const token = await memberSessionToken(owner);
+      const response = await fetch("/api/partner-deals",{method:"POST",cache:"no-store",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({action:"requestFinanceReview",dealId:deal.id,expectedRevision:deal.revision})});
+      const body = await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(typeof body.error==="string"?body.error:"Please try again.");
+      if(requestGeneration!==generation.current)return;
+      notify("Finance review requested","Finance can review the affected funding.",{variant:"success",href:null});
+      await load();
+    } catch(error) { if(requestGeneration!==generation.current)return; notify("Could not request Finance review",error instanceof Error?error.message:"Please try again.",{variant:"error",href:null,action:{label:"Reload agreement",onClick:()=>void load()}}); }
+  }
+
   return <section className="mx-auto max-w-5xl space-y-6 p-6" aria-labelledby="won-deals-heading">
     <div><h1 id="won-deals-heading" className="text-3xl font-semibold">Partner agreements</h1><p className="text-muted-foreground">Agreed partnerships and their delivery work.</p></div>
     {deals?.length === 0 ? <p>No partner agreements yet.</p> : null}
@@ -75,6 +89,7 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
         {agreementUrl(deal.agreementLink) ? <a href={agreementUrl(deal.agreementLink)!} target="_blank" rel="noreferrer" className="underline">Open agreement</a> : null}
         <div><h2 className="font-semibold">Contributions</h2>{deal.contributions.length ? <ul className="mt-2 space-y-2">{deal.contributions.map(c => <li key={c.id} className="rounded-md border p-3"><span>{c.seasonName} ({c.seasonCode}) · {c.kind === "cash" ? "Cash" : c.kind === "product" ? "Product" : "Service"}</span><p>{c.description}</p><p>{c.kind === "cash" ? amount(c.amountOre) : `Estimated value: ${amount(c.amountOre)}`}</p>{c.retiredAt&&<p>Retired; historical records retained.</p>}{c.invoiceDate ? <p>Invoice date: {c.invoiceDate}</p> : null}{c.manualHandling&&<p>Changes to this contribution were handled manually; the original financial record remains unchanged.</p>}{c.fundingStatus&&<p>Funding status: {c.fundingStatus}</p>}{c.fundingNeedsReview&&<p>Funding needs review. {canViewFinance?<Link to="/finance/financing" className="underline">Open Financing</Link>:"Ask Finance to review the funding record."}</p>}</li>)}</ul> : <p>No contributions recorded.</p>}</div>
         <div><h2 className="font-semibold">Deliverables</h2>{deal.deliverables.length ? <ul className="mt-2 space-y-2">{deal.deliverables.map(d => <li key={d.id} className="rounded-md border p-3"><p>{d.title}{d.retiredAt?" · Retired":""}</p><p>{d.description}</p>{d.dueDate ? <p>Due: {d.dueDate}</p> : null}</li>)}</ul> : <p>No deliverables recorded.</p>}</div>
+        {canManage && !deal.cancelledAt && deal.contributions.some(c=>c.kind==="cash"&&!c.retiredAt&&c.fundingNeedsReview) && <Button type="button" variant="outline" onClick={()=>void requestReview()}>Request Finance review</Button>}
         <AgreementChanges key={deal.id} deal={{id:deal.id,revision:deal.revision??0,title:deal.title,contactName:deal.contactName,contactEmail:deal.contactEmail,startsOn:deal.startsOn,endsOn:deal.endsOn,agreementLink:deal.agreementLink,cancelledAt:deal.cancelledAt??null,changes:deal.changes??[],financeReviews:deal.financeReviews??[],contributions:deal.contributions,deliverables:deal.deliverables}} canManage={canManage} seasons={seasons} onReload={()=>void load()}/>
         <div><h2 className="font-semibold">Tasks</h2>{deal.tasks.length || deal.contributions.some(c => c.kind === "cash" && !c.retiredAt && c.seasonId && !deal.tasks.some(t => t.kind === "invoice" && t.contributionId === c.id)) ? <ul className="mt-2 space-y-2">{deal.tasks.map(t => <li key={t.id} className="rounded-md border p-3">{t.canOpen ? <Link to={`/tasks/${t.id}`} className="underline">{t.title}</Link> : <span>{t.title}</span>}<span> · {statusNames[t.status] ?? t.status}</span></li>)}{deal.contributions.filter(c => c.kind === "cash" && !c.retiredAt && c.seasonId && !deal.tasks.some(t => t.kind === "invoice" && t.contributionId === c.id)).map(c => <li key={`planned-${c.id}`} className="rounded-md border p-3"><p>Invoice {deal.organizationName} · {c.seasonName}</p><p>{c.manualHandling?"Handled manually":deal.cancelledAt||deal.changes?.some(change=>change.status==="pending")?"Paused":"Planned"} · {amount(c.amountOre)}{c.invoiceDate ? ` · Invoice date: ${c.invoiceDate}` : ""}</p></li>)}</ul> : <p>No tasks recorded.</p>}</div>
       </CardContent></Card>

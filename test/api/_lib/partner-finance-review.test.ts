@@ -150,3 +150,44 @@ it('finishes review when a rejected linked record has no remaining candidate',as
  await confirm(0,121);
  expect((await db.query("select * from finance.funding where source_name='RejectedCo'")).rows).toHaveLength(2);
 });
+
+it('lets Finance resolve an existing won-deal discrepancy without seeing the pipeline',async()=>{
+ await setupDeal(130,'WonReviewCo',[20]);await confirm(0,131);
+ const cash=(await db.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1 and kind=\'cash\'',[id(131)])).rows[0].id;
+ const funding=(await db.query<{id:string}>("select funding_id as id from partner_deals.funding_links where contribution_id=$1",[cash])).rows[0].id;
+ await db.query('update finance.funding set amount_ore=25000,revision=revision+1 where id=$1',[funding]);
+ const revision=(await db.query<{revision:number}>('select revision from partner_deals.deals where id=$1',[id(131)])).rows[0].revision;
+ await expect(dealService(1).requestFinanceReview('test',id(131),revision)).rejects.toMatchObject({status:403});
+ expect(await dealService(0).requestFinanceReview('test',id(131),revision)).toEqual({count:1});
+ expect(await dealService(3).reviewNotifications('test')).toEqual([]);
+ await expect(dealService(2).financeReviewQueue('test')).rejects.toMatchObject({status:403});
+ const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number;matchesAgreement:boolean;canUnlink:boolean}}[];
+ const review=queue.find(x=>x.partner==='WonReviewCo')!;
+ expect(review.linkedFunding).toMatchObject({id:funding,matchesAgreement:false,canUnlink:false});
+ expect(JSON.stringify(review)).not.toContain('Private negotiation');
+ await expect(dealService(1).resolveFinanceReview('test',review.id,'unlink',funding,review.linkedFunding.revision,null,true)).rejects.toMatchObject({status:409});
+ expect((await db.query('select * from partner_deals.funding_links where contribution_id=$1',[cash])).rows).toHaveLength(1);
+ await db.query('update finance.funding set amount_ore=10000,revision=revision+1 where id=$1',[funding]);
+ const corrected=(await dealService(1).financeReviewQueue('test') as typeof queue).find(x=>x.id===review.id)!;
+ expect(corrected.linkedFunding.matchesAgreement).toBe(true);
+ await expect(dealService(1).resolveFinanceReview('test',review.id,'verified',funding,corrected.linkedFunding.revision-1,null,true)).rejects.toMatchObject({status:409});
+ await dealService(1).resolveFinanceReview('test',review.id,'verified',funding,corrected.linkedFunding.revision,null,true);
+ await dealService(1).resolveFinanceReview('test',review.id,'verified',funding,corrected.linkedFunding.revision,null,true);
+ expect((await dealService(1).financeReviewQueue('test') as typeof queue).some(x=>x.id===review.id)).toBe(false);
+ expect((await db.query("select * from partner_deals.audit where deal_id=$1 and action='finance_review_verified'",[id(131)])).rows).toHaveLength(1);
+});
+
+it('replaces a rejected won-deal funding link without modifying historical funding',async()=>{
+ await setupDeal(140,'WonRejectedCo',[20]);await confirm(0,141);
+ const cash=(await db.query<{id:string}>("select id from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(141)])).rows[0].id;
+ const previous=(await db.query<{id:string}>("select funding_id as id from partner_deals.funding_links where contribution_id=$1",[cash])).rows[0].id;
+ await db.query("update finance.funding set status='rejected',revision=revision+1 where id=$1",[previous]);
+ const revision=(await db.query<{revision:number}>('select revision from partner_deals.deals where id=$1',[id(141)])).rows[0].revision;
+ await dealService(0).requestFinanceReview('test',id(141),revision);
+ const review=(await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number;canUnlink:boolean}}[]).find(x=>x.partner==='WonRejectedCo')!;
+ expect(review.linkedFunding.canUnlink).toBe(true);
+ await dealService(1).resolveFinanceReview('test',review.id,'unlink',previous,review.linkedFunding.revision,null,true);
+ expect((await db.query<{status:string}>('select status from finance.funding where id=$1',[previous])).rows[0].status).toBe('rejected');
+ const fresh=(await db.query<{id:string;status:string}>("select f.id,f.status from partner_deals.funding_links l join finance.funding f on f.id=l.funding_id where l.contribution_id=$1",[cash])).rows[0];
+ expect(fresh.id).not.toBe(previous);expect(fresh.status).toBe('secured');
+});

@@ -114,3 +114,31 @@ it('provisions a future season without changing the active setting and denies no
  await expect(db.query("select finance.provision_future_season($1,'S30','S30','2029-01-01','2030-07-31')",[id(1)])).rejects.toThrow('finance:SEASON_OVERLAP');
  await expect(db.query("insert into finance.seasons(code,name,start_date,end_date,created_by_member_id,updated_by_member_id) values('S30','S30','2029-01-01','2030-07-31',$1,$1)",[id(1)])).rejects.toMatchObject({code:'23P01'});
 });
+
+it('reports a due invoice blocked by a pending amendment, then catches up after resolution',async()=>{
+ await setupDeal(160,'PendingInvoiceCo',[20]);
+ await db.query("update partner_deals.deals set stage='won',won_at=now(),won_by_member_id=$2 where id=$1",[id(161),id(1)]);
+ const contribution=(await db.query<{id:string}>("select id from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(161)])).rows[0].id;
+ await db.query('select partner_deals.attach_one_cash($1,$2,$3)',[id(1),id(161),contribution]);
+ const change=(await db.query<{id:string}>("insert into partner_deals.agreement_changes(deal_id,kind,reason,before_terms,proposed_terms,created_by) values($1,'amendment','Review','{}','{}',$2) returning id",[id(161),id(1)])).rows[0].id;
+ const blocked=(await db.query<{r:{created:number;failed:number;failures:{contributionId:string;code:string}[]}}>("select partner_deals.materialize_invoices_on('2027-01-01') r")).rows[0].r;
+ expect(blocked.failures).toEqual(expect.arrayContaining([expect.objectContaining({contributionId:contribution,code:'agreement_change_pending'})]));expect(blocked.failed).toBeGreaterThan(0);
+ expect((await db.query('select * from partner_deals.task_links where contribution_id=$1',[contribution])).rows).toHaveLength(0);
+ await db.query("update partner_deals.agreement_changes set status='resolved',resolved_by=$2,resolved_at=now(),resolution_note='Reviewed' where id=$1",[change,id(1)]);
+ const result=(await db.query<{r:{created:number;failed:number}}>("select partner_deals.materialize_invoices_on('2027-01-02') r")).rows[0].r;
+ expect(result.created).toBeGreaterThan(0);
+ expect((await db.query('select * from partner_deals.task_links where contribution_id=$1',[contribution])).rows).toHaveLength(1);
+});
+
+it('attaches only added cash when an earlier funded season is closed',async()=>{
+ await db.query("update finance.seasons set status='planning' where id=$1",[id(21)]);
+ await setupDeal(170,'PastSeasonCo',[20]);await confirm(0,171);
+ const old=(await db.query<{id:string;status:string}>("select f.id,f.status from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1",[id(171)])).rows[0];
+ await db.query("update finance.seasons set status='closed' where id=$1",[id(20)]);
+ const change=(await db.query<{id:string}>("insert into partner_deals.agreement_changes(deal_id,kind,reason,before_terms,proposed_terms,created_by) values($1,'amendment','Add next season','{}','{}',$2) returning id",[id(171),id(1)])).rows[0].id;
+ const added=(await db.query<{id:string}>("insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,invoice_date,pending_change_id) values($1,$2,'cash',20000,'2027-11-01',$3) returning id",[id(171),id(21),change])).rows[0].id;
+ await db.query('select partner_deals.attach_change_funding($1,$2,$3)',[id(1),id(171),change]);
+ await db.query('select partner_deals.attach_change_funding($1,$2,$3)',[id(1),id(171),change]);
+ expect((await db.query('select * from partner_deals.funding_links where contribution_id=$1',[added])).rows).toHaveLength(1);
+ expect((await db.query<{status:string}>('select status from finance.funding where id=$1',[old.id])).rows[0].status).toBe(old.status);
+});
