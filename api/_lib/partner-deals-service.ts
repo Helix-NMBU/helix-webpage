@@ -43,7 +43,7 @@ const readSql = `select caps.pipeline as "canManage",
   'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'retiredAt',c.retired_at,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date,
    'manualHandling',exists(select 1 from partner_deals.manual_reconciliation_items mr where mr.kind='cash' and mr.item_id=c.id),
    'fundingStatus',case when coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then (select f.status from partner_deals.funding_links l join finance.funding f on f.id=l.funding_id where l.contribution_id=c.id) else null end,
-   'fundingNeedsReview',case when caps.pipeline or coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then c.kind='cash' and c.retired_at is null and (not exists(select 1 from partner_deals.funding_links fl where fl.contribution_id=c.id) or partner_deals.linked_funding_mismatch(c.id)) else false end) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id and c.pending_change_id is null),'[]'::jsonb),
+   'fundingNeedsReview',case when caps.pipeline or coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then c.kind='cash' and c.retired_at is null and not exists(select 1 from partner_deals.manual_reconciliation_items mr where mr.kind='cash' and mr.item_id=c.id) and (not exists(select 1 from partner_deals.funding_links fl where fl.contribution_id=c.id) or partner_deals.linked_funding_mismatch(c.id)) else false end) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id and c.pending_change_id is null),'[]'::jsonb),
   'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'retiredAt',v.retired_at,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id and v.pending_change_id is null),'[]'::jsonb)
  ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes) else '{}'::jsonb end || case when caps.pipeline then jsonb_build_object(
  'financeReviews',coalesce((select jsonb_agg(jsonb_build_object('contributionId',r.contribution_id,'status',case when r.status='linked' and partner_deals.linked_funding_mismatch(c.id) then 'stale' when r.status='separate' and (select a.candidate_snapshot from partner_deals.separate_funding_approvals a where a.contribution_id=c.id) is distinct from partner_deals.funding_candidate_snapshot(c.id) then 'stale' else r.status end))
@@ -88,16 +88,23 @@ function errorFor(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("deal_change_closed_season")) throw new MemberCvError(409,"A closed season still has active records. Ask Finance and Marketing to review it; this change remains unresolved.");
+  if (message.includes("deal_change_cancel_finance")) throw new MemberCvError(409,"Ask Finance to retire unreceived funding before reconciling cancellation.");
+  if (message.includes("deal_change_cancel_invoice")) throw new MemberCvError(409,"Ask Finance to cancel the open invoice task before reconciling cancellation.");
+  if (message.includes("deal_change_cancel_task")) throw new MemberCvError(409,"Ask Marketing to cancel open deliverable tasks before reconciling cancellation.");
+  if (message.includes("deal_change_reopen_finance")) throw new MemberCvError(409,"Ask Finance to restore matching funding before reconciling reopening.");
+  if (message.includes("deal_change_reopen_invoice")) throw new MemberCvError(409,"Ask Finance to reopen the invoice task before reconciling reopening.");
+  if (message.includes("deal_change_reopen_task")) throw new MemberCvError(409,"Ask Marketing to reopen deliverable tasks before reconciling reopening.");
   if (message.includes("deal_change_manual_required")) throw new MemberCvError(409,"Completed tasks or received funding require documented manual handling and explicit confirmation.");
   if (message.includes("deal_change_retire_finance")) throw new MemberCvError(409,"Ask Finance to retire the unreceived funding before removing this contribution.");
   if (message.includes("deal_change_retire_invoice")) throw new MemberCvError(409,"Ask Finance to cancel the linked invoice task before removing this contribution.");
   if (message.includes("deal_change_retire_task")) throw new MemberCvError(409,"Ask Marketing to cancel the linked task before removing this deliverable.");
   if (message.includes("deal_change_finance_review")) throw new MemberCvError(409,"Ask Finance to update the linked secured funding to the proposed amount before reconciling.");
-  if (message.includes("deal_change_invoice_review")) throw new MemberCvError(409,"Ask Finance to update the linked invoice task date before reconciling.");
+  if (message.includes("deal_change_invoice_review")) throw new MemberCvError(409,"Ask Finance to update or cancel the linked invoice task before reconciling.");
   if (message.includes("deal_change_task_review")) throw new MemberCvError(409,"Ask Marketing to update the linked task to the proposed details before reconciling.");
   if (message.includes("deal_change_received_locked")) throw new MemberCvError(409,"A received funding amount needs separate handling. The original record was kept.");
   if (message.includes("deal_change_completed_locked")) throw new MemberCvError(409,"A completed task needs separate handling. The original task was kept.");
-  if (message.includes("deal_change_pending")) throw new MemberCvError(409,"Reconcile the existing amendment before recording another.");
+  if (message.includes("deal_change_pending")) throw new MemberCvError(409,"Reconcile or withdraw the existing agreement change before recording another.");
   if (message.includes("deal_change_cancelled")) throw new MemberCvError(409,"Reopen the agreement before reconciling its amendment.");
   if (message.includes("deal_change_conflict")) throw new MemberCvError(409,"This agreement changed. Reload it before continuing.");
   if (message.includes("deal_change_invalid")) throw new MemberCvError(400,"Check the agreement change and review note.");

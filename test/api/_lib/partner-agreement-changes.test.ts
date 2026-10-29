@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -48,6 +48,7 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  await expect(dealService(2).recordAgreementChange('test',id(81),1,'amendment','New details',terms,true)).rejects.toMatchObject({status:403});
  const amend=await dealService(0).recordAgreementChange('test',id(81),1,'amendment','New details',terms,true);
  await expect(dealService(0).recordAgreementChange('test',id(81),1,'amendment','Stale',terms,true)).rejects.toMatchObject({status:409});
+ await expect(dealService(0).recordAgreementChange('test',id(81),2,'cancellation','Interrupted amendment',null,true)).rejects.toMatchObject({status:409});
  const cancel=await dealService(0).recordAgreementChange('test',id(91),1,'cancellation','Agreement ended',null,true);
  const manualCash=(await db.query<{id:string;season_id:string;amount_ore:string;invoice_date:string}>("select id,season_id,amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(101)])).rows;
  const manualDeliverables=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(101)])).rows;
@@ -56,6 +57,17 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  const detail=await dealService(0).load('test','shared');expect(JSON.stringify(detail)).toContain('Revised agreement');
  expect((await db.query<{title:string}>("select title from partner_deals.deals where id=$1",[id(81)])).rows[0].title).toBe('Agreement');
  expect((await db.query("select * from partner_deals.agreement_changes where deal_id=$1 and status='pending'",[id(81)])).rows).toHaveLength(1);
+ await expect(dealService(0).recordAgreementChange('test',id(91),2,'reopening','Renewed',null,true)).rejects.toMatchObject({status:409});
+ await expect(dealService(0).resolveAgreementChange('test',cancel.id,'Reviewed cancellation',true,false)).rejects.toMatchObject({status:409});
+ await db.query("update finance.funding set status='deleted',prior_status='secured',revision=revision+1 where id in (select fl.funding_id from partner_deals.funding_links fl join partner_deals.contributions c on c.id=fl.contribution_id where c.deal_id=$1)",[id(91)]);
+ await expect(dealService(0).resolveAgreementChange('test',cancel.id,'Reviewed cancellation',true,false)).rejects.toMatchObject({status:409});
+ await db.query("update project_management.tasks set status='cancelled' where id in (select task_id from partner_deals.task_links where deal_id=$1)",[id(91)]);
+ await dealService(0).resolveAgreementChange('test',cancel.id,'Finance and Marketing handled cancellation',true,false);
+ const reopening=await dealService(0).recordAgreementChange('test',id(91),3,'reopening','Renewed',null,true);
+ await expect(dealService(0).resolveAgreementChange('test',reopening.id,'Reviewed reopening',true,false)).rejects.toMatchObject({status:409});
+ await db.query("update finance.funding set status='secured',prior_status=null,revision=revision+1 where id in (select fl.funding_id from partner_deals.funding_links fl join partner_deals.contributions c on c.id=fl.contribution_id where c.deal_id=$1)",[id(91)]);
+ await expect(dealService(0).resolveAgreementChange('test',reopening.id,'Reviewed reopening',true,false)).rejects.toMatchObject({status:409});
+ await db.query("update project_management.tasks set status='todo' where id in (select task_id from partner_deals.task_links where deal_id=$1)",[id(91)]);
  await db.exec(`update finance.seasons set status='closed' where code='S27';update finance.seasons set status='active' where code='S28';update finance.settings set setting_value='"S28"' where setting_key='current_season';`);
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'platform_administrator')",[id(1)]);
  await db.query('select project_management.provision_current_departments($1)',[id(1)]);
@@ -93,13 +105,13 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  await dealService(0).resolveAgreementChange('test',manual.id,'Handled manually with Finance and Marketing',true,true);
  expect((await db.query('select * from partner_deals.manual_reconciliation_items where change_id=$1',[manual.id])).rows).toHaveLength(2);
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[manualFunding])).rows[0].amount_ore).toBe('10000');
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from partner_deals.contributions where deal_id=$1 and season_id=$2",[id(101),id(21)])).rows[0].amount_ore).toBe('16000');
+ expect((await db.query<{title:string}>("select title from partner_deals.deliverables where deal_id=$1",[id(101)])).rows[0].title).toBe('Changed completed work');
+ const manualView=await dealService(0).load('test','shared');const manualDeal=(manualView.deals as {id:string;contributions:{seasonId:string;manualHandling:boolean;fundingNeedsReview:boolean}[]}[]).find(d=>d.id===id(101))!;expect(manualDeal.contributions.find(c=>c.seasonId===id(21))).toMatchObject({manualHandling:true,fundingNeedsReview:false});
  expect((await db.query<{title:string;status:string}>("select title,status from project_management.tasks where id=(select task_id from partner_deals.task_links where deal_id=$1 and kind='marketing')",[id(101)])).rows[0]).toMatchObject({title:'Publish logo',status:'done'});
  expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result")).rows[0].result.created).toBe(0);
  expect((await db.query("select task_id from partner_deals.task_links where deal_id=$1 and season_id=$2",[id(91),id(21)])).rows).toHaveLength(0);
- const reopening=await dealService(0).recordAgreementChange('test',id(91),2,'reopening','Renewed',null,true);
- expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result")).rows[0].result.created).toBe(0);
- await dealService(0).resolveAgreementChange('test',cancel.id,'Reviewed cancellation',true,false);
- await dealService(0).resolveAgreementChange('test',reopening.id,'Reviewed reopening',true,false);
+ await dealService(0).resolveAgreementChange('test',reopening.id,'Finance and Marketing restored records',true,false);
  expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result")).rows[0].result.created).toBe(1);
  expect((await db.query("select task_id from partner_deals.task_links where deal_id=$1 and season_id=$2",[id(81),id(20)])).rows).toHaveLength(1);
  expect((await db.query("select f.id from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1 order by f.id",[id(81)])).rows).toEqual(fundingBefore);
@@ -217,4 +229,43 @@ it('withdraws an incorrect pending addition while preserving Finance funding',as
  expect((await db.query("select * from partner_deals.agreement_changes where id=$1 and withdrawn_at is not null",[change.id])).rows).toHaveLength(1);
  expect((await db.query("select * from partner_deals.audit where deal_id=$1 and action='agreement_change_withdrawn'",[id(201)])).rows).toHaveLength(1);
  await dealService(0).recordAgreementChange('test',id(201),3,'amendment','Corrected amount',{...terms,newCash:[{...terms.newCash[0],id:id(211),amountOre:'26000'}]},true);
+});
+
+it('requires documented manual handling for cancellation of received funding and completed work',async()=>{
+ await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where season='S28' and name='Business & Marketing' on conflict do nothing",[id(3)]);
+ await setupDeal(230,'CompletedCo',[21]);await confirm(0,231);
+ const funding=(await db.query<{funding_id:string}>("select fl.funding_id from partner_deals.funding_links fl join partner_deals.contributions c on c.id=fl.contribution_id where c.deal_id=$1",[id(231)])).rows[0].funding_id;
+ await db.query("update finance.funding set status='received',revision=revision+1 where id=$1",[funding]);
+ await db.query("update project_management.tasks set status='done',completed_at=now() where id in (select task_id from partner_deals.task_links where deal_id=$1)",[id(231)]);
+ const cancel=await dealService(0).recordAgreementChange('test',id(231),1,'cancellation','Ended after delivery',null,true);
+ await expect(dealService(0).resolveAgreementChange('test',cancel.id,'Reviewed',true,false)).rejects.toMatchObject({status:409});
+ await dealService(0).resolveAgreementChange('test',cancel.id,'Handled with Finance and Marketing',true,true);
+ expect((await db.query("select * from finance.funding where id=$1 and status='received'",[funding])).rows).toHaveLength(1);
+ expect((await db.query("select t.id from project_management.tasks t join partner_deals.task_links l on l.task_id=t.id where l.deal_id=$1 and t.status='done'",[id(231)])).rows).toHaveLength(2);
+ expect((await db.query("select * from partner_deals.manual_reconciliation_items where change_id=$1",[cancel.id])).rows).toHaveLength(2);
+});
+
+it('requires an obsolete open invoice to be handled before manual received-funding changes',async()=>{
+ await setupDeal(240,'PaidCo',[21]);await confirm(0,241);
+ const c=(await db.query<{id:string;amount_ore:string;invoice_date:string}>("select id,amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(241)])).rows[0];
+ const d=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(241)])).rows[0];
+ const funding=(await db.query<{funding_id:string}>("select funding_id from partner_deals.funding_links where contribution_id=$1",[c.id])).rows[0].funding_id;
+ await db.query("update finance.funding set status='received',revision=revision+1 where id=$1",[funding]);
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[{id:c.id,amountOre:'15000',invoiceDate:c.invoice_date}],inKindChanges:[],deliverableChanges:[{id:d.id,title:d.title,description:d.description,dueDate:d.due_date}]};
+ const amendment=await dealService(0).recordAgreementChange('test',id(241),1,'amendment','Adjust received amount',terms,true);
+ await expect(dealService(0).resolveAgreementChange('test',amendment.id,'Manual handling',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('invoice task')});
+ await db.query("update project_management.tasks set status='cancelled' where id=(select task_id from partner_deals.task_links where contribution_id=$1)",[c.id]);
+ await dealService(0).resolveAgreementChange('test',amendment.id,'Finance handled the obsolete invoice',true,true);
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[funding])).rows[0].amount_ore).toBe('10000');
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from partner_deals.contributions where id=$1",[c.id])).rows[0].amount_ore).toBe('15000');
+});
+
+it('keeps cancellation unresolved when a closed season still has active records',async()=>{
+ await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where season='S28' and name='Business & Marketing' on conflict do nothing",[id(3)]);
+ await setupDeal(220,'ClosedCo',[21]);await confirm(0,221);
+ await db.exec("update finance.seasons set status='closed' where code='S28'");
+ const cancel=await dealService(0).recordAgreementChange('test',id(221),1,'cancellation','Agreement ended',null,true);
+ await expect(dealService(0).resolveAgreementChange('test',cancel.id,'Reviewed manually',true,true)).rejects.toMatchObject({status:409,message:expect.stringContaining('closed season')});
+ expect((await db.query("select * from partner_deals.agreement_changes where id=$1 and status='pending'",[cancel.id])).rows).toHaveLength(1);
+ expect((await db.query("select f.id from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1 and f.status='secured'",[id(221)])).rows).toHaveLength(1);
 });
