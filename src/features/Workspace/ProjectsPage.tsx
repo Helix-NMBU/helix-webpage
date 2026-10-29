@@ -208,16 +208,13 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
       <Directory
         title="Projects"
         fill={scopedOptions.view === "timeline"}
-        action={<div className="flex items-center gap-2">
+        action={<div className="flex min-w-0 flex-wrap items-center gap-2">
+          {departmentId && <span className="text-sm text-muted-foreground">{department?.name ?? "Unknown department"}</span>}
+          {departmentId && !departmentIdScope && <Button variant="ghost" size="sm" onClick={() => { const next = new URLSearchParams(params); next.delete("department"); setParams(next); }}>All projects</Button>}
+          <div className="w-48 max-w-full sm:w-64"><Search outside label="Find projects" value={search} onChange={setSearch} /></div>
           <ProjectViewMenu data={data} options={scopedOptions} onChange={change} onReset={reset} hideDepartmentFilter={Boolean(departmentIdScope)} />
+          {scopedOptions.view === "timeline" && <><Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button><div className="w-28"><Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scopedOptions.scale} onChange={value => change("scale", value)} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} /></div></>}
           {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
-        </div>}
-        toolbar={<div className="space-y-3">
-          {departmentId && <div className="flex items-center gap-3 text-sm"><span>{department?.name ?? "Unknown department"}</span>{!departmentIdScope && <Button variant="ghost" size="sm" onClick={() => { const next = new URLSearchParams(params); next.delete("department"); setParams(next); }}>All projects</Button>}</div>}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="w-full max-w-sm"><Search outside label="Find projects" value={search} onChange={setSearch} /></div>
-            {scopedOptions.view === "timeline" && <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button><div className="w-28"><Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scopedOptions.scale} onChange={value => change("scale", value)} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} /></div></div>}
-          </div>
         </div>}
       >
         <>

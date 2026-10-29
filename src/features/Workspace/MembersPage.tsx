@@ -192,7 +192,7 @@ export function MembersPage() {
   }
   return (
     <>
-      <Directory title="Members" toolbar={<Search outside label="Find members" value={search} onChange={setSearch} />} action={
+      <Directory title="Members" action={<div className="flex min-w-0 flex-wrap items-center gap-2"><div className="w-48 max-w-full sm:w-64"><Search outside label="Find members" value={search} onChange={setSearch} /></div>
         <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label="Member view settings" title="Member view settings"><IconFilter2 aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
           <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-5">
             <div className="space-y-3 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">
@@ -203,7 +203,7 @@ export function MembersPage() {
             <div className="space-y-3 border-t pt-4"><p className="text-sm font-medium">Display columns</p><div role="group" aria-label="Member display columns" className="flex flex-wrap gap-2">{MEMBER_COLUMNS.map(([key, label]) => <Button key={key} type="button" size="sm" className="rounded-full" variant={options.columns.includes(key) ? "secondary" : "outline"} aria-pressed={options.columns.includes(key)} onClick={() => changeView("columns", MEMBER_COLUMNS.map(([item]) => item).filter(item => item === key ? !options.columns.includes(item) : options.columns.includes(item)).join(","))}>{label}</Button>)}</div></div>
             <Button variant="ghost" className="w-full border-t" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); for (const key of ["group", "sort", "direction", "columns"]) next.delete(key); return next; }, { replace: true })}>Reset view</Button>
           </PopoverContent>
-        </Popover>
+        </Popover></div>
       }>
         <Table aria-label="Members list">
           <TableHeader>

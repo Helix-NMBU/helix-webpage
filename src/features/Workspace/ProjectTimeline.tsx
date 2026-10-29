@@ -5,7 +5,6 @@ import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import { addDays, formatDate, osloDate } from "../ProjectManagement/model";
 import { chartDay } from "../ProjectManagement/progress-chart";
 import { ProgressRing } from "../ProjectManagement/ProgressRing";
-import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
 import type { WorkspaceProject } from "./types";
 
 const monthStart = (date: string) => `${date.slice(0, 7)}-01`;
@@ -36,14 +35,13 @@ export function timelineTicks(start: string, end: string, pixelsPerDay: number) 
   }
   return ticks;
 }
-export function milestoneClusters(milestones: WorkspaceProject["milestones"], x: (date: string) => number) {
-  const groups: WorkspaceProject["milestones"][] = [];
+export function milestonePositions(milestones: WorkspaceProject["milestones"], x: (date: string) => number) {
+  const positions: { milestone: WorkspaceProject["milestones"][number]; position: number }[] = [];
   for (const milestone of milestones.filter(item => item.deadline).sort((a, b) => a.deadline!.localeCompare(b.deadline!) || a.title.localeCompare(b.title))) {
-    const group = groups[groups.length - 1];
-    if (group && x(milestone.deadline!) - x(group[0].deadline!) < 24) group.push(milestone);
-    else groups.push([milestone]);
+    const previous = positions[positions.length - 1];
+    positions.push({ milestone, position: Math.max(x(milestone.deadline!), previous ? previous.position + 12 : -Infinity) });
   }
-  return groups;
+  return positions;
 }
 export function ProjectTimeline({ projects, groups, scale, timelineRef }: {
   projects: WorkspaceProject[]; groups: { id: string; name: string; projects: WorkspaceProject[] }[];
@@ -94,7 +92,7 @@ export function ProjectTimeline({ projects, groups, scale, timelineRef }: {
         {groups.map(group => <div key={group.id}>
           {group.name && <div className="sticky left-0 w-[var(--timeline-label-width)] border-y bg-muted px-4 py-2 text-xs font-medium">{group.name}</div>}
           {group.projects.map(project => {
-            const clusters = milestoneClusters(project.milestones, x);
+            const markers = milestonePositions(project.milestones, x);
             const hasRange = Boolean(project.startDate && project.deadline);
             const direction = viewport.width ? offscreenProject(project.startDate ? x(project.startDate) : null, project.deadline ? x(project.deadline) : null, viewport.left, viewport.left + viewport.width - viewport.label) : null;
             const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
@@ -113,14 +111,8 @@ export function ProjectTimeline({ projects, groups, scale, timelineRef }: {
                 title={`${project.name}: ${formatDate(project.startDate!)} – ${formatDate(project.deadline)}`}
                 className="absolute top-6 flex h-7 items-center overflow-hidden rounded-md border border-primary/40 bg-primary/15 text-xs hover:bg-primary/25"
                 style={{ left: x(project.startDate!), width: Math.max(2, x(project.deadline!) - x(project.startDate!)) }}
-              ><span className="sr-only">{project.name}</span></Link></> : project.deadline ? <Link to={`/projects/${project.id}`} aria-label={`Open project ${project.name}, target ${formatDate(project.deadline)}`} title={`${project.name}: target ${formatDate(project.deadline)}`} className="absolute top-3 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-3 py-1.5 text-xs hover:bg-accent" style={{ left: x(project.deadline) }}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.deadline}T12:00:00Z`))}</Link> : project.startDate ? <Link to={`/projects/${project.id}`} className="absolute top-3 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-3 py-1.5 text-xs hover:bg-accent" style={{ left: x(project.startDate) }} title={`Start: ${formatDate(project.startDate)}; deadline not set`}>Start: {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.startDate}T12:00:00Z`))}</Link> : <span className="absolute left-4 top-5 text-xs text-muted-foreground">Dates not set</span>}
-              {clusters.map(cluster => {
-                const first = cluster[0];
-                const position = { left: x(first.deadline!), top: hasRange ? 26 : 56 };
-                const markerClass = "absolute z-10 -translate-x-1/2 rounded p-1 text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-                if (cluster.length === 1) return <Link key={first.id} to={`/projects/${project.id}?milestone=${encodeURIComponent(first.id)}`} aria-label={`Open milestone ${first.title} in ${project.name}`} title={`${first.title}: ${formatDate(first.deadline)}`} className={markerClass} style={position}><IconDiamonds aria-hidden="true" className="size-4" /></Link>;
-                return <Popover key={first.id}><PopoverTrigger asChild><button type="button" className={markerClass} style={position} aria-label={`${cluster.length} milestones near ${formatDate(first.deadline)} in ${project.name}`}><span className="relative block h-4" style={{ width: 16 + Math.min(cluster.length - 1, 2) * 5 }}>{cluster.slice(0, 3).map((milestone, index) => <IconDiamonds key={milestone.id} aria-hidden="true" className="absolute top-0 size-4" style={{ left: index * 5 }} />)}</span></button></PopoverTrigger><PopoverContent align="start" className="w-72 space-y-1 p-2"><p className="px-2 py-1 text-xs font-medium text-muted-foreground">Milestones</p>{cluster.map(milestone => <Link key={milestone.id} to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} className="flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="min-w-0 truncate">{milestone.title}</span><time className="shrink-0 text-xs text-muted-foreground" dateTime={milestone.deadline!}>{formatDate(milestone.deadline)}</time></Link>)}</PopoverContent></Popover>;
-              })}
+              ><span className="sr-only">{project.name}</span></Link></> : project.deadline ? <Link to={`/projects/${project.id}`} aria-label={`Open project ${project.name}, target ${formatDate(project.deadline)}`} title={`${project.name}: target ${formatDate(project.deadline)}`} className="absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-2 py-0.5 text-xs hover:bg-accent" style={{ left: x(project.deadline) }}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.deadline}T12:00:00Z`))}</Link> : project.startDate ? <Link to={`/projects/${project.id}`} className="absolute top-0 -translate-x-1/2 whitespace-nowrap rounded-md border bg-muted px-2 py-0.5 text-xs hover:bg-accent" style={{ left: x(project.startDate) }} title={`Start: ${formatDate(project.startDate)}; deadline not set`}>Start: {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${project.startDate}T12:00:00Z`))}</Link> : <span className="absolute left-4 top-0 text-xs text-muted-foreground">Dates not set</span>}
+              {markers.map(({ milestone, position }) => <Link key={milestone.id} to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} aria-label={`Open milestone ${milestone.title} in ${project.name}`} title={`${milestone.title}: ${formatDate(milestone.deadline)}`} className="absolute top-6 z-10 flex h-7 w-3 -translate-x-1/2 items-center justify-center rounded text-foreground hover:z-20 hover:bg-accent focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ left: position }}><IconDiamonds aria-hidden="true" className="size-4 max-w-none shrink-0" /></Link>)}
             </div>
           </div>; })}
         </div>)}

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { directoryFixture } from "./fixtures.test-support";
 import { projectGroups, projectView, visibleProjects } from "./project-view";
-import { milestoneClusters, offscreenProject, timelineRange, timelineTicks } from "./ProjectTimeline";
+import { milestonePositions, offscreenProject, timelineRange, timelineTicks } from "./ProjectTimeline";
 
 describe("project views", () => {
-  it("keeps nearby milestones in one accessible group and separates distant dates", () => {
+  it("keeps every nearby milestone individually accessible in the same lane", () => {
     const milestones = [{ id: "a", title: "First", deadline: "2026-10-01", priority: "normal" as const }, { id: "b", title: "Second", deadline: "2026-10-02", priority: "normal" as const }, { id: "c", title: "Third", deadline: "2026-11-01", priority: "normal" as const }, { id: "d", title: "Undated", deadline: null, priority: "normal" as const }];
-    const groups = milestoneClusters(milestones, date => (Date.parse(date) - Date.parse("2026-10-01")) / 86400000 * 3);
-    expect(groups.map(group => group.map(item => item.id))).toEqual([["a", "b"], ["c"]]);
+    const positions = milestonePositions(milestones, date => (Date.parse(date) - Date.parse("2026-10-01")) / 86400000 * 3);
+    expect(positions.map(item => [item.milestone.id, item.position])).toEqual([["a", 0], ["b", 12], ["c", 93]]);
   });
   it("shows progressively more date ticks when zooming in", () => {
     const ticks = (pixelsPerDay: number) => timelineTicks("2026-10-01", "2026-11-01", pixelsPerDay);
