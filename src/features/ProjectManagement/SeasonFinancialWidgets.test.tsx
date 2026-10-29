@@ -36,7 +36,8 @@ it("shows exact amounts, a dated manual balance, and accessible department spend
   expect(container.textContent).toContain("as of 2026-10-28");
   expect(container.textContent).toContain("Includes unpaid invoices");
   expect(container.querySelector('[role="img"][aria-label*="over budget"]')).not.toBeNull();
-  expect(container.textContent).toContain("Spending by department");
+  expect(container.textContent).not.toContain("Spending by department");
+  expect(container.textContent).toContain("NOK 1 250,50 / NOK 1 000,00");
   expect(container.querySelector('a[href="/finance"]')).not.toBeNull();
   const bar = container.querySelector('[role="progressbar"][aria-label*="Mechanical"]');
   expect(bar?.getAttribute("aria-valuetext")).toContain("NOK 1 250,50 spent of NOK 1 000,00 allocated, over budget, NOK 100,00 unbudgeted");

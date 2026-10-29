@@ -44,7 +44,7 @@ function DepartmentRow({ department }: { department: SeasonFinancialDepartment }
   const label = `${department.name}: ${money(department.actualNok)} spent of ${money(department.plannedNok)} allocated${over ? ", over budget" : ""}${nokToOre(department.unbudgetedNok) > 0n ? `, ${money(department.unbudgetedNok)} unbudgeted` : ""}`;
   return <li className="grid grid-cols-[minmax(0,1fr)_minmax(4rem,1fr)] items-center gap-4 py-2">
     <div className="flex min-w-0 items-center gap-2 text-sm"><Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span>{department.name}</span></div>
-    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={label} title={label} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${percent}%` }} /></div>
+    <div className="min-w-0 space-y-1"><div aria-hidden="true" className="text-right text-xs tabular-nums text-muted-foreground">{money(department.actualNok)} / {money(department.plannedNok)}</div><div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={label} title={label} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${percent}%` }} /></div></div>
   </li>;
 }
 
@@ -130,7 +130,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
             {visible && summary.plannedNok !== null && summary.actualNok !== null && nokToOre(summary.actualNok) > nokToOre(summary.plannedNok) && <p className="text-xs text-destructive">Over budget</p>}
             <p className="text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</p>
           </div>
-          {visible && <><div aria-hidden="true" className="h-px bg-border md:my-3 md:h-auto md:w-px" /><div className="space-y-3"><h3 className="font-medium">Spending by department</h3>{stale && <p className="text-xs text-muted-foreground">Last loaded values.</p>}{summary.departments.length ? <ul>{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul> : <p className="text-sm text-muted-foreground">No departments to show.</p>}</div></>}
+          {visible && <><div aria-hidden="true" className="h-px bg-border md:my-3 md:h-auto md:w-px" /><div className="space-y-3">{stale && <p className="text-xs text-muted-foreground">Last loaded values.</p>}{summary.departments.length ? <ul>{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul> : <p className="text-sm text-muted-foreground">No departments to show.</p>}</div></>}
         </div>
       </CardContent></Card>
     </div>
