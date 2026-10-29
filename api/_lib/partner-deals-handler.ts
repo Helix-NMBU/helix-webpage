@@ -16,6 +16,8 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) throw new MemberCvError(400,"Check the deal details and try again.");
    if (req.body.action === "createOrganization") return res.status(200).json(await service.createOrganization(token,req.body.name));
    if (req.body.action === "renameOrganization") return res.status(200).json(await service.renameOrganization(token,req.body.id,req.body.expectedRevision,req.body.name));
+   if (req.body.action === "linkFunding") return res.status(200).json(await service.linkFunding(token,req.body.contributionId,req.body.fundingId));
+   if (req.body.action === "unlinkFunding") return res.status(200).json(await service.unlinkFunding(token,req.body.contributionId));
    if (req.body.action === "saveDeal") return res.status(200).json(await service.save(token,req.body.deal));
    throw new MemberCvError(400,"Choose a valid deal operation.");
   } catch (error) {

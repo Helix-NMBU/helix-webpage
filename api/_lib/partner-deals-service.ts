@@ -10,6 +10,8 @@ export interface DealServices {
   createOrganization(token: string, name: unknown): Promise<{ id: string }>;
   renameOrganization(token: string, id: unknown, revision: unknown, name: unknown): Promise<{ id: string }>;
   save(token: string, body: unknown): Promise<{ id: string }>;
+  linkFunding(token: string, contributionId: unknown, fundingId: unknown): Promise<{ ok: true }>;
+  unlinkFunding(token: string, contributionId: unknown): Promise<{ ok: true }>;
 }
 
 // One SQL statement binds the projection to the current grant and linked Google identity.
@@ -62,6 +64,8 @@ function errorFor(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("deal_funding_possible_duplicate")) throw new MemberCvError(409, "Existing funding may match this partner and season. Ask Finance to link the existing record before confirming the deal.");
+  if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
   if (message.includes("deal_forbidden") || code === "42501") throw new MemberCvError(403, "You do not have access to sponsor deals.");
   if (message.includes("deal_not_found")) throw new MemberCvError(404, "This deal is no longer available.");
   if (message.includes("deal_conflict") || message.includes("deal_won_locked") || code === "40001") throw new MemberCvError(409, "This deal changed or has been won. Reload it before saving.");
@@ -106,6 +110,22 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         const result = await deps.db.query<{id: string}>("select partner_deals.rename_organization($1::uuid,$2,$3,$4::uuid,$5::integer,$6) as id", [actor.userId,actor.googleSub,actor.email,id,revision,name]);
         if (!result.rows[0]?.id) throw new Error("Missing identifier");
         return result.rows[0];
+      } catch (error) { return errorFor(error); }
+    },
+    async linkFunding(token, contributionId, fundingId) {
+      try {
+        if (typeof contributionId !== "string" || typeof fundingId !== "string") throw new MemberCvError(400, "Choose a cash contribution and funding record.");
+        const actor = await identity(token);
+        await deps.db.query("select partner_deals.prepare_funding_link($1::uuid,$2,$3,$4::uuid,$5::uuid)", [actor.userId,actor.googleSub,actor.email,contributionId,fundingId]);
+        return { ok: true };
+      } catch (error) { return errorFor(error); }
+    },
+    async unlinkFunding(token, contributionId) {
+      try {
+        if (typeof contributionId !== "string") throw new MemberCvError(400, "Choose a cash contribution.");
+        const actor = await identity(token);
+        await deps.db.query("select partner_deals.remove_funding_link($1::uuid,$2,$3,$4::uuid)", [actor.userId,actor.googleSub,actor.email,contributionId]);
+        return { ok: true };
       } catch (error) { return errorFor(error); }
     },
     async save(token, body) {
