@@ -21,9 +21,10 @@ import { Label } from "@libs/components/ui/label";
 import { formatDate, osloDate } from "./model";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
+import { localTaskDealId } from "../PartnerDeals/local-fixture";
 
 async function lookupTaskDeal(taskId: string, owner: { current: string | null }): Promise<string | null> {
-  if (isLocalMemberMode()) return null;
+  if (isLocalMemberMode()) return localTaskDealId(taskId);
   const token = await memberSessionToken(owner);
   const query = new URLSearchParams({ view: "taskDeal", taskId });
   const response = await fetch(`/api/partner-deals?${query}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });

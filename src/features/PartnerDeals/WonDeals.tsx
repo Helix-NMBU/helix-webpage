@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
+import { localWonDeals } from "./local-fixture";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { memberSessionToken } from "../MemberCV/session";
@@ -22,7 +23,7 @@ function agreementUrl(value: string) {
   try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : null; } catch { return null; }
 }
 async function requestShared(owner: { current: string | null }): Promise<SharedResult> {
-  if (isLocalMemberMode()) return { deals: [] };
+  if (isLocalMemberMode()) return localWonDeals();
   const token = await memberSessionToken(owner);
   const response = await fetch("/api/partner-deals?view=shared", { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
   const body = await response.json().catch(() => ({})) as SharedResult & { error?: string };

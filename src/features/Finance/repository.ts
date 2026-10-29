@@ -15,6 +15,7 @@ import type {
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
+import { localSponsorFunding } from "../PartnerDeals/local-fixture";
 
 let localBankSnapshot: BankSnapshot | null = null;
 let localBankVersion = 0;
@@ -34,7 +35,7 @@ function localCapabilities(): FinanceCapabilitiesResponse {
     viewVersion: 0,
     profiles: ["finance"],
     capabilities: capabilitiesForProfiles(["finance"]),
-    seasonCode: null,
+    seasonCode: "S27",
     approvalThresholdNok: null,
     today: osloToday(),
   };
@@ -117,7 +118,7 @@ export function createFinanceApi(owner: { current: string | null }) {
       return request<PurchasesView>(extra ? `purchases&${extra}` : "purchases");
     },
     financing: () => local()
-      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: 0, seasonCode: null, funding: [], parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
+      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: 0, seasonCode: "S27", funding: localSponsorFunding(), parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
       : request<FinancingView>("financing"),
     mutate,
   };
