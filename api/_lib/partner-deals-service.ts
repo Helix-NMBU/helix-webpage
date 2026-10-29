@@ -4,7 +4,8 @@ import { neonCvServices, type CvDatabase, type WorkspaceIdentity } from "./membe
 import { withVerifyFullSsl } from "./pg-ssl.js";
 
 type DealView = "pipeline" | "shared";
-export type DealWorkspace = { canManage: boolean; deals: unknown[]; organizations: unknown[]; seasons: unknown[] };
+export class DuplicateFundingError extends MemberCvError { readonly code = "funding_possible_duplicate"; }
+export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; deals: unknown[]; organizations: unknown[]; seasons: unknown[] };
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
@@ -72,7 +73,7 @@ function errorFor(error: unknown): never {
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (message.includes("deal_funding_candidates_changed")) throw new MemberCvError(409, "Funding changed. Reload the candidates before continuing.");
-  if (message.includes("deal_funding_possible_duplicate")) throw new MemberCvError(409, "Existing funding may match this partner and season. Ask Finance to link the existing record before confirming the deal.");
+  if (message.includes("deal_funding_possible_duplicate")) throw new DuplicateFundingError(409, "Existing funding may match this partner and season. Review it before confirming the deal.");
   if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
   if (message.includes("deal_funding_closed")) throw new MemberCvError(409, "A deal season is closed. Review the agreement with Finance.");
   if (message.includes("deal_forbidden") || code === "42501") throw new MemberCvError(403, "You do not have access to sponsor deals.");
@@ -99,15 +100,15 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         if (!result.rows[0]) throw new MemberCvError(403, "You do not have access to sponsor deals.");
         // Recheck after reading so a revoked grant or disabled account cannot
         // receive data captured by the earlier statement snapshot.
-        const access = await deps.db.query<{ pipeline: boolean; shared: boolean }>(
-          "select pipeline, shared from partner_deals.capabilities($1::uuid,$2,$3)",
+        const access = await deps.db.query<{ pipeline: boolean; shared: boolean; can_review_funding: boolean }>(
+          "select pipeline, shared, pipeline and coalesce((finance.capability_flags($1::uuid)->>'manageFunding')::boolean,false) as can_review_funding from partner_deals.capabilities($1::uuid,$2,$3)",
           [actor.userId, actor.googleSub, actor.email],
         );
         const current = access.rows[0];
         if (!current || (view === "pipeline" ? !current.pipeline : !current.shared)) {
           throw new MemberCvError(403, "You do not have access to sponsor deals.");
         }
-        return { ...result.rows[0], canManage: current.pipeline };
+        return { ...result.rows[0], canManage: current.pipeline, canReviewFunding: view === "pipeline" && current.can_review_funding };
       } catch (error) { return errorFor(error); }
     },
     async taskDeal(token, taskId) {

@@ -29,7 +29,7 @@ import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
-import { pipelineRepository } from "@/features/PartnerDeals/repository";
+import { canViewAgreements, pipelineRepository } from "@/features/PartnerDeals/repository";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -53,16 +53,19 @@ export function AppSidebar({
   const notify = useNotify();
   const [savingOrder, setSavingOrder] = React.useState(false);
   const [pipelineAllowed, setPipelineAllowed] = React.useState(false);
+  const [agreementsAllowed, setAgreementsAllowed] = React.useState(false);
   React.useEffect(() => {
     let active = true; let version = 0;
     const check = () => {
       const request = ++version;
+      void canViewAgreements().then(allowed => { if (active && request === version) setAgreementsAllowed(allowed); }).catch(() => { if (active && request === version) setAgreementsAllowed(false); });
       void pipelineRepository().load().then(result => { if (active && request === version) setPipelineAllowed(result.canManage); }).catch(() => { if (active && request === version) setPipelineAllowed(false); });
     };
     check(); window.addEventListener("focus", check);
     return () => { active = false; window.removeEventListener("focus", check); };
   }, [location.pathname]);
   const spaceItems = [
+    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconUsersGroup, isActive: location.pathname === "/partner-deals" }] : []),
     ...(pipelineAllowed ? [{ title: "Sponsor pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban, isActive: location.pathname === "/sponsor-pipeline" }] : []),
     ...(workspace?.projectAccess
       ? [

@@ -62,14 +62,16 @@ it('leaves the deal, tasks and funding untouched if an existing funding source m
  await setupDeal(40,'DuplicateCo',[20]);
  await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-998','DuplicateCo','Owner','sponsor_cash',10000,'secured',$2,$2)",[id(20),id(1)]);
  const before=(await db.query('select * from finance.funding')).rows.length;
- await expect(confirm(0,41)).rejects.toMatchObject({status:409});
+ await expect(confirm(0,41)).rejects.toMatchObject({status:409,code:'funding_possible_duplicate'});
  expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
  expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(41)])).rows).toHaveLength(0);
  expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(41)])).rows[0].stage).toBe('proposal');
  const contribution=(await db.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id(41)])).rows[0].id;
  const existing=(await db.query<{id:string}>("select id from finance.funding where public_ref='F-S27-998'")).rows[0].id;
  await expect(dealService(0).linkFunding('test',contribution,existing)).rejects.toMatchObject({status:403});
+ expect((await dealService(0).load('test','pipeline')).canReviewFunding).toBe(false);
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(1)]);
+ expect((await dealService(0).load('test','pipeline')).canReviewFunding).toBe(true);
  await dealService(0).linkFunding('test',contribution,existing);
  await confirm(0,41);
  expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);

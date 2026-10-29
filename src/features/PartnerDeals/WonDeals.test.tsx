@@ -22,3 +22,12 @@ it("shows agreed contributions and work, but only links authorized tasks",async(
  expect(el.textContent).toContain('Invoice task');
  await act(async()=>root.unmount()); el.remove();
 });
+
+it("opens an authorized agreement from a task backlink query",async()=>{
+ const item:WonDeal={id:"deal-1",title:"Chosen deal",organizationName:"Partner",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[],deliverables:[],tasks:[]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>{root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal-1"]}><WonDeals loadShared={async()=>({deals:[item]})}/></MemoryRouter>);});
+ expect(el.textContent).toContain("Partner · Chosen deal");
+ expect(el.textContent).toContain("Back to agreements");
+ await act(async()=>root.unmount());el.remove();
+});

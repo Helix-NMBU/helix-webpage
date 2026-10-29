@@ -7,7 +7,7 @@ export type Deal = { id: string; organizationId: string; organizationName: strin
 export type DealInput = Omit<Deal,"organizationName" | "id" | "revision" | "stage"> & { id?:string; expectedRevision?:number; stage: Exclude<DealStage,"won"> };
 export type Organization = { id:string; name:string; revision:number };
 export type Season = { id:string; code:string; name:string; startDate:string; endDate:string; status:string };
-export type PipelineData = { canManage:boolean; deals:Deal[]; organizations:Organization[]; seasons:Season[] };
+export type PipelineData = { canManage:boolean; canReviewFunding?:boolean; deals:Deal[]; organizations:Organization[]; seasons:Season[] };
 export interface PipelineRepository { load(): Promise<PipelineData>; save(deal:DealInput):Promise<void>; createOrganization(name:string):Promise<string>; renameOrganization(id:string,revision:number,name:string):Promise<void>; confirmWon(id:string,revision:number):Promise<void>; }
 export function editableDeal(deal:Deal, stage:Exclude<DealStage,"won"> = deal.stage === "won" ? "lead" : deal.stage):DealInput {
  const { id,revision,organizationName: _name, ...rest } = deal;

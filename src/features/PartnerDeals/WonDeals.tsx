@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { memberSessionToken } from "../MemberCV/session";
@@ -21,6 +22,7 @@ function agreementUrl(value: string) {
   try { const url = new URL(value); return ["https:", "http:"].includes(url.protocol) ? url.href : null; } catch { return null; }
 }
 async function requestShared(owner: { current: string | null }): Promise<SharedResult> {
+  if (isLocalMemberMode()) return { deals: [] };
   const token = await memberSessionToken(owner);
   const response = await fetch("/api/partner-deals?view=shared", { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
   const body = await response.json().catch(() => ({})) as SharedResult & { error?: string };
@@ -33,7 +35,11 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
   const owner = useRef<string | null>(null);
   const generation = useRef(0);
   const [deals, setDeals] = useState<WonDeal[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [search, setSearch] = useSearchParams();
+  const selected = search.get("deal");
+  function setSelected(id: string | null) {
+    setSearch(previous => { const next = new URLSearchParams(previous); if (id) next.set("deal", id); else next.delete("deal"); return next; });
+  }
   const load = useCallback(async () => {
     const current = ++generation.current;
     setDeals(null);
@@ -46,7 +52,12 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
       notify("Could not load agreements", error instanceof Error ? error.message : "Please try again.", { variant: "error", action: { label: "Try again", onClick: () => { void load(); } } });
     }
   }, [loadShared, notify]);
-  useEffect(() => { owner.current = null; setSelected(null); void load(); return () => { generation.current++; }; }, [load, account?.email]);
+  useEffect(() => {
+    owner.current = null; void load();
+    const onFocus = () => { void load(); };
+    window.addEventListener("focus", onFocus);
+    return () => { generation.current++; window.removeEventListener("focus", onFocus); };
+  }, [load, account?.email]);
   const deal = deals?.find(item => item.id === selected);
   return <section className="mx-auto max-w-5xl space-y-6 p-6" aria-labelledby="won-deals-heading">
     <div><h1 id="won-deals-heading" className="text-3xl font-semibold">Partner agreements</h1><p className="text-muted-foreground">Agreed partnerships and their delivery work.</p></div>

@@ -20,6 +20,7 @@ beforeAll(async()=>{
  create table identity.member_roles(member_id uuid,role_key text);
  create table partner.organizations(id uuid primary key default gen_random_uuid(),name text not null,active boolean not null default false,revoked_at timestamptz,created_at timestamptz default now());
  create table finance.seasons(id uuid primary key,code text,name text,start_date date,end_date date,status text);
+ create function finance.capability_flags(uuid) returns jsonb language sql as $$ select '{"manageFunding":false}'::jsonb $$;
  insert into finance.seasons values('${season}','S27','S27','2026-08-01','2027-07-31','active'),('${future}','S28','S28','2027-08-01','2028-07-31','planning');`);
  for(const [id,actor] of identities) {
   await pg.query(`insert into neon_auth."user" values($1,$2,true,false)`,[id,actor.email]);
