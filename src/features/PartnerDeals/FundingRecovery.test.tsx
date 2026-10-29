@@ -69,3 +69,30 @@ it("discards an old action when the account changes and access is revoked",async
  expect(notify).not.toHaveBeenCalledWith("Funding linked", "", expect.anything());
  await act(async()=>root.unmount());el.remove();
 });
+
+it("passes the selected revision and offers reload after a stale link conflict", async () => {
+ const candidates = [{ id: "fund-1", revision: 3, reference: "F-S27-003", status: "secured", amountOre: "10000", expectedDate: null }];
+ const api: FundingRecoveryApi = { candidates: vi.fn().mockResolvedValue({ contributionId: "cash", amountOre: "10000", linkedFundingId: null, candidates }), link: vi.fn().mockRejectedValue(new Error("This funding record changed. Reload funding and review it before linking.")), unlink: vi.fn(), approveSeparate: vi.fn() };
+ const el = document.createElement("div"); document.body.append(el); const root = createRoot(el);
+ await act(async () => { root.render(<FundingRecovery contributionId="cash" api={api} />); });
+ await act(async () => { [...el.querySelectorAll("button")].find(x => x.textContent === "Link this record")!.click(); });
+ expect(api.link).toHaveBeenCalledWith("cash", "fund-1", 3);
+ expect(notify).toHaveBeenCalledWith("Could not update funding", expect.stringContaining("changed"), expect.objectContaining({ action: expect.objectContaining({ label: "Reload funding" }) }));
+ await act(async () => root.unmount()); el.remove();
+});
+it("ignores a completed action after switching to another contribution", async () => {
+ let finish!: () => void;
+ const delayed = new Promise<void>(resolve => { finish=resolve; });
+ const candidates = vi.fn().mockImplementation(async (id:string) => ({contributionId:id,amountOre:"10000",linkedFundingId:null,candidates:[{id:`fund-${id}`,revision:0,reference:`REF-${id}`,status:"secured",amountOre:"10000",expectedDate:null}]}));
+ const api: FundingRecoveryApi = { candidates, link: vi.fn().mockReturnValue(delayed), unlink: vi.fn(), approveSeparate: vi.fn() };
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>{root.render(<FundingRecovery contributionId="A" api={api}/>);});
+ await act(async()=>{[...el.querySelectorAll("button")].find(x=>x.textContent==="Link this record")!.click();});
+ await act(async()=>{root.render(<FundingRecovery contributionId="B" api={api}/>);});
+ expect(el.textContent).toContain("REF-B");
+ await act(async()=>{finish();await delayed;});
+ expect(el.textContent).toContain("REF-B");
+ expect(el.textContent).not.toContain("REF-A");
+ expect(candidates.mock.calls.filter(([id])=>id==="A")).toHaveLength(1);
+ await act(async()=>root.unmount());el.remove();
+});

@@ -14,7 +14,7 @@ export interface DealServices {
   createOrganization(token: string, name: unknown): Promise<{ id: string }>;
   renameOrganization(token: string, id: unknown, revision: unknown, name: unknown): Promise<{ id: string }>;
   save(token: string, body: unknown): Promise<{ id: string }>;
-  linkFunding(token: string, contributionId: unknown, fundingId: unknown): Promise<{ ok: true }>;
+  linkFunding(token: string, contributionId: unknown, fundingId: unknown, expectedRevision: unknown): Promise<{ ok: true }>;
   unlinkFunding(token: string, contributionId: unknown): Promise<{ ok: true }>;
   fundingCandidates(token: string, contributionId: unknown): Promise<FundingCandidates>;
   approveSeparateFunding(token: string, contributionId: unknown, snapshot: unknown, confirmed: unknown): Promise<{ ok: true }>;
@@ -73,6 +73,8 @@ function errorFor(error: unknown): never {
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (message.includes("deal_funding_candidates_changed")) throw new MemberCvError(409, "Funding changed. Reload the candidates before continuing.");
+  if (message.includes("deal_linked_organization")) throw new MemberCvError(409, "This partner has linked funding. Ask Finance to reconcile it before changing the partner name.");
+  if (message.includes("deal_funding_stale_link")) throw new MemberCvError(409, "This funding record changed. Reload funding and review it before linking.");
   if (message.includes("deal_funding_possible_duplicate")) throw new DuplicateFundingError(409, "Existing funding may match this partner and season. Review it before confirming the deal.");
   if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
   if (message.includes("deal_funding_closed")) throw new MemberCvError(409, "A deal season is closed. Review the agreement with Finance.");
@@ -167,11 +169,11 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         return { ok: true };
       } catch (error) { return errorFor(error); }
     },
-    async linkFunding(token, contributionId, fundingId) {
+    async linkFunding(token, contributionId, fundingId, expectedRevision) {
       try {
-        if (typeof contributionId !== "string" || typeof fundingId !== "string") throw new MemberCvError(400, "Choose a cash contribution and funding record.");
+        if (typeof contributionId !== "string" || typeof fundingId !== "string" || !Number.isSafeInteger(expectedRevision) || Number(expectedRevision) < 0) throw new MemberCvError(400, "Choose a cash contribution and funding record.");
         const actor = await identity(token);
-        await deps.db.query("select partner_deals.prepare_funding_link($1::uuid,$2,$3,$4::uuid,$5::uuid)", [actor.userId,actor.googleSub,actor.email,contributionId,fundingId]);
+        await deps.db.query("select partner_deals.prepare_funding_link($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::integer)", [actor.userId,actor.googleSub,actor.email,contributionId,fundingId,expectedRevision]);
         return { ok: true };
       } catch (error) { return errorFor(error); }
     },

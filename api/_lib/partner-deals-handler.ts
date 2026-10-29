@@ -19,7 +19,7 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
    if (req.body.action === "createOrganization") return res.status(200).json(await service.createOrganization(token,req.body.name));
    if (req.body.action === "renameOrganization") return res.status(200).json(await service.renameOrganization(token,req.body.id,req.body.expectedRevision,req.body.name));
    if (req.body.action === "approveSeparateFunding") return res.status(200).json(await service.approveSeparateFunding(token,req.body.contributionId,req.body.snapshot,req.body.confirmed));
-   if (req.body.action === "linkFunding") return res.status(200).json(await service.linkFunding(token,req.body.contributionId,req.body.fundingId));
+   if (req.body.action === "linkFunding") return res.status(200).json(await service.linkFunding(token,req.body.contributionId,req.body.fundingId,req.body.expectedRevision));
    if (req.body.action === "unlinkFunding") return res.status(200).json(await service.unlinkFunding(token,req.body.contributionId));
    if (req.body.action === "confirmWon") return res.status(200).json(await service.confirmWon(token,req.body.dealId,req.body.expectedRevision,req.body.confirmed));
    if (req.body.action === "saveDeal") return res.status(200).json(await service.save(token,req.body.deal));

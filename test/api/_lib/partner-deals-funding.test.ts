@@ -23,7 +23,7 @@ beforeAll(async()=>{
  insert into neon_auth.account values('${actor}','google','sub'),('${other}','google','other');
  insert into identity.members values('${actor}','${actor}','sub','member@example.test','Member','Member'),('${other}','${other}','other','other@example.test','Other','Member');
  insert into identity.platform_roles values('platform_administrator','Admin',1);`);
- for(const file of ["011_finance_core.sql","012_finance_season_budgets.sql","013_finance_funding.sql","024_financials_member_role.sql","035_partner_deals.sql","037_partner_deal_funding.sql","039_partner_deal_funding_recovery.sql"]) await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`,import.meta.url),"utf8"));
+ for(const file of ["011_finance_core.sql","012_finance_season_budgets.sql","013_finance_funding.sql","024_financials_member_role.sql","035_partner_deals.sql","037_partner_deal_funding.sql","039_partner_deal_funding_recovery.sql","042_partner_funding_hardening.sql"]) await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`,import.meta.url),"utf8"));
  await pg.exec(`insert into partner_deals.member_grants values('${actor}','business',true);
  insert into finance.seasons(code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values
  ('S27','S27','2026-08-01','2027-07-31','active','${actor}','${actor}'),('S28','S28','2027-08-01','2028-07-31','planning','${actor}','${actor}');`);
@@ -74,9 +74,9 @@ describe('partner deal funding',()=>{
   const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
   const funding=(await pg.query<{id:string}>("select f.id from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id where f.season_id=$1 limit 1",[current])).rows[0].id;
   await pg.exec(`delete from identity.member_roles where member_id='${actor}' and role_key='financials'`);
-  await expect(svc.linkFunding('actor',contribution,funding)).rejects.toMatchObject({status:403});
+  await expect(svc.linkFunding('actor',contribution,funding,0)).rejects.toMatchObject({status:403});
   await pg.exec(`insert into identity.member_roles values('${actor}','financials');`);
-  await expect(svc.linkFunding('actor',contribution,funding)).rejects.toMatchObject({status:400});
+  await expect(svc.linkFunding('actor',contribution,funding,0)).rejects.toMatchObject({status:400});
  });
  it('returns no candidate data when finance access is revoked during the read',async()=>{
   const id=(await svc.save('actor',payload('Revocation',[cash(current)]))).id;
@@ -100,7 +100,7 @@ describe('partner deal funding',()=>{
   const id=(await svc.save('actor',{...payload('Fourth',[cash(current,'1234')]),organizationId:newOrg})).id;
   const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
   const record=(await pg.query<{id:string}>(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-999','NewCo','Member','sponsor_cash',1234,'received',$2,$2) returning id`,[current,actor])).rows[0].id;
-  await svc.linkFunding('actor',contribution,record);await svc.linkFunding('actor',contribution,record);await call(id);
+  await svc.linkFunding('actor',contribution,record,0);await svc.linkFunding('actor',contribution,record,0);await call(id);
   expect((await pg.query<{status:string}>('select status from finance.funding where id=$1',[record])).rows[0].status).toBe('received');
   await svc.unlinkFunding('actor',contribution);expect((await pg.query('select * from partner_deals.funding_links where contribution_id=$1',[contribution])).rows).toHaveLength(0);
  });
@@ -114,4 +114,35 @@ describe('partner deal funding',()=>{
   expect((await pg.query('select * from finance.funding')).rows).toHaveLength(before);
   expect((await pg.query('select * from partner_deals.funding_links where contribution_id in (select id from partner_deals.contributions where deal_id=$1)',[id])).rows).toHaveLength(0);
  });
+});
+it('rejects linking a candidate that changed after review',async()=>{
+ await pg.exec("insert into partner.organizations(name,active) values('StaleCo',false)");
+ const staleOrg=(await pg.query<{id:string}>("select id from partner.organizations where name='StaleCo'")).rows[0].id;
+ const id=(await svc.save('actor',{...payload('Stale',[cash(current,'3210')]),organizationId:staleOrg})).id;
+ const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
+ const record=(await pg.query<{id:string}>(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-777','StaleCo','Member','sponsor_cash',3210,'secured',$2,$2) returning id`,[current,actor])).rows[0].id;
+ await pg.query("update finance.funding set status='received',revision=revision+1 where id=$1",[record]);
+ await expect(svc.linkFunding('actor',contribution,record,0)).rejects.toMatchObject({status:409});
+ expect((await pg.query('select * from partner_deals.funding_links where contribution_id=$1',[contribution])).rows).toHaveLength(0);
+ await svc.linkFunding('actor',contribution,record,1);
+ expect((await pg.query('select * from partner_deals.funding_links where contribution_id=$1',[contribution])).rows).toHaveLength(1);
+});
+it('rejects linked partner renames before and after Won',async()=>{
+ await pg.exec("insert into partner.organizations(name,active) values('LinkedCo',false)");
+ const linkedOrg=(await pg.query<{id:string}>("select id from partner.organizations where name='LinkedCo'")).rows[0].id;
+ const id=(await svc.save('actor',{...payload('Linked',[cash(current,'4321')]),organizationId:linkedOrg})).id;
+ const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
+ const record=(await pg.query<{id:string}>(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-778','LinkedCo','Member','sponsor_cash',4321,'secured',$2,$2) returning id`,[current,actor])).rows[0].id;
+ await svc.linkFunding('actor',contribution,record,0);
+ await expect(svc.renameOrganization('actor',linkedOrg,0,'Changed')).rejects.toMatchObject({status:409});
+ await pg.query("update partner_deals.deals set stage='won',won_at=now(),won_by_member_id=$2 where id=$1",[id,actor]);
+ await expect(svc.renameOrganization('actor',linkedOrg,0,'Changed')).rejects.toMatchObject({status:409});
+ expect((await pg.query<{name:string}>('select name from partner.organizations where id=$1',[linkedOrg])).rows[0].name).toBe('LinkedCo');
+});
+it('keeps ordinary finance funding edits working through the season lock wrapper',async()=>{
+ await pg.query("insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','\"S27\"','Current season',$1) on conflict(setting_key) do update set setting_value=excluded.setting_value",[actor]);
+ const row=(await pg.query<{id:string}>(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-779','Other','Member','sponsor_cash',4321,'secured',$2,$2) returning id`,[current,actor])).rows[0].id;
+ const command={action:'editFunding',fundingId:row,expectedRevision:0,fields:['sourceName'],values:{sourceName:'Changed'}};
+ await pg.query('select finance.apply_funding_change($1,$2,$3,$4::jsonb,$5)',[actor,'33333333-3333-4333-8333-333333333333','a'.repeat(64),JSON.stringify(command),false]);
+ expect((await pg.query<{source_name:string,revision:number}>('select source_name,revision from finance.funding where id=$1',[row])).rows[0]).toEqual({source_name:'Changed',revision:1});
 });

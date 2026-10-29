@@ -8,7 +8,7 @@ type Candidate = { id: string; revision: number; reference: string; status: stri
 type CandidateResult = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: Candidate[] };
 export interface FundingRecoveryApi {
   candidates(contributionId: string): Promise<CandidateResult>;
-  link(contributionId: string, fundingId: string): Promise<void>;
+  link(contributionId: string, fundingId: string, expectedRevision: number): Promise<void>;
   unlink(contributionId: string): Promise<void>;
   approveSeparate(contributionId: string, candidates: Candidate[]): Promise<void>;
 }
@@ -23,7 +23,7 @@ function apiFor(owner: { current: string | null }): FundingRecoveryApi {
   }
   return {
     candidates: async contributionId => await request(`?view=fundingCandidates&contributionId=${encodeURIComponent(contributionId)}`) as CandidateResult,
-    link: async (contributionId, fundingId) => { await request("", { action: "linkFunding", contributionId, fundingId }); },
+    link: async (contributionId, fundingId, expectedRevision) => { await request("", { action: "linkFunding", contributionId, fundingId, expectedRevision }); },
     unlink: async contributionId => { await request("", { action: "unlinkFunding", contributionId }); },
     approveSeparate: async (contributionId, snapshot) => { await request("", { action: "approveSeparateFunding", contributionId, snapshot, confirmed: true }); },
   };
@@ -78,7 +78,7 @@ export function FundingRecovery({ contributionId, api, onResolved }: { contribut
       <ul className="space-y-2">{result.candidates.map(candidate => <li className="rounded-md border p-3" key={candidate.id}>
         <p>{candidate.reference} · {candidate.status} · {amount(candidate.amountOre)}</p>
         {candidate.expectedDate ? <p>Expected payment: {candidate.expectedDate}</p> : null}
-        <Button type="button" variant="outline" disabled={busy || candidate.amountOre !== result.amountOre || !["secured", "received"].includes(candidate.status)} onClick={() => void act(() => client.link(contributionId, candidate.id), "Funding linked")}>Link this record</Button>
+        <Button type="button" variant="outline" disabled={busy || candidate.amountOre !== result.amountOre || !["secured", "received"].includes(candidate.status)} onClick={() => void act(() => client.link(contributionId, candidate.id, candidate.revision), "Funding linked")}>Link this record</Button>
       </li>)}</ul>
       <label className="flex items-start gap-2"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /> <span>I reviewed these records and confirm this agreement needs a separate funding record.</span></label>
       <Button type="button" variant="outline" disabled={busy || !acknowledged} onClick={() => void act(() => client.approveSeparate(contributionId, result.candidates), "Separate funding approved")}>Approve separate funding</Button>

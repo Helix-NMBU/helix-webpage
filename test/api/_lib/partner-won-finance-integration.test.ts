@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','042_partner_funding_hardening']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -68,11 +68,11 @@ it('leaves the deal, tasks and funding untouched if an existing funding source m
  expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(41)])).rows[0].stage).toBe('proposal');
  const contribution=(await db.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id(41)])).rows[0].id;
  const existing=(await db.query<{id:string}>("select id from finance.funding where public_ref='F-S27-998'")).rows[0].id;
- await expect(dealService(0).linkFunding('test',contribution,existing)).rejects.toMatchObject({status:403});
+ await expect(dealService(0).linkFunding('test',contribution,existing,0)).rejects.toMatchObject({status:403});
  expect((await dealService(0).load('test','pipeline')).canReviewFunding).toBe(false);
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(1)]);
  expect((await dealService(0).load('test','pipeline')).canReviewFunding).toBe(true);
- await dealService(0).linkFunding('test',contribution,existing);
+ await dealService(0).linkFunding('test',contribution,existing,0);
  await confirm(0,41);
  expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
  expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(41)])).rows).toHaveLength(2);

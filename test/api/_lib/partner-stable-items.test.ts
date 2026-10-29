@@ -24,7 +24,7 @@ beforeAll(async()=>{
  insert into neon_auth.account values('${actor}','google','sub');
  insert into identity.members values('${actor}','${actor}','sub','member@example.test','Member','Member');
  insert into identity.platform_roles values('platform_administrator','Admin',1);`);
- for(const f of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','039_partner_deal_funding_recovery','040_partner_stable_draft_items']) await db.exec(load(f));
+ for(const f of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','039_partner_deal_funding_recovery','040_partner_stable_draft_items','042_partner_funding_hardening']) await db.exec(load(f));
  await db.exec(`insert into partner_deals.member_grants values('${actor}','business',true); insert into identity.member_roles values('${actor}','financials');
  insert into finance.seasons(code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('S27','S27','2026-08-01','2027-07-31','active','${actor}','${actor}');
  insert into partner.organizations(name,active) values('Acme',false);`);
@@ -42,7 +42,7 @@ async function snapshot(dealId:string){
 it('preserves linked funding and both item identities through a stage and title edit',async()=>{
  const deal=(await svc.save('test',body())).id; const ids=await snapshot(deal);
  const record=(await db.query<{id:string}>(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-111','Acme','Member','sponsor_cash',10000,'secured',$2,$2) returning id`,[season,actor])).rows[0].id;
- await svc.linkFunding('test',ids.contribution,record);
+ await svc.linkFunding('test',ids.contribution,record,0);
  const payload=body();
  await svc.save('test',{...payload,id:deal,expectedRevision:0,title:'New title',stage:'contacted',contributions:[{...payload.contributions[0],id:ids.contribution}],deliverables:[{...payload.deliverables[0],id:ids.deliverable}]});
  expect(await snapshot(deal)).toEqual(ids);
@@ -79,7 +79,7 @@ it('allows replacing an unlinked cash entry in the same season',async()=>{
 it('prevents changing the organization of a deal with linked funding',async()=>{
  const deal=(await svc.save('test',body())).id, ids=await snapshot(deal), payload=body();
  const record=(await db.query<{id:string}>(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-112','Acme','Member','sponsor_cash',10000,'secured',$2,$2) returning id`,[season,actor])).rows[0].id;
- await svc.linkFunding('test',ids.contribution,record);
+ await svc.linkFunding('test',ids.contribution,record,0);
  const other=(await db.query<{id:string}>("insert into partner.organizations(name,active) values('Other',false) returning id")).rows[0].id;
  await expect(svc.save('test',{...payload,id:deal,expectedRevision:0,organizationId:other,contributions:[{...payload.contributions[0],id:ids.contribution}],deliverables:[{...payload.deliverables[0],id:ids.deliverable}]})).rejects.toMatchObject({status:409});
  expect(await snapshot(deal)).toEqual(ids);
