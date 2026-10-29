@@ -73,12 +73,12 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
     <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-medium">Department access</legend>
       <p className="text-sm text-muted-foreground">Leads manage department content and work. Members can update their assigned task statuses. Viewers have read-only access.</p>
-      {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department access is set to Viewer.</p>}
+      {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department membership can be chosen independently.</p>}
       {data.departments.map(department => {
         const choice = departments.find(d => d.id === department.id)!;
         return <div key={department.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm">
           <Label htmlFor={`department-access-${department.id}`} className="font-normal">{department.name}</Label>
-          <Select value={roleOverride ? "viewer" : choice.access ?? "none"} disabled={busy || roleOverride} onValueChange={value => {
+          <Select value={choice.access ?? "none"} disabled={busy} onValueChange={value => {
             const level = value === "none" ? null : value as DepartmentAccess;
             setDepartments(values => values.map(item => item.id === department.id ? { ...item, access: level, member: level !== null, lead: level === "lead" } : item));
           }}>

@@ -13,7 +13,7 @@ export function createLocalDepartmentHomeRepository(): DepartmentHomeRepository 
   async function read(id: string): Promise<DepartmentHome> {
     const workspace = await projects.load();
     const department = workspace.departments.find((d) => d.id === id);
-    if (!department?.memberIds.includes(workspace.viewerId))
+    if (!department || (!workspace.canManage && !department.memberIds.includes(workspace.viewerId)))
       throw new WorkspaceRequestError(
         "You can open departments that you belong to.",
         403,

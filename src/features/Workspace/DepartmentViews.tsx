@@ -22,7 +22,7 @@ function useDepartmentAccess() {
     (item) => departmentPath(item.name) === `/departments/${departmentId}`,
   );
   const denied = Boolean(
-    directory && (!department || !department.memberIds.includes(directory.viewerId)),
+    directory && (!department || (!directory.canManageProjects && !department.memberIds.includes(directory.viewerId))),
   );
   useEffect(() => {
     if (denied) {
