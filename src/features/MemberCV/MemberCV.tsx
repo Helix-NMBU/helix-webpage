@@ -1022,8 +1022,8 @@ export default function MemberCV() {
           <CardContent className="space-y-6 p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
-                <Avatar className="size-16 rounded-xl">
-                  <AvatarFallback className="rounded-xl text-xl" style={avatarFallbackStyle(account?.email || envelope?.identity.email || memberName)}>
+                <Avatar className="size-16">
+                  <AvatarFallback className="text-xl" style={avatarFallbackStyle(account?.email || envelope?.identity.email || memberName)}>
                     {accountInitials(memberName)}
                   </AvatarFallback>
                 </Avatar>
