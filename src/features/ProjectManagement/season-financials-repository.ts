@@ -9,13 +9,14 @@ export class SeasonFinancialRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export async function loadSeasonFinancialSummary(owner: { current: string | null }): Promise<SeasonFinancialSummary> {
+export async function loadSeasonFinancialSummary(owner: { current: string | null }, signal?: AbortSignal): Promise<SeasonFinancialSummary> {
   if (isLocalMemberMode()) {
     if (!localMemberSignedIn() || !localMemberHasSeasonOverview()) throw new SeasonFinancialRequestError("Season Overview access is required.", 403);
     return { bank: loadLocalSeasonBankView(), seasonCode: null, budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], canOpenFinancials: localMemberHasFinancials(), viewVersion: 0 };
   }
   const token = await memberSessionToken(owner);
-  const response = await fetch("/api/member-login?__module=season-financials", { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
+  if (signal?.aborted) throw new DOMException("The request was cancelled.", "AbortError");
+  const response = await fetch("/api/member-login?__module=season-financials", { signal, cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
   const body = await response.json().catch(() => null) as (SeasonFinancialSummary & { error?: string }) | null;
   if (!response.ok) {
     if (response.status === 401) memberLoadFailure(new CvRequestError("Your session has ended. Sign in again to continue.", 401));

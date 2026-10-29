@@ -96,11 +96,11 @@ it("refreshes a visible tab periodically without overlapping requests and clears
   await render(load);
   await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
   expect(load).toHaveBeenCalledTimes(2);
-  await act(async () => { window.dispatchEvent(new Event("focus")); await vi.advanceTimersByTimeAsync(60_000); });
+  await act(async () => { window.dispatchEvent(new Event("focus")); await vi.advanceTimersByTimeAsync(1_000); });
   expect(load).toHaveBeenCalledTimes(2);
   await act(async () => { resolve({ ...summary, actualNok: "22.00" }); });
   expect(container.textContent).toContain("NOK 22,00");
-  await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
   expect(load).toHaveBeenCalledTimes(3);
   expect(container.textContent).toContain("NOK 9,00");
   await act(async () => root.unmount());
@@ -141,4 +141,26 @@ it("skips background polling while hidden and refreshes when visible again", asy
   visibility.mockReturnValue("visible");
   await act(async () => document.dispatchEvent(new Event("visibilitychange")));
   expect(load).toHaveBeenCalledTimes(2);
+});
+
+it("times out a stuck refresh, permits recovery, and ignores its delayed result", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  let resolve!: (value: SeasonFinancialSummary) => void;
+  const stuck = new Promise<SeasonFinancialSummary>(done => { resolve = done; });
+  const load = vi.fn().mockResolvedValueOnce(summary).mockReturnValueOnce(stuck).mockResolvedValueOnce({ ...summary, actualNok: "42.00" });
+  await render(load);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  const signal = load.mock.calls[1][1] as AbortSignal;
+  expect(signal.aborted).toBe(false);
+  await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+  expect(signal.aborted).toBe(true);
+  expect(container.textContent).toContain("Last loaded values.");
+  expect(container.textContent).toContain("Could not load financial overview Try again");
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(container.textContent).toContain("NOK 42,00");
+  expect(container.textContent).not.toContain("Last loaded values.");
+  await act(async () => resolve({ ...summary, actualNok: "999.00" }));
+  expect(container.textContent).toContain("NOK 42,00");
+  expect(container.textContent).not.toContain("NOK 999,00");
 });

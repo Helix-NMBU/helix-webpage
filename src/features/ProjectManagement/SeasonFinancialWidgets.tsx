@@ -47,14 +47,24 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
   const generation = useRef(0);
   const inFlight = useRef<number | null>(null);
   const active = useRef(false);
+  const pending = useRef<{ controller: AbortController; timer: number } | null>(null);
   const notify = useNotify();
   const navigate = useNavigate();
   const refresh = useCallback(async () => {
     if (inFlight.current !== null) return;
     const request = ++generation.current;
     inFlight.current = request;
+    const controller = new AbortController();
+    let timer = 0;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = window.setTimeout(() => {
+        reject(new SeasonFinancialRequestError("The financial overview took too long to load. Please try again.", 503));
+        controller.abort();
+      }, 15_000);
+    });
+    pending.current = { controller, timer };
     try {
-      const result = await load(owner);
+      const result = await Promise.race([load(owner, controller.signal), timeout]);
       if (!active.current || request !== generation.current) return;
       setSummary(result); setStale(false);
       if (result.bank.status === "unavailable") notify("Could not load bank balance", "Please try again.", { id: "season-bank-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
@@ -65,6 +75,8 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
       if (denied) { setSummary(null); setStale(false); } else setStale(true);
       notify("Could not load financial overview", error instanceof Error ? error.message : "Please try again.", { id: "season-financial-load", variant: "error", href: null, action: status === 401 ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Try again", onClick: () => void refresh() } });
     } finally {
+      window.clearTimeout(timer);
+      if (pending.current?.controller === controller) pending.current = null;
       if (inFlight.current === request) inFlight.current = null;
       if (active.current && request === generation.current) setLoading(false);
     }
@@ -75,7 +87,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
     const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onVisibility);
     const timer = window.setInterval(onVisibility, 60_000);
-    return () => { active.current = false; generation.current++; inFlight.current = null; window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
+    return () => { active.current = false; generation.current++; inFlight.current = null; if (pending.current) { window.clearTimeout(pending.current.timer); pending.current.controller.abort(); pending.current = null; } window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
   }, [userId, refresh]);
   const mismatch = !!summary?.seasonCode && summary.seasonCode !== season;
   const visible = summary && !mismatch && (summary.budgetStatus === "approved" || summary.budgetStatus === "draft");
