@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/pop
 import { MAX_TASK_ASSIGNEES, type ProjectMember } from "./types";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { avatarFallbackStyle } from "@libs/components/avatar-colors";
+import { IconUserPlus } from "@tabler/icons-react";
 
 function imageSource(value?: string | null): string | undefined {
   if (!value || value.length > 2048) return undefined;
@@ -25,19 +26,19 @@ function MemberAvatar({ member }: { member: ProjectMember }) {
   </Avatar>;
 }
 
-export function AssigneeAvatars({ assigneeIds, members, maxVisible = 3, assignmentRole = "assignee", showNames = false, showNamesAtAllSizes = false }: { assigneeIds: string[]; members: ProjectMember[]; maxVisible?: number; assignmentRole?: "assignee" | "lead" | "member"; showNames?: boolean; showNamesAtAllSizes?: boolean }) {
+export function AssigneeAvatars({ assigneeIds, members, maxVisible = 3, assignmentRole = "assignee", showNames = false, showNamesAtAllSizes = false, showOverflowCount = true }: { assigneeIds: string[]; members: ProjectMember[]; maxVisible?: number; assignmentRole?: "assignee" | "lead" | "member"; showNames?: boolean; showNamesAtAllSizes?: boolean; showOverflowCount?: boolean }) {
   const assigned = assigneeIds.map(id => members.find(member => member.id === id) ?? { id, name: "Inactive member" });
   if (!assigned.length) return <span className="text-sm text-muted-foreground">{assignmentRole === "member" ? "No members" : assignmentRole === "lead" ? "No leads" : "Unassigned"}</span>;
   const remaining = assigned.slice(maxVisible);
   const avatars = <AvatarGroup role="group" aria-label={`${assignmentRole === "member" ? "Members:" : assignmentRole === "lead" ? "Leads:" : "Assigned to"} ${assigned.map(member => member.name).join(", ")}`}>
     {assigned.slice(0, maxVisible).map(member => <MemberAvatar key={member.id} member={member} />)}
-    {remaining.length > 0 && <AvatarGroupCount role="img" aria-label={remaining.map(member => member.name).join(", ")} title={remaining.map(member => member.name).join(", ")}>+{remaining.length}</AvatarGroupCount>}
+    {showOverflowCount && remaining.length > 0 && <AvatarGroupCount role="img" aria-label={remaining.map(member => member.name).join(", ")} title={remaining.map(member => member.name).join(", ")}>+{remaining.length}</AvatarGroupCount>}
   </AvatarGroup>;
   return showNames ? <div className={`inline-flex items-center gap-2 ${showNamesAtAllSizes ? "max-w-full" : "max-w-64 gap-0 xl:gap-2"}`} title={assigned.map(member => member.name).join(", ")}>{avatars}<span data-assignee-names className={`${showNamesAtAllSizes ? "inline min-w-0 whitespace-normal break-words" : "hidden truncate xl:inline"} text-sm`} title={assigned.map(member => member.name).join(", ")} aria-hidden="true">{assigned.map(member => member.name).join(", ")}</span></div> : avatars;
 }
 
-export function AssigneePicker({ id, value, members, onChange, disabled = false, assignmentRole = "assignee", inline = false, inlineShowNames = true, triggerLabel, groupLabel, onOpenChange, onCommit, maxSelected = MAX_TASK_ASSIGNEES }: {
-  id: string; value: string[]; members: ProjectMember[]; onChange: (ids: string[]) => void; disabled?: boolean; assignmentRole?: "assignee" | "lead" | "member"; inline?: boolean; inlineShowNames?: boolean; triggerLabel?: string; groupLabel?: string; onOpenChange?: (open: boolean) => void; onCommit?: (ids: string[]) => Promise<boolean>; maxSelected?: number;
+export function AssigneePicker({ id, value, members, onChange, disabled = false, assignmentRole = "assignee", inline = false, inlineShowNames = true, inlineMaxVisible = 3, inlineShowOverflowCount = true, emptyIcon = false, circular = false, triggerLabel, groupLabel, onOpenChange, onCommit, maxSelected = MAX_TASK_ASSIGNEES }: {
+  id: string; value: string[]; members: ProjectMember[]; onChange: (ids: string[]) => void; disabled?: boolean; assignmentRole?: "assignee" | "lead" | "member"; inline?: boolean; inlineShowNames?: boolean; inlineMaxVisible?: number; inlineShowOverflowCount?: boolean; emptyIcon?: boolean; circular?: boolean; triggerLabel?: string; groupLabel?: string; onOpenChange?: (open: boolean) => void; onCommit?: (ids: string[]) => Promise<boolean>; maxSelected?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -52,8 +53,8 @@ export function AssigneePicker({ id, value, members, onChange, disabled = false,
   }
   function changeOpen(next: boolean) { if (!disabled) { setOpen(next); if (!next) setSearch(""); onOpenChange?.(next); } }
   return <Popover open={open} onOpenChange={changeOpen}>
-    <PopoverTrigger asChild><Button id={id} type="button" variant={inline ? "ghost" : "outline"} disabled={disabled} aria-label={triggerLabel ?? (assignmentRole === "member" ? "Choose department members" : assignmentRole === "lead" ? "Choose milestone leads" : "Choose task assignees")} aria-describedby={`${id}-summary`} className={inline ? "-mx-2 h-auto justify-start px-2 py-1 font-normal" : "h-9 w-full justify-start gap-2 font-normal"}>
-      {inline ? <AssigneeAvatars assigneeIds={value} members={members} assignmentRole={assignmentRole} showNames={inlineShowNames} /> : value.length ? <><AssigneeAvatars assigneeIds={value} members={members} maxVisible={2} assignmentRole={assignmentRole} /><span data-assignee-names className="hidden truncate text-xs xl:inline">{value.length === 1 ? options.find(member => member.id === value[0])?.name : `${value.length} ${assignmentRole === "member" ? "members" : assignmentRole === "lead" ? "leads" : "assignees"}`}</span></> : assignmentRole === "member" ? "Choose members…" : assignmentRole === "lead" ? "Add leads…" : "Assign to…"}
+    <PopoverTrigger asChild><Button id={id} type="button" variant={inline ? "ghost" : "outline"} disabled={disabled} aria-label={triggerLabel ?? (assignmentRole === "member" ? "Choose department members" : assignmentRole === "lead" ? "Choose milestone leads" : "Choose task assignees")} aria-describedby={`${id}-summary`} className={circular ? `size-6 shrink-0 rounded-full border border-muted-foreground/30 bg-transparent p-0 text-muted-foreground [&_svg]:size-3.5 [&_[data-slot=avatar]]:size-5 ${!value.length ? "border-dashed" : ""}` : emptyIcon && !value.length ? "size-7 rounded-full border border-dashed border-muted-foreground/50 p-1 text-muted-foreground" : inline ? "-mx-2 h-auto justify-start px-2 py-1 font-normal" : "h-9 w-full justify-start gap-2 font-normal"}>
+      {emptyIcon && !value.length ? <IconUserPlus aria-hidden="true" className="size-4" /> : inline ? <AssigneeAvatars assigneeIds={value} members={members} assignmentRole={assignmentRole} maxVisible={inlineMaxVisible} showOverflowCount={inlineShowOverflowCount} showNames={inlineShowNames} /> : value.length ? <><AssigneeAvatars assigneeIds={value} members={members} maxVisible={2} assignmentRole={assignmentRole} /><span data-assignee-names className="hidden truncate text-xs xl:inline">{value.length === 1 ? options.find(member => member.id === value[0])?.name : `${value.length} ${assignmentRole === "member" ? "members" : assignmentRole === "lead" ? "leads" : "assignees"}`}</span></> : assignmentRole === "member" ? "Choose members…" : assignmentRole === "lead" ? "Add leads…" : "Assign to…"}
     </Button></PopoverTrigger>
     <span id={`${id}-summary`} className="sr-only">{value.length ? `${assignmentRole === "member" ? "Members:" : assignmentRole === "lead" ? "Leads:" : "Assigned to"} ${value.map(key => options.find(member => member.id === key)?.name).join(", ")}.` : assignmentRole === "member" ? "No members." : assignmentRole === "lead" ? "No leads." : "Unassigned."}</span>
     <PopoverContent align="start" className="w-72 p-2"><div className="p-1"><Input autoFocus aria-label="Search members to assign" placeholder="Search members…" value={search} onChange={event => setSearch(event.target.value)} /></div>
@@ -63,7 +64,7 @@ export function AssigneePicker({ id, value, members, onChange, disabled = false,
         </label>)}
         {!filtered.length && <p className="px-2 py-4 text-sm text-muted-foreground">No members found.</p>}
       </div>
-      <div className="mt-2 flex items-center justify-between border-t pt-2"><Button type="button" size="sm" variant="ghost" disabled={!value.length || disabled} onClick={() => onChange([])}>Clear</Button><div className="flex gap-1">{onCommit && <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => changeOpen(false)}>Cancel</Button>}<Button type="button" size="sm" disabled={disabled} onClick={() => { if (onCommit) void onCommit(value).then(saved => { if (saved) changeOpen(false); }); else changeOpen(false); }}>{onCommit ? "Save leads" : "Done"}</Button></div></div>
+      <div className="mt-2 flex items-center justify-between border-t pt-2"><Button type="button" size="sm" variant="ghost" disabled={!value.length || disabled} onClick={() => onChange([])}>Clear</Button><div className="flex gap-1">{onCommit && <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => changeOpen(false)}>Cancel</Button>}<Button type="button" size="sm" disabled={disabled} onClick={() => { if (onCommit) void onCommit(value).then(saved => { if (saved) changeOpen(false); }); else changeOpen(false); }}>{onCommit ? (assignmentRole === "lead" ? "Save leads" : "Save assignees") : "Done"}</Button></div></div>
     </PopoverContent>
   </Popover>;
 }

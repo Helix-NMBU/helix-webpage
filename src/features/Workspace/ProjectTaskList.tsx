@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
-import { TaskBoard } from "../ProjectManagement/TaskBoard";
+import { TaskBoard, type SaveBoardAssignees } from "../ProjectManagement/TaskBoard";
 import { ProjectTaskViewMenu } from "./ProjectTaskViewMenu";
 import { projectTaskView, visibleProjectTasks } from "./project-task-view";
 import { IconChevronDown } from "@tabler/icons-react";
@@ -42,6 +42,7 @@ export function ProjectTaskList({
   onClear,
   onOpen,
   onStatusChange,
+  onSaveAssignees,
   onCreate,
   boardKind = "milestone",
   heading,
@@ -60,6 +61,7 @@ export function ProjectTaskList({
   onClear: () => void;
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
+  onSaveAssignees?: SaveBoardAssignees;
   onCreate: () => void;
   boardKind?: "task" | "milestone";
   heading?: string;
@@ -221,6 +223,7 @@ export function ProjectTaskList({
           columns={["priority", "milestone", "assignee", "deadline"]}
           onOpen={boardKind === "milestone" ? onOpenMilestone : onOpen}
           onStatusChange={onStatusChange}
+          onSaveAssignees={onSaveAssignees}
         />
       ) : (
         <div className="space-y-5">

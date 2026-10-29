@@ -26,7 +26,7 @@ describe("page loading layouts", () => {
   });
   it("shows the board layout for a board task view", async () => {
     await act(async () => root.render(<TaskListSkeleton board />));
-    expect(container.querySelectorAll(".sm\\:grid-cols-3 > div")).toHaveLength(3);
+    expect(container.querySelectorAll(".w-72.flex-none")).toHaveLength(3);
   });
   it("only shows the purchase registration form skeleton when the member can register", async () => {
     await act(async () => root.render(<FinanceContentSkeleton page="purchases" />));

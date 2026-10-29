@@ -1,10 +1,12 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import { useTaskBoardDrag } from "./useTaskBoardDrag";
 import { BlockedTaskDropDialog } from "./BlockedTaskDropDialog";
 import { Link } from "react-router-dom";
-import { IconDiamonds } from "@tabler/icons-react";
+import { IconDiamonds, IconUserPlus } from "@tabler/icons-react";
 import { Card, CardContent } from "@libs/components/ui/card";
-import { AssigneeAvatars } from "./TaskAssignees";
+import { AssigneeAvatars, AssigneePicker } from "./TaskAssignees";
+import { canManageTask } from "./permissions";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 import {
   TaskStatusControl,
   TaskStatusIcon,
@@ -18,9 +20,31 @@ import {
   STATUS_LABELS,
   TASK_STATUSES,
   type ProjectWorkspace,
+  type ProjectMutation,
   type Task,
 } from "./types";
 import type { PersonalTaskColumn } from "./personal-task-view";
+
+export type SaveBoardAssignees = (task: Task, assigneeIds: string[]) => Promise<boolean>;
+export function boardAssignmentMutation(task: Task, assigneeIds: string[]): ProjectMutation {
+  return task.kind === "milestone"
+    ? { action: "update_milestone", id: task.id, expectedRevision: task.revision, changes: { assigneeIds } }
+    : { action: "save_task", id: task.id, expectedRevision: task.revision, task: { ...task, assigneeIds } };
+}
+
+function BoardAssignees({ task, workspace, busy, onSave, onOpen }: { task: Task; workspace: ProjectWorkspace; busy: boolean; onSave?: SaveBoardAssignees; onOpen: (task: Task) => void }) {
+  const [draft, setDraft] = useState(task.assigneeIds);
+  const notify = useNotify();
+  if (task.assigneeIds.length) return <AssigneeAvatars assigneeIds={task.assigneeIds} members={workspace.members} maxVisible={2} assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} />;
+  if (!onSave || !canManageTask(task, workspace)) return <span role="img" aria-label={task.kind === "milestone" ? "No leads" : "Unassigned"} title={task.kind === "milestone" ? "No leads" : "Unassigned"} className="flex size-7 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground"><IconUserPlus aria-hidden="true" className="size-4" /></span>;
+  return <AssigneePicker id={`board-assignees-${task.id}`} value={draft} members={workspace.members} onChange={setDraft} disabled={busy} assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} inline inlineShowNames={false} emptyIcon triggerLabel={`${task.kind === "milestone" ? "Assign leads to" : "Assign"} ${task.title}`} onOpenChange={() => setDraft(task.assigneeIds)} onCommit={ids => {
+    if (task.kind === "task" && (!task.projectId || !task.milestoneId)) {
+      notify("Organize this task first", "Choose a project and milestone before assigning this task.", { variant: "warning", href: null, action: { label: "Open task", onClick: () => onOpen(task) } });
+      return Promise.resolve(false);
+    }
+    return onSave(task, ids);
+  }} />;
+}
 
 export function TaskBoard({
   tasks,
@@ -30,6 +54,7 @@ export function TaskBoard({
   columns,
   onOpen,
   onStatusChange,
+  onSaveAssignees,
 }: {
   tasks: Task[];
   kind?: Task["kind"];
@@ -38,6 +63,7 @@ export function TaskBoard({
   columns: readonly PersonalTaskColumn[];
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
+  onSaveAssignees?: SaveBoardAssignees;
 }) {
   const records = tasks.filter((task) => task.kind === kind);
   const drag = useTaskBoardDrag(records, workspace, busy, onStatusChange);
@@ -82,7 +108,7 @@ export function TaskBoard({
               onDragOver={(event) => drag.enter(event, status)}
               onDragLeave={(event) => drag.leave(event, status)}
               onDrop={(event) => drag.drop(event, status)}
-              className={`flex min-w-72 flex-1 flex-col rounded-xl p-2 transition-colors ${drag.over === status ? "bg-accent ring-2 ring-inset ring-primary" : "bg-muted/40"}`}
+              className={`flex w-72 flex-none flex-col rounded-xl p-2 transition-colors ${drag.over === status ? "bg-accent ring-2 ring-inset ring-primary" : "bg-muted/40"}`}
             >
               <h3 className="flex shrink-0 items-center gap-2 px-2 py-3 text-sm font-medium">
                 <TaskStatusIcon status={status} />
@@ -144,11 +170,7 @@ export function TaskBoard({
                           </button>
                           {show("assignee") && (
                             <span className="relative z-10 shrink-0">
-                              <AssigneeAvatars
-                                assigneeIds={task.assigneeIds}
-                                members={workspace.members}
-                                maxVisible={2}
-                              />
+                              <BoardAssignees task={task} workspace={workspace} busy={busy || drag.locked} onSave={onSaveAssignees} onOpen={onOpen} />
                             </span>
                           )}
                         </div>
