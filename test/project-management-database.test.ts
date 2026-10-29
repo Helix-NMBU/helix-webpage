@@ -76,6 +76,7 @@ describe("project management database and authorization", () => {
     await db.exec(readFileSync(new URL("../db/migrations/023_project_requires_lead.sql", import.meta.url), "utf8"));
     for (const name of ["018_department_homes", "019_department_settings_permissions", "025_workspace_space_access", "026_department_access_levels"]) await db.exec(readFileSync(new URL(`../db/migrations/${name}.sql`, import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/032_estimated_task_history.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/033_project_status.sql", import.meta.url), "utf8"));
     departmentAccessInstalled = true;
     await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[manager.userId]);
     await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name in ('Mechanical & Production','Business & Marketing')",[member.userId]);
@@ -83,6 +84,20 @@ describe("project management database and authorization", () => {
 
   }, 60000);
   afterAll(async () => { await db?.close(); });
+
+  it("saves project status independently of task status and preserves it on older edits", async () => {
+    const before = await service().load("verified");
+    const project = before.projects.find(item => item.id === id(950))!;
+    const originalTasks = before.tasks.filter(item => item.projectId === project.id).map(item => [item.id, item.status]);
+    await expect(service(member).mutate("verified", { action: "save_project", id: project.id, expectedRevision: project.revision, project: { ...project, status: "blocked" } })).rejects.toMatchObject({ status: 403 });
+    const updated = await service().mutate("verified", { action: "save_project", id: project.id, expectedRevision: project.revision, project: { ...project, status: "blocked" } });
+    expect(updated.projects.find(item => item.id === project.id)?.status).toBe("blocked");
+    expect(updated.tasks.filter(item => item.projectId === project.id).map(item => [item.id, item.status])).toEqual(originalTasks);
+    const saved = updated.projects.find(item => item.id === project.id)!;
+    const { status: _status, ...olderClientProject } = saved;
+    const later = await service().mutate("verified", { action: "save_project", id: saved.id, expectedRevision: saved.revision, project: olderClientProject });
+    expect(later.projects.find(item => item.id === project.id)?.status).toBe("blocked");
+  });
 
   it("records an estimate separately while preserving observed events and authorization", async () => {
     const created = await save(899);

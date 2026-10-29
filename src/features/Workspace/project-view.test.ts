@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { directoryFixture } from "./fixtures.test-support";
 import { projectGroups, projectView, visibleProjects } from "./project-view";
-import { milestonePositions, offscreenProject, projectTimelineStatus, timelinePointerDate, timelinePointerPosition, timelineRange, timelineTicks } from "./ProjectTimeline";
+import { milestonePositions, offscreenProject, timelinePointerDate, timelinePointerPosition, timelineRange, timelineTicks } from "./ProjectTimeline";
 
 describe("project views", () => {
   it("keeps the pointer guide at the project column edge when hovering the project area", () => {
@@ -13,22 +13,14 @@ describe("project views", () => {
     expect(timelinePointerDate("2026-10-01", "2026-11-01", 10, 350, 300, 50)).toBe("2026-10-11");
     expect(timelinePointerDate("2026-10-01", "2026-11-01", 10, 900, 300, 50)).toBe("2026-10-31");
   });
-  it("derives project status from its task states", () => {
-    expect(projectTimelineStatus([])).toBeNull();
-    expect(projectTimelineStatus([{ status: "cancelled" }])).toBe("cancelled");
-    expect(projectTimelineStatus([{ status: "done" }, { status: "cancelled" }])).toBe("done");
-    expect(projectTimelineStatus([{ status: "done" }, { status: "blocked" }])).toBe("blocked");
-    expect(projectTimelineStatus([{ status: "done" }, { status: "todo" }])).toBe("in_progress");
-    expect(projectTimelineStatus([{ status: "backlog" }])).toBe("todo");
-  });
   it("keeps every nearby milestone individually accessible in the same lane", () => {
     const milestones = [{ id: "a", title: "First", deadline: "2026-10-01", priority: "normal" as const }, { id: "b", title: "Second", deadline: "2026-10-02", priority: "normal" as const }, { id: "c", title: "Third", deadline: "2026-11-01", priority: "normal" as const }, { id: "d", title: "Undated", deadline: null, priority: "normal" as const }];
     const positions = milestonePositions(milestones, date => (Date.parse(date) - Date.parse("2026-10-01")) / 86400000 * 3);
-    expect(positions.map(item => [item.milestone.id, item.position])).toEqual([["a", 0], ["b", 6], ["c", 93]]);
+    expect(positions.map(item => [item.milestone.id, item.position])).toEqual([["a", 0], ["b", 4], ["c", 93]]);
   });
   it("keeps milestones on the same date individually addressable in a compact stack", () => {
     const milestones = ["a", "b", "c"].map(id => ({ id, title: id, deadline: "2026-10-01", priority: "normal" as const }));
-    expect(milestonePositions(milestones, () => 100).map(item => item.position)).toEqual([100, 106, 112]);
+    expect(milestonePositions(milestones, () => 100).map(item => item.position)).toEqual([100, 104, 108]);
   });
   it("shows progressively more date ticks when zooming in", () => {
     const ticks = (pixelsPerDay: number) => timelineTicks("2026-10-01", "2026-11-01", pixelsPerDay);

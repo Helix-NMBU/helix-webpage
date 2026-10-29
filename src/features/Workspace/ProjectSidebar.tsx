@@ -20,19 +20,19 @@ import {
   ORGANIZATION_DEPARTMENTS,
   TASK_CATEGORIES,
   TASK_PRIORITIES,
+  TASK_WORKFLOW_STATUSES,
+  STATUS_LABELS,
   type ProjectInput,
   type ProjectWorkspace,
   type Task,
 } from "../ProjectManagement/types";
 import { summarize } from "../ProjectManagement/model";
-import {
-  milestoneProgress,
-  progressCounts,
-} from "../ProjectManagement/progress";
+import { milestoneProgress } from "../ProjectManagement/progress";
 import { getDepartmentIcon } from "./department-icons";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
 import { ProjectDatePicker } from "../ProjectManagement/ProjectDatePicker";
 import { PriorityGlyph } from "../ProjectManagement/PriorityGlyph";
+import { TaskStatusIcon, TaskStatusIndicator } from "../ProjectManagement/TaskStatus";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 function Widget({
@@ -107,7 +107,6 @@ export function ProjectSidebar({
   const [leadDraft, setLeadDraft] = useState(project.leadIds ?? []);
   const [departmentDraft, setDepartmentDraft] = useState(project.departments);
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
-  const counts = progressCounts(tasks);
   const progress = workspace
     ? summarize(tasks)
     : {
@@ -117,19 +116,7 @@ export function ProjectSidebar({
           ? Math.round((project.done / project.total) * 100)
           : 0,
       };
-  const status = !workspace
-    ? "—"
-    : !tasks.length
-      ? "No tasks"
-      : tasks.every((task) => task.status === "cancelled")
-        ? "Cancelled"
-        : progress.total > 0 && progress.done === progress.total
-          ? "Completed"
-          : tasks.some((task) => task.status === "blocked")
-            ? "Blocked"
-            : counts.started > 0
-              ? "In progress"
-              : "To do";
+  const status = project.status ?? "todo";
   const assignees = [...new Set(tasks.flatMap((task) => task.assigneeIds))];
   const ids = new Set(tasks.map((task) => task.id));
   const chart = workspace
@@ -154,7 +141,7 @@ export function ProjectSidebar({
       >
         <dl className="space-y-5">
           <Property label="Status">
-            <span title="Based on project task status">{status}</span>
+            {canEdit ? <Select value={status} disabled={busy} onValueChange={value => void onSaveProject({ status: value as ProjectInput["status"] })}><SelectTrigger aria-label="Project status" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted [&>svg:last-child]:opacity-0"><TaskStatusIcon status={status} /><SelectValue /></SelectTrigger><SelectContent>{[...TASK_WORKFLOW_STATUSES, ...(status === "cancelled" ? ["cancelled" as const] : [])].map(value => <SelectItem key={value} value={value}>{STATUS_LABELS[value]}</SelectItem>)}</SelectContent></Select> : <TaskStatusIndicator status={status} />}
           </Property>
           <Property label="Priority">
             {canEdit ? <Select value={project.priority ?? "normal"} disabled={busy} onValueChange={value => void onSaveProject({ priority: value as ProjectInput["priority"] })}>

@@ -11,12 +11,15 @@ import {
 } from "@libs/components/ui/select";
 import { AssigneePicker } from "./TaskAssignees";
 import { PriorityGlyph } from "./PriorityGlyph";
+import { TaskStatusIcon } from "./TaskStatus";
 import { ProjectDatePicker } from "./ProjectDatePicker";
 import {
   CATEGORY_LABELS,
   ORGANIZATION_DEPARTMENTS,
   TASK_CATEGORIES,
   TASK_PRIORITIES,
+  TASK_WORKFLOW_STATUSES,
+  STATUS_LABELS,
   type ProjectInput,
   type ProjectMember,
   type TaskCategory,
@@ -74,6 +77,7 @@ export function ProjectComposerProperties({
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 pb-5 pt-1">
+      <PropertyChoice id="project-status" label="Status" value={draft.status ?? "todo"} options={TASK_WORKFLOW_STATUSES.map(value => ({ value, label: STATUS_LABELS[value] }))} icon={<TaskStatusIcon status={draft.status ?? "todo"} />} disabled={busy} onChange={value => setDraft({ ...draft, status: value as ProjectInput["status"] })} />
       <PropertyChoice
         id="project-priority"
         label="Priority"

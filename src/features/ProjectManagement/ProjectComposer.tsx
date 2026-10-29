@@ -60,6 +60,7 @@ export function ProjectComposer({
     description: "",
     category,
     departments: initialDepartments,
+    status: "todo",
     priority: "normal",
     leadIds: [],
     startDate: null,

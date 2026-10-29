@@ -16,6 +16,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = { backlog: "Backlog", t
 
 export interface ProjectInput {
   startDate?: string | null;
+  status?: TaskStatus;
   priority?: TaskPriority;
   leadIds?: string[];
   name: string;

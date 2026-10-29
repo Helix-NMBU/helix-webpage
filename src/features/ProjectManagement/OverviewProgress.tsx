@@ -13,6 +13,7 @@ import { isOrganized } from "./hierarchy";
 import { progressSeries, progressStepPath } from "./progress";
 import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
 import { ProgressRing } from "./ProgressRing";
+import { TaskStatusIndicator } from "./TaskStatus";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { departmentMemberIds } from "./permissions";
@@ -253,7 +254,7 @@ export function OverviewProgress({ workspace, busy, projectColumns, onToggleProj
         {projectColumns.includes("deadline") && <TableCell className="whitespace-nowrap"><TargetDate deadline={project.deadline} /></TableCell>}
         {projectColumns.includes("milestones") && <TableCell className="tabular-nums"><span className="inline-flex items-center gap-1.5"><IconDiamonds aria-hidden="true" className="size-4 text-muted-foreground" />{milestones.length}</span></TableCell>}
         {projectColumns.includes("tasks") && <TableCell className="tabular-nums">{progress.total}</TableCell>}
-        {projectColumns.includes("status") && <TableCell><ProgressRing {...progress} label={project.name} showTotal={false} /></TableCell>}
+        {projectColumns.includes("status") && <TableCell><div className="flex items-center gap-3"><TaskStatusIndicator status={project.status ?? "todo"} /><ProgressRing {...progress} label={project.name} showTotal={false} /></div></TableCell>}
       </TableRow>; })}
       {!projects.length && <TableRow><TableCell colSpan={1 + projectColumns.length} className="py-6 text-center text-sm text-muted-foreground"><EmptyIllustration kind="cube" /><p className="mt-2">No projects yet.</p></TableCell></TableRow>}
     </TableBody></Table></CardContent></Card></section>
