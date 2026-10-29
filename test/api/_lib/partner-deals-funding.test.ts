@@ -24,6 +24,7 @@ beforeAll(async()=>{
  insert into identity.members values('${actor}','${actor}','sub','member@example.test','Member','Member'),('${other}','${other}','other','other@example.test','Other','Member');
  insert into identity.platform_roles values('platform_administrator','Admin',1);`);
  for(const file of ["011_finance_core.sql","012_finance_season_budgets.sql","013_finance_funding.sql","024_financials_member_role.sql","035_partner_deals.sql","037_partner_deal_funding.sql","039_partner_deal_funding_recovery.sql","042_partner_funding_hardening.sql"]) await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`,import.meta.url),"utf8"));
+ await pg.exec("alter table partner_deals.deals add column if not exists primary_season_id uuid");
  await pg.exec(`insert into partner_deals.member_grants values('${actor}','business',true);
  insert into finance.seasons(code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values
  ('S27','S27','2026-08-01','2027-07-31','active','${actor}','${actor}'),('S28','S28','2027-08-01','2028-07-31','planning','${actor}','${actor}');`);

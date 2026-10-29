@@ -25,6 +25,7 @@ beforeAll(async()=>{
  insert into identity.members values('${actor}','${actor}','sub','member@example.test','Member','Member');
  insert into identity.platform_roles values('platform_administrator','Admin',1);`);
  for(const f of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','039_partner_deal_funding_recovery','040_partner_stable_draft_items','042_partner_funding_hardening']) await db.exec(load(f));
+ await db.exec("alter table partner_deals.deals add column if not exists primary_season_id uuid");
  await db.exec(`insert into partner_deals.member_grants values('${actor}','business',true); insert into identity.member_roles values('${actor}','financials');
  insert into finance.seasons(code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('S27','S27','2026-08-01','2027-07-31','active','${actor}','${actor}');
  insert into partner.organizations(name,active) values('Acme',false);`);

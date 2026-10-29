@@ -31,6 +31,7 @@ beforeAll(async()=>{
  await pg.exec(readFileSync(new URL("../../../db/migrations/035_partner_deals.sql",import.meta.url),"utf8"));
  await pg.exec(readFileSync(new URL("../../../db/migrations/056_partner_deal_sponsor_level.sql",import.meta.url),"utf8"));
  await pg.exec(`alter table partner_deals.deals add column cancelled_at timestamptz; alter table partner_deals.contributions add column retired_at timestamptz; alter table partner_deals.contributions add column pending_change_id uuid; alter table partner_deals.deliverables add column retired_at timestamptz; alter table partner_deals.deliverables add column pending_change_id uuid; create table finance.funding(id uuid,status text); create table partner_deals.funding_links(contribution_id uuid,funding_id uuid); create table partner_deals.manual_reconciliation_items(change_id uuid,kind text,item_id uuid); create table partner_deals.agreement_changes(id uuid,deal_id uuid,kind text,reason text,before_terms jsonb,proposed_terms jsonb,status text,created_at timestamptz,resolved_at timestamptz,withdrawn_at timestamptz,resolution_note text); create table partner_deals.manual_funding_reviews(id uuid,contribution_id uuid,note text,reviewed_at timestamptz); create function partner_deals.manual_finance_review_ready(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_needs_review(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_review_token(uuid) returns text language sql as $$ select null::text $$; create function partner_deals.linked_funding_mismatch(uuid) returns boolean language sql as $$ select false $$; create table partner_deals.separate_funding_approvals(contribution_id uuid,candidate_snapshot jsonb); create function partner_deals.funding_candidate_snapshot(uuid) returns jsonb language sql as $$ select '[]'::jsonb $$; create table partner_deals.finance_reviews(contribution_id uuid,organization_name text,season_id uuid,amount_ore bigint,status text); create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid,contribution_id uuid);`);
+ await pg.exec(readFileSync(new URL("../../../db/migrations/059_imported_partner_deals.sql",import.meta.url),"utf8"));
  await pg.exec(`insert into partner_deals.member_grants values ('${business}','business',true),('${marketing}','marketing',true);`);
  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  services=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});
@@ -102,6 +103,15 @@ describe("partner deals access and persistence",()=>{
   expect(response.json).toHaveBeenCalledWith({error:"You do not have access to sponsor deals."});
   expect(JSON.stringify(response.json.mock.calls)).not.toContain("Partner agreement");
   await pg.query("update partner_deals.member_grants set active=true where member_id=$1",[marketing]);
+ });
+ it("preserves an unknown invoice date in a draft but requires one before confirming Won",async()=>{
+  const draft = input();
+  const id=(await services.save(business,{...draft,title:"No invoice date",seasonId:season,contributions:[{...draft.contributions[0],invoiceDate:null}]})).id;
+  const saved=(await pg.query<{amount_ore:string;invoice_date:string|null}>("select amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1",[id])).rows[0];
+  expect(saved).toMatchObject({amount_ore:"100000",invoice_date:null});
+  expect((await pg.query<{season_id:string}>("select primary_season_id as season_id from partner_deals.deals where id=$1",[id])).rows[0].season_id).toBe(season);
+  await expect(pg.query("select partner_deals.confirm_won($1,$2,$3,$4,0)",[business,identities.get(business)!.googleSub,identities.get(business)!.email,id])).rejects.toThrow(/deal_invoice_date_required/);
+  expect((await pg.query<{stage:string}>("select stage from partner_deals.deals where id=$1",[id])).rows[0].stage).toBe("lead");
  });
  it("rechecks account and grant revocation",async()=>{
   await pg.query("update partner_deals.member_grants set active=false where member_id=$1",[marketing]);
