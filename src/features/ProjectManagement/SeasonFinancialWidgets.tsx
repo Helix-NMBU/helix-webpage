@@ -123,10 +123,10 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
       <Card className="gap-4 py-5 md:col-span-2"><CardContent className="space-y-4 px-5">
         {(!summary || summary.budgetStatus !== "approved" || mismatch || stale) && <p className="text-sm text-muted-foreground">{summary ? (summary.budgetStatus === "approved" && !mismatch ? "Last loaded values." : budgetDisplay) : "Unavailable"}{stale && summary && summary.budgetStatus !== "approved" && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</p>}
         <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] md:gap-8">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-5">
+          <div className="flex flex-col items-center justify-center gap-4 text-center">
+            <div className="flex flex-col items-center gap-5">
               {visible && summary.plannedNok !== null && summary.actualNok !== null && <BudgetRing planned={summary.plannedNok} actual={summary.actualNok} />}
-              <dl className="grid flex-1 gap-3 tabular-nums"><div><dt className="text-sm text-muted-foreground">Season budget</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</dd></div><div><dt className="text-sm text-muted-foreground">Recorded spending</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</dd></div></dl>
+              <dl className="grid grid-cols-2 gap-x-8 gap-y-3 tabular-nums"><div><dt className="text-sm text-muted-foreground">Season budget</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</dd></div><div><dt className="text-sm text-muted-foreground">Recorded spending</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</dd></div></dl>
             </div>
             {visible && summary.plannedNok !== null && summary.actualNok !== null && nokToOre(summary.actualNok) > nokToOre(summary.plannedNok) && <p className="text-xs text-destructive">Over budget</p>}
             <p className="text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</p>
