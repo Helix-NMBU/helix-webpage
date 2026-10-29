@@ -25,7 +25,7 @@ describe("Sponsor pipeline",()=>{
  it("offers authorized recovery when duplicate funding blocks confirmation",async()=>{
   confirmWon.mockRejectedValueOnce(new PipelineError("Existing funding",409,"funding_possible_duplicate"));
   await render();await select("won");await act(async()=>button("Confirm won").click());
-  expect(document.body.textContent).toContain("Matching funding exists");
+  expect(document.body.textContent).toContain("Funding needs review");
   await act(async()=>button("Review funding").click());
   expect(document.body.textContent).toContain("Recovery for contribution-1");
  });
@@ -44,6 +44,13 @@ describe("Sponsor pipeline",()=>{
   await render();await act(async()=>window.dispatchEvent(new Event("focus")));
   await act(async()=>resolve(structuredClone(data)));
   expect(container.textContent).not.toContain("Engine deal");
+ });
+ it("offers a Finance request when linked funding no longer matches",async()=>{
+  load.mockResolvedValueOnce({...structuredClone(data),canReviewFunding:false});
+  confirmWon.mockRejectedValueOnce(new PipelineError("Funding changed",409,"funding_mismatch"));
+  await render();await select("won");await act(async()=>button("Confirm won").click());
+  await act(async()=>button("Request review").click());
+  expect(requestFinanceReview).toHaveBeenCalledWith("one",3);
  });
  it("hides private deal data after access is denied",async()=>{load.mockRejectedValueOnce(new PipelineError("Access denied",403));await render();expect(container.textContent).not.toContain("Engine deal");expect(container.textContent).toContain("Could not load sponsor pipeline");});
  it("preserves the duplicate funding response code",async()=>{

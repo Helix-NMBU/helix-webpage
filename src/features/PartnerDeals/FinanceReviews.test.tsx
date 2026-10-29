@@ -32,3 +32,14 @@ it("does not render review data when access is denied",async()=>{
  expect(el.textContent).not.toContain("Acme");expect(notify).toHaveBeenCalledWith("Could not load Finance reviews","Access denied",expect.objectContaining({variant:"error"}));
  await act(async()=>root.unmount());el.remove();
 });
+
+it("lets Finance remove a mismatched linked draft record with its revision",async()=>{
+ const linked={id:"old-fund",revision:9,reference:"F-S27-200",status:"secured",amountOre:"25000"};
+ const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",partner:"Acme",season:"S27",amountOre:"10000",candidates:[],linkedFunding:linked}]),resolve:vi.fn().mockResolvedValue(undefined)};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<FinanceReviews repository={repo}/>));
+ expect(el.textContent).toContain("F-S27-200");
+ await act(async()=>[...el.querySelectorAll("button")].find(b=>b.textContent==="Remove mismatched link")!.click());
+ expect(repo.resolve).toHaveBeenCalledWith("review","unlink","old-fund",9,undefined);
+ await act(async()=>root.unmount());el.remove();
+});

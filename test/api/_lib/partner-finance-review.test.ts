@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','042_partner_funding_hardening','043_partner_finance_review']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -101,4 +101,52 @@ it('invalidates changed requests and denies revoked Finance and partner-only ses
  await expect(dealService(1).financeReviewQueue('test')).rejects.toMatchObject({status:403});
  const partnerOnly=createDealServices({db,authenticate:async()=>{throw new (await import('../../../api/_lib/member-cv-error.js')).MemberCvError(401,'Sign in');}});
  await expect(partnerOnly.financeReviewQueue('partner-otp')).rejects.toMatchObject({status:401});
+});
+
+it('lets separate Finance safely unlink a mismatched draft and resolve remaining matches',async()=>{
+ await db.query('update neon_auth."user" set banned=false where id=$1',[id(2)]);
+ await setupDeal(110,'MismatchCo',[20]);
+ await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-903','MismatchCo','Owner','sponsor_cash',10000,'secured',$2,$2)",[id(20),id(1)]);
+ await dealService(0).requestFinanceReview('test',id(111),0);
+ const initial=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;candidates:{id:string;revision:number}[]}[];
+ const review=initial.find(r=>r.partner==='MismatchCo')!;const funding=review.candidates[0];
+ await dealService(1).resolveFinanceReview('test',review.id,'link',funding.id,funding.revision,null,true);
+ await db.query("update finance.funding set amount_ore=25000,revision=revision+1 where id=$1",[funding.id]);
+ await expect(confirm(0,111)).rejects.toMatchObject({status:409,code:'funding_mismatch'});
+ expect(JSON.stringify(await dealService(0).load('test','pipeline'))).toContain('stale');
+ await dealService(0).requestFinanceReview('test',id(111),0);
+ const list=await dealService(1).financeReviewQueue('test') as {id:string;linkedFunding:{id:string;revision:number;amountOre:string}|null;candidates:unknown[]}[];
+ const mismatch=list.find(r=>r.id===review.id)!;
+ expect(mismatch.linkedFunding).toMatchObject({id:funding.id,amountOre:'25000'});
+ expect(JSON.stringify(mismatch)).not.toContain('Private negotiation');
+ await expect(dealService(2).resolveFinanceReview('test',review.id,'unlink',funding.id,mismatch.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:403});
+ await expect(dealService(1).resolveFinanceReview('test',review.id,'unlink',funding.id,mismatch.linkedFunding!.revision-1,null,true)).rejects.toMatchObject({status:409});
+ await dealService(1).resolveFinanceReview('test',review.id,'unlink',funding.id,mismatch.linkedFunding!.revision,null,true);
+ await dealService(1).resolveFinanceReview('test',review.id,'unlink',funding.id,mismatch.linkedFunding!.revision,null,true);
+ expect((await db.query('select * from finance.funding where id=$1',[funding.id])).rows).toHaveLength(1);
+ expect((await db.query('select * from partner_deals.funding_links where funding_id=$1',[funding.id])).rows).toHaveLength(0);
+ const after=await dealService(1).financeReviewQueue('test') as {id:string;linkedFunding:unknown;candidates:unknown[]}[];
+ const remaining=after.find(r=>r.id===review.id)!;expect(remaining.linkedFunding).toBeNull();expect(remaining.candidates).toHaveLength(1);
+ await dealService(1).resolveFinanceReview('test',review.id,'separate',null,null,remaining.candidates,true);
+ await confirm(0,111);
+ await expect(dealService(1).resolveFinanceReview('test',review.id,'unlink',funding.id,mismatch.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:409});
+ expect((await db.query("select * from finance.funding where source_name='MismatchCo'")).rows).toHaveLength(2);
+});
+
+it('finishes review when a rejected linked record has no remaining candidate',async()=>{
+ await setupDeal(120,'RejectedCo',[20]);
+ await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-904','RejectedCo','Owner','sponsor_cash',10000,'secured',$2,$2)",[id(20),id(1)]);
+ await dealService(0).requestFinanceReview('test',id(121),0);
+ const initial=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;candidates:{id:string;revision:number}[]}[];
+ const review=initial.find(r=>r.partner==='RejectedCo')!;const funding=review.candidates[0];
+ await dealService(1).resolveFinanceReview('test',review.id,'link',funding.id,funding.revision,null,true);
+ await db.query("update finance.funding set status='rejected',revision=revision+1 where id=$1",[funding.id]);
+ await dealService(0).requestFinanceReview('test',id(121),0);
+ const current=await dealService(1).financeReviewQueue('test') as {id:string;linkedFunding:{revision:number}|null}[];
+ const linked=current.find(r=>r.id===review.id)!.linkedFunding!;
+ await dealService(1).resolveFinanceReview('test',review.id,'unlink',funding.id,linked.revision,null,true);
+ expect((await dealService(1).financeReviewQueue('test') as {id:string}[]).some(r=>r.id===review.id)).toBe(false);
+ expect(JSON.stringify(await dealService(0).load('test','pipeline'))).toContain('unlinked');
+ await confirm(0,121);
+ expect((await db.query("select * from finance.funding where source_name='RejectedCo'")).rows).toHaveLength(2);
 });

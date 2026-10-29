@@ -5,6 +5,7 @@ import { withVerifyFullSsl } from "./pg-ssl.js";
 
 type DealView = "pipeline" | "shared";
 export class DuplicateFundingError extends MemberCvError { readonly code = "funding_possible_duplicate"; }
+export class FundingMismatchError extends MemberCvError { readonly code = "funding_mismatch"; }
 export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; deals: unknown[]; organizations: unknown[]; seasons: unknown[] };
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
@@ -36,7 +37,7 @@ const readSql = `select caps.pipeline as "canManage",
   'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id),'[]'::jsonb),
   'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id),'[]'::jsonb)
  ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes,
- 'financeReviews',coalesce((select jsonb_agg(jsonb_build_object('contributionId',r.contribution_id,'status',case when r.status='separate' and (select a.candidate_snapshot from partner_deals.separate_funding_approvals a where a.contribution_id=c.id) is distinct from partner_deals.funding_candidate_snapshot(c.id) then 'stale' else r.status end))
+ 'financeReviews',coalesce((select jsonb_agg(jsonb_build_object('contributionId',r.contribution_id,'status',case when r.status='linked' and partner_deals.linked_funding_mismatch(c.id) then 'stale' when r.status='separate' and (select a.candidate_snapshot from partner_deals.separate_funding_approvals a where a.contribution_id=c.id) is distinct from partner_deals.funding_candidate_snapshot(c.id) then 'stale' else r.status end))
   from partner_deals.finance_reviews r join partner_deals.contributions c on c.id=r.contribution_id
   where c.deal_id=d.id and (r.organization_name,r.season_id,r.amount_ore)=(o.name,c.season_id,c.amount_ore)),'[]'::jsonb)) else '{}'::jsonb end order by d.updated_at desc,d.id)
  from partner_deals.deals d join partner.organizations o on o.id=d.organization_id
@@ -85,7 +86,7 @@ function errorFor(error: unknown): never {
   if (message.includes("deal_linked_organization")) throw new MemberCvError(409, "This partner has linked funding. Ask Finance to reconcile it before changing the partner name.");
   if (message.includes("deal_funding_stale_link")) throw new MemberCvError(409, "This funding record changed. Reload funding and review it before linking.");
   if (message.includes("deal_funding_possible_duplicate")) throw new DuplicateFundingError(409, "Existing funding may match this partner and season. Review it before confirming the deal.");
-  if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
+  if (message.includes("deal_funding_mismatch")) throw new FundingMismatchError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
   if (message.includes("deal_funding_closed")) throw new MemberCvError(409, "A deal season is closed. Review the agreement with Finance.");
   if (message.includes("deal_forbidden") || code === "42501") throw new MemberCvError(403, "You do not have access to sponsor deals.");
   if (message.includes("deal_linked_contribution")) throw new MemberCvError(409, "This contribution is linked to funding. Ask Finance to unlink it before changing or removing it.");
@@ -144,9 +145,9 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
     },
     async resolveFinanceReview(token, reviewId, action, fundingId, revision, snapshot, confirmed) {
       try {
-        if(confirmed!==true || typeof reviewId!=="string" || !["link","separate"].includes(String(action)) || (action==="link" && (typeof fundingId!=="string" || !Number.isSafeInteger(revision) || Number(revision)<0)) || (action==="separate" && (!Array.isArray(snapshot) || snapshot.length>100))) throw new MemberCvError(400,"Review the funding before continuing.");
+        if(confirmed!==true || typeof reviewId!=="string" || !["link","unlink","separate"].includes(String(action)) || (["link","unlink"].includes(String(action)) && (typeof fundingId!=="string" || !Number.isSafeInteger(revision) || Number(revision)<0)) || (action==="separate" && (!Array.isArray(snapshot) || snapshot.length>100))) throw new MemberCvError(400,"Review the funding before continuing.");
         const actor=await identity(token);
-        await deps.db.query("select partner_deals.resolve_finance_review($1::uuid,$2,$3,$4::uuid,$5,$6::uuid,$7::integer,$8::jsonb)",[actor.userId,actor.googleSub,actor.email,reviewId,action,action==="link"?fundingId:null,action==="link"?revision:null,action==="separate"?JSON.stringify(snapshot):null]);
+        await deps.db.query("select partner_deals.resolve_finance_review($1::uuid,$2,$3,$4::uuid,$5,$6::uuid,$7::integer,$8::jsonb)",[actor.userId,actor.googleSub,actor.email,reviewId,action,action==="link"||action==="unlink"?fundingId:null,action==="link"||action==="unlink"?revision:null,action==="separate"?JSON.stringify(snapshot):null]);
         return {ok:true};
       } catch(error) { return errorFor(error); }
     },

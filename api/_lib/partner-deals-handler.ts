@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { bearer } from "./member-cv-service.js";
 import { MemberCvError } from "./member-cv-error.js";
-import { DuplicateFundingError, neonDealServices, type DealServices } from "./partner-deals-service.js";
+import { DuplicateFundingError, FundingMismatchError, neonDealServices, type DealServices } from "./partner-deals-service.js";
 export function createDealHandler(getServices: () => DealServices = neonDealServices) {
  return async (req: VercelRequest, res: VercelResponse) => {
   res.setHeader("Cache-Control", "private, no-store"); res.setHeader("Vary", "Authorization");
@@ -28,7 +28,7 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
    if (req.body.action === "saveDeal") return res.status(200).json(await service.save(token,req.body.deal));
    throw new MemberCvError(400,"Choose a valid deal operation.");
   } catch (error) {
-   return res.status(error instanceof MemberCvError ? error.status : 503).json({ error: error instanceof MemberCvError ? error.message : "Sponsor deals are temporarily unavailable. Try again.", ...(error instanceof DuplicateFundingError ? { code: error.code } : {}) });
+   return res.status(error instanceof MemberCvError ? error.status : 503).json({ error: error instanceof MemberCvError ? error.message : "Sponsor deals are temporarily unavailable. Try again.", ...((error instanceof DuplicateFundingError || error instanceof FundingMismatchError) ? { code: error.code } : {}) });
   }
  };
 }
