@@ -20,7 +20,7 @@ function Notifications() {
 }
 let root: Root, container: HTMLDivElement;
 beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 async function render(load: (owner: { current: string | null }) => Promise<SeasonFinancialSummary>, season = "S27", userId = "one") {
   await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><SeasonFinancialWidgets season={season} userId={userId} load={load} /><Notifications /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
 }
@@ -85,4 +85,60 @@ it("does not show a hidden draft or fabricate an unavailable bank balance", asyn
   expect(container.textContent).toContain("Could not load bank balance Try again");
   expect(container.textContent).not.toContain("NOK 1 000,00");
   expect(container.textContent).not.toContain("NOK 0,00");
+});
+
+it("refreshes a visible tab periodically without overlapping requests and clears the timer", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  let resolve!: (value: SeasonFinancialSummary) => void;
+  const pending = new Promise<SeasonFinancialSummary>(done => { resolve = done; });
+  const load = vi.fn().mockResolvedValueOnce(summary).mockReturnValueOnce(pending).mockResolvedValue({ ...summary, actualNok: "9.00" });
+  await render(load);
+  await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+  expect(load).toHaveBeenCalledTimes(2);
+  await act(async () => { window.dispatchEvent(new Event("focus")); await vi.advanceTimersByTimeAsync(60_000); });
+  expect(load).toHaveBeenCalledTimes(2);
+  await act(async () => { resolve({ ...summary, actualNok: "22.00" }); });
+  expect(container.textContent).toContain("NOK 22,00");
+  await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+  expect(load).toHaveBeenCalledTimes(3);
+  expect(container.textContent).toContain("NOK 9,00");
+  await act(async () => root.unmount());
+  await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+  expect(load).toHaveBeenCalledTimes(3);
+  // The shared cleanup calls unmount as well; install a fresh root for it.
+  root = createRoot(container);
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+it("labels retained department values and a previously absent balance after refresh fails", async () => {
+  const load = vi.fn().mockResolvedValueOnce({ ...summary, bank: { status: "available", snapshot: null } }).mockRejectedValueOnce(new Error("Offline"));
+  await render(load);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(container.textContent).toContain("Last checked: no balance entered.");
+  expect(container.textContent).not.toContain("No balance entered yet.");
+  expect(container.textContent).toContain("Last loaded values. Recorded spending compared with the planned budget.");
+  expect(container.textContent).toContain("Could not load financial overview Try again");
+});
+
+it("marks a previously absent budget as a past observation after refresh fails", async () => {
+  const absent = { ...summary, seasonCode: null, budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], bank: { status: "available", snapshot: null } } satisfies SeasonFinancialSummary;
+  const load = vi.fn().mockResolvedValueOnce(absent).mockRejectedValueOnce(new Error("Offline"));
+  await render(load);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(container.textContent).toContain("Last checked: no season budget.");
+  expect(container.textContent).not.toContain("No season budget yet.");
+});
+
+it("skips background polling while hidden and refreshes when visible again", async () => {
+  vi.useFakeTimers();
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+  const load = vi.fn().mockResolvedValue(summary);
+  await render(load);
+  await act(async () => { await vi.advanceTimersByTimeAsync(120_000); });
+  expect(load).toHaveBeenCalledTimes(1);
+  visibility.mockReturnValue("visible");
+  await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+  expect(load).toHaveBeenCalledTimes(2);
 });

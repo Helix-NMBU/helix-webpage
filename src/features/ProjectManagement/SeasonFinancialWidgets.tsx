@@ -45,11 +45,14 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
   const [stale, setStale] = useState(false);
   const owner = useRef<string | null>(userId);
   const generation = useRef(0);
+  const inFlight = useRef<number | null>(null);
   const active = useRef(false);
   const notify = useNotify();
   const navigate = useNavigate();
   const refresh = useCallback(async () => {
+    if (inFlight.current !== null) return;
     const request = ++generation.current;
+    inFlight.current = request;
     try {
       const result = await load(owner);
       if (!active.current || request !== generation.current) return;
@@ -62,6 +65,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
       if (denied) { setSummary(null); setStale(false); } else setStale(true);
       notify("Could not load financial overview", error instanceof Error ? error.message : "Please try again.", { id: "season-financial-load", variant: "error", href: null, action: status === 401 ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Try again", onClick: () => void refresh() } });
     } finally {
+      if (inFlight.current === request) inFlight.current = null;
       if (active.current && request === generation.current) setLoading(false);
     }
   }, [load, navigate, notify]);
@@ -70,20 +74,22 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
     const onFocus = () => { void refresh(); };
     const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onVisibility);
-    return () => { active.current = false; generation.current++; window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
+    const timer = window.setInterval(onVisibility, 60_000);
+    return () => { active.current = false; generation.current++; inFlight.current = null; window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
   }, [userId, refresh]);
   const mismatch = !!summary?.seasonCode && summary.seasonCode !== season;
   const visible = summary && !mismatch && (summary.budgetStatus === "approved" || summary.budgetStatus === "draft");
   const budgetDetail = mismatch ? `Finance is set to ${summary.seasonCode}, not ${season}.` : summary?.budgetStatus === "draft-hidden" ? "Draft budget is restricted." : summary?.budgetStatus === "absent" ? "No season budget yet." : summary?.budgetStatus === "draft" ? "Draft budget" : "Approved budget";
+  const budgetDisplay = stale && summary?.budgetStatus === "absent" && !mismatch ? "Last checked: no season budget." : budgetDetail;
   const bank = summary?.bank;
   const snapshot = bank?.status === "available" ? bank.snapshot : null;
   return <section className="space-y-4" aria-labelledby="season-financial-title">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="season-financial-title" className="text-lg font-medium">Season finances</h2><p className="text-sm text-muted-foreground">Planned costs, recorded spending and money in the bank.</p></div>{summary?.canOpenFinancials && <Button asChild variant="outline" size="sm"><Link to={financeRoutes.overview}>Open Financials</Link></Button>}</div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Season budget</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{summary ? budgetDetail : "Unavailable"}{stale && summary ? " · Last loaded value" : ""}</CardContent></Card>
+      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Season budget</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{summary ? budgetDisplay : "Unavailable"}{stale && summary && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</CardContent></Card>
       <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Recorded spending</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</CardContent></Card>
-      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{snapshot ? <>Manually entered combined balance · as of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</> : bank?.status === "available" ? "No balance entered yet." : "Balance unavailable."}</CardContent></Card>
+      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{snapshot ? <>Manually entered combined balance · as of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</CardContent></Card>
     </div>
-    {visible && <Card className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Spending by department</CardTitle><CardDescription>Recorded spending compared with the planned budget.</CardDescription></CardHeader><CardContent className="px-5"><ul className="divide-y">{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul></CardContent></Card>}
+    {visible && <Card className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Spending by department</CardTitle><CardDescription>{stale ? "Last loaded values. " : ""}Recorded spending compared with the planned budget.</CardDescription></CardHeader><CardContent className="px-5"><ul className="divide-y">{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul></CardContent></Card>}
   </section>;
 }
