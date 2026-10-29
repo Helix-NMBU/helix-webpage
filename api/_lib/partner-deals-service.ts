@@ -91,6 +91,7 @@ function errorFor(error: unknown): never {
   if (message.includes("deal_linked_contribution")) throw new MemberCvError(409, "This contribution is linked to funding. Ask Finance to unlink it before changing or removing it.");
   if (message.includes("deal_no_current_season")) throw new MemberCvError(409, "Set an active current season before confirming the deal.");
   if (message.includes("deal_task_season_unavailable")) throw new MemberCvError(409, "Tasks are not yet available for the current season.");
+  if (message.includes("deal_marketing_lead_missing")) throw new MemberCvError(409, "Assign an active Business & Marketing lead or a deliverable owner before confirming the deal.");
   if (message.includes("deal_marketing_department_missing")) throw new MemberCvError(409, "Set up the Business & Marketing department before confirming the deal.");
   if (message.includes("deal_finance_lead_missing")) throw new MemberCvError(409, "Assign an active Finance lead before confirming the deal.");
   if (message.includes("deal_finance_department_missing")) throw new MemberCvError(409, "Set up the Finance department before confirming the deal.");

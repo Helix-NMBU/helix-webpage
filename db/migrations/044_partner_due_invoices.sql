@@ -22,6 +22,17 @@ begin
  select name into marketing_dept from project_management.departments where season=current_season.code and name='Business & Marketing';
  select name into finance_dept from project_management.departments where season=current_season.code and name='Finance';
  if exists(select 1 from partner_deals.deliverables where deal_id=d.id) and marketing_dept is null then raise exception 'deal_marketing_department_missing' using errcode='22023'; end if;
+ if exists(select 1 from partner_deals.deliverables where deal_id=d.id and owner_member_id is null) then
+  -- An unassigned task must have a verified department lead who can manage it.
+  perform dm.member_id from project_management.department_members dm
+   join project_management.departments dep on dep.id=dm.department_id
+   join identity.members m on m.id=dm.member_id join neon_auth."user" u on u.id=m.auth_user_id
+   join neon_auth.account a on a."userId"=u.id and a."providerId"='google' and a."accountId"=m.google_sub
+   where dep.season=current_season.code and dep.name=marketing_dept and dm.access_level='lead'
+    and lower(u.email)=m.email and u."emailVerified" is true and u.banned is not true
+   for share of dm,m,u,a;
+  if not found then raise exception 'deal_marketing_lead_missing' using errcode='22023'; end if;
+ end if;
  select * into contribution from partner_deals.contributions where deal_id=d.id and season_id=current_season.id and kind='cash';
  if contribution.id is not null and finance_dept is null then raise exception 'deal_finance_department_missing' using errcode='22023'; end if;
  if contribution.id is not null then

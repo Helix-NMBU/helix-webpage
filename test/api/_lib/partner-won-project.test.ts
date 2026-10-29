@@ -129,3 +129,21 @@ it('does not confirm a cash deal when its Finance lead is revoked',async()=>{
  await db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[id(1),'manager','manager@helixnmbu.no',id(51)]);
  expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind='invoice'",[id(51)])).rows).toHaveLength(1);
 });
+
+
+it('requires an eligible Marketing lead for unassigned deliverables and recovers after setup',async()=>{
+ await db.exec(`insert into partner.organizations values('${id(60)}','Unassigned',false); insert into partner_deals.deals(id,organization_id,title,stage,created_by_member_id,updated_by_member_id) values('${id(61)}','${id(60)}','Agreement','proposal','${id(1)}','${id(1)}'); insert into partner_deals.deliverables(deal_id,title) values('${id(61)}','Publish campaign');`);
+ await expect(db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[id(1),'manager','manager@helixnmbu.no',id(61)])).rejects.toThrow('deal_marketing_lead_missing');
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(61)])).rows[0].stage).toBe('proposal');
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(61)])).rows).toHaveLength(0);
+ await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where season='S28' and name='Business & Marketing'",[id(3)]);
+ await db.query('update neon_auth."user" set banned=true where id=$1',[id(3)]);
+ await expect(db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[id(1),'manager','manager@helixnmbu.no',id(61)])).rejects.toThrow('deal_marketing_lead_missing');
+ await db.query('update neon_auth."user" set banned=false where id=$1',[id(3)]);
+ await db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[id(1),'manager','manager@helixnmbu.no',id(61)]);
+ const task=(await db.query<{task_id:string}>("select task_id from partner_deals.task_links where deal_id=$1 and kind='marketing'",[id(61)])).rows[0].task_id;
+ const marketing=createProjectServices({db,authenticate:async()=>people[2]});
+ expect((await marketing.load('test')).tasks.some(t=>t.id===task)).toBe(true);
+ await marketing.mutate('test',{action:'set_status',id:task,expectedRevision:1,status:'in_progress',blockedReason:''});
+ expect((await marketing.load('test')).tasks.find(t=>t.id===task)?.status).toBe('in_progress');
+});
