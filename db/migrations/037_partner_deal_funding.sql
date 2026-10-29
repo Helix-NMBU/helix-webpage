@@ -82,7 +82,8 @@ begin
    -- Counter locking serializes against normal finance creation for this season.
    refnum:=finance.issue_counter('funding:'||season_code,p_member);
    if exists(select 1 from finance.funding x where x.season_id=c.season_id and x.funding_type='sponsor_cash'
-       and x.status not in ('deleted','rejected') and lower(btrim(x.source_name))=lower(btrim(org))) then
+       and x.status not in ('deleted','rejected') and lower(btrim(x.source_name))=lower(btrim(org))
+       and not exists(select 1 from partner_deals.funding_links linked where linked.funding_id=x.id)) then
      raise exception 'deal_funding_possible_duplicate' using errcode='23505';
    end if;
    ref:='F-'||season_code||'-'||case when refnum<1000 then lpad(refnum::text,3,'0') else refnum::text end;

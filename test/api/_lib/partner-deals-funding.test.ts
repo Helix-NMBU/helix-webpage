@@ -44,15 +44,22 @@ describe('partner deal funding',()=>{
   expect((await pg.query('select * from partner_deals.funding_links')).rows).toHaveLength(2);
   expect((await pg.query("select * from finance.audit_log where entity='funding'")).rows.length).toBeGreaterThan(0);
  });
- it('fails before producing a duplicate and preserves existing funding',async()=>{
-  const id=(await svc.save('actor',payload('Second',[cash(current)]))).id;
+ it('permits separate deals from the same sponsor when prior funding is linked',async()=>{
+  const id=(await svc.save('actor',payload('Second',[cash(current,'200000')]))).id;
+  await call(id);
+  expect((await pg.query('select * from finance.funding')).rows).toHaveLength(3);
+  expect((await pg.query('select * from partner_deals.funding_links')).rows).toHaveLength(3);
+ });
+ it('blocks an unlinked matching source before creating duplicate funding',async()=>{
+  await pg.query(`insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-998','Acme','Member','sponsor_cash',100000,'secured',$2,$2)`,[current,actor]);
+  const id=(await svc.save('actor',payload('Candidate',[cash(current)]))).id;
   await expect(call(id)).rejects.toThrow('deal_funding_possible_duplicate');
-  expect((await pg.query('select * from finance.funding')).rows).toHaveLength(2);
+  expect((await pg.query('select * from finance.funding')).rows).toHaveLength(4);
  });
  it('requires existing financial authority for linking and refuses reuse of a linked funding record',async()=>{
   const id=(await svc.save('actor',payload('Third',[cash(current)]))).id;
   const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
-  const funding=(await pg.query<{id:string}>('select id from finance.funding where season_id=$1',[current])).rows[0].id;
+  const funding=(await pg.query<{id:string}>("select f.id from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id where f.season_id=$1 limit 1",[current])).rows[0].id;
   await expect(svc.linkFunding('actor',contribution,funding)).rejects.toMatchObject({status:403});
   await pg.exec(`insert into identity.member_roles values('${actor}','financials');`);
   await expect(svc.linkFunding('actor',contribution,funding)).rejects.toMatchObject({status:400});
