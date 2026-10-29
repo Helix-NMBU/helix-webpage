@@ -1,0 +1,89 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@libs/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
+import { Skeleton } from "@libs/components/ui/skeleton";
+import { CvRequestError } from "../MemberCV/repository";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { financeRoutes } from "../Finance/routes";
+import { nokToOre } from "../Finance/finance-calculations";
+import { loadSeasonFinancialSummary, SeasonFinancialRequestError } from "./season-financials-repository";
+import type { SeasonFinancialDepartment, SeasonFinancialSummary, SeasonFinancialSystem } from "./season-financials-types";
+
+// Format canonical decimal strings without converting large values to a floating-point number.
+function money(value: string): string {
+  const [whole, fraction = "00"] = value.split(".");
+  return `NOK ${whole.replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${fraction.padEnd(2, "0")}`;
+}
+
+function usage(actual: string, planned: string): number {
+  const a = nokToOre(actual), p = nokToOre(planned);
+  if (p <= 0n) return a > 0n ? 100 : 0;
+  return Number(a >= p ? 100n : a <= 0n ? 0n : a * 100n / p);
+}
+
+function BudgetLine({ item, detail = false }: { item: SeasonFinancialDepartment | SeasonFinancialSystem; detail?: boolean }) {
+  const over = nokToOre(item.actualNok) > nokToOre(item.plannedNok);
+  const percentage = usage(item.actualNok, item.plannedNok);
+  return <div className="space-y-2">
+    {detail && <h4 className="font-medium">{item.name}{"active" in item && !item.active ? " · Inactive" : ""}</h4>}
+    <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-sm tabular-nums"><span>Spent {money(item.actualNok)}</span><span className="text-muted-foreground">Budget {money(item.plannedNok)}</span></div>
+    <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true"><div className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${percentage}%` }} /></div>
+    {(over || nokToOre(item.unbudgetedNok) > 0n) && <p className="text-xs text-muted-foreground">{over ? "Over budget" : ""}{over && nokToOre(item.unbudgetedNok) > 0n ? " · " : ""}{nokToOre(item.unbudgetedNok) > 0n ? `Unbudgeted ${money(item.unbudgetedNok)}` : ""}</p>}
+  </div>;
+}
+
+function DepartmentRow({ department }: { department: SeasonFinancialDepartment }) {
+  const [open, setOpen] = useState(false);
+  const panel = `season-finance-${department.departmentKey}`;
+  return <li className="space-y-3 py-4 first:pt-0 last:pb-0"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{department.name}</h3><Button type="button" variant="outline" size="sm" aria-expanded={open} aria-controls={panel} onClick={() => setOpen(value => !value)}>{open ? "Hide systems" : "Show systems"}<span className="sr-only"> for {department.name}</span></Button></div><BudgetLine item={department} />{open && <div id={panel} className="space-y-4 rounded-lg bg-muted/40 p-4">{department.systems.length ? department.systems.map(system => <BudgetLine key={system.id} item={system} detail />) : <p className="text-sm text-muted-foreground">No systems in this department.</p>}</div>}</li>;
+}
+
+export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinancialSummary }: { season: string; userId: string; load?: typeof loadSeasonFinancialSummary }) {
+  const [summary, setSummary] = useState<SeasonFinancialSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [stale, setStale] = useState(false);
+  const owner = useRef<string | null>(userId);
+  const generation = useRef(0);
+  const active = useRef(false);
+  const notify = useNotify();
+  const navigate = useNavigate();
+  const refresh = useCallback(async () => {
+    const request = ++generation.current;
+    try {
+      const result = await load(owner);
+      if (!active.current || request !== generation.current) return;
+      setSummary(result); setStale(false);
+      if (result.bank.status === "unavailable") notify("Could not load bank balance", "Please try again.", { id: "season-bank-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
+    } catch (error) {
+      if (!active.current || request !== generation.current) return;
+      const status = error instanceof SeasonFinancialRequestError || error instanceof CvRequestError ? error.status : null;
+      const denied = status === 401 || status === 403;
+      if (denied) { setSummary(null); setStale(false); } else setStale(true);
+      notify("Could not load financial overview", error instanceof Error ? error.message : "Please try again.", { id: "season-financial-load", variant: "error", href: null, action: status === 401 ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Try again", onClick: () => void refresh() } });
+    } finally {
+      if (active.current && request === generation.current) setLoading(false);
+    }
+  }, [load, navigate, notify]);
+  useEffect(() => {
+    owner.current = userId; active.current = true; setSummary(null); setLoading(true); setStale(false); void refresh();
+    const onFocus = () => { void refresh(); };
+    const onVisibility = () => { if (document.visibilityState === "visible") void refresh(); };
+    window.addEventListener("focus", onFocus); document.addEventListener("visibilitychange", onVisibility);
+    return () => { active.current = false; generation.current++; window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [userId, refresh]);
+  const mismatch = !!summary?.seasonCode && summary.seasonCode !== season;
+  const visible = summary && !mismatch && (summary.budgetStatus === "approved" || summary.budgetStatus === "draft");
+  const budgetDetail = mismatch ? `Finance is set to ${summary.seasonCode}, not ${season}.` : summary?.budgetStatus === "draft-hidden" ? "Draft budget is restricted." : summary?.budgetStatus === "absent" ? "No season budget yet." : summary?.budgetStatus === "draft" ? "Draft budget" : "Approved budget";
+  const bank = summary?.bank;
+  const snapshot = bank?.status === "available" ? bank.snapshot : null;
+  return <section className="space-y-4" aria-labelledby="season-financial-title">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="season-financial-title" className="text-lg font-medium">Season finances</h2><p className="text-sm text-muted-foreground">Planned costs, recorded spending and money in the bank.</p></div>{summary?.canOpenFinancials && <Button asChild variant="outline" size="sm"><Link to={financeRoutes.overview}>Open Financials</Link></Button>}</div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Season budget</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{summary ? budgetDetail : "Unavailable"}{stale && summary ? " · Last loaded value" : ""}</CardContent></Card>
+      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Recorded spending</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</CardContent></Card>
+      <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{snapshot ? <>Manually entered combined balance · as of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</> : bank?.status === "available" ? "No balance entered yet." : "Balance unavailable."}</CardContent></Card>
+    </div>
+    {visible && <Card className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Spending by department</CardTitle><CardDescription>Recorded spending compared with the planned budget.</CardDescription></CardHeader><CardContent className="px-5"><ul className="divide-y">{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul></CardContent></Card>}
+  </section>;
+}
