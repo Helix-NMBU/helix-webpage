@@ -48,7 +48,8 @@ returns jsonb language sql stable set search_path=pg_catalog as $$
    and (r.organization_name,r.season_id,r.amount_ore)=(o.name,c.season_id,c.amount_ore)
    and not exists(select 1 from partner_deals.review_notification_reads seen where seen.notification_id=n.id and seen.member_id=p_member)
    and (
-    (n.kind='requested' and r.status='pending' and n.event_time=r.requested_at and partner_deals.finance_reviewer(p_member,p_sub,p_email))
+    (n.kind='requested' and r.status='pending' and n.event_time=r.requested_at and partner_deals.finance_reviewer(p_member,p_sub,p_email)
+      and (jsonb_array_length(partner_deals.funding_candidate_snapshot(c.id))>0 or partner_deals.linked_funding_mismatch(c.id)))
     or
     (n.kind='resolved' and n.event_time=r.resolved_at
        and coalesce((select pipeline from partner_deals.capabilities(p_member,p_sub,p_email)),false)

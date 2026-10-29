@@ -83,6 +83,9 @@ it('does not return an event when Finance access is revoked between reads',async
  const revoking={query:async<T>(sql:string,params?:unknown[])=>{const rows=(await db.query<T>(sql,params)).rows;if(!revoked&&sql.includes('review_notifications(')){revoked=true;await db.query("delete from identity.member_roles where member_id=$1 and role_key='financials'",[id(2)]);}return {rows};}};
  const service=createDealServices({db:revoking,authenticate:auth(1)});
  expect(await service.reviewNotifications('test')).toEqual([]);expect(revoked).toBe(true);
+ expect(await dealService(3).reviewNotifications('test')).toHaveLength(1);
+ await db.query("update finance.funding set status='rejected',revision=revision+1 where source_name='RevokedCo'");
+ expect(await dealService(3).reviewNotifications('test')).toEqual([]);
 });
 it('suppresses a stale completion when the linked funding changes later',async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(2)]);
