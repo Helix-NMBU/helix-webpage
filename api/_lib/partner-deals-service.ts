@@ -15,6 +15,7 @@ export interface DealServices {
   markReviewNotificationsRead(token: string, ids: unknown): Promise<{ ok: true }>;
   recordAgreementChange(token: string, dealId: unknown, revision: unknown, kind: unknown, reason: unknown, terms: unknown, confirmed: unknown): Promise<{id:string}>;
   resolveAgreementChange(token: string, changeId: unknown, note: unknown, confirmed: unknown, manualConfirmed: unknown): Promise<{id:string}>;
+  withdrawAgreementChange(token: string, changeId: unknown, note: unknown, confirmed: unknown): Promise<{id:string}>;
   requestFinanceReview(token: string, dealId: unknown, revision: unknown): Promise<{ count: number }>;
   financeReviewQueue(token: string): Promise<unknown[]>;
   resolveFinanceReview(token: string, reviewId: unknown, action: unknown, fundingId: unknown, revision: unknown, snapshot: unknown, confirmed: unknown): Promise<{ ok: true }>;
@@ -37,21 +38,21 @@ const readSql = `select caps.pipeline as "canManage",
   'ownerMemberId',d.owner_member_id,'contactName',d.contact_name,'contactEmail',d.contact_email,
   'startsOn',d.starts_on,'endsOn',d.ends_on,'agreementLink',d.agreement_link,'revision',d.revision,
   'wonAt',d.won_at,'wonByMemberId',d.won_by_member_id,'cancelledAt',d.cancelled_at,
-  'changes',coalesce((select jsonb_agg(jsonb_build_object('id',ac.id,'kind',ac.kind,'reason',ac.reason,'beforeTerms',ac.before_terms,'proposedTerms',ac.proposed_terms,'status',ac.status,'createdAt',ac.created_at,'resolvedAt',ac.resolved_at,'resolutionNote',ac.resolution_note,'manualItems',coalesce((select jsonb_agg(jsonb_build_object('kind',mr.kind,'itemId',mr.item_id)) from partner_deals.manual_reconciliation_items mr where mr.change_id=ac.id),'[]'::jsonb)) order by ac.created_at,ac.id) from partner_deals.agreement_changes ac where ac.deal_id=d.id),'[]'::jsonb),
+  'changes',coalesce((select jsonb_agg(jsonb_build_object('id',ac.id,'kind',ac.kind,'reason',ac.reason,'beforeTerms',ac.before_terms,'proposedTerms',ac.proposed_terms,'status',ac.status,'createdAt',ac.created_at,'resolvedAt',ac.resolved_at,'withdrawnAt',ac.withdrawn_at,'resolutionNote',ac.resolution_note,'manualItems',coalesce((select jsonb_agg(jsonb_build_object('kind',mr.kind,'itemId',mr.item_id)) from partner_deals.manual_reconciliation_items mr where mr.change_id=ac.id),'[]'::jsonb)) order by ac.created_at,ac.id) from partner_deals.agreement_changes ac where ac.deal_id=d.id),'[]'::jsonb),
   'tasks',coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'status',t.status,'kind',l.kind,'deliverableId',l.deliverable_id,'seasonId',l.season_id,'contributionId',l.contribution_id,'canOpen',project_management.can_access_task($1::uuid,t.id)) order by l.kind,t.title) from partner_deals.task_links l join project_management.tasks t on t.id=l.task_id where l.deal_id=d.id),'[]'::jsonb),
   'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'retiredAt',c.retired_at,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date,
    'manualHandling',exists(select 1 from partner_deals.manual_reconciliation_items mr where mr.kind='cash' and mr.item_id=c.id),
    'fundingStatus',case when coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then (select f.status from partner_deals.funding_links l join finance.funding f on f.id=l.funding_id where l.contribution_id=c.id) else null end,
-   'fundingNeedsReview',case when caps.pipeline or coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then c.kind='cash' and c.retired_at is null and (not exists(select 1 from partner_deals.funding_links fl where fl.contribution_id=c.id) or partner_deals.linked_funding_mismatch(c.id)) else false end) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id),'[]'::jsonb),
-  'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'retiredAt',v.retired_at,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id),'[]'::jsonb)
- ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes,
+   'fundingNeedsReview',case when caps.pipeline or coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then c.kind='cash' and c.retired_at is null and (not exists(select 1 from partner_deals.funding_links fl where fl.contribution_id=c.id) or partner_deals.linked_funding_mismatch(c.id)) else false end) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id and c.pending_change_id is null),'[]'::jsonb),
+  'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'retiredAt',v.retired_at,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id and v.pending_change_id is null),'[]'::jsonb)
+ ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes) else '{}'::jsonb end || case when caps.pipeline then jsonb_build_object(
  'financeReviews',coalesce((select jsonb_agg(jsonb_build_object('contributionId',r.contribution_id,'status',case when r.status='linked' and partner_deals.linked_funding_mismatch(c.id) then 'stale' when r.status='separate' and (select a.candidate_snapshot from partner_deals.separate_funding_approvals a where a.contribution_id=c.id) is distinct from partner_deals.funding_candidate_snapshot(c.id) then 'stale' else r.status end))
   from partner_deals.finance_reviews r join partner_deals.contributions c on c.id=r.contribution_id
   where c.deal_id=d.id and (r.organization_name,r.season_id,r.amount_ore)=(o.name,c.season_id,c.amount_ore)),'[]'::jsonb)) else '{}'::jsonb end order by d.updated_at desc,d.id)
  from partner_deals.deals d join partner.organizations o on o.id=d.organization_id
  where ($4='pipeline' or d.stage='won')),'[]'::jsonb) as deals,
  case when $4='pipeline' then coalesce((select jsonb_agg(jsonb_build_object('id',o.id,'name',o.name,'revision',coalesce(v.revision,0)) order by lower(o.name),o.id) from partner.organizations o left join partner_deals.organization_versions v on v.organization_id=o.id),'[]'::jsonb) else '[]'::jsonb end as organizations,
- case when $4='pipeline' then coalesce((select jsonb_agg(jsonb_build_object('id',s.id,'code',s.code,'name',s.name,'startDate',s.start_date,'endDate',s.end_date,'status',s.status) order by s.start_date) from finance.seasons s),'[]'::jsonb) else '[]'::jsonb end as seasons
+ coalesce((select jsonb_agg(jsonb_build_object('id',s.id,'code',s.code,'name',s.name,'startDate',s.start_date,'endDate',s.end_date,'status',s.status) order by s.start_date) from finance.seasons s where $4='pipeline' or caps.pipeline or exists(select 1 from partner_deals.contributions sc join partner_deals.deals sd on sd.id=sc.deal_id where sd.stage='won' and sc.season_id=s.id)),'[]'::jsonb) as seasons
  from partner_deals.capabilities($1::uuid,$2,$3) caps where case when $4='pipeline' then caps.pipeline else caps.shared end`;
 
 function record(value: unknown): Record<string, unknown> {
@@ -151,6 +152,7 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
             return {...contribution,fundingStatus:null,fundingNeedsReview:current.pipeline ? contribution.fundingNeedsReview : false};
           }) : []};
         });
+        if (view === "shared" && workspace.canManage && !current.pipeline) throw new MemberCvError(403, "Your sponsor deal access changed. Reload the agreements.");
         return { ...workspace, canManage: current.pipeline, canReviewFunding: view === "pipeline" && current.can_review_funding, canViewFinance: current.can_view_finance };
       } catch (error) { return errorFor(error); }
     },
@@ -192,6 +194,14 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         if(confirmed!==true || typeof changeId!=="string" || typeof note!=="string" || !note.trim() || note.length>2000) throw new MemberCvError(400,"Enter a review note before reconciling.");
         const actor=await identity(token);
         const rows=await deps.db.query<{id:string}>("select partner_deals.resolve_agreement_change($1::uuid,$2,$3,$4::uuid,$5,$6::boolean) as id",[actor.userId,actor.googleSub,actor.email,changeId,note,manualConfirmed===true]);
+        if(!rows.rows[0]?.id)throw new Error("Missing change identifier");return rows.rows[0];
+      } catch(error) { return errorFor(error); }
+    },
+    async withdrawAgreementChange(token, changeId, note, confirmed) {
+      try {
+        if(confirmed!==true || typeof changeId!=="string" || typeof note!=="string" || !note.trim() || note.length>2000) throw new MemberCvError(400,"Enter a reason before withdrawing.");
+        const actor=await identity(token);
+        const rows=await deps.db.query<{id:string}>("select partner_deals.withdraw_agreement_change($1::uuid,$2,$3,$4::uuid,$5) as id",[actor.userId,actor.googleSub,actor.email,changeId,note]);
         if(!rows.rows[0]?.id)throw new Error("Missing change identifier");return rows.rows[0];
       } catch(error) { return errorFor(error); }
     },

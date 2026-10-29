@@ -54,3 +54,35 @@ it("records proposed cash and deliverable terms with the existing item identitie
  expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({terms:{cashChanges:[{id:"cash",amountOre:"20000",retire:true}],deliverableChanges:[{id:"delivery",title:"New logo",retire:true}]}});
  await act(async()=>root.unmount());el.remove();
 });
+
+it("proposes added cash and deliverables with a season",async()=>{
+ const request=vi.fn().mockResolvedValue({ok:true,json:async()=>({id:"change"})});vi.stubGlobal("fetch",request);
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<AgreementChanges deal={deal} canManage seasons={[{id:"season",code:"S28",status:"planning"}]} onReload={()=>{}}/>));
+ await act(async()=>button("Propose amendment").click());await act(async()=>button("Add cash").click());await act(async()=>button("Add deliverable").click());
+ const labels=[...document.querySelectorAll("label")];const set=(label:string,val:string)=>{const input=labels.find(x=>x.textContent?.startsWith(label))!.querySelector("input,textarea,select")!;const proto=input instanceof HTMLSelectElement?HTMLSelectElement.prototype:input instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,"value")!.set!.call(input,val);input.dispatchEvent(new Event(input instanceof HTMLSelectElement?"change":"input",{bubbles:true}));};
+ await act(async()=>{set("Season","season");set("Amount (NOK)","250.00");set("Invoice date","2027-11-01");set("Deliverable","Attend event");set("Reason","Add commitments");});
+ await act(async()=>button("Save proposed amendment").click());
+ expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({terms:{newCash:[{seasonId:"season",amountOre:"25000",invoiceDate:"2027-11-01"}],newDeliverables:[{title:"Attend event"}]}});
+ await act(async()=>root.unmount());el.remove();
+});
+
+it("offers a Finance review action when added funding has a possible duplicate",async()=>{
+ const request=vi.fn().mockResolvedValueOnce({ok:false,json:async()=>({code:"funding_possible_duplicate",error:"Matching funding"})}).mockResolvedValueOnce({ok:true,json:async()=>({count:1})});vi.stubGlobal("fetch",request);
+ const pending={...deal,changes:[{id:"change",kind:"amendment" as const,reason:"Added cash",beforeTerms:{...deal,cashChanges:[],inKindChanges:[],deliverableChanges:[]},proposedTerms:{newCash:[{id:"new",seasonId:"s",amountOre:"25000",invoiceDate:"2027-11-01"}]},status:"pending" as const,createdAt:"now",resolvedAt:null,resolutionNote:null}]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);await act(async()=>root.render(<AgreementChanges deal={pending} canManage onReload={()=>{}}/>));
+ await act(async()=>button("Review and reconcile").click());const textarea=document.querySelector("textarea")!;await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(textarea,"Reviewed");textarea.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();});
+ await act(async()=>button("Confirm reconciliation").click());
+ const recovery=notify.mock.calls.find(c=>c[0]==="Review existing funding")?.[2]?.action;expect(recovery?.label).toBe("Request Finance review");
+ await act(async()=>recovery.onClick());expect(JSON.parse(request.mock.calls[1][1].body)).toMatchObject({action:"requestFinanceReview",dealId:"deal",expectedRevision:2});
+ await act(async()=>root.unmount());el.remove();
+});
+it("withdraws an incorrect pending proposal only after explicit confirmation",async()=>{
+ const request=vi.fn().mockResolvedValue({ok:true,json:async()=>({id:"change"})});vi.stubGlobal("fetch",request);
+ const pending={...deal,changes:[{id:"change",kind:"amendment" as const,reason:"Wrong amount",beforeTerms:{...deal,cashChanges:[],inKindChanges:[],deliverableChanges:[]},proposedTerms:{},status:"pending" as const,createdAt:"now",resolvedAt:null,resolutionNote:null}]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);await act(async()=>root.render(<AgreementChanges deal={pending} canManage onReload={()=>{}}/>));
+ await act(async()=>button("Withdraw proposal").click());expect(button("Confirm withdrawal").disabled).toBe(true);
+ const textarea=document.querySelector("textarea")!;await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(textarea,"Entered incorrectly");textarea.dispatchEvent(new Event("input",{bubbles:true}));document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();});
+ await act(async()=>button("Confirm withdrawal").click());expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({action:"withdrawAgreementChange",changeId:"change",note:"Entered incorrectly",confirmed:true});
+ await act(async()=>root.unmount());el.remove();
+});

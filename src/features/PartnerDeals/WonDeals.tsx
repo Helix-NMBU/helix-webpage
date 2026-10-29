@@ -12,8 +12,8 @@ import { AgreementChanges, type AgreementChange } from "./AgreementChanges";
 type Contribution = { id: string; seasonId?: string; seasonCode: string; seasonName: string; kind: "cash" | "product" | "service"; description: string; amountOre: string | null; invoiceDate: string | null; fundingStatus?:string|null; fundingNeedsReview?:boolean; manualHandling?:boolean; retiredAt?:string|null };
 type Deliverable = { id: string; title: string; description: string; dueDate: string | null; retiredAt?:string|null };
 type DealTask = { id: string; title: string; status: string; kind: "marketing" | "invoice"; deliverableId: string | null; seasonId: string | null; contributionId: string | null; canOpen: boolean };
-export type WonDeal = { id: string; title: string; organizationName: string; startsOn: string | null; endsOn: string | null; contactName: string; contactEmail: string; agreementLink: string; contributions: Contribution[]; deliverables: Deliverable[]; tasks: DealTask[]; revision?:number; cancelledAt?:string|null; changes?:AgreementChange[] };
-type SharedResult = { deals: WonDeal[]; canManage?:boolean; canViewFinance?:boolean };
+export type WonDeal = { id: string; title: string; organizationName: string; startsOn: string | null; endsOn: string | null; contactName: string; contactEmail: string; agreementLink: string; contributions: Contribution[]; deliverables: Deliverable[]; tasks: DealTask[]; revision?:number; cancelledAt?:string|null; changes?:AgreementChange[]; financeReviews?:{contributionId:string;status:string}[] };
+type SharedResult = { deals: WonDeal[]; canManage?:boolean; canViewFinance?:boolean; seasons?:{id:string;code:string;status:string}[] };
 const statusNames: Record<string, string> = { backlog: "Backlog", todo: "To do", in_progress: "In progress", blocked: "Blocked", done: "Done", cancelled: "Cancelled" };
 function amount(value: string | null) {
   if (!value || !/^\d+$/.test(value)) return "Not specified";
@@ -37,6 +37,7 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
   const owner = useRef<string | null>(null);
   const generation = useRef(0);
   const [deals, setDeals] = useState<WonDeal[] | null>(null);
+  const [seasons,setSeasons]=useState<{id:string;code:string;status:string}[]>([]);
   const [canManage,setCanManage]=useState(false); const [canViewFinance,setCanViewFinance]=useState(false);
   const [search, setSearch] = useSearchParams();
   const selected = search.get("deal");
@@ -48,7 +49,7 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
     setDeals(null);
     try {
       const result = await (loadShared ? loadShared() : requestShared(owner));
-      if (generation.current === current) { setDeals(result.deals);setCanManage(result.canManage===true);setCanViewFinance(result.canViewFinance===true); }
+      if (generation.current === current) { setDeals(result.deals);setCanManage(result.canManage===true);setCanViewFinance(result.canViewFinance===true);setSeasons(result.seasons??[]); }
     } catch (error) {
       if (generation.current !== current) return;
       setDeals(null);
@@ -74,7 +75,7 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
         {agreementUrl(deal.agreementLink) ? <a href={agreementUrl(deal.agreementLink)!} target="_blank" rel="noreferrer" className="underline">Open agreement</a> : null}
         <div><h2 className="font-semibold">Contributions</h2>{deal.contributions.length ? <ul className="mt-2 space-y-2">{deal.contributions.map(c => <li key={c.id} className="rounded-md border p-3"><span>{c.seasonName} ({c.seasonCode}) · {c.kind === "cash" ? "Cash" : c.kind === "product" ? "Product" : "Service"}</span><p>{c.description}</p><p>{c.kind === "cash" ? amount(c.amountOre) : `Estimated value: ${amount(c.amountOre)}`}</p>{c.retiredAt&&<p>Retired; historical records retained.</p>}{c.invoiceDate ? <p>Invoice date: {c.invoiceDate}</p> : null}{c.manualHandling&&<p>Changes to this contribution were handled manually; the original financial record remains unchanged.</p>}{c.fundingStatus&&<p>Funding status: {c.fundingStatus}</p>}{c.fundingNeedsReview&&<p>Funding needs review. {canViewFinance?<Link to="/finance/financing" className="underline">Open Financing</Link>:"Ask Finance to review the funding record."}</p>}</li>)}</ul> : <p>No contributions recorded.</p>}</div>
         <div><h2 className="font-semibold">Deliverables</h2>{deal.deliverables.length ? <ul className="mt-2 space-y-2">{deal.deliverables.map(d => <li key={d.id} className="rounded-md border p-3"><p>{d.title}{d.retiredAt?" · Retired":""}</p><p>{d.description}</p>{d.dueDate ? <p>Due: {d.dueDate}</p> : null}</li>)}</ul> : <p>No deliverables recorded.</p>}</div>
-        <AgreementChanges key={deal.id} deal={{id:deal.id,revision:deal.revision??0,title:deal.title,contactName:deal.contactName,contactEmail:deal.contactEmail,startsOn:deal.startsOn,endsOn:deal.endsOn,agreementLink:deal.agreementLink,cancelledAt:deal.cancelledAt??null,changes:deal.changes??[],contributions:deal.contributions,deliverables:deal.deliverables}} canManage={canManage} onReload={()=>void load()}/>
+        <AgreementChanges key={deal.id} deal={{id:deal.id,revision:deal.revision??0,title:deal.title,contactName:deal.contactName,contactEmail:deal.contactEmail,startsOn:deal.startsOn,endsOn:deal.endsOn,agreementLink:deal.agreementLink,cancelledAt:deal.cancelledAt??null,changes:deal.changes??[],financeReviews:deal.financeReviews??[],contributions:deal.contributions,deliverables:deal.deliverables}} canManage={canManage} seasons={seasons} onReload={()=>void load()}/>
         <div><h2 className="font-semibold">Tasks</h2>{deal.tasks.length || deal.contributions.some(c => c.kind === "cash" && !c.retiredAt && c.seasonId && !deal.tasks.some(t => t.kind === "invoice" && t.contributionId === c.id)) ? <ul className="mt-2 space-y-2">{deal.tasks.map(t => <li key={t.id} className="rounded-md border p-3">{t.canOpen ? <Link to={`/tasks/${t.id}`} className="underline">{t.title}</Link> : <span>{t.title}</span>}<span> · {statusNames[t.status] ?? t.status}</span></li>)}{deal.contributions.filter(c => c.kind === "cash" && !c.retiredAt && c.seasonId && !deal.tasks.some(t => t.kind === "invoice" && t.contributionId === c.id)).map(c => <li key={`planned-${c.id}`} className="rounded-md border p-3"><p>Invoice {deal.organizationName} · {c.seasonName}</p><p>{c.manualHandling?"Handled manually":deal.cancelledAt||deal.changes?.some(change=>change.status==="pending")?"Paused":"Planned"} · {amount(c.amountOre)}{c.invoiceDate ? ` · Invoice date: ${c.invoiceDate}` : ""}</p></li>)}</ul> : <p>No tasks recorded.</p>}</div>
       </CardContent></Card>
     </> : null}

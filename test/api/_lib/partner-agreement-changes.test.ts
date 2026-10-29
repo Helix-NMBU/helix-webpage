@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -147,4 +147,74 @@ it('keeps a retired invoice task separate from a replacement contribution',async
  const links=(await db.query<{task_id:string;contribution_id:string}>("select task_id,contribution_id from partner_deals.task_links where deal_id=$1 and kind='invoice'",[id(151)])).rows;
  expect(links).toHaveLength(2);expect(links).toContainEqual({task_id:prior,contribution_id:previous});expect(links.some(l=>l.contribution_id===replacement&&l.task_id!==prior)).toBe(true);
  expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result")).rows[0].result.created).toBe(0);
+});
+
+it('creates added funding and tasks only after separate Finance review, atomically and idempotently',async()=>{
+ await db.query("update project_management.department_members set access_level='lead' where member_id=$1 and department_id=(select id from project_management.departments where season='S28' and name='Business & Marketing')",[id(3)]);
+ await setupDeal(160,'AddedCo',[]); await confirm(0,161);
+ const existing=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(161)])).rows[0];
+ await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S28-9998','AddedCo','manager','sponsor_cash',25000,'secured',$2,$2)",[id(21),id(1)]);
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[],inKindChanges:[],deliverableChanges:[{id:existing.id,title:existing.title,description:existing.description,dueDate:existing.due_date}],newCash:[{id:id(170),seasonId:id(21),amountOre:'25000',invoiceDate:'2027-11-01'},{id:id(171),seasonId:id(22),amountOre:'35000',invoiceDate:'2028-11-01'}],newInKind:[],newDeliverables:[{id:id(172),title:'New event',description:'Attend event',dueDate:'2027-12-01'}]};
+ const proposed=await dealService(0).recordAgreementChange('test',id(161),1,'amendment','Add commitments',terms,true);
+ const shared=await dealService(2).load('test','shared'); const visible=(shared.deals as {id:string;contributions:{id:string}[];deliverables:{id:string}[]}[]).find(d=>d.id===id(161))!;
+ expect(visible.contributions.some(c=>c.id===id(170))).toBe(false);expect(visible.deliverables.some(c=>c.id===id(172))).toBe(false);
+ await expect(dealService(0).resolveAgreementChange('test',proposed.id,'Reviewed',true,false)).rejects.toMatchObject({status:409});
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id in ($1,$2)",[id(170),id(171)])).rows).toHaveLength(0);
+ await expect(dealService(2).requestFinanceReview('test',id(161),2)).rejects.toMatchObject({status:403});
+ await dealService(0).requestFinanceReview('test',id(161),2);
+ const pendingAlerts=(await db.query<{alerts:{href:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(2),'finance','finance@helixnmbu.no'])).rows[0].alerts;expect(pendingAlerts.some(a=>a.href==='/finance/sponsor-reviews')).toBe(true);
+ const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;candidates:{id:string;revision:number}[]}[];
+ const item=queue.find(x=>x.partner==='AddedCo')!;expect(item).toBeDefined();expect(JSON.stringify(item)).not.toContain('Private negotiation');expect(JSON.stringify(item)).not.toContain('New event');
+ await expect(dealService(2).resolveFinanceReview('test',item.id,'link',item.candidates[0].id,item.candidates[0].revision,null,true)).rejects.toMatchObject({status:403});
+ await dealService(1).resolveFinanceReview('test',item.id,'link',item.candidates[0].id,item.candidates[0].revision,null,true);
+ const businessAlerts=(await db.query<{alerts:{href:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(1),'manager','manager@helixnmbu.no'])).rows[0].alerts;expect(businessAlerts.some(a=>a.href===`/partner-deals?deal=${id(161)}`)).toBe(true);
+ const businessReview=await dealService(0).load('test','shared');expect(JSON.stringify(businessReview)).toContain('\"status\":\"linked\"');
+ const marketingReview=await dealService(2).load('test','shared');expect(JSON.stringify(marketingReview)).not.toContain('financeReviews');
+ await dealService(0).resolveAgreementChange('test',proposed.id,'Finance and Marketing reviewed',true,false);
+ await dealService(0).resolveAgreementChange('test',proposed.id,'Finance and Marketing reviewed',true,false);
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id in ($1,$2)",[id(170),id(171)])).rows).toHaveLength(2);
+ expect((await db.query("select * from partner_deals.task_links where contribution_id=$1 and kind='invoice'",[id(170)])).rows).toHaveLength(1);
+ expect((await db.query("select * from partner_deals.task_links where contribution_id=$1 and kind='invoice'",[id(171)])).rows).toHaveLength(0);
+ expect((await db.query("select * from partner_deals.task_links where deliverable_id=$1 and kind='marketing'",[id(172)])).rows).toHaveLength(1);
+ const now=await dealService(2).load('test','shared');expect(JSON.stringify(now)).toContain(id(172));
+});
+
+it('replaces retired cash in the same season while preserving its former invoice and funding',async()=>{
+ await setupDeal(180,'ReplacedCo',[21]);await confirm(0,181);
+ const old=(await db.query<{id:string;amount_ore:string;invoice_date:string}>("select id,amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(181)])).rows[0];
+ const oldLink=(await db.query<{task_id:string}>("select task_id from partner_deals.task_links where contribution_id=$1",[old.id])).rows[0];
+ const oldFunding=(await db.query<{funding_id:string}>("select funding_id from partner_deals.funding_links where contribution_id=$1",[old.id])).rows[0];
+ const deliverable=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(181)])).rows[0];
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[{id:old.id,amountOre:old.amount_ore,invoiceDate:old.invoice_date,retire:true}],inKindChanges:[],deliverableChanges:[{id:deliverable.id,title:deliverable.title,description:deliverable.description,dueDate:deliverable.due_date}]};
+ const retired=await dealService(0).recordAgreementChange('test',id(181),1,'amendment','Remove old contribution',terms,true);
+ await db.query("update finance.funding set status='deleted',prior_status='secured',revision=revision+1 where id=$1",[oldFunding.funding_id]);
+ await db.query("update project_management.tasks set status='cancelled' where id=$1",[oldLink.task_id]);
+ await dealService(0).resolveAgreementChange('test',retired.id,'Retired with Finance',true,false);
+ const addition=await dealService(0).recordAgreementChange('test',id(181),3,'amendment','Add replacement',{...terms,cashChanges:[],newCash:[{id:id(190),seasonId:id(21),amountOre:'55000',invoiceDate:'2027-12-01'}]},true);
+ await dealService(0).resolveAgreementChange('test',addition.id,'Approved replacement',true,false);
+ expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind='invoice'",[id(181)])).rows).toHaveLength(2);
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id in ($1,$2)",[old.id,id(190)])).rows).toHaveLength(2);
+ expect((await db.query("select * from project_management.tasks where id=$1 and status='cancelled'",[oldLink.task_id])).rows).toHaveLength(1);
+ expect((await db.query("select * from finance.funding where id=$1 and status='deleted'",[oldFunding.funding_id])).rows).toHaveLength(1);
+});
+
+it('withdraws an incorrect pending addition while preserving Finance funding',async()=>{
+ await setupDeal(200,'WithdrawCo',[]);await confirm(0,201);
+ const delivery=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(201)])).rows[0];
+ await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S28-9997','WithdrawCo','manager','sponsor_cash',24000,'secured',$2,$2)",[id(21),id(1)]);
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[],inKindChanges:[],deliverableChanges:[{id:delivery.id,title:delivery.title,description:delivery.description,dueDate:delivery.due_date}],newCash:[{id:id(210),seasonId:id(21),amountOre:'24000',invoiceDate:'2027-11-01'}]};
+ const change=await dealService(0).recordAgreementChange('test',id(201),1,'amendment','Incorrect amount',terms,true);
+ await dealService(0).requestFinanceReview('test',id(201),2);
+ const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;candidates:{id:string;revision:number}[]}[];const review=queue.find(x=>x.partner==='WithdrawCo')!;const candidate=review.candidates[0];
+ await dealService(1).resolveFinanceReview('test',review.id,'link',candidate.id,candidate.revision,null,true);
+ await expect(dealService(2).withdrawAgreementChange('test',change.id,'Wrong amount',true)).rejects.toMatchObject({status:403});
+ await dealService(0).withdrawAgreementChange('test',change.id,'Wrong amount',true);await dealService(0).withdrawAgreementChange('test',change.id,'Wrong amount',true);
+ const alerts=(await db.query<{alerts:{href:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(1),'manager','manager@helixnmbu.no'])).rows[0].alerts;expect(alerts.some(a=>a.href===`/partner-deals?deal=${id(201)}`)).toBe(false);
+ await expect(dealService(0).resolveAgreementChange('test',change.id,'Try again',true,false)).rejects.toMatchObject({status:409});
+ expect((await db.query("select * from finance.funding where id=$1 and status='secured'",[candidate.id])).rows).toHaveLength(1);
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id=$1",[id(210)])).rows).toHaveLength(0);
+ expect((await db.query("select * from partner_deals.task_links where contribution_id=$1",[id(210)])).rows).toHaveLength(0);
+ expect((await db.query("select * from partner_deals.agreement_changes where id=$1 and withdrawn_at is not null",[change.id])).rows).toHaveLength(1);
+ expect((await db.query("select * from partner_deals.audit where deal_id=$1 and action='agreement_change_withdrawn'",[id(201)])).rows).toHaveLength(1);
+ await dealService(0).recordAgreementChange('test',id(201),3,'amendment','Corrected amount',{...terms,newCash:[{...terms.newCash[0],id:id(211),amountOre:'26000'}]},true);
 });
