@@ -6,7 +6,7 @@ import type { Deal, Organization, PipelineData, Season } from './types';
 
 const KEY='helix-member-local-partner-deals-v1';
 const PROJECT_KEY='helix-member-local-projects-v1';
-type LocalTaskLink = { taskId:string; dealId:string; kind:'marketing'|'invoice'; deliverableId:string|null; seasonId:string|null };
+type LocalTaskLink = { taskId:string; dealId:string; kind:'marketing'|'invoice'; deliverableId:string|null; seasonId:string|null; contributionId?:string|null };
 type LocalState = { organizations:Organization[]; deals:Deal[]; projects:Project[]; tasks:Task[]; taskLinks:LocalTaskLink[]; version:number };
 export const localSeasons:Season[]=[{id:'s27',code:'S27',name:'Season 2027',startDate:'2026-08-01',endDate:'2027-07-31',status:'active'},{id:'s28',code:'S28',name:'Season 2028',startDate:'2027-08-01',endDate:'2028-07-31',status:'planning'}];
 function assertLocal() {
@@ -39,7 +39,7 @@ export function addLocalWonEffects(state:LocalState,deal:Deal) {
  };
  const addTask=(group:ReturnType<typeof addProject>,title:string,description:string,deadline:string|null,owner:string|null,kind:LocalTaskLink['kind'],deliverableId:string|null,seasonId:string|null)=>{
   const task:Task={id:crypto.randomUUID(),season:season.code,title,description,category:group.project.category,projectId:group.project.id,milestoneId:group.milestone.id,assigneeIds:owner?[owner]:[],deadline,startDate:null,status:'todo',priority:'normal',kind:'task',partnerName:deal.organizationName,blockedReason:'',revision:1,createdAt:now,updatedAt:now,completedAt:null};
-  state.tasks.push(task);state.taskLinks.push({taskId:task.id,dealId:deal.id,kind,deliverableId,seasonId});
+  state.tasks.push(task);state.taskLinks.push({taskId:task.id,dealId:deal.id,kind,deliverableId,seasonId,contributionId:kind==='invoice'?(deal.contributions.find(c=>c.kind==='cash'&&c.seasonId===seasonId)?.id??null):null});
  };
  if(deal.deliverables.length){
   const group=addProject(`${deal.organizationName} partnership`,'partnership-deliverables','Business & Marketing');
@@ -64,7 +64,7 @@ export function localWonDeals() {
   ...deal, negotiationNotes:undefined,
   contributions:deal.contributions.map(c=>{const season=localSeasons.find(s=>s.id===c.seasonId);return {...c,id:c.id!,seasonCode:season?.code??'',seasonName:season?.name??''};}),
   deliverables:deal.deliverables.map(d=>({...d,id:d.id!})),
-  tasks:state.taskLinks.filter(link=>link.dealId===deal.id).map(link=>{const task=workspace?.tasks.find(t=>t.id===link.taskId)??state.tasks.find(t=>t.id===link.taskId)!;return {id:task.id,title:task.title,status:task.status,kind:link.kind,deliverableId:link.deliverableId,seasonId:link.seasonId,canOpen:true};}),
+  tasks:state.taskLinks.filter(link=>link.dealId===deal.id).map(link=>{const task=workspace?.tasks.find(t=>t.id===link.taskId)??state.tasks.find(t=>t.id===link.taskId)!;return {id:task.id,title:task.title,status:task.status,kind:link.kind,deliverableId:link.deliverableId,seasonId:link.seasonId,contributionId:link.contributionId??(link.kind==='invoice'?deal.contributions.find(c=>c.kind==='cash'&&c.seasonId===link.seasonId)?.id??null:null),canOpen:true};}),
  }))};
 }
 export function localSponsorFunding():FundingRecord[] {
