@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review','054_partner_manual_finance_review']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -121,14 +121,24 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  const later=await dealService(0).recordAgreementChange('test',id(101),5,'amendment','Correct another detail',{...followupTerms,title:'Second correction'},true);
  await expect(dealService(0).resolveAgreementChange('test',later.id,'Review changed funding',true,false)).rejects.toMatchObject({status:409});
  const findManual=async(n:number)=>{const view=await dealService(n).load('test','shared');return (view.deals as {id:string;contributions:{id:string;seasonId:string;fundingNeedsReview:boolean;manualReviewToken:string|null}[]}[]).find(d=>d.id===id(101))!.contributions.find(c=>c.seasonId===id(21))!;};
- const businessChanged=await findManual(0);expect(businessChanged.fundingNeedsReview).toBe(true);expect(businessChanged.manualReviewToken).toBeTruthy();
+ const businessChanged=await findManual(0);expect(businessChanged.fundingNeedsReview).toBe(true);expect(businessChanged.manualReviewToken).toBeNull();
  const financeChanged=await findManual(1);expect(financeChanged.fundingNeedsReview).toBe(true);expect(financeChanged.manualReviewToken).toBeNull();
  const marketingChanged=await findManual(2);expect(marketingChanged.fundingNeedsReview).toBe(false);expect(marketingChanged.manualReviewToken).toBeNull();
- await expect(dealService(2).acknowledgeManualFunding('test',id(101),6,businessChanged.id,businessChanged.manualReviewToken,'Reviewed',true)).rejects.toMatchObject({status:403});
- await expect(dealService(3).acknowledgeManualFunding('test',id(101),6,businessChanged.id,businessChanged.manualReviewToken,'Reviewed',true)).rejects.toMatchObject({status:403});
- await expect(dealService(0).acknowledgeManualFunding('test',id(101),6,businessChanged.id,businessChanged.manualReviewToken,'Reviewed',false)).rejects.toMatchObject({status:400});
+ await expect(dealService(2).requestFinanceReview('test',id(101),6)).rejects.toMatchObject({status:403});
+ await dealService(0).requestFinanceReview('test',id(101),6);
+ const reviewQueue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;manualFunding:boolean;linkedFunding:{id:string;revision:number;canUnlink:boolean}}[];
+ const review=reviewQueue.find(r=>r.partner==='ManualCo')!;expect(review.manualFunding).toBe(true);expect(review.linkedFunding.canUnlink).toBe(false);
+ await expect(dealService(1).resolveFinanceReview('test',review.id,'unlink',review.linkedFunding.id,review.linkedFunding.revision,null,true)).rejects.toMatchObject({status:409});
+ await dealService(1).resolveFinanceReview('test',review.id,'verified',review.linkedFunding.id,review.linkedFunding.revision,null,true);
+ const verified=await findManual(0);expect(verified.manualReviewToken).toBeTruthy();
+ await expect(dealService(2).acknowledgeManualFunding('test',id(101),6,verified.id,verified.manualReviewToken,'Reviewed',true)).rejects.toMatchObject({status:403});
+ await expect(dealService(3).acknowledgeManualFunding('test',id(101),6,verified.id,verified.manualReviewToken,'Reviewed',true)).rejects.toMatchObject({status:403});
+ await expect(dealService(0).acknowledgeManualFunding('test',id(101),6,verified.id,verified.manualReviewToken,'Reviewed',false)).rejects.toMatchObject({status:400});
  await db.query("update finance.funding set amount_ore=9100,revision=revision+1 where id=$1",[manualFunding]);
- await expect(dealService(0).acknowledgeManualFunding('test',id(101),6,businessChanged.id,businessChanged.manualReviewToken,'Reviewed with Finance',true)).rejects.toMatchObject({status:409});
+ await expect(dealService(0).acknowledgeManualFunding('test',id(101),6,verified.id,verified.manualReviewToken,'Reviewed with Finance',true)).rejects.toMatchObject({status:409});
+ await dealService(0).requestFinanceReview('test',id(101),6);
+ const refreshedQueue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;linkedFunding:{id:string;revision:number}}[];const refreshedReview=refreshedQueue.find(r=>r.partner==='ManualCo')!;
+ await dealService(1).resolveFinanceReview('test',refreshedReview.id,'verified',refreshedReview.linkedFunding.id,refreshedReview.linkedFunding.revision,null,true);
  const refreshed=await findManual(0);await dealService(0).acknowledgeManualFunding('test',id(101),6,refreshed.id,refreshed.manualReviewToken,'Reviewed with Finance',true);
  expect((await findManual(0)).fundingNeedsReview).toBe(false);
  const reviewedBusiness=await dealService(0).load('test','shared');const reviewedFinance=await dealService(1).load('test','shared');const reviewedMarketing=await dealService(2).load('test','shared');expect(JSON.stringify(reviewedBusiness)).toContain('Reviewed with Finance');expect(JSON.stringify(reviewedFinance)).toContain('Reviewed with Finance');expect(JSON.stringify(reviewedMarketing)).not.toContain('Reviewed with Finance');
@@ -137,7 +147,6 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  const afterRevocation=await createDealServices({db:revokingManualDb,authenticate:auth(1)}).load('test','shared');
  expect(JSON.stringify(afterRevocation)).not.toContain('Reviewed with Finance');
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(2)]);
-
  await dealService(0).resolveAgreementChange('test',later.id,'Finance handled the new discrepancy',true,false);
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[manualFunding])).rows[0].amount_ore).toBe('9100');
  expect((await db.query("select * from partner_deals.audit where deal_id=$1 and action='manual_funding_reviewed'",[id(101)])).rows).toHaveLength(1);
@@ -290,6 +299,67 @@ it('requires an obsolete open invoice to be handled before manual received-fundi
  await dealService(0).resolveAgreementChange('test',amendment.id,'Finance handled the obsolete invoice',true,true);
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[funding])).rows[0].amount_ore).toBe('10000');
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from partner_deals.contributions where id=$1",[c.id])).rows[0].amount_ore).toBe('15000');
+});
+
+it('routes mixed manual and ordinary discrepancies through Finance without replacing received history',async()=>{
+ await setupDeal(260,'MixedCo',[21,22]);await confirm(0,261);
+ const cash=(await db.query<{id:string;season_id:string;amount_ore:string;invoice_date:string}>("select id,season_id,amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(261)])).rows;const current=cash.find(c=>c.season_id===id(21))!;const future=cash.find(c=>c.season_id===id(22))!;
+ const delivery=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(261)])).rows[0];
+ const manualFunding=(await db.query<{funding_id:string}>("select funding_id from partner_deals.funding_links where contribution_id=$1",[current.id])).rows[0].funding_id;const ordinaryFunding=(await db.query<{funding_id:string}>("select funding_id from partner_deals.funding_links where contribution_id=$1",[future.id])).rows[0].funding_id;
+ await db.query("update project_management.tasks set status='done',completed_at=now() where id=(select task_id from partner_deals.task_links where contribution_id=$1)",[current.id]);
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:cash.map(c=>({id:c.id,amountOre:c.id===current.id?'15000':c.amount_ore,invoiceDate:c.invoice_date})),inKindChanges:[],deliverableChanges:[{id:delivery.id,title:delivery.title,description:delivery.description,dueDate:delivery.due_date}]};
+ const amendment=await dealService(0).recordAgreementChange('test',id(261),1,'amendment','Manual difference',terms,true);await dealService(0).resolveAgreementChange('test',amendment.id,'Reviewed with Finance',true,true);
+ await db.query("update finance.funding set status='deleted',prior_status='secured',revision=revision+1 where id=$1",[manualFunding]);await db.query("update finance.funding set amount_ore=11000,revision=revision+1 where id=$1",[ordinaryFunding]);
+ expect((await dealService(0).requestFinanceReview('test',id(261),3)).count).toBe(2);
+ type Review={id:string;partner:string;season:string;manualFunding:boolean;linkedFunding:{id:string;revision:number;matchesAgreement:boolean;canUnlink:boolean}|null;candidates:{id:string;revision:number}[]};
+ let queue=await dealService(1).financeReviewQueue('test') as Review[];let manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;let ordinary=queue.find(r=>r.partner==='MixedCo'&&!r.manualFunding)!;
+ expect(manual.linkedFunding).toMatchObject({id:manualFunding,matchesAgreement:false,canUnlink:false});expect(ordinary).toBeDefined();
+ expect(JSON.stringify(queue)).not.toContain('Private negotiation');
+ await expect(dealService(2).financeReviewQueue('test')).rejects.toMatchObject({status:403});await expect(dealService(3).financeReviewQueue('test')).rejects.toMatchObject({status:403});
+ const event=(await db.query<{id:string}>("select id from partner_deals.review_notification_events where review_id=$1 and kind='requested' order by event_time desc limit 1",[manual.id])).rows[0].id;
+ const financeAlerts=(await db.query<{alerts:{id:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(2),'finance','finance@helixnmbu.no'])).rows[0].alerts;
+ const marketingAlerts=(await db.query<{alerts:{id:string}[]}>("select partner_deals.review_notifications($1,$2,$3) alerts",[id(3),'marketing','marketing@helixnmbu.no'])).rows[0].alerts;expect(financeAlerts.some(x=>x.id===event)).toBe(true);expect(marketingAlerts.some(x=>x.id===event)).toBe(false);
+
+ await expect(dealService(1).resolveFinanceReview('test',manual.id,'unlink',manualFunding,manual.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:409});
+ await expect(dealService(1).resolveFinanceReview('test',manual.id,'verified',manualFunding,manual.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:409});
+ await db.query("update finance.funding set status='secured',prior_status=null,revision=revision+1 where id=$1",[manualFunding]);await db.query("update finance.funding set amount_ore=10000,revision=revision+1 where id=$1",[ordinaryFunding]);
+ queue=await dealService(1).financeReviewQueue('test') as Review[];manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;ordinary=queue.find(r=>r.partner==='MixedCo'&&!r.manualFunding)!;
+ await dealService(1).resolveFinanceReview('test',manual.id,'verified',manualFunding,manual.linkedFunding!.revision,null,true);await dealService(1).resolveFinanceReview('test',ordinary.id,'verified',ordinaryFunding,ordinary.linkedFunding!.revision,null,true);
+ const getManual=async()=>{const ws=await dealService(0).load('test','shared');return (ws.deals as {id:string;contributions:{id:string;manualReviewToken:string|null}[]}[]).find(d=>d.id===id(261))!.contributions.find(c=>c.id===current.id)!;};
+ let projection=await getManual();await dealService(0).acknowledgeManualFunding('test',id(261),3,current.id,projection.manualReviewToken,'Finance restored original funding',true);
+ await db.query("update finance.funding set source_name='Wrong source',revision=revision+1 where id=$1",[manualFunding]);await dealService(0).requestFinanceReview('test',id(261),4);
+ queue=await dealService(1).financeReviewQueue('test') as Review[];manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;expect(manual.linkedFunding!.matchesAgreement).toBe(false);
+ await expect(dealService(1).resolveFinanceReview('test',manual.id,'verified',manualFunding,manual.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:409});
+ await db.query("update finance.funding set source_name='MixedCo',funding_type='grant',revision=revision+1 where id=$1",[manualFunding]);queue=await dealService(1).financeReviewQueue('test') as Review[];manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;expect(manual.linkedFunding!.matchesAgreement).toBe(false);await expect(dealService(1).resolveFinanceReview('test',manual.id,'verified',manualFunding,manual.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:409});
+ await db.query("update finance.funding set funding_type='sponsor_cash',season_id=$2,revision=revision+1 where id=$1",[manualFunding,id(22)]);queue=await dealService(1).financeReviewQueue('test') as Review[];manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;expect(manual.linkedFunding!.matchesAgreement).toBe(false);await expect(dealService(1).resolveFinanceReview('test',manual.id,'verified',manualFunding,manual.linkedFunding!.revision,null,true)).rejects.toMatchObject({status:409});
+ await db.query("update finance.funding set season_id=$2,revision=revision+1 where id=$1",[manualFunding,id(21)]);queue=await dealService(1).financeReviewQueue('test') as Review[];manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;await dealService(1).resolveFinanceReview('test',manual.id,'verified',manualFunding,manual.linkedFunding!.revision,null,true);
+ projection=await getManual();await dealService(0).acknowledgeManualFunding('test',id(261),4,current.id,projection.manualReviewToken,'Finance corrected the source',true);
+ await db.query("update finance.funding set status='received',revision=revision+1 where id=$1",[manualFunding]);await db.query("delete from partner_deals.funding_links where contribution_id=$1",[current.id]);
+ await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S28-9988','MixedCo','manager','sponsor_cash',10000,'secured',$2,$2)",[id(21),id(1)]);
+ await dealService(0).requestFinanceReview('test',id(261),5);queue=await dealService(1).financeReviewQueue('test') as Review[];manual=queue.find(r=>r.partner==='MixedCo'&&r.manualFunding)!;
+ expect(manual.linkedFunding).toBeNull();expect(manual.candidates.map(c=>c.id)).toEqual([manualFunding]);
+ const fake=(await db.query<{id:string;revision:number}>("select id,revision from finance.funding where public_ref='F-S28-9988'")).rows[0];await expect(dealService(1).resolveFinanceReview('test',manual.id,'link',fake.id,fake.revision,null,true)).rejects.toMatchObject({status:409});
+ await dealService(1).resolveFinanceReview('test',manual.id,'link',manualFunding,manual.candidates[0].revision,null,true);
+ projection=await getManual();await dealService(0).acknowledgeManualFunding('test',id(261),5,current.id,projection.manualReviewToken,'Finance restored the original link',true);
+ expect((await db.query("select * from finance.funding where id=$1 and status='received' and amount_ore=10000",[manualFunding])).rows).toHaveLength(1);
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id=$1 and funding_id=$2",[current.id,manualFunding])).rows).toHaveLength(1);
+});
+
+it('restores a missing historical link for a legacy manual review only from audited funding',async()=>{
+ await setupDeal(270,'LegacyCo',[21]);await confirm(0,271);
+ const c=(await db.query<{id:string;amount_ore:string;invoice_date:string}>("select id,amount_ore::text,invoice_date::text from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(271)])).rows[0];
+ const d=(await db.query<{id:string;title:string;description:string;due_date:string|null}>("select id,title,description,due_date::text from partner_deals.deliverables where deal_id=$1",[id(271)])).rows[0];
+ const funding=(await db.query<{funding_id:string}>("select funding_id from partner_deals.funding_links where contribution_id=$1",[c.id])).rows[0].funding_id;
+ await db.query("update project_management.tasks set status='done',completed_at=now() where id=(select task_id from partner_deals.task_links where contribution_id=$1)",[c.id]);
+ const terms={title:'Agreement',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[{id:c.id,amountOre:'15000',invoiceDate:c.invoice_date}],inKindChanges:[],deliverableChanges:[{id:d.id,title:d.title,description:d.description,dueDate:d.due_date}]};
+ const change=await dealService(0).recordAgreementChange('test',id(271),1,'amendment','Older manual review',terms,true);await dealService(0).resolveAgreementChange('test',change.id,'Reviewed historically',true,true);
+ await db.query("update partner_deals.manual_reconciliation_items set funding_snapshot=null where change_id=$1 and kind='cash'",[change.id]);await db.query("delete from partner_deals.funding_links where contribution_id=$1",[c.id]);
+ await dealService(0).requestFinanceReview('test',id(271),3);const queue=await dealService(1).financeReviewQueue('test') as {id:string;partner:string;manualFunding:boolean;candidates:{id:string;revision:number}[]}[];const review=queue.find(r=>r.partner==='LegacyCo')!;
+ expect(review.manualFunding).toBe(true);expect(review.candidates.map(x=>x.id)).toEqual([funding]);
+ await dealService(1).resolveFinanceReview('test',review.id,'link',funding,review.candidates[0].revision,null,true);
+ const workspace=await dealService(0).load('test','shared');const item=(workspace.deals as {id:string;contributions:{id:string;manualReviewToken:string}[]}[]).find(x=>x.id===id(271))!.contributions.find(x=>x.id===c.id)!;
+ await dealService(0).acknowledgeManualFunding('test',id(271),3,c.id,item.manualReviewToken,'Finance restored the audited original link',true);
+ expect((await db.query("select * from partner_deals.funding_links where contribution_id=$1 and funding_id=$2",[c.id,funding])).rows).toHaveLength(1);
 });
 
 it('keeps cancellation unresolved when a closed season still has active records',async()=>{

@@ -34,7 +34,7 @@ export async function canViewAgreements(): Promise<boolean> {
 }
 
 export type FinanceReviewCandidate = {id:string;revision:number;reference:string;status:string;amountOre:string;expectedDate:string|null};
-export type FinanceReview = {id:string;partner:string;season:string;amountOre:string;candidates:FinanceReviewCandidate[];linkedFunding:(Omit<FinanceReviewCandidate,"expectedDate"> & {matchesAgreement?:boolean;canUnlink?:boolean})|null};
+export type FinanceReview = {id:string;manualFunding?:boolean;partner:string;season:string;amountOre:string;candidates:FinanceReviewCandidate[];linkedFunding:(Omit<FinanceReviewCandidate,"expectedDate"> & {matchesAgreement?:boolean;canUnlink?:boolean})|null};
 export interface FinanceReviewRepository { load():Promise<FinanceReview[]>; resolve(id:string, resolution:"link"|"unlink"|"separate"|"verified", fundingId?:string, expectedRevision?:number, snapshot?:FinanceReviewCandidate[]):Promise<void> }
 export function financeReviewRepository():FinanceReviewRepository {
  const owner={current:null as string|null};

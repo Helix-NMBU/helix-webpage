@@ -65,3 +65,26 @@ it("directs Finance to correct an active won-deal record instead of unlinking it
  expect(el.textContent).not.toContain("Remove mismatched link");
  await act(async()=>root.unmount());el.remove();
 });
+
+it("keeps manually reviewed funding linked and offers correction in Financing",async()=>{
+ const linked={id:"fund",revision:10,reference:"F-S27-300",status:"received",amountOre:"9000",matchesAgreement:false,canUnlink:false};
+ const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",manualFunding:true,partner:"Acme",season:"S27",amountOre:"15000",candidates:[],linkedFunding:linked}]),resolve:vi.fn()};
+ const {MemoryRouter}=await import("react-router-dom");const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<MemoryRouter><FinanceReviews repository={repo}/></MemoryRouter>));
+ expect(el.querySelector('a[href="/finance/financing"]')).not.toBeNull();expect(el.textContent).not.toContain("Remove mismatched link");expect(el.textContent).not.toContain("Approve separate funding");
+ await act(async()=>root.unmount());el.remove();
+});
+it("lets Finance restore the original manual funding link without requiring the later agreement amount",async()=>{
+ const original={...candidate,amountOre:"9000",status:"received"};const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",manualFunding:true,partner:"Acme",season:"S27",amountOre:"15000",candidates:[original],linkedFunding:null}]),resolve:vi.fn().mockResolvedValue(undefined)};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);await act(async()=>root.render(<FinanceReviews repository={repo}/>));
+ await act(async()=>[...el.querySelectorAll("button")].find(b=>b.textContent==="Link this record")!.click());expect(repo.resolve).toHaveBeenCalledWith("review","link","fund",4,undefined);
+ await act(async()=>root.unmount());el.remove();
+});
+
+it("guides Finance to find the original record when the manual link is missing",async()=>{
+ const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",manualFunding:true,partner:"Acme",season:"S27",amountOre:"15000",candidates:[],linkedFunding:null}]),resolve:vi.fn()};
+ const {MemoryRouter}=await import("react-router-dom");const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<MemoryRouter><FinanceReviews repository={repo}/></MemoryRouter>));
+ expect(el.textContent).toContain("Find or restore the original funding record");expect(el.querySelector('a[href="/finance/financing"]')).not.toBeNull();expect(el.textContent).not.toContain("Approve separate funding");
+ await act(async()=>root.unmount());el.remove();
+});
