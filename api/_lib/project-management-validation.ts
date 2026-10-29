@@ -54,7 +54,7 @@ function project(value: unknown): ProjectInput {
   const startDate = body.startDate === undefined ? undefined : date(body.startDate);
   const deadline = date(body.deadline);
   if (startDate && deadline && startDate > deadline) return invalid("The start date must be on or before the deadline.");
-  return { ...(startDate !== undefined ? { startDate } : {}), priority: body.priority === undefined ? "normal" : oneOf(body.priority, TASK_PRIORITIES), leadIds: body.leadIds === undefined ? [] : [...new Set((body.leadIds as unknown[]).map(uuid))], name: text(body.name, "project name", 200, true), description: text(body.description, "description", 2000),
+  return { ...(startDate !== undefined ? { startDate } : {}), ...(body.status !== undefined ? { status: oneOf(body.status, TASK_STATUSES) } : {}), priority: body.priority === undefined ? "normal" : oneOf(body.priority, TASK_PRIORITIES), leadIds: body.leadIds === undefined ? [] : [...new Set((body.leadIds as unknown[]).map(uuid))], name: text(body.name, "project name", 200, true), description: text(body.description, "description", 2000),
     category: oneOf(body.category, TASK_CATEGORIES), departments: [...new Set(body.departments.map(value => text(value, "department", 100, true)))], deadline };
 }
 export function parseProjectMutation(value: unknown): ProjectMutation {

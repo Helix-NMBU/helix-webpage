@@ -109,12 +109,13 @@ export function validateProject(input: ProjectInput): ProjectInput {
   if (!TASK_CATEGORIES.includes(input.category) || !Array.isArray(input.departments) || input.departments.length > 10) throw new Error("Choose a category and up to ten departments.");
   if (input.departments.some(name => !ORGANIZATION_DEPARTMENTS.includes(name.trim() as typeof ORGANIZATION_DEPARTMENTS[number]))) throw new Error("Choose departments from the organization list.");
   if (input.priority !== undefined && !TASK_PRIORITIES.includes(input.priority)) throw new Error("Choose a valid priority.");
+  if (input.status !== undefined && !TASK_STATUSES.includes(input.status)) throw new Error("Choose a valid status.");
   if (!Array.isArray(input.leadIds) || input.leadIds.length === 0) throw new Error("Assign at least one project Lead.");
   if (input.leadIds.length > MAX_TASK_ASSIGNEES || input.leadIds.some(id => typeof id !== "string" || !id)) throw new Error("Choose up to 20 project Leads.");
   const startDate = date(input.startDate ?? null);
   const deadline = date(input.deadline);
   if (startDate && deadline && startDate > deadline) throw new Error("The start date must be on or before the deadline.");
-  return { startDate, priority: input.priority ?? "normal", leadIds: [...new Set(input.leadIds ?? [])], name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline };
+  return { startDate, status: input.status ?? "todo", priority: input.priority ?? "normal", leadIds: [...new Set(input.leadIds ?? [])], name: text(input.name, "Project name", 200, true), description: text(input.description, "Description", 2000), category: input.category, departments: [...new Set(input.departments.map(item => text(item, "Department", 100, true)))], deadline };
 }
 
 export function validateProjectMilestones(input: ProjectMilestoneInput[], projectId: string, category: ProjectInput["category"]): ProjectMilestoneInput[] {

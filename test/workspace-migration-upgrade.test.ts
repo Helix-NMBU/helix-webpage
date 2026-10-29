@@ -15,8 +15,20 @@ it("upgrades an existing member database through the complete migration chain an
     const path = new URL("../db/migrations/", import.meta.url);
     const files = readdirSync(path).filter(file => /^\d{3}_[a-z0-9_]+\.sql$/.test(file)).sort();
     for (const file of files) {
+      if (file === "033_project_status.sql") await db.exec(`
+        insert into project_management.projects(id,season,name,category,lead_ids) values('20000000-0000-4000-8000-000000000001','S27','Existing project','production',array['${memberId}'::uuid]);
+        insert into project_management.tasks(id,season,title,category,project_id,deadline,status,priority,kind) values('20000000-0000-4000-8000-000000000002','S27','Existing milestone','production','20000000-0000-4000-8000-000000000001','2026-12-01','todo','normal','milestone');
+        insert into project_management.tasks(id,season,title,category,project_id,milestone_id,status,priority,kind,blocked_reason) values('20000000-0000-4000-8000-000000000003','S27','Existing task','production','20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','blocked','normal','task','Waiting');`);
       await db.exec(readFileSync(new URL(file, path), "utf8"));
       if (file === "002_member_helix_role.sql") await db.query("insert into identity.members(id,auth_user_id,google_sub,email,full_name) values($1,$1,'existing-google','existing@helixnmbu.no','Existing Member')", [memberId]);
+      if (file === "033_project_status.sql") {
+        const readStatus = async () => (await db.query<{ status: string }>("select status from project_management.projects where id='20000000-0000-4000-8000-000000000001'")).rows[0].status;
+        expect(await readStatus()).toBe("blocked");
+        await db.exec("update project_management.projects set status='done' where id='20000000-0000-4000-8000-000000000001'");
+        await db.exec(readFileSync(new URL(file, path), "utf8"));
+        expect(await readStatus()).toBe("done");
+        await db.exec("delete from project_management.tasks where project_id='20000000-0000-4000-8000-000000000001'; delete from project_management.projects where id='20000000-0000-4000-8000-000000000001'");
+      }
     }
     const workspace = await createWorkspaceServices({ db, authenticate: async () => ({ userId: memberId, googleSub: "existing-google", email: "existing@helixnmbu.no", name: "Existing Member" }) }).load("verified");
     expect(workspace.members).toEqual([expect.objectContaining({ id: memberId, name: "Existing Member" })]);

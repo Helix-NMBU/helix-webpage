@@ -31,7 +31,7 @@ import { ProjectViewMenu } from "./ProjectViewMenu";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { PROJECT_COLUMNS, projectView, visibleProjects, projectGroups, type ProjectColumn } from "./project-view";
 import { ProjectEditor } from "../ProjectManagement/TaskEditor";
-import { ProgressRing } from "../ProjectManagement/ProgressRing";
+import { TaskStatusIndicator } from "../ProjectManagement/TaskStatus";
 import {
   PriorityIndicator,
   TargetDate,
@@ -113,13 +113,7 @@ export function ProjectRows({
             </TableCell>}
             {show("tasks") && <TableCell className="tabular-nums">{p.total}</TableCell>}
             {show("status") && <TableCell>
-              <ProgressRing
-                label={p.name}
-                done={p.done}
-                total={p.total}
-                percent={p.total ? Math.round((p.done / p.total) * 100) : 0}
-                showTotal={false}
-              />
+              <TaskStatusIndicator status={p.status ?? "todo"} />
             </TableCell>}
           </TableRow>
         ))}
