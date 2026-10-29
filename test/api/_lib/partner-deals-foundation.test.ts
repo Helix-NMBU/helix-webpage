@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { createDealServices } from "../../../api/_lib/partner-deals-service.js";
+import { createDealHandler } from "../../../api/_lib/partner-deals-handler.js";
 import { MemberCvError } from "../../../api/_lib/member-cv-error.js";
 import type { CvDatabase, WorkspaceIdentity } from "../../../api/_lib/member-cv-service.js";
 const business="00000000-0000-4000-8000-000000000001", marketing="00000000-0000-4000-8000-000000000002", admin="00000000-0000-4000-8000-000000000003", pm="00000000-0000-4000-8000-000000000004";
@@ -68,8 +69,33 @@ describe("partner deals access and persistence",()=>{
  it("only exposes won terms to shared readers and never returns negotiation notes",async()=>{
   await pg.query("update partner_deals.deals set stage='won',won_at=now(),won_by_member_id=$2 where id=$1",[dealId,business]);
   const shared=await services.load(marketing,"shared"); expect(shared.deals).toHaveLength(1);
+  expect(shared.deals[0]).toMatchObject({ contributions: expect.arrayContaining([
+   expect.objectContaining({ seasonCode:"S27", seasonName:"S27" }),
+   expect.objectContaining({ seasonCode:"S28", seasonName:"S28" }),
+  ]) });
+  expect(shared.seasons).toEqual([]);
   expect(JSON.stringify(shared)).not.toContain("Private negotiation");
   await expect(services.save(business,{...input(),id:dealId,expectedRevision:1})).rejects.toMatchObject({status:409});
+ });
+ it("returns no deal data when a grant is revoked during a read",async()=>{
+  let revoked=false;
+  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>{
+   const rows=(await pg.query<T>(sql,params)).rows;
+   if (!revoked && sql.includes('as "canManage"')) {
+    revoked=true;
+    await pg.query("update partner_deals.member_grants set active=false where member_id=$1",[marketing]);
+   }
+   return {rows};
+  }};
+  const reading=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});
+  const handler=createDealHandler(()=>reading);
+  const response={setHeader:vi.fn(),status:vi.fn(),json:vi.fn()}; response.status.mockReturnValue(response);
+  await handler({method:"GET",headers:{authorization:`Bearer ${marketing}`},query:{view:"shared"}} as never,response as never);
+  expect(revoked).toBe(true);
+  expect(response.status).toHaveBeenCalledWith(403);
+  expect(response.json).toHaveBeenCalledWith({error:"You do not have access to sponsor deals."});
+  expect(JSON.stringify(response.json.mock.calls)).not.toContain("Partner agreement");
+  await pg.query("update partner_deals.member_grants set active=true where member_id=$1",[marketing]);
  });
  it("rechecks account and grant revocation",async()=>{
   await pg.query("update partner_deals.member_grants set active=false where member_id=$1",[marketing]);

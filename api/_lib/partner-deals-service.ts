@@ -20,7 +20,7 @@ const readSql = `select caps.pipeline as "canManage",
   'ownerMemberId',d.owner_member_id,'contactName',d.contact_name,'contactEmail',d.contact_email,
   'startsOn',d.starts_on,'endsOn',d.ends_on,'agreementLink',d.agreement_link,'revision',d.revision,
   'wonAt',d.won_at,'wonByMemberId',d.won_by_member_id,
-  'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'kind',c.kind,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date) order by c.id) from partner_deals.contributions c where c.deal_id=d.id),'[]'::jsonb),
+  'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id),'[]'::jsonb),
   'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id),'[]'::jsonb)
  ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes) else '{}'::jsonb end order by d.updated_at desc,d.id)
  from partner_deals.deals d join partner.organizations o on o.id=d.organization_id
@@ -77,7 +77,17 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         const actor = await identity(token);
         const result = await deps.db.query<DealWorkspace>(readSql, [actor.userId,actor.googleSub,actor.email,view]);
         if (!result.rows[0]) throw new MemberCvError(403, "You do not have access to sponsor deals.");
-        return result.rows[0];
+        // Recheck after reading so a revoked grant or disabled account cannot
+        // receive data captured by the earlier statement snapshot.
+        const access = await deps.db.query<{ pipeline: boolean; shared: boolean }>(
+          "select pipeline, shared from partner_deals.capabilities($1::uuid,$2,$3)",
+          [actor.userId, actor.googleSub, actor.email],
+        );
+        const current = access.rows[0];
+        if (!current || (view === "pipeline" ? !current.pipeline : !current.shared)) {
+          throw new MemberCvError(403, "You do not have access to sponsor deals.");
+        }
+        return { ...result.rows[0], canManage: current.pipeline };
       } catch (error) { return errorFor(error); }
     },
     async createOrganization(token, name) {
