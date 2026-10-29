@@ -10,18 +10,23 @@ export function Directory({
   title,
   children,
   action,
+  toolbar,
+  fill = false,
 }: {
   title: string;
   children: ReactNode;
   action?: ReactNode;
+  toolbar?: ReactNode;
+  fill?: boolean;
 }) {
   return (
-    <section aria-label={title} className="space-y-4">
-      <div className="flex min-h-9 items-center justify-between gap-4">
+    <section aria-label={title} className={fill ? "flex min-h-0 min-w-0 flex-1 flex-col gap-4" : "space-y-4"}>
+      <div className="flex min-h-9 shrink-0 items-center justify-between gap-4">
         <h1 className="text-lg font-medium">{title}</h1>
         {action}
       </div>
-      <div className="overflow-hidden rounded-xl border bg-card">
+      {toolbar}
+      <div className={fill ? "flex min-h-80 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card md:min-h-0" : "overflow-hidden rounded-xl border bg-card"}>
         {children}
       </div>
     </section>
@@ -31,19 +36,21 @@ export function Search({
   label,
   value,
   onChange,
+  outside = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  outside?: boolean;
 }) {
   return (
-    <div className="relative max-w-sm p-3">
+    <div className={outside ? "relative max-w-sm" : "relative max-w-sm p-3"}>
       <IconSearch
-        className="pointer-events-none absolute left-6 top-5 size-4 text-muted-foreground"
+        className={`pointer-events-none absolute size-4 text-muted-foreground ${outside ? "left-3 top-2" : "left-6 top-5"}`}
         aria-hidden="true"
       />
       <Input
-        className="h-8 border-0 bg-transparent pl-9 shadow-none"
+        className={outside ? "h-8 pl-9" : "h-8 border-0 bg-transparent pl-9 shadow-none"}
         aria-label={label}
         placeholder={`${label}…`}
         value={value}
@@ -79,7 +86,7 @@ export function LoadDirectory({ title = "Workspace", columns = 5 }: { title?: st
     <section role="status" aria-label={`Loading ${title}`} className="space-y-4">
       <div className="flex min-h-9 items-center justify-between"><h1 className="text-lg font-medium">{title}</h1>{title === "Projects" && <Skeleton className="h-8 w-24" />}</div>
       <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="p-3"><Skeleton className="h-8 w-56 max-w-full" /></div>
+        {title !== "Departments" && <div className="p-3"><Skeleton className="h-8 w-56 max-w-full" /></div>}
         {timeline ? <div className="space-y-3 border-t p-4"><div className="flex justify-between"><Skeleton className="h-4 w-32" /><Skeleton className="h-8 w-32" /></div>{[0, 1, 2, 3].map(i => <div key={i} className="flex items-center gap-4 border-t py-3"><Skeleton className="h-4 w-36" /><Skeleton className={`h-6 ${i % 2 ? "w-1/3" : "w-1/2"}`} /></div>)}</div> : <div className="overflow-x-auto"><div className="min-w-[42rem]"><div className="grid gap-4 border-y px-4 py-3" style={{ gridTemplateColumns: `2fr repeat(${headings.length - 1}, minmax(0, 1fr))` }}>{headings.map((heading, i) => <span key={i} className="text-xs font-medium text-muted-foreground">{heading || <Skeleton className="h-3 w-3/4" />}</span>)}</div>
         {Array.from({ length: 5 }, (_, row) => <div key={row} className="grid items-center gap-4 border-b px-4 py-4 last:border-0" style={{ gridTemplateColumns: `2fr repeat(${headings.length - 1}, minmax(0, 1fr))` }}>{headings.map((_, col) => <div key={col} className="flex items-center gap-2">{col === 0 && title === "Members" && <Skeleton className="size-7 shrink-0 rounded-full" />}<Skeleton className="h-4 w-3/4" /></div>)}</div>)}</div></div>}
       </div>

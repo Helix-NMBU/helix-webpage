@@ -1,6 +1,7 @@
 import { departmentAccess } from "../ProjectManagement/permissions";
 import { useState } from "react";
-import { IconPencil } from "@tabler/icons-react";
+import { IconFilter2, IconPencil } from "@tabler/icons-react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@libs/components/ui/tabs";
 import { useMemberFeatureAccess } from "../MemberPlatform/MemberFeatureAccess";
 import { MemberAccessEditor } from "./MemberAccessEditor";
@@ -26,6 +27,9 @@ import type { FormEvent } from "react";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Badge } from "@libs/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
+import { Choice, Field } from "../ProjectManagement/TaskEditor";
+import { MEMBER_COLUMNS, memberDepartments, memberGroups, memberView } from "./member-view";
 import {
   Dialog,
   DialogContent,
@@ -153,20 +157,18 @@ export function MembersPage() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<WorkspaceMember | null>(null);
   const [busy, setBusy] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const options = memberView(params);
   if (!data) return <LoadDirectory title="Members" columns={4} />;
   const canEdit = data.canAdmin || canManageAccess;
-  const memberDepartments = (memberId: string) =>
-    data.departments.filter((department) => {
-      const level = departmentAccess(department, memberId);
-      return level === "member" || level === "lead";
-    });
-  const matches = data.members.filter((m) =>
-    `${m.name} ${m.helixRole ?? ""} ${m.role} ${memberDepartments(m.id)
-      .map((d) => d.name)
-      .join(" ")}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
-  );
+  const groups = memberGroups(data, options, search);
+  const columnCount = 1 + options.columns.length + (canEdit ? 1 : 0);
+  const changeView = (key: string, value: string) => setParams(previous => {
+    const next = new URLSearchParams(previous);
+    next.set(key, value);
+    return next;
+  }, { replace: true });
+  const sortAria = (key: string) => options.sort === key ? (options.direction === "asc" ? "ascending" as const : "descending" as const) : undefined;
   async function save(change: MemberChange) {
     if (busy || !workspace) return;
     setBusy(true);
@@ -190,18 +192,29 @@ export function MembersPage() {
   }
   return (
     <>
-      <Directory title="Members">
-        <Search label="Find members" value={search} onChange={setSearch} />
-        <Table>
+      <Directory title="Members" toolbar={<Search outside label="Find members" value={search} onChange={setSearch} />} action={
+        <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label="Member view settings" title="Member view settings"><IconFilter2 aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
+          <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-5">
+            <div className="space-y-3 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">
+              <Field id="members-group" label="Grouping"><Choice id="members-group" value={options.group} onChange={value => changeView("group", value)} options={[{ value: "none", label: "No grouping" }, { value: "department", label: "Department" }, { value: "role", label: "Role" }]} /></Field>
+              <Field id="members-sort" label="Ordering"><Choice id="members-sort" value={options.sort} onChange={value => changeView("sort", value)} options={[{ value: "name", label: "Name" }, ...MEMBER_COLUMNS.map(([value, label]) => ({ value, label }))]} /></Field>
+              <Field id="members-direction" label="Direction"><Choice id="members-direction" value={options.direction} onChange={value => changeView("direction", value)} options={[{ value: "asc", label: "Ascending" }, { value: "desc", label: "Descending" }]} /></Field>
+            </div>
+            <div className="space-y-3 border-t pt-4"><p className="text-sm font-medium">Display columns</p><div role="group" aria-label="Member display columns" className="flex flex-wrap gap-2">{MEMBER_COLUMNS.map(([key, label]) => <Button key={key} type="button" size="sm" className="rounded-full" variant={options.columns.includes(key) ? "secondary" : "outline"} aria-pressed={options.columns.includes(key)} onClick={() => changeView("columns", MEMBER_COLUMNS.map(([item]) => item).filter(item => item === key ? !options.columns.includes(item) : options.columns.includes(item)).join(","))}>{label}</Button>)}</div></div>
+            <Button variant="ghost" className="w-full border-t" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); for (const key of ["group", "sort", "direction", "columns"]) next.delete(key); return next; }, { replace: true })}>Reset view</Button>
+          </PopoverContent>
+        </Popover>
+      }>
+        <Table aria-label="Members list">
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4" aria-sort="ascending">
+              <TableHead className="pl-4" aria-sort={sortAria("name")}>
                 Name
               </TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Last seen</TableHead>
+              {options.columns.includes("role") && <TableHead aria-sort={sortAria("role")}>Role</TableHead>}
+              {options.columns.includes("joined") && <TableHead aria-sort={sortAria("joined")}>Joined</TableHead>}
+              {options.columns.includes("department") && <TableHead aria-sort={sortAria("department")}>Department</TableHead>}
+              {options.columns.includes("seen") && <TableHead aria-sort={sortAria("seen")}>Last seen</TableHead>}
               {canEdit && (
                 <TableHead className="w-20">
                   <span className="sr-only">Actions</span>
@@ -210,8 +223,10 @@ export function MembersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {matches.map((m) => (
-              <TableRow key={m.id}>
+            {groups.flatMap(group => [
+              ...(group.name ? [<TableRow key={`group-${group.name}`}><TableCell colSpan={columnCount} className="bg-muted/40 px-4 py-2 text-sm font-medium">{group.name} <span className="ml-1 text-xs text-muted-foreground">{group.members.length}</span></TableCell></TableRow>] : []),
+              ...group.members.map((m) => (
+              <TableRow key={`${group.name}-${m.id}`}>
                 <TableCell className="py-4 pl-4">
                   <div className="flex items-center gap-3">
                     <AssigneeAvatars
@@ -229,24 +244,24 @@ export function MembersPage() {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
+                {options.columns.includes("role") && <TableCell>
                   {m.role === "Admin" ? (
                     <Badge variant="secondary">Admin</Badge>
                   ) : (
                     m.role
                   )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
+                </TableCell>}
+                {options.columns.includes("joined") && <TableCell className="text-muted-foreground">
                   {monthDate(m.joinedAt)}
-                </TableCell>
-                <TableCell className="max-w-xs whitespace-normal text-muted-foreground">
-                  {memberDepartments(m.id)
+                </TableCell>}
+                {options.columns.includes("department") && <TableCell className="max-w-xs whitespace-normal text-muted-foreground">
+                  {memberDepartments(data, m.id)
                     .map((d) => d.name)
                     .join(", ") || "—"}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
+                </TableCell>}
+                {options.columns.includes("seen") && <TableCell className="text-muted-foreground">
                   {seenDate(m.lastSeenAt)}
-                </TableCell>
+                </TableCell>}
                 {canEdit && (
                   <TableCell>
                     <Button
@@ -261,9 +276,9 @@ export function MembersPage() {
                   </TableCell>
                 )}
               </TableRow>
-            ))}
-            {!matches.length && (
-              <NoResults columns={canEdit ? 6 : 5}>
+            ))])}
+            {!groups.some(group => group.members.length) && (
+              <NoResults columns={columnCount}>
                 No members match your search.
               </NoResults>
             )}

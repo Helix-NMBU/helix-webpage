@@ -75,6 +75,7 @@ describe("project management database and authorization", () => {
     await db.query("update project_management.projects set lead_ids=array[$1::uuid]", [manager.userId]);
     await db.exec(readFileSync(new URL("../db/migrations/023_project_requires_lead.sql", import.meta.url), "utf8"));
     for (const name of ["018_department_homes", "019_department_settings_permissions", "025_workspace_space_access", "026_department_access_levels"]) await db.exec(readFileSync(new URL(`../db/migrations/${name}.sql`, import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/032_estimated_task_history.sql", import.meta.url), "utf8"));
     departmentAccessInstalled = true;
     await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[manager.userId]);
     await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name in ('Mechanical & Production','Business & Marketing')",[member.userId]);
@@ -82,6 +83,24 @@ describe("project management database and authorization", () => {
 
   }, 60000);
   afterAll(async () => { await db?.close(); });
+
+  it("records an estimate separately while preserving observed events and authorization", async () => {
+    const created = await save(899);
+    const item = created.tasks.find(t => t.id === id(899))!;
+    const before = created.progressEvents.filter(e => e.taskId === item.id);
+    const change = { action: "estimate_history", id: item.id, expectedRevision: item.revision, createdDate: "2025-09-01", completedDate: "2025-09-10", basis: "Estimated from meeting notes" };
+    await expect(service(member).mutate("verified", change)).rejects.toMatchObject({ status: 403 });
+    await expect(service().mutate("verified", { ...change, completedDate: "2099-01-01" })).rejects.toMatchObject({ status: 400 });
+    await expect(service().mutate("verified", { ...change, createdDate: "2025-09-11" })).rejects.toMatchObject({ status: 400 });
+    await expect(service().mutate("verified", { ...change, basis: " " })).rejects.toMatchObject({ status: 400 });
+    const after = await service().mutate("verified", change);
+    expect(after.tasks.find(t => t.id === item.id)).toMatchObject({ status: "done", historicalEstimate: { createdDate: "2025-09-01", completedDate: "2025-09-10" } });
+    const events = after.progressEvents.filter(e => e.taskId === item.id);
+    expect(events).toHaveLength(before.length + 1);
+    expect(events[0]).toEqual(before[0]);
+    await expect(service().mutate("verified", change)).rejects.toMatchObject({ status: 409 });
+    await expect(db.exec("update project_management.task_history_estimates set created_date='2025-01-01'")).rejects.toThrow();
+  });
 
   it("preserves existing assignments and does not restore removed members when migration is repeated", async () => {
     const baseline = (await service().load("verified")).progressEvents.filter(event => event.taskId === id(800));

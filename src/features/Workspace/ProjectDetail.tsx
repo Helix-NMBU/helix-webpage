@@ -414,7 +414,7 @@ export function ProjectDetail({
               tabIndex={0}
               role="region"
               aria-label="Project content"
-              className={`min-w-0 md:min-h-0 md:overscroll-y-contain md:pb-2 md:pr-2 ${tab === "tasks" && params.get("view") === "board" ? "md:overflow-hidden" : "md:overflow-y-auto"}`}
+              className={`min-w-0 md:min-h-0 md:overscroll-y-contain md:pb-2 md:pr-2 ${tab === "tasks" && params.get("view") === "board" ? "md:flex md:flex-col md:overflow-hidden" : "md:overflow-y-auto"}`}
             >
               {tab === "overview" ? (
                 <section
@@ -509,7 +509,7 @@ export function ProjectDetail({
                   )}
                 </section>
               ) : (
-                <div className="space-y-3">
+                <div className={params.get("view") === "board" ? "flex min-h-0 flex-1 flex-col gap-3" : "space-y-3"}>
                 {selected && canCreate && <div className="flex justify-end gap-2"><Button variant="outline" size="sm" disabled={busy} onClick={() => setEditingMilestone(selected)}>Edit milestone</Button><DeleteWorkButton kind="milestone" title={selected.title} busy={busy} onDelete={() => save({ action: "delete_task", id: selected.id, expectedRevision: selected.revision })} /></div>}
                 <ProjectTaskList
                   key={project.id}

@@ -11,7 +11,18 @@ export function progressSeries(events: TaskProgressEvent[], tasks: Task[], today
   const states = new Map<string, TaskProgressEvent>();
   const days = new Map<string, ReturnType<typeof progressCounts>>();
   let counts = progressCounts([]);
-  for (const event of [...events].sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt))) {
+  const estimates = new Map(tasks.filter(task => task.historicalEstimate).map(task => [task.id, task.historicalEstimate!]));
+  const projected = events.filter(event => {
+    const estimate = estimates.get(event.taskId);
+    return !estimate || event.recordedAt > estimate.recordedAt;
+  });
+  for (const task of tasks) {
+    const estimate = task.historicalEstimate;
+    if (!estimate) continue;
+    projected.push(progressEvent({ ...task, status: "todo" }, `${estimate.createdDate}T12:00:00Z`));
+    projected.push(progressEvent({ ...task, status: "done" }, `${estimate.completedDate}T12:00:00Z`));
+  }
+  for (const event of projected.sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt))) {
     const day = osloDate(new Date(event.recordedAt));
     if (day > today) continue;
     const previous = states.get(event.taskId);
@@ -53,5 +64,16 @@ export function updateTaskDraft<K extends keyof TaskInput>(draft: TaskInput, key
 }
 
 export function progressStepPath(points: ReturnType<typeof progressSeries>, key: "scope" | "started" | "completed", x: (date: string) => number, y: (value: number) => number): string {
-  return points.map((point, index) => index ? `H${x(point.date)} V${y(point[key])}` : `M${x(point.date)},${y(point[key])}`).join(" ");
+  return points.map((point, index) => {
+    const endX = x(point.date);
+    const endY = y(point[key]);
+    if (!index) return `M${endX},${endY}`;
+    const previous = points[index - 1];
+    const previousY = y(previous[key]);
+    if (previousY === endY) return `H${endX}`;
+    // Keep quiet periods flat and round only a short transition into each observation.
+    const width = Math.min(12, Math.max(0, (endX - x(previous.date)) / 2));
+    const startX = endX - width;
+    return `H${startX} C${startX + width / 2},${previousY} ${startX + width / 2},${endY} ${endX},${endY}`;
+  }).join(" ");
 }

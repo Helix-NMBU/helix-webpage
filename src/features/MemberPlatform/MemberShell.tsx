@@ -40,7 +40,8 @@ function Workspace({ children }: { children?: ReactNode }) {
   const taskDetail = /^\/tasks\/[^/]+\/?$/.test(location.pathname);
   const taskBoard = location.pathname === "/tasks" && new URLSearchParams(location.search).get("view") === "board";
   const projectDetail = /^\/projects\/[^/]+\/?$/.test(location.pathname);
-  const bounded = projectDetail || taskDetail || taskBoard;
+  const projectTimeline = (/^\/projects\/?$/.test(location.pathname) || /^\/departments\/[^/]+\/projects\/?$/.test(location.pathname)) && new URLSearchParams(location.search).get("view") === "timeline";
+  const bounded = projectDetail || projectTimeline || taskDetail || taskBoard;
   const page = previewPage(location.pathname);
   const seasonOverview = location.pathname === "/season-overview" || location.pathname.startsWith("/project-management");
   const directory = useWorkspace()?.data;

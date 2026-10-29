@@ -24,7 +24,8 @@ const workspaceSql = `select project_management.is_department_manager(viewer.id)
   coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'season',t.season,'title',t.title,'description',t.description,
     'category',t.category,'projectId',t.project_id,'milestoneId',t.milestone_id,'assigneeIds',coalesce((select jsonb_agg(ta.member_id order by ta.member_id) from project_management.task_assignees ta where ta.task_id=t.id),'[]'::jsonb),'deadline',t.deadline,'startDate',t.start_date,
     'status',t.status,'priority',t.priority,'kind',t.kind,'partnerName',t.partner_name,'blockedReason',t.blocked_reason,
-    'revision',t.revision,'createdAt',t.created_at,'updatedAt',t.updated_at,'completedAt',t.completed_at)
+    'revision',t.revision,'createdAt',t.created_at,'updatedAt',t.updated_at,'completedAt',t.completed_at,
+    'historicalEstimate',(select jsonb_build_object('createdDate',h.created_date,'completedDate',h.completed_date,'recordedAt',h.recorded_at,'basis',h.basis) from project_management.task_history_estimates h where h.task_id=t.id order by h.id desc limit 1))
     order by t.deadline nulls last,t.created_at,t.id) from project_management.tasks t where t.season = 'S27' and project_management.can_access_task(viewer.id,t.id)),'[]'::jsonb) as tasks,
   coalesce((select jsonb_agg(jsonb_build_object('taskId',e.task_id,'recordedAt',e.recorded_at,
     'category',e.category,'kind',e.kind,'status',e.status) order by e.recorded_at,e.event_id)
@@ -73,7 +74,7 @@ export function createProjectServices(deps: { db: CvDatabase; authenticate(token
       try {
         const identity = await deps.authenticate(token);
         const change = parseProjectMutation(body);
-        await deps.db.query(change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_project" && change.milestones !== undefined ? "select project_management.create_project_with_milestones($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
+        await deps.db.query(change.action === "estimate_history" ? "select project_management.estimate_task_history($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_project" && change.milestones !== undefined ? "select project_management.create_project_with_milestones($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
         return await read(identity);
       } catch (error) { return projectError(error); }
     },

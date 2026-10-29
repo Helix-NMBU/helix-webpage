@@ -48,6 +48,7 @@ export interface Task extends TaskInput {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  historicalEstimate?: { createdDate: string; completedDate: string; recordedAt: string; basis?: string } | null;
 }
 export interface TaskProgressEvent {
   taskId: string;
@@ -79,7 +80,8 @@ export type ProjectMutation =
   | { action: "update_milestone"; id: string; expectedRevision: number; changes: MilestoneChanges }
   | { action: "save_task"; id: string; expectedRevision: number; task: TaskInput }
   | { action: "save_project"; id: string; expectedRevision: number; project: ProjectInput; milestones?: ProjectMilestoneInput[] }
-  | { action: "set_status"; id: string; expectedRevision: number; status: TaskStatus; blockedReason: string };
+  | { action: "set_status"; id: string; expectedRevision: number; status: TaskStatus; blockedReason: string }
+  | { action: "estimate_history"; id: string; expectedRevision: number; createdDate: string; completedDate: string; basis: string };
 
 export interface ProjectRepository {
   load(): Promise<ProjectWorkspace>;

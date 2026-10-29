@@ -13,7 +13,6 @@ import { useWorkspace } from "./WorkspaceContext";
 import { DepartmentHomeSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import {
   Directory,
-  Search,
   NoResults,
   LoadDirectory,
 } from "./DirectoryComponents";
@@ -29,14 +28,7 @@ export function DepartmentsPage() {
   const workspace = useWorkspace();
   const data = workspace?.data;
   const { departmentId } = useParams();
-  const [params, setParams] = useSearchParams();
-  const search = params.get("search") ?? "";
-  function setSearch(value: string) {
-    const next = new URLSearchParams(params);
-    if (value) next.set("search", value);
-    else next.delete("search");
-    setParams(next, { replace: true });
-  }
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const notify = useNotify();
   const selected = data?.departments.find(
@@ -68,11 +60,6 @@ export function DepartmentsPage() {
     data.departments.find((d) => d.name === name),
   )
     .filter((department) => department !== undefined)
-    .filter((department) =>
-      `${department.name} ${data.members.filter(member => (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(member.id)).map(member => member.name).join(" ")}`
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-    )
     .sort(
       (a, b) =>
         Number(b.memberIds.includes(data.viewerId)) -
@@ -80,7 +67,6 @@ export function DepartmentsPage() {
     );
   return (
     <Directory title="Departments">
-      <Search label="Find departments" value={search} onChange={setSearch} />
       <Table>
         <TableHeader>
           <TableRow>
@@ -170,7 +156,7 @@ export function DepartmentsPage() {
             );
           })}
           {!departments.length && (
-            <NoResults columns={5}>No departments match your search.</NoResults>
+            <NoResults columns={5}>No departments to show.</NoResults>
           )}
         </TableBody>
       </Table>
