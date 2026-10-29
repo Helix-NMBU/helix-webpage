@@ -22,6 +22,6 @@ export async function loadSeasonFinancialSummary(owner: { current: string | null
     if (response.status === 401) memberLoadFailure(new CvRequestError("Your session has ended. Sign in again to continue.", 401));
     throw new SeasonFinancialRequestError(body?.error || "Could not load financial information.", response.status);
   }
-  if (!body || !Array.isArray(body.departments) || !body.bank || typeof body.viewVersion !== "number") throw new SeasonFinancialRequestError("The financial information was incomplete.", 503);
+  if (!body || !Array.isArray(body.departments) || !body.bank || !body.moneyFlow || typeof body.viewVersion !== "number") throw new SeasonFinancialRequestError("The financial information was incomplete.", 503);
   return body;
 }

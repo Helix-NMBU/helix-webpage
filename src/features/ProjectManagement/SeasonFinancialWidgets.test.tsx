@@ -87,7 +87,7 @@ it("ignores late responses from an earlier account", async () => {
 });
 
 it("does not show a hidden draft or fabricate an unavailable bank balance", async () => {
-  await render(async () => ({ ...summary, budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, departments: [], bank: { status: "unavailable" } }));
+  await render(async () => ({ ...summary, budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, departments: [], moneyFlow: { status: "unavailable" }, bank: { status: "unavailable" } }));
   expect(container.textContent).toContain("Draft budget is restricted");
   expect(container.textContent).toContain("Balance unavailable");
   expect(container.textContent).toContain("Could not load bank balance Try again");
@@ -189,4 +189,46 @@ it("places the finance slot between Progress and Projects", async () => {
   const headings = container.querySelector("[data-project-progress]")!;
   const children = Array.from(headings.children);
   expect(children.map(element => element.id || element.getAttribute("aria-labelledby"))).toEqual(["progress-title", "finance-slot", "overview-projects-title"]);
+});
+
+function flowCard() { return container.querySelector<HTMLElement>('[role="group"][aria-label="Money in and out"]')!; }
+
+it("compares recorded sponsor cash received with money paid out", async () => {
+  await render(async () => ({ ...summary, moneyFlow: { status: "available", moneyInNok: "152000.01", moneyOutNok: "68500.75" } }));
+  expect(flowCard().textContent).toContain("NOK 152 000,01");
+  expect(flowCard().textContent).toContain("NOK 68 500,75");
+  expect(flowCard().textContent).toContain("sponsor cash marked received");
+  expect(flowCard().textContent).toContain("paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records");
+  expect(flowCard().textContent).toContain("not bank-reconciled");
+});
+
+it("shows actual zero flow, and does not fabricate it when there is no season", async () => {
+  await render(async () => summary);
+  expect(flowCard().textContent?.match(/NOK 0,00/g)).toHaveLength(2);
+  await render(async () => ({ ...summary, seasonCode: null, moneyFlow: { status: "no-season" } }));
+  expect(flowCard().textContent).toContain("No finance season configured");
+  expect(flowCard().textContent).not.toContain("NOK 0,00");
+});
+
+it("suppresses mismatched seasons and reports unavailable flows with retry", async () => {
+  await render(async () => ({ ...summary, moneyFlow: { status: "available", moneyInNok: "12345.00", moneyOutNok: "678.00" } }), "S28");
+  expect(flowCard().textContent).toContain("Finance is set to S27, not S28");
+  expect(flowCard().textContent).not.toContain("NOK 12 345,00");
+  await render(async () => ({ ...summary, moneyFlow: { status: "unavailable" } }));
+  expect(flowCard().textContent).toContain("Money in and out unavailable");
+  expect(flowCard().textContent).not.toContain("NOK 0,00");
+  expect(container.textContent).toContain("Could not load money in and out Try again");
+});
+
+it("marks retained money flow and previously absent finance season as stale", async () => {
+  const load = vi.fn().mockResolvedValueOnce({ ...summary, moneyFlow: { status: "available", moneyInNok: "20.00", moneyOutNok: "15.00" } }).mockRejectedValueOnce(new Error("Offline"));
+  await render(load);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(flowCard().textContent).toContain("Last loaded values.");
+  expect(flowCard().textContent).toContain("NOK 20,00");
+  const missing = { ...summary, seasonCode: null, moneyFlow: { status: "no-season" } } satisfies SeasonFinancialSummary;
+  const missingLoad = vi.fn().mockResolvedValueOnce(missing).mockRejectedValueOnce(new Error("Offline"));
+  await render(missingLoad);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(flowCard().textContent).toContain("Last checked: no finance season configured.");
 });

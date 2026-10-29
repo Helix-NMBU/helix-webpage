@@ -82,6 +82,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
       const result = await Promise.race([load(owner, controller.signal), timeout]);
       if (!active.current || request !== generation.current) return;
       setSummary(result); setStale(false);
+      if (result.moneyFlow.status === "unavailable") notify("Could not load money in and out", "Please try again.", { id: "season-money-flow-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
       if (result.bank.status === "unavailable") notify("Could not load bank balance", "Please try again.", { id: "season-bank-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
     } catch (error) {
       if (!active.current || request !== generation.current) return;
@@ -110,9 +111,13 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
   const budgetDisplay = stale && summary?.budgetStatus === "absent" && !mismatch ? "Last checked: no season budget." : budgetDetail;
   const bank = summary?.bank;
   const snapshot = bank?.status === "available" ? bank.snapshot : null;
+  const flow = summary?.moneyFlow;
+  const flowVisible = summary?.seasonCode === season && flow?.status === "available";
+  const flowScale = flowVisible ? (nokToOre(flow.moneyInNok) > nokToOre(flow.moneyOutNok) ? flow.moneyInNok : flow.moneyOutNok) : "0.00";
+  const flowNote = mismatch ? `${stale ? "Last checked: finance was" : "Finance is"} set to ${summary.seasonCode}, not ${season}.` : flow?.status === "no-season" || (summary && !summary.seasonCode) ? (stale ? "Last checked: no finance season configured." : "No finance season configured.") : flow?.status === "unavailable" || !summary ? "Money in and out unavailable." : stale ? "Last loaded values." : `Recorded for ${season}.`;
   return <section className="space-y-4" aria-labelledby="season-financial-title">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="season-financial-title" className="text-lg font-medium">Season finances</h2><p className="text-sm text-muted-foreground">Planned costs, recorded spending and money in the bank.</p></div>{summary?.canOpenFinancials && <Button asChild variant="outline" size="sm"><Link to={financeRoutes.overview}>Open Financials</Link></Button>}</div>
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
       <Card className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Season budget and spending</CardTitle><CardDescription>{summary ? budgetDisplay : "Unavailable"}{stale && summary && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</CardDescription></CardHeader><CardContent className="space-y-4 px-5">
         <div className="flex flex-wrap items-center gap-5">
           {visible && summary.plannedNok !== null && summary.actualNok !== null && <BudgetRing planned={summary.plannedNok} actual={summary.actualNok} />}
@@ -121,6 +126,13 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
         {visible && summary.plannedNok !== null && summary.actualNok !== null && nokToOre(summary.actualNok) > nokToOre(summary.plannedNok) && <p className="text-xs text-destructive">Over budget</p>}
         <p className="text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</p>
         {visible && <><Button type="button" variant="outline" size="sm" aria-expanded={showDepartments} aria-controls="season-finance-departments" onClick={() => setShowDepartments(value => !value)}>{showDepartments ? "Hide departments" : "Show departments"}</Button>{showDepartments && <div id="season-finance-departments" className="space-y-3 border-t pt-4"><h3 className="font-medium">Spending by department</h3><p className="text-xs text-muted-foreground">{stale ? "Last loaded values. " : ""}Recorded spending compared with the planned budget.</p><ul className="divide-y">{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul></div>}</>}
+      </CardContent></Card>
+      <Card role="group" aria-label="Money in and out" className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Money in and out</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader><CardContent className="space-y-4 px-5">
+        <dl className="space-y-3 tabular-nums">
+          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money in</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>{flowVisible && <div className="h-2 rounded-full bg-muted" aria-hidden="true"><div className="h-full rounded-full bg-primary" style={{ width: `${usage(flow.moneyInNok, flowScale)}%` }} /></div>}</div>
+          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money out</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>{flowVisible && <div className="h-2 rounded-full bg-muted" aria-hidden="true"><div className="h-full rounded-full bg-muted-foreground" style={{ width: `${usage(flow.moneyOutNok, flowScale)}%` }} /></div>}</div>
+        </dl>
+        <p className="text-xs text-muted-foreground">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
       </CardContent></Card>
       <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{snapshot ? <>Manually entered combined balance · as of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</CardContent></Card>
     </div>
