@@ -191,7 +191,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const stats = summarize(scope);
   const today = osloDate();
   const upcomingMilestones = scope.filter(task => task.kind === "milestone" && isOpen(task) && task.deadline && task.deadline >= today && task.deadline <= addDays(today, 30)).sort((a, b) => a.deadline!.localeCompare(b.deadline!) || a.title.localeCompare(b.title));
-  const title = personal ? "My tasks" : category ? CATEGORY_LABELS[category] : `${workspace.season} Overview`;
+  const title = personal ? "My tasks" : category ? CATEGORY_LABELS[category] : "Season Overview";
   const descriptions: Record<string, string> = { overview: "A shared view of the season, its progress, and the work ahead.", production: "From design to assembly. Track production work and upcoming milestones.", "partnership-deliverables": "Track recorded commitments to this season's sponsors and partners.", marketing: "Plan campaigns, content, and the Helix story.", operations: "Competition deadlines and the work that keeps the team running." };
   const filtered = scope.filter(task => (status === "all" || (status === "open" ? isOpen(task) : task.status === status)) && (projectId === "all" || task.projectId === projectId) && (milestoneId === "all" || (milestoneId === "unorganized" ? !isOrganized(task, workspace) : task.kind === "task" && task.milestoneId === milestoneId)) && (!search || [task.title, task.description, task.partnerName, workspace.members.filter(member => task.assigneeIds.includes(member.id)).map(member => member.name).join(" ")].join(" ").toLowerCase().includes(search.toLowerCase()))).sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.title.localeCompare(b.title));
   if (personal) return <>

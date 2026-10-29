@@ -3,6 +3,8 @@ import {
   IconChartBar,
   IconBell,
   IconLayoutKanban,
+  IconLayoutDashboard,
+  IconContract,
   IconSmartHome,
   IconCube,
   IconUsers,
@@ -66,15 +68,16 @@ export function AppSidebar({
     check(); window.addEventListener("focus", check);
     return () => { active = false; window.removeEventListener("focus", check); };
   }, [location.pathname]);
+  const businessPath = departmentPath("Business & Marketing");
+  const businessDepartment = workspace?.departments?.find(department => departmentPath(department.name) === businessPath);
   const spaceItems = [
-    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconUsersGroup, isActive: location.pathname === "/partner-deals" }] : []),
-    ...(pipelineAllowed ? [{ title: "Sponsor pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban, isActive: location.pathname === "/sponsor-pipeline" }] : []),
+    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconContract, isActive: location.pathname === "/partner-deals" }] : []),
     ...(workspace?.projectAccess
       ? [
           {
             title: "Season Overview",
             url: "/season-overview",
-            icon: IconLayoutKanban,
+            icon: IconLayoutDashboard,
             isActive: location.pathname === "/season-overview",
           },
         ]
@@ -104,22 +107,28 @@ export function AppSidebar({
         ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
       ],
     }] : []),
-    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId))
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (pipelineAllowed && departmentPath(department.name) === businessPath))
       .map((department) => {
         const url = departmentPath(department.name);
+        const member = department.memberIds.includes(workspace.viewerId);
+        const hasPipeline = pipelineAllowed && url === businessPath;
         return {
           title: department.name,
           url,
           icon: getDepartmentIcon(department.name),
-          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`),
+          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (hasPipeline && location.pathname === "/sponsor-pipeline"),
           subMenuClassName: "border-l-0",
           items: [
-            { title: "Home", url, icon: IconSmartHome },
-            { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
-            { title: "Projects", url: `${url}/projects`, icon: IconCube },
+            ...(member ? [
+              { title: "Home", url, icon: IconSmartHome },
+              { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
+              { title: "Projects", url: `${url}/projects`, icon: IconCube },
+            ] : []),
+            ...(hasPipeline ? [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] : []),
           ],
         };
       }) ?? []),
+    ...(pipelineAllowed && !businessDepartment ? [{ title: "Business & Marketing", url: businessPath, icon: getDepartmentIcon("Business & Marketing"), isActive: location.pathname === "/sponsor-pipeline", subMenuClassName: "border-l-0", items: [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] }] : []),
   ];
   const order = workspace?.spaceOrder ?? [];
   spaceItems.sort((a, b) => {
@@ -138,7 +147,7 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher onNavigate={onNavigate} disabled={disabled} />
+        <TeamSwitcher />
       </SidebarHeader>
       <SidebarContent>
         <NavMain
