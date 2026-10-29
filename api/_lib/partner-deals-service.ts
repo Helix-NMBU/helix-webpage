@@ -92,6 +92,7 @@ function errorFor(error: unknown): never {
   if (message.includes("deal_no_current_season")) throw new MemberCvError(409, "Set an active current season before confirming the deal.");
   if (message.includes("deal_task_season_unavailable")) throw new MemberCvError(409, "Tasks are not yet available for the current season.");
   if (message.includes("deal_marketing_department_missing")) throw new MemberCvError(409, "Set up the Business & Marketing department before confirming the deal.");
+  if (message.includes("deal_finance_lead_missing")) throw new MemberCvError(409, "Assign an active Finance lead before confirming the deal.");
   if (message.includes("deal_finance_department_missing")) throw new MemberCvError(409, "Set up the Finance department before confirming the deal.");
   if (message.includes("deal_invalid_marketing_owner")) throw new MemberCvError(409, "Choose a deliverable owner in the Business & Marketing department.");
   if (message.includes("deal_funding_unavailable")) throw new MemberCvError(503, "Funding is not configured. Ask an administrator to complete setup, then try again.");

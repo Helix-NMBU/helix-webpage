@@ -399,6 +399,16 @@ returns boolean language sql stable security invoker set search_path=pg_catalog 
     where dm.member_id=actor and d.season=project_management.current_season() and d.name=any(department_names) and (not managing or dm.access_level='lead'));
 $$;
 
+-- A task detail belongs to the active workspace season. Do not advertise old
+-- task links that the current-season workspace cannot open.
+create or replace function project_management.can_access_task(actor uuid,target uuid,managing boolean default false)
+returns boolean language sql stable security invoker set search_path=pg_catalog as $$
+ select exists(select 1 from project_management.tasks t
+  where t.id=target and t.season=project_management.current_season()
+   and (project_management.is_department_manager(actor) or exists(select 1 from project_management.projects p
+    where p.id=t.project_id and project_management.can_access_project(actor,p.departments,managing))))
+$$;
+
 create or replace function project_management.sync_manager_departments()
 returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
 begin

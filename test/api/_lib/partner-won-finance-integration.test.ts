@@ -111,4 +111,6 @@ it('provisions a future season without changing the active setting and denies no
  expect(future.rows[0].id).toBe(again.rows[0].id);
  expect((await db.query<{code:string}>("select setting_value #>> '{}' as code from finance.settings where setting_key='current_season'")).rows[0].code).toBe('S27');
  await expect(db.query("select finance.provision_future_season($1,'S29','S29','2028-09-01','2029-07-31')",[id(1)])).rejects.toThrow('finance:SEASON_CONFLICT');
+ await expect(db.query("select finance.provision_future_season($1,'S30','S30','2029-01-01','2030-07-31')",[id(1)])).rejects.toThrow('finance:SEASON_OVERLAP');
+ await expect(db.query("insert into finance.seasons(code,name,start_date,end_date,created_by_member_id,updated_by_member_id) values('S30','S30','2029-01-01','2030-07-31',$1,$1)",[id(1)])).rejects.toMatchObject({code:'23P01'});
 });

@@ -16,7 +16,7 @@ begin
  if d.stage='won' then return d.id; end if;
  if p_expected is null or d.revision<>p_expected then raise exception 'deal_conflict' using errcode='40001'; end if;
  if d.stage='lost' then raise exception 'deal_invalid_stage' using errcode='22023'; end if;
- select s.* into current_season from finance.seasons s join finance.settings st on st.setting_key='current_season' and s.code=st.setting_value #>> '{}';
+ select s.* into current_season from finance.seasons s join finance.settings st on st.setting_key='current_season' and s.code=st.setting_value #>> '{}' for share of st,s;
  if current_season.id is null or current_season.status='closed' then raise exception 'deal_no_current_season' using errcode='22023'; end if;
  select name into org_name from partner.organizations where id=d.organization_id;
  select name into marketing_dept from project_management.departments where season=current_season.code and name='Business & Marketing';
@@ -24,6 +24,16 @@ begin
  if exists(select 1 from partner_deals.deliverables where deal_id=d.id) and marketing_dept is null then raise exception 'deal_marketing_department_missing' using errcode='22023'; end if;
  select * into contribution from partner_deals.contributions where deal_id=d.id and season_id=current_season.id and kind='cash';
  if contribution.id is not null and finance_dept is null then raise exception 'deal_finance_department_missing' using errcode='22023'; end if;
+ if contribution.id is not null then
+  perform dm.member_id from project_management.department_members dm
+   join project_management.departments dep on dep.id=dm.department_id
+   join identity.members m on m.id=dm.member_id join neon_auth."user" u on u.id=m.auth_user_id
+   join neon_auth.account a on a."userId"=u.id and a."providerId"='google' and a."accountId"=m.google_sub
+   where dep.season=current_season.code and dep.name=finance_dept and dm.access_level='lead'
+    and lower(u.email)=m.email and u."emailVerified" is true and u.banned is not true
+   for share of dm,m,u,a;
+  if not found then raise exception 'deal_finance_lead_missing' using errcode='22023'; end if;
+ end if;
  if exists(select 1 from partner_deals.deliverables v where v.deal_id=d.id and v.owner_member_id is not null and not exists(
   select 1 from project_management.department_members dm join project_management.departments dep on dep.id=dm.department_id
   join identity.members m on m.id=dm.member_id join neon_auth."user" u on u.id=m.auth_user_id
@@ -65,6 +75,11 @@ begin
 end $$;
 
 
+-- Overlapping seasons are ambiguous and make rollover unpredictable. PostgreSQL's
+-- range exclusion constraint also rejects concurrent overlapping inserts.
+alter table finance.seasons add constraint finance_seasons_no_overlap
+ exclude using gist (daterange(start_date,end_date,'[]') with &&);
+
 -- Operator-only provisioning leaves the configured current season unchanged.
 create function finance.provision_future_season(p_operator uuid,p_code text,p_name text,p_start date,p_end date)
 returns uuid language plpgsql set search_path=pg_catalog as $$
@@ -76,6 +91,8 @@ begin
  where st.setting_key='current_season';
  if current_end is null or p_code !~ '^S[0-9]{2}$' or length(btrim(p_name)) not between 1 and 80
    or p_start is null or p_end is null or p_start<=current_end or p_end<p_start then raise exception 'finance:INVALID' using errcode='22023'; end if;
+ if exists(select 1 from finance.seasons s where s.code<>p_code and daterange(s.start_date,s.end_date,'[]') && daterange(p_start,p_end,'[]')) then
+  raise exception 'finance:SEASON_OVERLAP' using errcode='23P01'; end if;
  select * into existing from finance.seasons where code=p_code for update;
  if found then
   if existing.start_date is distinct from p_start or existing.end_date is distinct from p_end or existing.name is distinct from btrim(p_name) or existing.status='closed'
@@ -112,10 +129,23 @@ begin
  if p_day is null then raise exception 'deal_invoice_invalid_date'; end if;
  perform pg_advisory_xact_lock(72704,12);
  select s.* into current_season from finance.settings st join finance.seasons s on s.code=st.setting_value #>> '{}'
- where st.setting_key='current_season' and s.status<>'closed' and p_day between s.start_date and s.end_date;
+ where st.setting_key='current_season' and s.status<>'closed' and p_day between s.start_date and s.end_date for share of st,s;
  if current_season.id is null then raise exception 'deal_invoice_current_season_unavailable'; end if;
+ if not exists(select 1 from partner_deals.contributions c join partner_deals.deals d on d.id=c.deal_id
+   join finance.seasons s on s.id=c.season_id where d.stage='won' and c.kind='cash' and s.start_date<=p_day
+   and not exists(select 1 from partner_deals.task_links l where l.deal_id=d.id and l.season_id=c.season_id and l.kind='invoice')) then
+   return jsonb_build_object('created',0,'failed',0,'failures','[]'::jsonb);
+ end if;
  select name into finance_dept from project_management.departments where season=current_season.code and name='Finance';
  if finance_dept is null then raise exception 'deal_invoice_finance_department_missing'; end if;
+ perform dm.member_id from project_management.department_members dm
+  join project_management.departments dep on dep.id=dm.department_id
+  join identity.members m on m.id=dm.member_id join neon_auth."user" u on u.id=m.auth_user_id
+  join neon_auth.account a on a."userId"=u.id and a."providerId"='google' and a."accountId"=m.google_sub
+  where dep.season=current_season.code and dep.name=finance_dept and dm.access_level='lead'
+   and lower(u.email)=m.email and u."emailVerified" is true and u.banned is not true
+  for share of dm,m,u,a;
+ if not found then raise exception 'deal_invoice_finance_lead_missing'; end if;
  for rec in
   select c.id as contribution_id,c.season_id,c.amount_ore,c.invoice_date,s.name as season_name,
    d.id as deal_id,o.name as organization_name

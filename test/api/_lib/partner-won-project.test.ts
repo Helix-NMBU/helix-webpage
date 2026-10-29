@@ -75,7 +75,12 @@ it('creates future invoice tasks at season start, catches up safely and lets Fin
  await expect(db.query('select project_management.provision_current_departments($1)',[id(2)])).rejects.toThrow('forbidden');
  await db.query('select project_management.provision_current_departments($1)',[id(1)]);
  expect((await db.query("select * from project_management.department_members dm join project_management.departments d on d.id=dm.department_id where d.season='S28'")).rows).toHaveLength(0);
+ await expect(db.query("select partner_deals.materialize_invoices_on('2027-08-02')")).rejects.toThrow('deal_invoice_finance_lead_missing');
+ expect((await db.query("select * from partner_deals.task_links where season_id=$1",[id(20)])).rows).toHaveLength(0);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where season='S28' and name='Finance'",[id(2)]);
+ await db.query('update neon_auth."user" set banned=true where id=$1',[id(2)]);
+ await expect(db.query("select partner_deals.materialize_invoices_on('2027-08-02')")).rejects.toThrow('deal_invoice_finance_lead_missing');
+ await db.query('update neon_auth."user" set banned=false where id=$1',[id(2)]);
  const after=await db.query<{result:{created:number,failed:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result");
  expect(after.rows[0].result).toMatchObject({created:1,failed:0});
  const repeat=await db.query<{result:{created:number,failed:number}}>("select partner_deals.materialize_invoices_on('2027-08-03') result");
@@ -87,6 +92,9 @@ it('creates future invoice tasks at season start, catches up safely and lets Fin
  expect(task?.description).toContain('500.00 NOK');
  await finance.mutate('test',{action:'set_status',id:invoice,expectedRevision:1,status:'in_progress',blockedReason:''});
  expect((await finance.load('test')).tasks.find(x=>x.id===invoice)?.status).toBe('in_progress');
+ const old=(await db.query<{task_id:string}>("select task_id from partner_deals.task_links where season_id=$1 and kind='invoice'",[id(11)])).rows[0].task_id;
+ expect((await db.query<{allowed:boolean}>('select project_management.can_access_task($1,$2) allowed',[id(2),old])).rows[0].allowed).toBe(false);
+ expect((await db.query<{allowed:boolean}>('select project_management.can_access_task($1,$2) allowed',[id(1),old])).rows[0].allowed).toBe(false);
  expect((await db.query("select * from partner_deals.task_links where season_id=$1 and kind='invoice'",[id(20)])).rows).toHaveLength(1);
 });
 
@@ -108,4 +116,16 @@ it('serializes concurrent runner attempts for the same contribution',async()=>{
  expect(attempts.reduce((sum,x)=>sum+x.rows[0].result.created,0)).toBe(1);
  expect(attempts.reduce((sum,x)=>sum+x.rows[0].result.failed,0)).toBe(0);
  expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind='invoice'",[id(41)])).rows).toHaveLength(1);
+});
+
+
+it('does not confirm a cash deal when its Finance lead is revoked',async()=>{
+ await db.exec(`insert into partner.organizations values('${id(50)}','Leadless',false); insert into partner_deals.deals(id,organization_id,title,stage,created_by_member_id,updated_by_member_id) values('${id(51)}','${id(50)}','Agreement','proposal','${id(1)}','${id(1)}'); insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,invoice_date) values('${id(51)}','${id(20)}','cash',25000,'2027-11-01');`);
+ await db.query('update neon_auth."user" set banned=true where id=$1',[id(2)]);
+ await expect(db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[id(1),'manager','manager@helixnmbu.no',id(51)])).rejects.toThrow('deal_finance_lead_missing');
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(51)])).rows[0].stage).toBe('proposal');
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(51)])).rows).toHaveLength(0);
+ await db.query('update neon_auth."user" set banned=false where id=$1',[id(2)]);
+ await db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[id(1),'manager','manager@helixnmbu.no',id(51)]);
+ expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind='invoice'",[id(51)])).rows).toHaveLength(1);
 });
