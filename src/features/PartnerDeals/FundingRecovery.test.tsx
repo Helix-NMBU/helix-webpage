@@ -15,7 +15,7 @@ it("requires an explicit acknowledgement before approving a separate record", as
  expect(el.textContent).toContain("F-S27-001");
  const approve = [...el.querySelectorAll("button")].find(x => x.textContent === "Approve separate funding")!;
  expect(approve.disabled).toBe(true);
- await act(async () => { el.querySelector("input")!.click(); });
+ await act(async () => { el.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click(); });
  expect(approve.disabled).toBe(false);
  await act(async () => { approve.click(); });
  expect(api.approveSeparate).toHaveBeenCalledWith("cash", candidates);

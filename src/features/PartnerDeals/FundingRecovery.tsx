@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Checkbox } from "@libs/components/ui/checkbox";
 import { Button } from "@libs/components/ui/button";
 import { memberSessionToken } from "../MemberCV/session";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -80,7 +81,7 @@ export function FundingRecovery({ contributionId, api, onResolved }: { contribut
         {candidate.expectedDate ? <p>Expected payment: {candidate.expectedDate}</p> : null}
         <Button type="button" variant="outline" disabled={busy || candidate.amountOre !== result.amountOre || !["secured", "received"].includes(candidate.status)} onClick={() => void act(() => client.link(contributionId, candidate.id, candidate.revision), "Funding linked")}>Link this record</Button>
       </li>)}</ul>
-      <label className="flex items-start gap-2"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /> <span>I reviewed these records and confirm this agreement needs a separate funding record.</span></label>
+      <label className="flex items-start gap-2"><Checkbox checked={acknowledged} onCheckedChange={value => setAcknowledged(value === true)} /> <span>I reviewed these records and confirm this agreement needs a separate funding record.</span></label>
       <Button type="button" variant="outline" disabled={busy || !acknowledged} onClick={() => void act(() => client.approveSeparate(contributionId, result.candidates), "Separate funding approved")}>Approve separate funding</Button>
     </> : null}
   </section>;

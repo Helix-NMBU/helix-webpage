@@ -8,8 +8,9 @@ import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPl
 import { SponsorPipeline } from "./Pipeline";
 import { PipelineError, createPipelineRepository } from "./repository";
 import type { Deal, PipelineData } from "./types";
-const deal:Deal={id:"one",organizationId:"org",organizationName:"Partner",title:"Engine deal",stage:"lead",ownerMemberId:null,contactName:"Contact",contactEmail:"",startsOn:null,endsOn:null,agreementLink:"",negotiationNotes:"Private",revision:3,contributions:[{id:"contribution-1",seasonId:"s27",kind:"cash",description:"",amountOre:"120000",invoiceDate:"2026-11-01"}],deliverables:[{id:"deliverable-1",title:"Logo",description:"",dueDate:null,ownerMemberId:null}]};
+const deal:Deal={id:"one",organizationId:"org",organizationName:"Partner",title:"Engine deal",stage:"lead",ownerMemberId:null,contactName:"Contact",contactEmail:"",startsOn:null,endsOn:null,agreementLink:"",negotiationNotes:"Private",revision:3,contributions:[{id:"contribution-1",seasonId:"s27",kind:"cash",description:"",amountOre:"120000",invoiceDate:"2026-11-01"}],deliverables:[{id:"deliverable-1",title:"Logo",description:"Logo on the car",dueDate:"2027-02-03",ownerMemberId:"m1"}]};
 const data:PipelineData={canManage:true,canReviewFunding:true,deals:[deal],organizations:[{id:"org",name:"Partner",revision:0}],seasons:[{id:"s27",code:"S27",name:"2027",startDate:"2026-08-01",endDate:"2027-07-31",status:"active"}]};
+vi.mock("../Workspace/WorkspaceContext",()=>({useWorkspace:()=>({data:{members:[{id:"m1",name:"Morgan"}]}})}));
 vi.mock("./FundingRecovery",()=>({FundingRecovery:({contributionId}:{contributionId:string})=><div>Recovery for {contributionId}</div>}));
 function Probe(){const context=useMemberNotifications();return <output>{context?.items.map(i=><span key={i.id}>{i.title} {i.description} {i.action && <button onClick={i.action.onClick}>{i.action.label}</button>}</span>)}</output>;}
 describe("Sponsor pipeline",()=>{
@@ -18,10 +19,10 @@ describe("Sponsor pipeline",()=>{
  beforeEach(()=>{vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);container=document.createElement("div");document.body.append(container);root=createRoot(container);load.mockReset().mockResolvedValue(structuredClone(data));save.mockReset().mockResolvedValue(undefined);requestFinanceReview.mockReset().mockResolvedValue(undefined);confirmWon.mockReset().mockResolvedValue(undefined);});
  afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();});
  async function render(){const router=createMemoryRouter([{path:"/sponsor-pipeline",element:<MemberThemeProvider><MemberNotificationsProvider><SponsorPipeline repository={{load,save,createOrganization,renameOrganization,requestFinanceReview,confirmWon}}/><Probe/></MemberNotificationsProvider></MemberThemeProvider>}],{initialEntries:["/sponsor-pipeline"]});await act(async()=>root.render(<RouterProvider router={router}/>));}
- async function select(stage:string){const element=container.querySelector<HTMLSelectElement>('[aria-label="Stage for Engine deal"]')!;await act(async()=>{element.value=stage;element.dispatchEvent(new Event("change",{bubbles:true}));});}
+ async function select(stage:string){const element=container.querySelector<HTMLButtonElement>('[aria-label="Stage for Engine deal"]')!;await act(async()=>element.dispatchEvent(new KeyboardEvent("keydown",{key:" ",bubbles:true})));const label=stage==="won"?"Won":"Lost";const option=[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item=>item.textContent===label)!;await act(async()=>option.click());}
  const button=(name:string)=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(el=>el.textContent===name)!;
  it("shows six stages and moves a deal without generating a won transition",async()=>{await render();for(const name of ["Lead","Contacted","In discussion","Proposal sent","Won","Lost"])expect(container.querySelector(`[aria-label="${name}"]`)).not.toBeNull();await select("lost");expect(save).toHaveBeenCalledWith(expect.objectContaining({id:"one",expectedRevision:3,stage:"lost"}));expect(save.mock.calls[0][0].contributions[0].id).toBe("contribution-1");expect(save.mock.calls[0][0].deliverables[0].id).toBe("deliverable-1");expect(confirmWon).not.toHaveBeenCalled();});
- it("reviews and explicitly confirms Won, preserving the card when the handoff fails",async()=>{confirmWon.mockRejectedValueOnce(new PipelineError("Try again",503));await render();await select("won");expect(save).not.toHaveBeenCalled();expect(document.body.textContent).toContain("Confirm deal as won");expect(document.body.textContent).toContain("Logo");expect(confirmWon).not.toHaveBeenCalled();await act(async()=>button("Confirm won").click());expect(confirmWon).toHaveBeenCalledWith("one",3);expect(document.body.textContent).toContain("Could not confirm deal");expect(document.body.textContent).toContain("Engine deal");expect(document.querySelector('[role="dialog"]')).not.toBeNull();});
+ it("reviews and explicitly confirms Won, preserving the card when the handoff fails",async()=>{confirmWon.mockRejectedValueOnce(new PipelineError("Try again",503));await render();await select("won");expect(save).not.toHaveBeenCalled();expect(document.body.textContent).toContain("Confirm deal as won");expect(document.body.textContent).toContain("Logo on the car");expect(document.body.textContent).toContain("Owner: Morgan");expect(document.body.textContent).toContain("Due: 2027-02-03");expect(document.body.textContent).toContain("Invoice date: 2026-11-01");expect(confirmWon).not.toHaveBeenCalled();await act(async()=>button("Confirm won").click());expect(confirmWon).toHaveBeenCalledWith("one",3);expect(document.body.textContent).toContain("Could not confirm deal");expect(document.body.textContent).toContain("Engine deal");expect(document.querySelector('[role="dialog"]')).not.toBeNull();});
  it("offers authorized recovery when duplicate funding blocks confirmation",async()=>{
   confirmWon.mockRejectedValueOnce(new PipelineError("Existing funding",409,"funding_possible_duplicate"));
   await render();await select("won");await act(async()=>button("Confirm won").click());
@@ -51,6 +52,22 @@ describe("Sponsor pipeline",()=>{
   await render();await select("won");await act(async()=>button("Confirm won").click());
   await act(async()=>button("Request review").click());
   expect(requestFinanceReview).toHaveBeenCalledWith("one",3);
+ });
+ it("retains unsaved edits and requires review before retrying a stale revision",async()=>{
+  save.mockRejectedValueOnce(new PipelineError("This deal changed. Reload it before saving.",409));
+  await render();await act(async()=>button("Engine deal").click());
+  const title=document.querySelector<HTMLInputElement>('input[required][maxlength="200"]')!;
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(title,"My unsaved deal");title.dispatchEvent(new Event("input",{bubbles:true}));});
+  await act(async()=>button("Save deal").click());
+  expect(document.body.textContent).toContain("Your edits are kept");
+  load.mockResolvedValueOnce({...structuredClone(data),deals:[{...structuredClone(deal),revision:4,title:"Latest from colleague"}]});
+  await act(async()=>button("Review latest").click());
+  expect(document.body.textContent).toContain("Latest from colleague");
+  expect(document.body.textContent).toContain("My unsaved deal");
+  await act(async()=>button("Continue with my edits").click());
+  expect(title.value).toBe("My unsaved deal");
+  await act(async()=>button("Save deal").click());
+  expect(save).toHaveBeenLastCalledWith(expect.objectContaining({expectedRevision:4,title:"My unsaved deal"}));
  });
  it("hides private deal data after access is denied",async()=>{load.mockRejectedValueOnce(new PipelineError("Access denied",403));await render();expect(container.textContent).not.toContain("Engine deal");expect(container.textContent).toContain("Could not load sponsor pipeline");});
  it("preserves the duplicate funding response code",async()=>{

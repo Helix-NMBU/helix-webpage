@@ -21,7 +21,7 @@ it("requires explicit confirmation for separate funding",async()=>{
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>root.render(<FinanceReviews repository={repo}/>));
  const approve=[...el.querySelectorAll("button")].find(b=>b.textContent==="Approve separate funding")!;
- expect(approve.disabled).toBe(true);await act(async()=>el.querySelector("input")!.click());expect(approve.disabled).toBe(false);
+ expect(approve.disabled).toBe(true);await act(async()=>el.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());expect(approve.disabled).toBe(false);
  await act(async()=>approve.click());expect(repo.resolve).toHaveBeenCalledWith("review","separate",undefined,undefined,[candidate]);
  await act(async()=>root.unmount());el.remove();
 });
