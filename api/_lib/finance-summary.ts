@@ -198,6 +198,13 @@ function publicScenario(scenario: ReturnType<typeof calculateScenarios>[number])
   };
 }
 
+// The Season Overview receives a deliberately narrower projection in its own service.
+// Reuse the same item/system calculations as Financials without exposing scenarios.
+export async function loadDepartmentSummaries(query: Query, seasonCode: string, includeDraftItems: boolean) {
+  const facts = await loadFacts(query, seasonCode, includeDraftItems);
+  return buildDepartmentSummaries(departmentFacts(facts.systems, facts.items));
+}
+
 export async function loadFundingScenarios(query: Query, seasonCode: string, includeDraftItems: boolean): Promise<FundingScenario[]> {
   const facts = await loadFacts(query, seasonCode, includeDraftItems);
   return calculateScenarios(facts.items.map(toItemFact), facts.funding, facts.parts).map(publicScenario);
