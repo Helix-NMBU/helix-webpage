@@ -4,6 +4,7 @@ import { Button } from "@libs/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { FinanceContentSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { FinanceGate, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
+import { BankSnapshotEditor } from "./BankSnapshotEditor";
 import { BudgetsBoard } from "./BudgetsPage";
 import { FinancingPage } from "./FinancingPage";
 import { OverviewBoard } from "./OverviewPage";
@@ -70,6 +71,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           </Button>
         ))}
       </nav>
+      {page === "overview" && session.capabilities?.draftBudgetItems ? <BankSnapshotEditor /> : null}
       {page === "financing" ? <FinancingPage /> : !loaded ? (
         <FinanceContentSkeleton page={page} canRegister={Boolean(session.capabilities?.registerActual)} />
       ) : budgetsReady ? (

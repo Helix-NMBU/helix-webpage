@@ -74,6 +74,7 @@ export function sortProfiles(profiles: readonly FinanceProfile[]): FinanceProfil
 }
 
 const REVISION_ACTIONS = new Set<FinanceAction>([
+  "setBankSnapshot",
   "approveBudget",
   "addItem",
   "editItem",
@@ -98,6 +99,7 @@ const REVISION_ACTIONS = new Set<FinanceAction>([
 ]);
 
 const ACTION_CAPABILITY: Record<FinanceAction, keyof FinanceCapabilitySet> = {
+  setBankSnapshot: "draftBudgetItems",
   createBudget: "createBudget",
   approveBudget: "approveBudget",
   addItem: "draftBudgetItems",

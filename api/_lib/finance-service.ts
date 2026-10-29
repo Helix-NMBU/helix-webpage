@@ -1,3 +1,4 @@
+import { loadBankSnapshot, setBankSnapshot } from "./finance-bank.js";
 import { performBudgetImport } from "./finance-budget-import.js";
 import pg from "pg";
 import { isFinanceAction, isFinanceProfile, mutationAllowed, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
@@ -22,6 +23,7 @@ import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
 import { createCvServices } from "./member-cv-service.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
 import type {
+  BankSnapshot,
   FinanceCapabilitiesResponse,
   FinanceCapabilitySet,
   FinanceMutationResult,
@@ -41,6 +43,7 @@ type FlagsRow = FinanceCapabilitySet & { profiles: FinanceProfile[] };
 type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: string | null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
 
 export interface FinanceServices {
+  bankSnapshot(token: string): Promise<BankSnapshot | null>;
   capabilities(token: string): Promise<FinanceCapabilitiesResponse>;
   version(token: string, knownVersion?: number): Promise<{ viewVersion: number; unchanged?: boolean }>;
   overview(token: string, knownVersion?: number): Promise<PublicOverview | FinanceUnchanged>;
@@ -171,6 +174,10 @@ export function createFinanceServices(deps: {
   }
 
   return {
+    async bankSnapshot(token) {
+      await context(token);
+      return loadBankSnapshot(db);
+    },
     async recovery(token, deliveryAfter, uploadAfter) {
       const current = await context(token);
       return loadFinanceRecovery(db, current, { deliveryAfter, uploadAfter });
@@ -306,6 +313,7 @@ export function createFinanceServices(deps: {
           throw new FinanceError(400, "A valid revision is required.");
         }
       }
+      if (action === "setBankSnapshot") return setBankSnapshot(db, current.memberId, body);
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
       if (action === "previewImport" || action === "importItems") return performBudgetImport(db, current, body);
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
