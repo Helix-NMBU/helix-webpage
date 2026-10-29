@@ -23,6 +23,7 @@ beforeAll(async()=>{
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[people[2].userId]);
  await db.exec(`insert into partner.organizations values('${id(10)}','Acme',false); insert into finance.seasons values('${id(11)}','S27','S27','2026-08-01','2027-07-31','active'); insert into finance.settings values('current_season','"S27"');`);
  await db.exec(read('035_partner_deals'));
+ await db.exec("alter table partner_deals.deals add column if not exists primary_season_id uuid");
  await db.exec('create function partner_deals.attach_won_funding(uuid,uuid) returns void language plpgsql as $$ begin return; end $$;');
  await db.exec(read('038_partner_won_handoff'));
  await db.exec(read('041_project_current_season'));

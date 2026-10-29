@@ -26,6 +26,14 @@ describe("Pipeline",()=>{
   await render();const text=container.querySelector('[aria-label="Lead"]')!.textContent!;
   for(const value of ["Company","Partner","Assignee","Morgan","Deal value","In-kind value","Silver","S27, S28","unvalued items","Values total across seasons"]) expect(text).toContain(value);
  });
+ it("shows and edits a deal season without inventing a contribution",async()=>{
+  load.mockResolvedValueOnce({...data,deals:[{...deal,seasonId:"s27",contributions:[]}],seasons:[...data.seasons,{id:"s28",code:"S28",name:"2028",startDate:"2027-08-01",endDate:"2028-07-31",status:"planning"}]});
+  await render();
+  expect(container.querySelector('[aria-label="Edit Season for Engine deal"]')?.textContent).toContain("S27");
+  await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Season for Engine deal"]')!.click());
+  await act(async()=>button("S28").click());
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({seasonId:"s28",contributions:[]}));
+ });
  it("edits a card field inline and saves the revised deal",async()=>{
   await render();
   const edit=container.querySelector<HTMLButtonElement>('[aria-label="Edit Sponsor level for Engine deal"]')!;
