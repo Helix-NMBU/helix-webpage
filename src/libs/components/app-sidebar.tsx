@@ -70,8 +70,12 @@ export function AppSidebar({
   }, [location.pathname]);
   const businessPath = departmentPath("Business & Marketing");
   const businessDepartment = workspace?.departments?.find(department => departmentPath(department.name) === businessPath);
+  const businessItems = [
+    ...(pipelineAllowed ? [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] : []),
+    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconContract }] : []),
+  ];
+  const businessActive = businessItems.some(item => item.url === location.pathname);
   const spaceItems = [
-    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconContract, isActive: location.pathname === "/partner-deals" }] : []),
     ...(workspace?.projectAccess
       ? [
           {
@@ -107,16 +111,16 @@ export function AppSidebar({
         ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
       ],
     }] : []),
-    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (pipelineAllowed && departmentPath(department.name) === businessPath))
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (businessItems.length > 0 && departmentPath(department.name) === businessPath))
       .map((department) => {
         const url = departmentPath(department.name);
         const member = department.memberIds.includes(workspace.viewerId);
-        const hasPipeline = pipelineAllowed && url === businessPath;
+        const isBusiness = url === businessPath;
         return {
           title: department.name,
           url,
           icon: getDepartmentIcon(department.name),
-          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (hasPipeline && location.pathname === "/sponsor-pipeline"),
+          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (isBusiness && businessActive),
           subMenuClassName: "border-l-0",
           items: [
             ...(member ? [
@@ -124,11 +128,11 @@ export function AppSidebar({
               { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
               { title: "Projects", url: `${url}/projects`, icon: IconCube },
             ] : []),
-            ...(hasPipeline ? [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] : []),
+            ...(isBusiness ? businessItems : []),
           ],
         };
       }) ?? []),
-    ...(pipelineAllowed && !businessDepartment ? [{ title: "Business & Marketing", url: businessPath, icon: getDepartmentIcon("Business & Marketing"), isActive: location.pathname === "/sponsor-pipeline", subMenuClassName: "border-l-0", items: [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] }] : []),
+    ...(businessItems.length > 0 && !businessDepartment ? [{ title: "Business & Marketing", url: businessPath, icon: getDepartmentIcon("Business & Marketing"), isActive: businessActive, subMenuClassName: "border-l-0", items: businessItems }] : []),
   ];
   const order = workspace?.spaceOrder ?? [];
   spaceItems.sort((a, b) => {
