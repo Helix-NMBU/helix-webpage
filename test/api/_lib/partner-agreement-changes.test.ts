@@ -132,6 +132,12 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  const refreshed=await findManual(0);await dealService(0).acknowledgeManualFunding('test',id(101),6,refreshed.id,refreshed.manualReviewToken,'Reviewed with Finance',true);
  expect((await findManual(0)).fundingNeedsReview).toBe(false);
  const reviewedBusiness=await dealService(0).load('test','shared');const reviewedFinance=await dealService(1).load('test','shared');const reviewedMarketing=await dealService(2).load('test','shared');expect(JSON.stringify(reviewedBusiness)).toContain('Reviewed with Finance');expect(JSON.stringify(reviewedFinance)).toContain('Reviewed with Finance');expect(JSON.stringify(reviewedMarketing)).not.toContain('Reviewed with Finance');
+ let revokedManual=false;
+ const revokingManualDb={query:async<T>(sql:string,params?:unknown[])=>{const rows=(await db.query<T>(sql,params)).rows;if(!revokedManual&&sql.includes('as "canManage"')){revokedManual=true;await db.query("delete from identity.member_roles where member_id=$1 and role_key='financials'",[id(2)]);}return {rows};}};
+ const afterRevocation=await createDealServices({db:revokingManualDb,authenticate:auth(1)}).load('test','shared');
+ expect(JSON.stringify(afterRevocation)).not.toContain('Reviewed with Finance');
+ await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(2)]);
+
  await dealService(0).resolveAgreementChange('test',later.id,'Finance handled the new discrepancy',true,false);
  expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[manualFunding])).rows[0].amount_ore).toBe('9100');
  expect((await db.query("select * from partner_deals.audit where deal_id=$1 and action='manual_funding_reviewed'",[id(101)])).rows).toHaveLength(1);
