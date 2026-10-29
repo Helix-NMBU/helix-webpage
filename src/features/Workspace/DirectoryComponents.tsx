@@ -21,7 +21,7 @@ export function Directory({
 }) {
   return (
     <section aria-label={title} className={fill ? "flex min-h-0 min-w-0 flex-1 flex-col gap-4" : "space-y-4"}>
-      <div className="flex min-h-9 shrink-0 items-center justify-between gap-4">
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-medium">{title}</h1>
         {action}
       </div>
