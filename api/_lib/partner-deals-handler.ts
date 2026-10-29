@@ -9,6 +9,7 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
   try {
    const token = bearer(req.headers.authorization); const service = getServices();
    if (req.method === "GET") {
+    if (req.query.view === "taskDeal") return res.status(200).json(await service.taskDeal(token,req.query.taskId));
     if (req.query.view === "fundingCandidates") return res.status(200).json(await service.fundingCandidates(token,req.query.contributionId));
     if (req.query.view !== "pipeline" && req.query.view !== "shared") throw new MemberCvError(400,"Choose a valid deal view.");
     return res.status(200).json(await service.load(token,req.query.view));

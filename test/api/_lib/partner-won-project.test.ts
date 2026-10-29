@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createProjectServices } from "../../../api/_lib/project-management-service.js";
+import { createDealServices } from "../../../api/_lib/partner-deals-service.js";
+import type { CvDatabase } from "../../../api/_lib/member-cv-service.js";
 const id=(n:number)=>`70000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const people=["manager","finance","marketing"].map((name,i)=>({userId:id(i+1),googleSub:name,email:`${name}@helixnmbu.no`,name}));
 const read=(name:string)=>readFileSync(new URL(`../../../db/migrations/${name}.sql`,import.meta.url),'utf8');
@@ -37,4 +39,24 @@ it('creates tasks that the respective department members can see and update',asy
  expect((await marketingService.load('test')).tasks.some(x=>x.id===invoice)).toBe(false);
  await finance.mutate('test',{action:'set_status',id:invoice,expectedRevision:1,status:'in_progress',blockedReason:''});
  await marketingService.mutate('test',{action:'set_status',id:marketing,expectedRevision:1,status:'done',blockedReason:''});
+});
+
+it('reveals the agreement link only while both task and shared-deal access remain valid',async()=>{
+ const marketingTask=(await db.query<{task_id:string}>("select task_id from partner_deals.task_links where kind='marketing'")).rows[0].task_id;
+ const queryDb: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await db.query<T>(sql,params)).rows})};
+ const service=createDealServices({db:queryDb,authenticate:async()=>people[2]});
+ expect(await service.taskDeal('test',marketingTask)).toEqual({dealId:null});
+ await db.query("insert into partner_deals.member_grants values($1,'marketing',true)",[id(3)]);
+ expect(await service.taskDeal('test',marketingTask)).toEqual({dealId:id(12)});
+ const financeTask=(await db.query<{task_id:string}>("select task_id from partner_deals.task_links where kind='invoice'")).rows[0].task_id;
+ expect(await service.taskDeal('test',financeTask)).toEqual({dealId:null});
+ let revoked=false;
+ const revokingDb: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>{
+  const rows=(await db.query<T>(sql,params)).rows;
+  if (!revoked && sql.includes('select d.id as "dealId"')) { revoked=true; await db.query("update partner_deals.member_grants set active=false where member_id=$1",[id(3)]); }
+  return {rows};
+ }};
+ const revoking=createDealServices({db:revokingDb,authenticate:async()=>people[2]});
+ expect(await revoking.taskDeal('test',marketingTask)).toEqual({dealId:null});
+ expect(revoked).toBe(true);
 });

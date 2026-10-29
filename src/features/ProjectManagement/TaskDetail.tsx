@@ -19,14 +19,28 @@ import { Input } from "@libs/components/ui/input";
 import { Textarea } from "@libs/components/ui/textarea";
 import { Label } from "@libs/components/ui/label";
 import { formatDate, osloDate } from "./model";
+import { memberSessionToken } from "../MemberCV/session";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 
-export default function TaskDetailPage({ repository }: { repository?: ProjectRepository }) {
-  const { taskId = "" } = useParams();
-  return <TaskDetail key={taskId} taskId={taskId} repository={repository} />;
+async function lookupTaskDeal(taskId: string, owner: { current: string | null }): Promise<string | null> {
+  if (isLocalMemberMode()) return null;
+  const token = await memberSessionToken(owner);
+  const query = new URLSearchParams({ view: "taskDeal", taskId });
+  const response = await fetch(`/api/partner-deals?${query}`, { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) return null;
+  const value = await response.json() as { dealId?: unknown };
+  return typeof value.dealId === "string" && /^[0-9a-f-]{36}$/i.test(value.dealId) ? value.dealId : null;
 }
 
-function TaskDetail({ taskId, repository: supplied }: { taskId: string; repository?: ProjectRepository }) {
+export default function TaskDetailPage({ repository, loadPartnerDeal }: { repository?: ProjectRepository; loadPartnerDeal?: (taskId: string) => Promise<string | null> }) {
+  const { taskId = "" } = useParams();
+  return <TaskDetail key={taskId} taskId={taskId} repository={repository} loadPartnerDeal={loadPartnerDeal} />;
+}
+
+function TaskDetail({ taskId, repository: supplied, loadPartnerDeal }: { taskId: string; repository?: ProjectRepository; loadPartnerDeal?: (taskId: string) => Promise<string | null> }) {
   const [workspace, setWorkspace] = useState<ProjectWorkspace | null>(null);
+  const [partnerDealId, setPartnerDealId] = useState<string | null>(null);
+  const dealOwner = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -72,6 +86,18 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
     return () => { alive.current = false; generation.current++; };
   }, [load]);
 
+  const visibleTask = access ? workspace?.tasks.find(item => item.id === taskId && item.kind === "task") : undefined;
+  useEffect(() => {
+    let active = true;
+    setPartnerDealId(null);
+    dealOwner.current = null;
+    if (visibleTask) {
+      const request = loadPartnerDeal ? loadPartnerDeal(taskId) : lookupTaskDeal(taskId, dealOwner);
+      void request.then(dealId => { if (active) setPartnerDealId(dealId); }).catch(() => { if (active) setPartnerDealId(null); });
+    }
+    return () => { active = false; };
+  }, [taskId, visibleTask?.id, workspace?.viewerId, access, loadPartnerDeal]);
+
   async function save(change: ProjectMutation) {
     if (saving.current || change.id !== taskId || !["save_task", "set_status", "delete_task", "estimate_history"].includes(change.action)) return false;
     saving.current = true; setBusy(true); generation.current++;
@@ -102,7 +128,7 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   }
 
   if (loading && !workspace) return <TaskDetailSkeleton />;
-  const task = access ? workspace?.tasks.find(item => item.id === taskId && item.kind === "task") : undefined;
+  const task = visibleTask;
   if (!task || !workspace) return <Empty className="min-h-64"><EmptyHeader><EmptyTitle>{denied || !access ? "Task access required" : workspace ? "Task not found" : "Could not load task"}</EmptyTitle><EmptyDescription>{denied || !access ? "Ask a platform administrator for project access." : workspace ? "This task may have been removed or is no longer available to you." : "Try loading this task again."}</EmptyDescription></EmptyHeader><div className="flex gap-2"><Button variant="outline" asChild><Link to="/tasks">My tasks</Link></Button>{!denied && !workspace && <Button onClick={() => void load()}>Try again</Button>}</div></Empty>;
   const from = (location.state as { from?: unknown } | null)?.from;
   const personalOrigin = typeof from === "string" && /^\/tasks(?:\?|$)/.test(from);
@@ -138,6 +164,7 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
           <div><dt>Area</dt><dd>{CATEGORY_LABELS[task.category]}</dd></div>
           <div><dt>Season</dt><dd>{task.season}</dd></div>
           {task.partnerName && <div><dt>Sponsor or partner</dt><dd>{task.partnerName}</dd></div>}
+          {partnerDealId && <div><dt>Agreement</dt><dd><Link to={`/partner-deals?deal=${encodeURIComponent(partnerDealId)}`} className="underline">View partner agreement</Link></dd></div>}
           {task.blockedReason && <div><dt>Blocked reason</dt><dd className="whitespace-pre-wrap">{task.blockedReason}</dd></div>}
         </dl>
       </aside>

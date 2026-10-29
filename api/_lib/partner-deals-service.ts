@@ -9,6 +9,7 @@ export type FundingCandidate = { id: string; revision: number; reference: string
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
   load(token: string, view: DealView): Promise<DealWorkspace>;
+  taskDeal(token: string, taskId: unknown): Promise<{ dealId: string | null }>;
   createOrganization(token: string, name: unknown): Promise<{ id: string }>;
   renameOrganization(token: string, id: unknown, revision: unknown, name: unknown): Promise<{ id: string }>;
   save(token: string, body: unknown): Promise<{ id: string }>;
@@ -107,6 +108,25 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
           throw new MemberCvError(403, "You do not have access to sponsor deals.");
         }
         return { ...result.rows[0], canManage: current.pipeline };
+      } catch (error) { return errorFor(error); }
+    },
+    async taskDeal(token, taskId) {
+      try {
+        if (typeof taskId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)) throw new MemberCvError(400, "Choose a valid task.");
+        const actor = await identity(token);
+        const query = `select d.id as "dealId" from partner_deals.task_links l
+          join partner_deals.deals d on d.id=l.deal_id and d.stage='won'
+          where l.task_id=$4::uuid and project_management.can_access_task($1::uuid,l.task_id)
+            and coalesce((select shared from partner_deals.capabilities($1::uuid,$2,$3)),false)`;
+        const result = await deps.db.query<{ dealId: string }>(query, [actor.userId, actor.googleSub, actor.email, taskId]);
+        if (!result.rows[0]) return { dealId: null };
+        // Recheck both grants after reading so revoked task or deal access cannot reveal the association.
+        const access = await deps.db.query<{ allowed: boolean }>(
+          `select coalesce((select shared from partner_deals.capabilities($1::uuid,$2,$3)),false)
+            and project_management.can_access_task($1::uuid,$4::uuid) as allowed`,
+          [actor.userId, actor.googleSub, actor.email, taskId],
+        );
+        return { dealId: access.rows[0]?.allowed ? result.rows[0].dealId : null };
       } catch (error) { return errorFor(error); }
     },
     async createOrganization(token, name) {
