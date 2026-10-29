@@ -12,6 +12,7 @@ import { SeasonFinancialRequestError } from "./season-financials-repository";
 import type { SeasonFinancialSummary } from "./season-financials-types";
 
 const summary: SeasonFinancialSummary = {
+  moneyFlow: { status: "available", moneyInNok: "0.00", moneyOutNok: "0.00" },
   seasonCode: "S27", budgetStatus: "approved", plannedNok: "1000.00", actualNok: "1250.50", canOpenFinancials: true, viewVersion: 1,
   bank: { status: "available", snapshot: { amountNok: "9876.54", asOfDate: "2026-10-28", updatedAt: "2026-10-29T10:00:00Z" } },
   departments: [{ departmentKey: "mechanical", name: "Mechanical", plannedNok: "1000.00", actualNok: "1250.50", unbudgetedNok: "100.00", systems: [{ id: "1", code: "SYS", name: "Frame", active: true, plannedNok: "1000.00", actualNok: "1250.50", unbudgetedNok: "100.00" }] }],

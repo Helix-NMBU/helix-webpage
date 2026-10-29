@@ -1,5 +1,6 @@
 import pg from "pg";
 import type { SeasonFinancialDepartment, SeasonFinancialSummary } from "../../src/features/ProjectManagement/season-financials-types.js";
+import { loadSeasonMoneyFlow } from "./season-money-flow.js";
 import { loadBankSnapshot } from "./finance-bank.js";
 import { nokToOre } from "../../src/features/Finance/finance-calculations.js";
 import { formatOre } from "./finance-money.js";
@@ -84,9 +85,10 @@ export function createSeasonFinancialServices(deps: {
           } catch {
             bank = { status: "unavailable" };
           }
+          const moneyFlow = await loadSeasonMoneyFlow(deps.db, before.season_code);
           const after = await context(identity);
           if (before.view_version === after.view_version && before.season_code === after.season_code && before.budget_status === after.budget_status && before.draft_allowed === after.draft_allowed && before.financials_allowed === after.financials_allowed) {
-            return { bank, seasonCode: before.season_code, budgetStatus, plannedNok, actualNok, departments, canOpenFinancials: before.financials_allowed, viewVersion: Number(before.view_version) };
+            return { bank, moneyFlow, seasonCode: before.season_code, budgetStatus, plannedNok, actualNok, departments, canOpenFinancials: before.financials_allowed, viewVersion: Number(before.view_version) };
           }
         }
         throw new MemberCvError(409, "Financial data changed while loading. Please try again.");

@@ -162,6 +162,26 @@ it("requires bearer authentication on the read-only HTTP endpoint", async () => 
 });
 
 
+it("shows only aggregate money flow even when draft budget figures are hidden", async () => {
+  await pg.exec(`
+    insert into finance.funding (season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id)
+      select id,'F-S27-001','Private sponsor','Owner','sponsor_cash',12345,'received','${admin}','${admin}' from finance.seasons where code='S27';
+    update finance.budgets set status='draft',approved_by_member_id=null,approved_on=null;
+    select finance.bump_view_version();
+  `);
+  const view = await services.summary("user");
+  expect(view).toMatchObject({ budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, moneyFlow: { status: "available", moneyInNok: "123.45", moneyOutNok: "5.00" } });
+  expect(JSON.stringify(view)).not.toContain("Private sponsor");
+  const failing: CvDatabase = { query: async <T>(text: string, params?: unknown[]) => {
+    if (text.includes("as money_in_ore")) throw new Error("offline");
+    return db.query<T>(text, params);
+  } };
+  expect((await createSeasonFinancialServices({ db: failing, authenticate: async () => identity }).summary("user")).moneyFlow).toEqual({ status: "unavailable" });
+  await pg.exec(`update project_management.access set active=false where member_id='${user}';`);
+  await expect(services.summary("user")).rejects.toMatchObject({ status: 403 });
+  await pg.exec(`update project_management.access set active=true where member_id='${user}'; update finance.budgets set status='approved',approved_by_member_id='${admin}',approved_on='2026-10-01'; select finance.bump_view_version();`);
+});
+
 it("provides only a dated manual balance to an authorized Season Overview reader", async () => {
   await pg.exec(`update finance.bank_snapshot set amount_ore=0, as_of_date='2026-10-28', updated_at=now(), updated_by='${admin}', revision=1; select finance.bump_view_version();`);
   const view = await services.summary("user");

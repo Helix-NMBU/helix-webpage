@@ -23,7 +23,12 @@ export type SeasonBankView =
   | { status: "available"; snapshot: SeasonBankSnapshot | null }
   | { status: "unavailable" };
 
+export type SeasonMoneyFlow =
+  | { status: "available"; moneyInNok: string; moneyOutNok: string }
+  | { status: "no-season" | "unavailable" };
+
 export type SeasonFinancialSummary = {
+  moneyFlow: SeasonMoneyFlow;
   bank: SeasonBankView;
   seasonCode: string | null;
   budgetStatus: "absent" | "draft-hidden" | "draft" | "approved";
