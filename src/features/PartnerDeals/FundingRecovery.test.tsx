@@ -45,7 +45,7 @@ it("does not reload or notify for contribution A after switching to B while link
  await act(async()=>root.render(<FundingRecovery contributionId="A" api={api} onResolved={resolved}/>));
  expect(el.textContent).toContain("REF-A");
  await act(async()=>{[...el.querySelectorAll("button")].find(b=>b.textContent==="Link this record")!.click();});
- expect(api.link).toHaveBeenCalledWith("A","fund-A");
+ expect(api.link).toHaveBeenCalledWith("A","fund-A",1);
  await act(async()=>root.render(<FundingRecovery contributionId="B" api={api} onResolved={resolved}/>));
  expect(el.textContent).toContain("REF-B");
  await act(async()=>pending.resolve());
