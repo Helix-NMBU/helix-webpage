@@ -67,6 +67,7 @@ describe("task workflow persistence", () => {
       "019_department_settings_permissions",
       "025_workspace_space_access",
       "026_department_access_levels",
+      "032_estimated_task_history",
     ])
       await db.exec(migration(name));
     for (const [index, person] of identities.entries()) {

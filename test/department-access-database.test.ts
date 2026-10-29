@@ -35,6 +35,7 @@ beforeAll(async () => {
   await db.query("insert into project_management.department_members(department_id,member_id,is_lead) values($1,$2,true),($1,$3,false)", [departmentId,id(1),id(2)]);
   await db.exec(readFileSync(new URL("../db/migrations/026_department_access_levels.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../db/migrations/028_member_preferences.sql", import.meta.url), "utf8"));
+  await db.exec(readFileSync(new URL("../db/migrations/032_estimated_task_history.sql", import.meta.url), "utf8"));
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) values($1,$2,'viewer')", [departmentId,id(3)]);
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Electronics'", [id(7)]);
 }, 60000);

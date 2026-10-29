@@ -4,6 +4,16 @@ import { compatibleMilestones, milestoneProgress, progressCounts, progressEvent,
 
 describe("observed task progress", () => {
   const task = initialLocalWorkspace().tasks[0];
+  it("projects labeled estimates without rewriting observations and keeps a later reopening", () => {
+    const estimated = { ...task, status: "todo" as const, historicalEstimate: { createdDate: "2026-09-01", completedDate: "2026-09-10", recordedAt: "2026-10-20T10:00:00Z" } };
+    const events = [progressEvent({ ...task, status: "todo" }, "2026-10-19T10:00:00Z"), progressEvent({ ...task, status: "done" }, "2026-10-20T09:59:59Z"), progressEvent(estimated, "2026-10-21T10:00:00Z")];
+    expect(progressSeries(events, [estimated], "2026-10-22")).toEqual([
+      { date: "2026-09-01", scope: 1, started: 0, completed: 0 },
+      { date: "2026-09-10", scope: 1, started: 1, completed: 1 },
+      { date: "2026-10-21", scope: 1, started: 0, completed: 0 },
+      { date: "2026-10-22", scope: 1, started: 0, completed: 0 },
+    ]);
+  });
   it("counts scope and started work without treating backlog as started", () => {
     expect(progressCounts([{ ...task, status: "backlog" }, task, { ...task, status: "blocked" }, { ...task, status: "in_progress" }, { ...task, status: "todo" }, { ...task, status: "cancelled" }, { ...task, kind: "milestone" }])).toEqual({ scope: 5, started: 3, completed: 1 });
   });
@@ -22,9 +32,9 @@ describe("observed task progress", () => {
       { date: "2026-10-26", scope: 1, started: 0, completed: 0 },
     ]);
   });
-  it("holds the previous observation steady until the next change rather than interpolating quiet days", () => {
+  it("keeps quiet periods flat and smoothly reaches each recorded state", () => {
     const points = [{ date: "2026-10-01", scope: 1, started: 0, completed: 0 }, { date: "2026-10-10", scope: 1, started: 1, completed: 1 }];
-    expect(progressStepPath(points, "completed", date => date === "2026-10-01" ? 0 : 9, value => 10 - value * 10)).toBe("M0,10 H9 V0");
+    expect(progressStepPath(points, "completed", date => date === "2026-10-01" ? 0 : 9, value => 10 - value * 10)).toBe("M0,10 H4.5 C6.75,10 6.75,0 9,0");
   });
   it("does not infer history from scheduled dates or draw future observations", () => {
     const current = { ...task, startDate: "2026-09-01", deadline: "2026-12-01" };

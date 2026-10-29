@@ -104,6 +104,14 @@ export function createLocalProjectRepository(): ProjectRepository {
           workspace.progressEvents.push(...tasks.map(task => progressEvent(task, now)));
         }
         workspace.projects = [...workspace.projects.filter(item => item.id !== mutation.id), { ...project, id: mutation.id, season: workspace.season, revision: mutation.expectedRevision + 1 }];
+      } else if (mutation.action === "estimate_history") {
+        const previous = workspace.tasks.find(item => item.id === mutation.id);
+        if (!previous || previous.kind !== "task") throw new Error("Choose a task.");
+        if (!canManageTask(previous, workspace)) throw new ProjectRequestError("Department Lead access is required.", 403);
+        const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && value >= "2000-01-01" && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
+        if (!validDate(mutation.createdDate) || !validDate(mutation.completedDate) || mutation.createdDate > mutation.completedDate || mutation.completedDate > osloDate()) throw new Error("Choose valid estimated dates in order, not in the future.");
+        if (!mutation.basis.trim() || mutation.basis.length > 1000) throw new Error("Describe the basis for these estimates.");
+        workspace.tasks = workspace.tasks.map(item => item.id === previous.id ? { ...item, status: "done", blockedReason: "", completedAt: item.completedAt ?? now, revision: item.revision + 1, updatedAt: now, historicalEstimate: { createdDate: mutation.createdDate, completedDate: mutation.completedDate, recordedAt: now, basis: mutation.basis.trim() } } : item);
       } else if (mutation.action === "update_milestone") {
         const previous = workspace.tasks.find(item => item.id === mutation.id);
         if (!previous || previous.kind !== "milestone") throw new ProjectRequestError("Milestone not found.", 404);

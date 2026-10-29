@@ -100,6 +100,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
     transform: position < 90 ? undefined : position > 550 ? "translateX(-100%)" : "translateX(-50%)",
   });
   return <div className="space-y-1.5" data-progress-start={start} data-progress-end={end}>
+    {workspace.tasks.some(task => task.historicalEstimate) && <p className="text-xs text-muted-foreground">Progress includes estimated historical dates.</p>}
     <div className="grid w-full grid-cols-3 items-center" style={{ paddingInline: `${22 / 640 * 100}%` }} aria-label={`Progress on ${formatDate(current.date)}`}>
       {series.map((item, index) => <div key={item.key} className={`flex items-baseline gap-2 ${index === 0 ? "justify-self-start" : index === 1 ? "justify-self-center" : "justify-self-end"}`}><div title={item.description} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-1.5" style={{ background: item.color }} />{item.label}</div><div className="text-sm font-medium tabular-nums">{current[item.key]}</div></div>)}
     </div>
@@ -108,7 +109,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
         <svg viewBox="0 0 640 180" preserveAspectRatio="none" className="h-full w-full overflow-visible" role="img" aria-label="Task progress over time" aria-describedby={`${chartId}-description`}>
           <desc id={`${chartId}-description`}>
             Scoped counts include non-cancelled tasks. Started includes in-progress, blocked and completed tasks.
-            The shaded scope area rises from zero to today's task count, then stays level. Started and completed lines show recorded daily states through today, without a progress forecast.
+            The shaded scope area rises from zero to today's task count, then stays level. Started and completed lines show daily states through today with smoothed transitions, including any labeled estimates, without a progress forecast.
             Displayed range: {formatDate(start)} to {formatDate(end)}.
             {visibleEvents.map(event => ` ${event.label}: ${formatDate(event.date)}.`).join("")}
             {deadline && `${deadlineX !== null ? ` The red line marks the end event on ${formatDate(deadline)}.` : ` The end event on ${formatDate(deadline)} is outside the displayed range.`} Red hatching marks time after the end event.`}
@@ -160,7 +161,7 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
       </div>
     </div>
     {!events.length && <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-      <span>{footerLabels?.start ?? (points.length === 1 ? `History begins ${shortDate(current.date)}` : `Recorded since ${shortDate(points[0].date)}`)}</span>
+      <span>{footerLabels?.start ?? (workspace.tasks.some(task => task.historicalEstimate) ? `History includes estimates from ${shortDate(points[0].date)}` : points.length === 1 ? `History begins ${shortDate(current.date)}` : `Recorded since ${shortDate(points[0].date)}`)}</span>
       {deadline && <span className="text-destructive" title="Red hatching marks time after the end event">{footerLabels?.end ?? `End event: ${shortDate(deadline)}`}</span>}
     </div>}
     <table className="sr-only"><caption>Progress history</caption><thead><tr><th>Date</th>{series.map(item => <th key={item.key}>{item.label}</th>)}</tr></thead><tbody>{points.map(point => <tr key={point.date}><th scope="row">{shortDate(point.date)}</th><td>{point.scope}</td><td>{point.started}</td><td>{point.completed}</td></tr>)}</tbody></table>

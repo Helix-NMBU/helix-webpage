@@ -14,6 +14,11 @@ import { TaskStatusControl } from "./TaskStatus";
 import { TaskEditor } from "./TaskEditor";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
+import { Input } from "@libs/components/ui/input";
+import { Textarea } from "@libs/components/ui/textarea";
+import { Label } from "@libs/components/ui/label";
+import { formatDate, osloDate } from "./model";
 
 export default function TaskDetailPage({ repository }: { repository?: ProjectRepository }) {
   const { taskId = "" } = useParams();
@@ -26,6 +31,10 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [estimating, setEstimating] = useState(false);
+  const [estimatedCreated, setEstimatedCreated] = useState("");
+  const [estimatedCompleted, setEstimatedCompleted] = useState("");
+  const [estimateBasis, setEstimateBasis] = useState("");
   const repository = useRef<Promise<ProjectRepository> | null>(null);
   const generation = useRef(0);
   const alive = useRef(false);
@@ -64,12 +73,12 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
   }, [load]);
 
   async function save(change: ProjectMutation) {
-    if (saving.current || change.id !== taskId || !["save_task", "set_status", "delete_task"].includes(change.action)) return false;
+    if (saving.current || change.id !== taskId || !["save_task", "set_status", "delete_task", "estimate_history"].includes(change.action)) return false;
     saving.current = true; setBusy(true); generation.current++;
     try {
       const next = await (await getRepository()).mutate(change);
       if (!alive.current) return false;
-      setWorkspace(next); setEditing(false);
+      setWorkspace(next); setEditing(false); setEstimating(false);
       window.dispatchEvent(new Event("helix-workspace-updated"));
       if (change.action === "delete_task") {
         notify("Task deleted", "The task has been removed.", { variant: "success", href: null });
@@ -122,6 +131,7 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
           <div><dt>Assignees</dt><dd><AssigneeAvatars assigneeIds={task.assigneeIds} members={members} showNames /></dd></div>
           <div><dt>Target date</dt><dd><TargetDate deadline={task.deadline} /></dd></div>
           {task.startDate && <div><dt>Start date</dt><dd><TargetDate deadline={task.startDate} /></dd></div>}
+          {task.historicalEstimate && <div><dt>Estimated historical dates</dt><dd>Created {formatDate(task.historicalEstimate.createdDate)} · Completed {formatDate(task.historicalEstimate.completedDate)}<p className="mt-2 whitespace-pre-wrap">{task.historicalEstimate.basis}</p></dd></div>}
           <div><dt>Project</dt><dd>{project ? <Link to={`/projects/${project.id}`} className="inline-flex items-start gap-2 hover:underline"><IconCube aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{project.name}</Link> : "Needs organization"}</dd></div>
           <div><dt>Milestone</dt><dd>{milestone && project ? <Link to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} className="inline-flex items-start gap-2 hover:underline"><IconDiamonds aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{milestone.title}</Link> : "Needs organization"}</dd></div>
           <div><dt>Department</dt><dd>{project?.departments.join(", ") || "No department"}</dd></div>
@@ -132,6 +142,8 @@ function TaskDetail({ taskId, repository: supplied }: { taskId: string; reposito
         </dl>
       </aside>
     </div>
+    {canLead && <div className="px-2 pb-4"><Button variant="outline" size="sm" disabled={busy} onClick={() => { setEstimatedCreated(task.historicalEstimate?.createdDate ?? ""); setEstimatedCompleted(task.historicalEstimate?.completedDate ?? ""); setEstimateBasis(task.historicalEstimate?.basis ?? ""); setEstimating(true); }}>Set estimated historical dates</Button></div>}
+    {estimating && <Dialog open onOpenChange={open => { if (!open && !busy) setEstimating(false); }}><DialogContent><DialogHeader><DialogTitle>Estimated historical dates</DialogTitle><DialogDescription>Use estimates for work completed before it was recorded. The original event history remains unchanged. Saving marks this task done and displays estimates in progress.</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={event => { event.preventDefault(); void save({ action: "estimate_history", id: task.id, expectedRevision: task.revision, createdDate: estimatedCreated, completedDate: estimatedCompleted, basis: estimateBasis }); }}><div className="space-y-2"><Label htmlFor="estimated-created">Estimated creation date</Label><Input id="estimated-created" type="date" required min="2000-01-01" max={estimatedCompleted || osloDate()} value={estimatedCreated} onChange={event => setEstimatedCreated(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="estimated-completed">Estimated completion date</Label><Input id="estimated-completed" type="date" required min={estimatedCreated || "2000-01-01"} max={osloDate()} value={estimatedCompleted} onChange={event => setEstimatedCompleted(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="estimate-basis">Basis for estimate</Label><Textarea id="estimate-basis" required maxLength={1000} value={estimateBasis} onChange={event => setEstimateBasis(event.target.value)} /></div><DialogFooter><Button type="button" variant="outline" onClick={() => setEstimating(false)}>Cancel</Button><Button type="submit" disabled={busy}>Save estimates</Button></DialogFooter></form></DialogContent></Dialog>}
     {editing && canUpdate && <TaskEditor key={`${task.id}-${task.revision}`} task={task} workspace={{ ...workspace, members }} category={task.category} statusOnly={personalOrigin} busy={busy} onSave={save} onClose={() => setEditing(false)} />}
   </section>;
 }

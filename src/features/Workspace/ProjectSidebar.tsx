@@ -158,12 +158,12 @@ export function ProjectSidebar({
           </Property>
           <Property label="Priority">
             {canEdit ? <Select value={project.priority ?? "normal"} disabled={busy} onValueChange={value => void onSaveProject({ priority: value as ProjectInput["priority"] })}>
-              <SelectTrigger aria-label="Project priority" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted [&>svg:last-child]:opacity-0"><PriorityGlyph priority={project.priority ?? "normal"} /><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Project priority" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted dark:bg-transparent dark:hover:bg-muted [&>svg:last-child]:opacity-0"><PriorityGlyph priority={project.priority ?? "normal"} /><SelectValue /></SelectTrigger>
               <SelectContent>{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}>{priority === "normal" ? "Medium" : priority[0].toUpperCase() + priority.slice(1)}</SelectItem>)}</SelectContent>
             </Select> : <span className="inline-flex items-center gap-2"><PriorityIndicator priority={project.priority ?? "normal"} />{project.priority === "normal" || !project.priority ? "Medium" : project.priority[0].toUpperCase() + project.priority.slice(1)}</span>}
           </Property>
           <Property label="Leads">
-            {canEdit ? <AssigneePicker id={`project-leads-${project.id}`} assignmentRole="lead" members={directory.members} value={leadDraft} onChange={setLeadDraft} disabled={busy} inline inlineShowNames triggerLabel="Edit project leads" onOpenChange={() => setLeadDraft(project.leadIds ?? [])} onCommit={leadIds => onSaveProject({ leadIds })} /> : <AssigneeAvatars assigneeIds={project.leadIds ?? []} members={directory.members} assignmentRole="lead" showNames />}
+            {canEdit ? <AssigneePicker id={`project-leads-${project.id}`} assignmentRole="lead" members={directory.members} value={leadDraft} onChange={setLeadDraft} disabled={busy} inline inlineShowNames={false} triggerLabel="Edit project leads" onOpenChange={() => setLeadDraft(project.leadIds ?? [])} onCommit={leadIds => onSaveProject({ leadIds })} /> : <AssigneeAvatars assigneeIds={project.leadIds ?? []} members={directory.members} assignmentRole="lead" />}
           </Property>
           <Property label="Assignees">
             <AssigneeAvatars
@@ -185,7 +185,7 @@ export function ProjectSidebar({
             </Popover> : <DepartmentNames names={project.departments} />}
           </Property>
           <Property label="Area">
-            {canEdit ? <Select value={project.category} disabled={busy} onValueChange={value => void onSaveProject({ category: value as ProjectInput["category"] })}><SelectTrigger aria-label="Project area" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted [&>svg:last-child]:opacity-0"><SelectValue /></SelectTrigger><SelectContent>{TASK_CATEGORIES.map(category => <SelectItem key={category} value={category}>{CATEGORY_LABELS[category]}</SelectItem>)}</SelectContent></Select> : CATEGORY_LABELS[project.category]}
+            {canEdit ? <Select value={project.category} disabled={busy} onValueChange={value => void onSaveProject({ category: value as ProjectInput["category"] })}><SelectTrigger aria-label="Project area" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted dark:bg-transparent dark:hover:bg-muted [&>svg:last-child]:opacity-0"><SelectValue /></SelectTrigger><SelectContent>{TASK_CATEGORIES.map(category => <SelectItem key={category} value={category}>{CATEGORY_LABELS[category]}</SelectItem>)}</SelectContent></Select> : CATEGORY_LABELS[project.category]}
           </Property>
           <Property label="Season">{project.season}</Property>
         </dl>

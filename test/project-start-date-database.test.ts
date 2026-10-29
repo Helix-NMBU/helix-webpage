@@ -20,6 +20,10 @@ describe("project start dates in Postgres",()=>{
     await db.exec(migration("020_project_start_dates"));
     await db.exec(migration("021_project_creation_milestones"));
     for (const name of ["018_department_homes","019_department_settings_permissions","025_workspace_space_access","026_department_access_levels","028_member_preferences"]) await db.exec(migration(name));
+    await db.exec(migration("029_pending_members_multiple_leads"));
+    await db.exec(migration("030_pending_project_leads"));
+    await db.exec(migration("031_pending_milestone_leads"));
+    await db.exec(migration("032_estimated_task_history"));
     for(const person of identities){
       await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[person.userId,person.name,person.email]);
       await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[person.googleSub,person.userId]);
@@ -74,6 +78,57 @@ describe("project start dates in Postgres",()=>{
     const other=await createProjectServices({db,authenticate:async()=>identities[1]}).mutate("verified",{...input,id:id(111),milestones:[{...input.milestones[0],id:id(212)}]});
     expect(other.tasks.find(t=>t.id===id(212))?.projectId).toBe(id(111));
   });
+  it("accepts pending project leads on creation and edits without granting access",async()=>{
+    await db.query("insert into identity.members(id,email,full_name,verified_at) values($1,'pending@helixnmbu.no','Pending Member',null)",[id(4)]);
+    const input={...project(120),project:{...project(120).project,leadIds:[id(2),id(4)]},milestones:[{id:id(220),title:"Ready",description:"",deadline:"2026-11-01",partnerName:""}]};
+    const created=await service().mutate("verified",input);
+    expect(created.projects.find(p=>p.id===input.id)).toMatchObject({leadIds:[id(2),id(4)]});
+    expect(created.projects.find(p=>p.id===input.id)?.milestones).toHaveLength(1);
+    await createProjectServices({db,authenticate:async()=>identities[0]}).mutate("verified",{...project(120),expectedRevision:1,project:{...input.project,leadIds:[id(4)]}});
+    expect((await db.query<{lead_ids:string[]}>("select lead_ids from project_management.projects where id=$1",[input.id])).rows[0].lead_ids).toEqual([id(4)]);
+    expect((await db.query("select member_id from project_management.access where member_id=$1",[id(4)])).rows).toHaveLength(0);
+    await expect(service(2).mutate("verified",{...project(121),project:{...input.project,leadIds:[id(4)]}})).rejects.toMatchObject({status:403});
+    await expect(service().mutate("verified",{...project(122),project:{...input.project,leadIds:[id(999)]}})).rejects.toMatchObject({status:400});
+    await db.query('update neon_auth."user" set banned=true where id=$1',[id(2)]);
+    await expect(service().mutate("verified",{...project(123),project:{...input.project,leadIds:[id(2)]}})).rejects.toMatchObject({status:400});
+    await db.query('update neon_auth."user" set banned=false where id=$1',[id(2)]);
+    await db.query('update neon_auth.account set "accountId"=\'wrong\' where "userId"=$1',[id(2)]);
+    await expect(service().mutate("verified",{...project(124),project:{...input.project,leadIds:[id(2)]}})).rejects.toMatchObject({status:400});
+    await db.query('update neon_auth.account set "accountId"=$1 where "userId"=$2',[identities[1].googleSub,id(2)]);
+    await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[id(5),"Pending Member","pending@helixnmbu.no"]);
+    await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',["pending-google",id(5)]);
+    const onboarded=await db.query<{member_id:string}>('select identity.onboard_member($1,$2,$3,$4,$5::jsonb,$6::jsonb) as member_id',[id(5),"pending-google","pending@helixnmbu.no","Pending Member","{}","{}"]);
+    expect(onboarded.rows[0].member_id).toBe(id(4));
+    expect((await db.query<{lead_ids:string[]}>("select lead_ids from project_management.projects where id=$1",[input.id])).rows[0].lead_ids).toEqual([id(4)]);
+    await expect(createProjectServices({db,authenticate:async()=>({userId:id(4),googleSub:"pending-google",email:"pending@helixnmbu.no",name:"Pending Member"})}).load("verified")).rejects.toMatchObject({status:403});
+  });
+  it("accepts pending milestone leads without granting access or relaxing task assignment rules",async()=>{
+    await db.query("insert into identity.members(id,email,full_name,verified_at) values($1,'pending-lead@helixnmbu.no','Pending Lead',null),($2,'other-pending@helixnmbu.no','Other Pending',null)",[id(6),id(7)]);
+    await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Mechanical & Production'",[id(6)]);
+    await service().mutate("verified",project(130));
+    const projects=createProjectServices({db,authenticate:async()=>identities[0]});
+    const milestone={title:"Interview rounds completed",description:"",category:"production",projectId:id(130),milestoneId:null,assigneeIds:[id(6)],deadline:"2026-11-04",startDate:"2026-11-01",status:"todo",priority:"normal",kind:"milestone",partnerName:"",blockedReason:""};
+    const created=await projects.mutate("verified",{action:"save_task",id:id(230),expectedRevision:0,task:milestone});
+    expect(created.tasks.find(t=>t.id===id(230))?.assigneeIds).toEqual([id(6)]);
+    await expect(projects.mutate("verified",{action:"save_task",id:id(232),expectedRevision:0,task:{...milestone,assigneeIds:[id(7)]}})).rejects.toMatchObject({status:400});
+    const edited=await projects.mutate("verified",{action:"update_milestone",id:id(230),expectedRevision:1,changes:{assigneeIds:[id(2),id(6)]}});
+    expect(edited.tasks.find(t=>t.id===id(230))?.assigneeIds).toEqual([id(2),id(6)]);
+    const fullEdit=await projects.mutate("verified",{action:"save_task",id:id(230),expectedRevision:2,task:{...milestone,assigneeIds:[id(2),id(6)]}});
+    expect(fullEdit.tasks.find(t=>t.id===id(230))?.assigneeIds).toEqual([id(2),id(6)]);
+    await expect(projects.mutate("verified",{action:"update_milestone",id:id(230),expectedRevision:3,changes:{assigneeIds:[id(7)]}})).rejects.toMatchObject({status:400});
+    await expect(projects.mutate("verified",{action:"save_task",id:id(231),expectedRevision:0,task:{...milestone,kind:"task",milestoneId:id(230)}})).rejects.toMatchObject({status:400});
+    await expect(createProjectServices({db,authenticate:async()=>identities[2]}).mutate("verified",{action:"update_milestone",id:id(230),expectedRevision:3,changes:{assigneeIds:[id(6)]}})).rejects.toMatchObject({status:403});
+    await db.query('update neon_auth."user" set banned=true where id=$1',[id(2)]);
+    await expect(projects.mutate("verified",{action:"update_milestone",id:id(230),expectedRevision:3,changes:{assigneeIds:[id(2)]}})).rejects.toMatchObject({status:400});
+    await db.query('update neon_auth."user" set banned=false where id=$1',[id(2)]);
+    await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[id(8),"Pending Lead","pending-lead@helixnmbu.no"]);
+    await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',["lead-google",id(8)]);
+    const onboarded=await db.query<{member_id:string}>('select identity.onboard_member($1,$2,$3,$4,$5::jsonb,$6::jsonb) as member_id',[id(8),"lead-google","pending-lead@helixnmbu.no","Pending Lead","{}","{}"]);
+    expect(onboarded.rows[0].member_id).toBe(id(6));
+    expect((await projects.load("verified")).tasks.find(t=>t.id===id(230))?.assigneeIds).toEqual([id(2),id(6)]);
+    await projects.mutate("verified",{action:"update_milestone",id:id(230),expectedRevision:3,changes:{assigneeIds:[id(6)]}});
+    expect((await db.query("select member_id from project_management.access where member_id=$1",[id(6)])).rows).toHaveLength(0);
+  });
   it("rolls back the project and earlier milestones when a later child conflicts",async()=>{
     const input={...project(112),milestones:[{id:id(213),title:"First draft",description:"",deadline:"2026-11-01",partnerName:""},{id:id(210),title:"Conflicting draft",description:"",deadline:"2026-11-02",partnerName:""}]};
     await expect(service(1).mutate("verified",input)).rejects.toMatchObject({status:409});
@@ -103,6 +158,8 @@ describe("project start dates in Postgres",()=>{
     const before=(await service().load("verified")).projects;
     await db.exec(migration("020_project_start_dates"));
     await db.exec(migration("021_project_creation_milestones"));
+    await db.exec(migration("030_pending_project_leads"));
+    await db.exec(migration("031_pending_milestone_leads"));
     expect((await service().load("verified")).projects).toEqual(before);
   });
 });

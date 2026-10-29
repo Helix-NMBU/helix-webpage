@@ -96,6 +96,14 @@ export function parseProjectMutation(value: unknown): ProjectMutation {
     return { action: body.action, id, expectedRevision, changes };
   }
   if (body.action === "save_task") return { action: body.action, id, expectedRevision, task: task(body.task) };
+  if (body.action === "estimate_history") {
+    if (expectedRevision < 1) return invalid("A saved revision is required.");
+    const createdDate = date(body.createdDate), completedDate = date(body.completedDate);
+    if (!createdDate || !completedDate || createdDate > completedDate) return invalid("Choose valid estimated dates in order.");
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Oslo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    if (completedDate > today) return invalid("Estimated completion cannot be in the future.");
+    return { action: "estimate_history", id, expectedRevision, createdDate, completedDate, basis: text(body.basis, "estimate basis", 1000, true) };
+  }
   if (body.action === "save_project") {
     const input = project(body.project);
     if (body.milestones === undefined) return { action: body.action, id, expectedRevision, project: input };

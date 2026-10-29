@@ -1,9 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { directoryFixture } from "./fixtures.test-support";
 import { projectGroups, projectView, visibleProjects } from "./project-view";
-import { timelineRange } from "./ProjectTimeline";
+import { milestoneClusters, offscreenProject, timelineRange, timelineTicks } from "./ProjectTimeline";
 
 describe("project views", () => {
+  it("keeps nearby milestones in one accessible group and separates distant dates", () => {
+    const milestones = [{ id: "a", title: "First", deadline: "2026-10-01", priority: "normal" as const }, { id: "b", title: "Second", deadline: "2026-10-02", priority: "normal" as const }, { id: "c", title: "Third", deadline: "2026-11-01", priority: "normal" as const }, { id: "d", title: "Undated", deadline: null, priority: "normal" as const }];
+    const groups = milestoneClusters(milestones, date => (Date.parse(date) - Date.parse("2026-10-01")) / 86400000 * 3);
+    expect(groups.map(group => group.map(item => item.id))).toEqual([["a", "b"], ["c"]]);
+  });
+  it("shows progressively more date ticks when zooming in", () => {
+    const ticks = (pixelsPerDay: number) => timelineTicks("2026-10-01", "2026-11-01", pixelsPerDay);
+    expect(ticks(18)).toHaveLength(31);
+    expect(ticks(8).length).toBeGreaterThan(ticks(3).length);
+    expect(ticks(3).every(date => date >= "2026-10-01" && date < "2026-11-01")).toBe(true);
+  });
+  it("identifies projects outside either edge without hiding overlapping or undated projects", () => {
+    expect(offscreenProject(10, 20, 30, 100)).toBe("left");
+    expect(offscreenProject(120, 150, 30, 100)).toBe("right");
+    expect(offscreenProject(20, 50, 30, 100)).toBeNull();
+    expect(offscreenProject(null, 20, 30, 100)).toBe("left");
+    expect(offscreenProject(null, null, 30, 100)).toBeNull();
+  });
   it("combines department, co-Lead, priority, completion and text filters", () => {
     const data = directoryFixture();
     const project = data.projects[0];
@@ -40,7 +58,8 @@ describe("project views", () => {
   it("keeps an undated project undated and uses a finite calendar window", () => {
     const project = { ...directoryFixture().projects[0], startDate: null, deadline: null, milestones: [] };
     const range = timelineRange([project], "2026-10-27");
-    expect(range.months.length).toBeGreaterThan(0); expect(range.months.length).toBeLessThan(12);
+    expect(range.start < "2024-01-01").toBe(true); expect(range.end > "2029-01-01").toBe(true);
+    expect(range.months.length).toBeLessThan(80);
     expect(project.deadline).toBeNull();
     expect(projectView(new URLSearchParams("columns=&view=timeline")).columns).toEqual([]);
   });
