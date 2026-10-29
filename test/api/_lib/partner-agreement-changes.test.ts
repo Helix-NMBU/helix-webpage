@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -131,4 +131,20 @@ it('retires contributions and deliverables only after Finance and Marketing reco
  expect((await db.query("select * from project_management.tasks where id=$1 and status='cancelled'",[task])).rows).toHaveLength(1);
  await db.exec(`update finance.seasons set status='closed' where code='S28';update finance.seasons set status='active' where code='S29';update finance.settings set setting_value='"S29"' where setting_key='current_season';`);
  expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2028-08-02') result")).rows[0].result.created).toBe(0);
+});
+
+
+it('keeps a retired invoice task separate from a replacement contribution',async()=>{
+ await db.exec(`update finance.seasons set status='active' where code='S28';update finance.seasons set status='planning' where code='S29';update finance.settings set setting_value='"S28"' where setting_key='current_season';`);
+ await setupDeal(150,'ReplacementCo',[21]); await confirm(0,151);
+ const previous=(await db.query<{id:string}>("select id from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(151)])).rows[0].id;
+ const prior=(await db.query<{task_id:string}>("select task_id from partner_deals.task_links where contribution_id=$1",[previous])).rows[0].task_id;
+ await db.query("update partner_deals.contributions set retired_at=now() where id=$1",[previous]);
+ const replacement=(await db.query<{id:string}>("insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,invoice_date) values($1,$2,'cash',25000,'2027-09-01') returning id",[id(151),id(21)])).rows[0].id;
+ await db.query("with created as (insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S28-9999','ReplacementCo','manager','sponsor_cash',25000,'secured',$2,$2) returning id) insert into partner_deals.funding_links(contribution_id,funding_id,linked_by_member_id) select $3,id,$2 from created",[id(21),id(1),replacement]);
+ const result=await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result");
+ expect(result.rows[0].result.created).toBe(1);
+ const links=(await db.query<{task_id:string;contribution_id:string}>("select task_id,contribution_id from partner_deals.task_links where deal_id=$1 and kind='invoice'",[id(151)])).rows;
+ expect(links).toHaveLength(2);expect(links).toContainEqual({task_id:prior,contribution_id:previous});expect(links.some(l=>l.contribution_id===replacement&&l.task_id!==prior)).toBe(true);
+ expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result")).rows[0].result.created).toBe(0);
 });
