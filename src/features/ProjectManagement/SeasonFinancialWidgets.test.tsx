@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPlatform/MemberNotifications";
 import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import { SeasonFinancialWidgets } from "./SeasonFinancialWidgets";
+import { OverviewProgress } from "./OverviewProgress";
+import { initialLocalWorkspace } from "./local-repository";
 import { SeasonFinancialRequestError } from "./season-financials-repository";
 import type { SeasonFinancialSummary } from "./season-financials-types";
 
@@ -32,6 +34,11 @@ it("shows exact amounts, a dated manual balance, and keyboard-accessible departm
   expect(container.textContent).toContain("NOK 9 876,54");
   expect(container.textContent).toContain("as of 2026-10-28");
   expect(container.textContent).toContain("Includes unpaid invoices");
+  expect(container.querySelector('[role="img"][aria-label*="over budget"]')).not.toBeNull();
+  const expand = [...container.querySelectorAll("button")].find(item => item.textContent === "Show departments")!;
+  expect(expand.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => expand.click());
+  expect(expand.getAttribute("aria-expanded")).toBe("true");
   expect(container.textContent).toContain("Over budget · Unbudgeted NOK 100,00");
   expect(container.querySelector('a[href="/finance"]')).not.toBeNull();
   const button = [...container.querySelectorAll("button")].find(item => item.textContent?.includes("Show systems"))!;
@@ -115,6 +122,7 @@ it("refreshes a visible tab periodically without overlapping requests and clears
 it("labels retained department values and a previously absent balance after refresh fails", async () => {
   const load = vi.fn().mockResolvedValueOnce({ ...summary, bank: { status: "available", snapshot: null } }).mockRejectedValueOnce(new Error("Offline"));
   await render(load);
+  await act(async () => [...container.querySelectorAll("button")].find(item => item.textContent === "Show departments")!.click());
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("Last checked: no balance entered.");
   expect(container.textContent).not.toContain("No balance entered yet.");
@@ -155,7 +163,7 @@ it("times out a stuck refresh, permits recovery, and ignores its delayed result"
   expect(signal.aborted).toBe(false);
   await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
   expect(signal.aborted).toBe(true);
-  expect(container.textContent).toContain("Last loaded values.");
+  expect(container.textContent).toContain("Last loaded value");
   expect(container.textContent).toContain("Could not load financial overview Try again");
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("NOK 42,00");
@@ -163,4 +171,21 @@ it("times out a stuck refresh, permits recovery, and ignores its delayed result"
   await act(async () => resolve({ ...summary, actualNok: "999.00" }));
   expect(container.textContent).toContain("NOK 42,00");
   expect(container.textContent).not.toContain("NOK 999,00");
+});
+
+it("reports zero-budget cases without dividing by zero or hiding an overrun", async () => {
+  await render(async () => ({ ...summary, plannedNok: "0.00", actualNok: "0.00" }));
+  expect(container.querySelector('[role="img"][aria-label*="percentage unavailable for a zero budget"]')).not.toBeNull();
+  const loadOver = async () => ({ ...summary, plannedNok: "0.00", actualNok: "10.00" });
+  await render(loadOver);
+  expect(container.querySelector('[role="img"][aria-label*="over budget"]')).not.toBeNull();
+  expect(container.textContent).toContain("Over budget");
+  expect(container.textContent).toContain("NOK 10,00");
+});
+
+it("places the finance slot between Progress and Projects", async () => {
+  await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><OverviewProgress workspace={initialLocalWorkspace()} busy={false} projectColumns={[]} onToggleProjectColumn={() => {}} onSelectProject={() => {}} onEditDepartment={() => {}}><div id="finance-slot">Season finances</div></OverviewProgress></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+  const headings = container.querySelector("[data-project-progress]")!;
+  const children = Array.from(headings.children);
+  expect(children.map(element => element.id || element.getAttribute("aria-labelledby"))).toEqual(["progress-title", "finance-slot", "overview-projects-title"]);
 });
