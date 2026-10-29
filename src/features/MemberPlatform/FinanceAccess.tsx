@@ -7,6 +7,7 @@ import { createFinanceApi, FinanceRequestError } from "../Finance/repository";
 import { CvRequestError } from "../MemberCV/repository";
 import type { FinancePageId } from "../Finance/routes";
 import type {
+  BankSnapshot,
   FinanceCapabilitiesResponse,
   FinanceCapabilitySet,
   FinanceMutationResult,
@@ -35,6 +36,7 @@ type FinanceState = {
   expanded: Record<string, boolean>;
 };
 type FinanceSession = FinanceState & {
+  bankSnapshot: () => Promise<BankSnapshot | null>;
   retry: () => void;
   loadPage: (page: FinancePageId, options?: { requestRecordId?: string; unpaidOnly?: boolean }) => Promise<void>;
   mutate: (body: Record<string, unknown>) => Promise<FinanceMutationResult>;
@@ -170,6 +172,7 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [revalidate]);
+  const bankSnapshot = useCallback(() => api.bankSnapshot(), [api]);
   const mutate = useCallback(async (body: Record<string, unknown>) => {
     const current = generation.current;
     try {
@@ -254,8 +257,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     else dirtyIds.current.delete(id);
   }, []);
   const value = useMemo(
-    () => ({ ...state, retry, loadPage, mutate, setExpanded, setFormDirty }),
-    [state, retry, loadPage, mutate, setExpanded, setFormDirty],
+    () => ({ ...state, bankSnapshot, retry, loadPage, mutate, setExpanded, setFormDirty }),
+    [state, bankSnapshot, retry, loadPage, mutate, setExpanded, setFormDirty],
   );
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }

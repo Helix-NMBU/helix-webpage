@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { MemberCvError, neonCvServices, type CvServices } from "./_lib/member-cv-service.js";
 import { memberAccount } from "./_lib/member-account.js";
 import { createWorkspaceHandler } from "./_lib/workspace-handler.js";
+import { createSeasonFinancialHandler } from "./_lib/season-financials-handler.js";
 import { createProjectHandler } from "./_lib/project-management-handler.js";
 
 export type MemberSessionReason = "no_session_cookie" | "session_lookup_failed" | "domain_rejected" | "db_error" | "missing_env";
@@ -70,11 +71,13 @@ export function createMemberLoginHandler(
 
 const memberSessionHandler = createMemberLoginHandler();
 const projectHandler = createProjectHandler();
+const seasonFinancialHandler = createSeasonFinancialHandler();
 const workspaceHandler = createWorkspaceHandler();
 
 // Keep the member API within the Hobby function budget. The public project URL
 // rewrites here; each module still performs its own authentication and grants.
 export default function memberApi(req: VercelRequest, res: VercelResponse) {
+  if (req.query?.__module === "season-financials") return seasonFinancialHandler(req, res);
   if (req.query?.__module === "workspace") return workspaceHandler(req,res);
   return req.query?.__module === "projects" ? projectHandler(req, res) : memberSessionHandler(req, res);
 }

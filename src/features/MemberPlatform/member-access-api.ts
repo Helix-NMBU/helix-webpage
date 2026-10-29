@@ -41,6 +41,11 @@ async function localAccessDirectory(): Promise<AccessDirectory> {
   return structuredClone(localDirectory);
 }
 
+export function localMemberHasSeasonOverview(): boolean {
+  if (!localDirectory) return true; // Matches the default local workspace access.
+  return localDirectory.members.some(member => member.email === localMemberAccount.email && member.spaceKeys.includes("season-overview"));
+}
+
 export function localMemberHasFinancials(): boolean {
   return localDirectory?.members.some(member => member.email === localMemberAccount.email && (member.spaceKeys.includes("financials") || member.roleKeys.includes("financials"))) ?? false;
 }

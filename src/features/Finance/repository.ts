@@ -1,6 +1,7 @@
 import { capabilitiesForProfiles } from "./access";
-import { osloToday } from "./money";
+import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money";
 import type {
+  BankSnapshot,
   FinanceCapabilitiesResponse,
   FinanceFieldError,
   FinanceMutationResult,
@@ -14,6 +15,14 @@ import type {
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
+
+let localBankSnapshot: BankSnapshot | null = null;
+let localBankVersion = 0;
+
+/** Read only from the dedicated loopback development mode. */
+export function localBankSnapshotForDevelopment(): BankSnapshot | null {
+  return isLocalMemberMode() && localMemberSignedIn() ? localBankSnapshot : null;
+}
 
 export class FinanceRequestError extends Error {
   constructor(message: string, readonly status: number, readonly errors: FinanceFieldError[] = []) { super(message); }
@@ -60,7 +69,20 @@ export function createFinanceApi(owner: { current: string | null }) {
     return body as T;
   }
   async function mutate(action: Record<string, unknown>): Promise<FinanceMutationResult> {
-    if (local()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
+    if (local()) {
+      if (action.action !== "setBankSnapshot" || !localMemberHasFinancials()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
+      if (action.expectedRevision !== (localBankSnapshot?.revision ?? 0)) throw new FinanceRequestError("The balance changed. Reload it before saving.", 409);
+      let amount: bigint | null;
+      let asOfDate: string;
+      try {
+        amount = parseNokToOre(typeof action.amountNok === "string" ? action.amountNok : "");
+        asOfDate = parseIsoDate(typeof action.asOfDate === "string" ? action.asOfDate : "");
+        if (amount === null || amount > 9223372036854775807n || amount < -9223372036854775808n) throw new Error();
+      } catch { throw new FinanceRequestError("Enter a valid balance and as-of date.", 400); }
+      localBankSnapshot = { amountNok: formatOre(amount), asOfDate, updatedAt: new Date().toISOString(), revision: (localBankSnapshot?.revision ?? 0) + 1 };
+      localBankVersion += 1;
+      return { ok: true, viewVersion: localBankVersion, revision: localBankSnapshot.revision, warnings: [], errors: [] };
+    }
     const token = await memberSessionToken(owner);
     const response = await fetch("/api/finance", {
       method: "POST",
@@ -73,6 +95,7 @@ export function createFinanceApi(owner: { current: string | null }) {
     return body as FinanceMutationResult;
   }
   return {
+    bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),
     capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
     version: () => local() ? Promise.resolve({ viewVersion: 0 } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
     recovery: (deliveryAfter?: string, uploadAfter?: string) => {

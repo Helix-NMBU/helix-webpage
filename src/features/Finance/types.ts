@@ -565,7 +565,10 @@ export type RequestInput = {
 
 type MutationBase = { requestId: string; expectedRevision?: number };
 
+export type BankSnapshot = { amountNok: string; asOfDate: string; updatedAt: string; revision: number };
+
 export type FinanceMutation =
+  | (MutationBase & { action: "setBankSnapshot"; amountNok: string; asOfDate: string })
   | (MutationBase & { action: "createBudget" })
   | (MutationBase & { action: "approveBudget"; reason?: string })
   | (MutationBase & { action: "addItem"; item: BudgetItemInput; reason?: string })
@@ -669,5 +672,5 @@ export type FinanceRecoveryView = {
   uploadNextCursor: string | null;
 };
 
-export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery"] as const;
+export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot"] as const;
 export type FinanceReadAction = (typeof FINANCE_READ_ACTIONS)[number];
