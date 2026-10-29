@@ -162,7 +162,7 @@ describe("internal member platform", () => {
     await act(async () => adminLabel.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
     await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/member-access", expect.objectContaining({
-      method: "POST", body: JSON.stringify({ action: "save_workspace_access", memberId: "other", expectedRevision: 1, departments: departmentDirectory.map(d => ({ id: d.id, revision: d.revision, member: false, lead: false, access: null })), spaceKeys: ["financials"] }),
+      method: "POST", body: JSON.stringify({ action: "save_workspace_access", memberId: "other", expectedRevision: 1, departments: departmentDirectory.map(d => ({ id: d.id, revision: d.revision, member: false, lead: false, access: null })), spaceKeys: ["financials"], partnerSpacesConfigured: true }),
     }));
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });

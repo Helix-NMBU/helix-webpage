@@ -1,3 +1,4 @@
+import { LOCAL_ACCESS_CHANGED } from "@/features/MemberPlatform/member-access-api";
 import * as React from "react";
 import {
   IconBell,
@@ -64,8 +65,8 @@ export function AppSidebar({
       void canViewAgreements().then(allowed => { if (active && request === version) setAgreementsAllowed(allowed); }).catch(() => { if (active && request === version) setAgreementsAllowed(false); });
       void pipelineRepository().load().then(result => { if (active && request === version) setPipelineAllowed(result.canManage); }).catch(() => { if (active && request === version) setPipelineAllowed(false); });
     };
-    check(); window.addEventListener("focus", check);
-    return () => { active = false; window.removeEventListener("focus", check); };
+    check(); window.addEventListener("focus", check); window.addEventListener(LOCAL_ACCESS_CHANGED, check);
+    return () => { active = false; window.removeEventListener("focus", check); window.removeEventListener(LOCAL_ACCESS_CHANGED, check); };
   }, [location.pathname]);
   const businessPath = departmentPath("Business & Marketing");
   const businessDepartment = workspace?.departments?.find(department => departmentPath(department.name) === businessPath);
