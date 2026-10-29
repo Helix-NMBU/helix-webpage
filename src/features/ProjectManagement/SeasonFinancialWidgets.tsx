@@ -29,11 +29,11 @@ function BudgetRing({ planned, actual }: { planned: string; actual: string }) {
   const percent = usage(actual, planned);
   const label = planOre === 0n ? (over ? "Over" : "—") : over ? "Over" : `${percent}%`;
   const details = `Recorded spending ${money(actual)} of budget ${money(planned)}${over ? ", over budget" : planOre === 0n ? ", percentage unavailable for a zero budget" : `, ${percent}% used`}`;
-  return <div role="img" aria-label={details} className="relative grid size-24 shrink-0 place-items-center">
+  return <div role="img" aria-label={details} className="relative grid size-32 shrink-0 place-items-center sm:size-40">
     <svg viewBox="0 0 100 100" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
       <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" pathLength="100" strokeDasharray={`${percent} 100`} className={over ? "text-destructive" : "text-primary"} />
-    </svg><span className="text-sm font-medium tabular-nums" aria-hidden="true">{label}</span>
+    </svg><span className="text-lg font-medium tabular-nums" aria-hidden="true">{label}</span>
   </div>;
 }
 
@@ -120,7 +120,8 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
         <p className="text-xs text-muted-foreground">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
       </CardContent></Card>
       <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{snapshot ? <>Manually entered combined balance · as of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</CardContent></Card>
-      <Card className="gap-4 py-5 md:col-span-2"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Season budget and spending</CardTitle><CardDescription>{summary ? budgetDisplay : "Unavailable"}{stale && summary && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</CardDescription></CardHeader><CardContent className="px-5">
+      <Card className="gap-4 py-5 md:col-span-2"><CardContent className="space-y-4 px-5">
+        {(!summary || summary.budgetStatus !== "approved" || mismatch || stale) && <p className="text-sm text-muted-foreground">{summary ? (summary.budgetStatus === "approved" && !mismatch ? "Last loaded values." : budgetDisplay) : "Unavailable"}{stale && summary && summary.budgetStatus !== "approved" && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</p>}
         <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] md:gap-8">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-5">
