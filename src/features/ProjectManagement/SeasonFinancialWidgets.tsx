@@ -138,10 +138,10 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
   return <section className="space-y-4" aria-labelledby="season-financial-title">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="season-financial-title" className="text-lg font-medium">Season finances</h2><p className="text-sm text-muted-foreground">Planned costs, recorded spending and money in the bank.</p></div>{summary?.canOpenFinancials && <Button asChild variant="outline" size="sm"><Link to={financeRoutes.overview}>Open Financials</Link></Button>}</div>
     <div className="grid gap-3 md:grid-cols-2">
-      <Card role="group" aria-label="Money in and out" className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Money in and out</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader><CardContent className="space-y-4 px-5">
-        <dl className="space-y-3 tabular-nums">
-          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money in</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div></div>
-          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money out</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div></div>
+      <Card role="group" aria-label="Money in and out" className="gap-2 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Money in and out</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader><CardContent className="space-y-3 px-5">
+        <dl className="grid justify-end gap-1 tabular-nums">
+          <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="text-sm text-muted-foreground">Money in</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>
+          <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="text-sm text-muted-foreground">Money out</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>
         </dl>
         {flowVisible && <MonthlyMoneyChart flow={flow} />}
         <p className="sr-only">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
