@@ -61,7 +61,6 @@ function MonthlyMoneyChart({ flow }: { flow: Extract<SeasonMoneyFlow, { status: 
     return input > max ? (input > output ? input : output) : (output > max ? output : max);
   }, 0n);
   return <TooltipProvider><div className="space-y-3">
-    <div className="flex gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-primary" />Money in</span><span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-muted-foreground" />Money out</span></div>
     <div className="flex h-36 items-end gap-1 sm:gap-2" aria-label="Monthly money in and out">
       {flow.months.map(item => {
         const date = new Date(`${item.month}-01T12:00:00Z`);
@@ -140,8 +139,8 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
     <div className="grid gap-3 md:grid-cols-2">
       <Card role="group" aria-label="Money in and out" className="gap-2 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Money in and out</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader><CardContent className="space-y-3 px-5">
         <dl className="grid justify-end gap-1 tabular-nums">
-          <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="text-sm text-muted-foreground">Money in</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>
-          <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="text-sm text-muted-foreground">Money out</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>
+          <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-primary" />In</dt><dd className="text-2xl font-medium sm:text-3xl">{loading && !summary ? <Skeleton className="h-9 w-32" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>
+          <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground" />Out</dt><dd className="text-2xl font-medium sm:text-3xl">{loading && !summary ? <Skeleton className="h-9 w-32" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>
         </dl>
         {flowVisible && <MonthlyMoneyChart flow={flow} />}
         <p className="sr-only">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
