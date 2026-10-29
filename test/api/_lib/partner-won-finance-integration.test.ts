@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','042_partner_funding_hardening']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','041_project_current_season','042_partner_funding_hardening','044_partner_due_invoices']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -100,4 +100,15 @@ it('rolls back funding when task creation fails after funding was inserted',asyn
  await db.exec('drop trigger test_reject_invoice on project_management.tasks; drop function project_management.test_reject_invoice();');
  await confirm(0,61);
  expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(61)])).rows).toHaveLength(2);
+});
+
+
+it('provisions a future season without changing the active setting and denies non-admins',async()=>{
+ await expect(db.query("select finance.provision_future_season($1,'S29','S29','2028-08-01','2029-07-31')",[id(2)])).rejects.toThrow('deal_operator_forbidden');
+ await db.query("insert into identity.member_roles(member_id,role_key) values($1,'platform_administrator')",[id(1)]);
+ const future=await db.query<{id:string}>("select finance.provision_future_season($1,'S29','S29','2028-08-01','2029-07-31') as id",[id(1)]);
+ const again=await db.query<{id:string}>("select finance.provision_future_season($1,'S29','S29','2028-08-01','2029-07-31') as id",[id(1)]);
+ expect(future.rows[0].id).toBe(again.rows[0].id);
+ expect((await db.query<{code:string}>("select setting_value #>> '{}' as code from finance.settings where setting_key='current_season'")).rows[0].code).toBe('S27');
+ await expect(db.query("select finance.provision_future_season($1,'S29','S29','2028-09-01','2029-07-31')",[id(1)])).rejects.toThrow('finance:SEASON_CONFLICT');
 });

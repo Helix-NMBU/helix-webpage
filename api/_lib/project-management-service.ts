@@ -11,25 +11,25 @@ export interface ProjectServices {
 }
 
 // A single statement reads one consistent snapshot and the current module grant.
-const workspaceSql = `select project_management.is_department_manager(viewer.id) as "canManage", viewer.id as "viewerId", 'S27' as season,
+const workspaceSql = `select project_management.is_department_manager(viewer.id) as "canManage", viewer.id as "viewerId", project_management.current_season() as season,
   '[]'::jsonb as "taskLeadCategories",
   coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'season',d.season,'name',d.name,'revision',d.revision,
     'memberIds',coalesce((select jsonb_agg(dm.member_id order by dm.member_id) from project_management.department_members dm where dm.department_id=d.id),'[]'::jsonb),
     'viewerIds',coalesce((select jsonb_agg(dm.member_id) from project_management.department_members dm where dm.department_id=d.id and dm.access_level='viewer'),'[]'::jsonb),
     'leadIds',coalesce((select jsonb_agg(dm.member_id order by dm.member_id) from project_management.department_members dm where dm.department_id=d.id and dm.is_lead),'[]'::jsonb),'leadId',(select dm.member_id from project_management.department_members dm where dm.department_id=d.id and dm.is_lead order by dm.member_id limit 1)) order by lower(d.name),d.id)
-    from project_management.departments d where d.season='S27'),'[]'::jsonb) as departments,
+    from project_management.departments d where d.season=project_management.current_season()),'[]'::jsonb) as departments,
   coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'season',p.season,'name',p.name,'description',p.description,
     'status',p.status,'priority',p.priority,'leadIds',p.lead_ids,'category',p.category,'departments',p.departments,'startDate',p.start_date,'deadline',p.deadline,'revision',p.revision) order by p.name,p.id)
-    from project_management.projects p where p.season = 'S27' and project_management.can_access_project(viewer.id,p.departments)),'[]'::jsonb) as projects,
+    from project_management.projects p where p.season = project_management.current_season() and project_management.can_access_project(viewer.id,p.departments)),'[]'::jsonb) as projects,
   coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'season',t.season,'title',t.title,'description',t.description,
     'category',t.category,'projectId',t.project_id,'milestoneId',t.milestone_id,'assigneeIds',coalesce((select jsonb_agg(ta.member_id order by ta.member_id) from project_management.task_assignees ta where ta.task_id=t.id),'[]'::jsonb),'deadline',t.deadline,'startDate',t.start_date,
     'status',t.status,'priority',t.priority,'kind',t.kind,'partnerName',t.partner_name,'blockedReason',t.blocked_reason,
     'revision',t.revision,'createdAt',t.created_at,'updatedAt',t.updated_at,'completedAt',t.completed_at,
     'historicalEstimate',(select jsonb_build_object('createdDate',h.created_date,'completedDate',h.completed_date,'recordedAt',h.recorded_at,'basis',h.basis) from project_management.task_history_estimates h where h.task_id=t.id order by h.id desc limit 1))
-    order by t.deadline nulls last,t.created_at,t.id) from project_management.tasks t where t.season = 'S27' and project_management.can_access_task(viewer.id,t.id)),'[]'::jsonb) as tasks,
+    order by t.deadline nulls last,t.created_at,t.id) from project_management.tasks t where t.season = project_management.current_season() and project_management.can_access_task(viewer.id,t.id)),'[]'::jsonb) as tasks,
   coalesce((select jsonb_agg(jsonb_build_object('taskId',e.task_id,'recordedAt',e.recorded_at,
     'category',e.category,'kind',e.kind,'status',e.status) order by e.recorded_at,e.event_id)
-    from project_management.task_progress_events e where e.season = 'S27' and (project_management.is_department_manager(viewer.id) or project_management.can_access_task(viewer.id,e.task_id))),'[]'::jsonb) as "progressEvents",
+    from project_management.task_progress_events e where e.season = project_management.current_season() and (project_management.is_department_manager(viewer.id) or project_management.can_access_task(viewer.id,e.task_id))),'[]'::jsonb) as "progressEvents",
   coalesce((select jsonb_agg(jsonb_build_object('id',m.id,'name',m.full_name,'avatarUrl',to_jsonb(u)->>'image') order by m.full_name,m.id)
     from identity.members m left join project_management.access eligible on m.id=eligible.member_id
     left join neon_auth."user" u on u.id = m.auth_user_id

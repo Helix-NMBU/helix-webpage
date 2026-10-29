@@ -4,6 +4,7 @@ import { memberAccount } from "./_lib/member-account.js";
 import { createWorkspaceHandler } from "./_lib/workspace-handler.js";
 import { createSeasonFinancialHandler } from "./_lib/season-financials-handler.js";
 import { createProjectHandler } from "./_lib/project-management-handler.js";
+import { partnerInvoiceRunner } from "./_lib/partner-invoice-runner.js";
 import { createDealHandler } from "./_lib/partner-deals-handler.js";
 
 export type MemberSessionReason = "no_session_cookie" | "session_lookup_failed" | "domain_rejected" | "db_error" | "missing_env";
@@ -79,6 +80,7 @@ const workspaceHandler = createWorkspaceHandler();
 // Keep the member API within the Hobby function budget. The public project URL
 // rewrites here; each module still performs its own authentication and grants.
 export default function memberApi(req: VercelRequest, res: VercelResponse) {
+  if (req.query?.__module === "partner-invoice-runner") return partnerInvoiceRunner(req,res);
   if (req.query?.__module === "partner-deals") return dealHandler(req, res);
   if (req.query?.__module === "season-financials") return seasonFinancialHandler(req, res);
   if (req.query?.__module === "workspace") return workspaceHandler(req,res);
