@@ -10,6 +10,9 @@ export type FundingCandidate = { id: string; revision: number; reference: string
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
   load(token: string, view: DealView): Promise<DealWorkspace>;
+  requestFinanceReview(token: string, dealId: unknown, revision: unknown): Promise<{ count: number }>;
+  financeReviewQueue(token: string): Promise<unknown[]>;
+  resolveFinanceReview(token: string, reviewId: unknown, action: unknown, fundingId: unknown, revision: unknown, snapshot: unknown, confirmed: unknown): Promise<{ ok: true }>;
   taskDeal(token: string, taskId: unknown): Promise<{ dealId: string | null }>;
   createOrganization(token: string, name: unknown): Promise<{ id: string }>;
   renameOrganization(token: string, id: unknown, revision: unknown, name: unknown): Promise<{ id: string }>;
@@ -32,7 +35,10 @@ const readSql = `select caps.pipeline as "canManage",
   'tasks',coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'status',t.status,'kind',l.kind,'deliverableId',l.deliverable_id,'seasonId',l.season_id,'canOpen',project_management.can_access_task($1::uuid,t.id)) order by l.kind,t.title) from partner_deals.task_links l join project_management.tasks t on t.id=l.task_id where l.deal_id=d.id),'[]'::jsonb),
   'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id),'[]'::jsonb),
   'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id),'[]'::jsonb)
- ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes) else '{}'::jsonb end order by d.updated_at desc,d.id)
+ ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes,
+ 'financeReviews',coalesce((select jsonb_agg(jsonb_build_object('contributionId',r.contribution_id,'status',case when r.status='separate' and (select a.candidate_snapshot from partner_deals.separate_funding_approvals a where a.contribution_id=c.id) is distinct from partner_deals.funding_candidate_snapshot(c.id) then 'stale' else r.status end))
+  from partner_deals.finance_reviews r join partner_deals.contributions c on c.id=r.contribution_id
+  where c.deal_id=d.id and (r.organization_name,r.season_id,r.amount_ore)=(o.name,c.season_id,c.amount_ore)),'[]'::jsonb)) else '{}'::jsonb end order by d.updated_at desc,d.id)
  from partner_deals.deals d join partner.organizations o on o.id=d.organization_id
  where ($4='pipeline' or d.stage='won')),'[]'::jsonb) as deals,
  case when $4='pipeline' then coalesce((select jsonb_agg(jsonb_build_object('id',o.id,'name',o.name,'revision',coalesce(v.revision,0)) order by lower(o.name),o.id) from partner.organizations o left join partner_deals.organization_versions v on v.organization_id=o.id),'[]'::jsonb) else '[]'::jsonb end as organizations,
@@ -72,6 +78,9 @@ function errorFor(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("deal_review_invalid")) throw new MemberCvError(400, "Choose an active review.");
+  if (message.includes("deal_review_changed")) throw new MemberCvError(409, "The review or deal changed. Reload before continuing.");
+  if (message.includes("deal_review_no_matches")) throw new MemberCvError(409, "No matching funding currently needs review.");
   if (message.includes("deal_funding_candidates_changed")) throw new MemberCvError(409, "Funding changed. Reload the candidates before continuing.");
   if (message.includes("deal_linked_organization")) throw new MemberCvError(409, "This partner has linked funding. Ask Finance to reconcile it before changing the partner name.");
   if (message.includes("deal_funding_stale_link")) throw new MemberCvError(409, "This funding record changed. Reload funding and review it before linking.");
@@ -112,6 +121,32 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         }
         return { ...result.rows[0], canManage: current.pipeline, canReviewFunding: view === "pipeline" && current.can_review_funding };
       } catch (error) { return errorFor(error); }
+    },
+    async requestFinanceReview(token, dealId, revision) {
+      try {
+        if (typeof dealId !== "string" || !Number.isSafeInteger(revision) || Number(revision) < 0) throw new MemberCvError(400,"Choose a valid deal.");
+        const actor=await identity(token);
+        const result=await deps.db.query<{count:number}>("select partner_deals.request_finance_review($1::uuid,$2,$3,$4::uuid,$5::integer) as count",[actor.userId,actor.googleSub,actor.email,dealId,revision]);
+        return {count:Number(result.rows[0]?.count ?? 0)};
+      } catch(error) { return errorFor(error); }
+    },
+    async financeReviewQueue(token) {
+      try {
+        const actor=await identity(token);
+        const result=await deps.db.query<{value:unknown[]}>("select partner_deals.finance_review_queue($1::uuid,$2,$3) as value",[actor.userId,actor.googleSub,actor.email]);
+        const check=await deps.db.query<{allowed:boolean}>("select partner_deals.finance_reviewer($1::uuid,$2,$3) as allowed",[actor.userId,actor.googleSub,actor.email]);
+        if(!check.rows[0]?.allowed)throw new MemberCvError(403,"Finance access is required.");
+        if(!Array.isArray(result.rows[0]?.value))throw new Error("Missing reviews");
+        return result.rows[0].value;
+      } catch(error) { return errorFor(error); }
+    },
+    async resolveFinanceReview(token, reviewId, action, fundingId, revision, snapshot, confirmed) {
+      try {
+        if(confirmed!==true || typeof reviewId!=="string" || !["link","separate"].includes(String(action)) || (action==="link" && (typeof fundingId!=="string" || !Number.isSafeInteger(revision) || Number(revision)<0)) || (action==="separate" && (!Array.isArray(snapshot) || snapshot.length>100))) throw new MemberCvError(400,"Review the funding before continuing.");
+        const actor=await identity(token);
+        await deps.db.query("select partner_deals.resolve_finance_review($1::uuid,$2,$3,$4::uuid,$5,$6::uuid,$7::integer,$8::jsonb)",[actor.userId,actor.googleSub,actor.email,reviewId,action,action==="link"?fundingId:null,action==="link"?revision:null,action==="separate"?JSON.stringify(snapshot):null]);
+        return {ok:true};
+      } catch(error) { return errorFor(error); }
     },
     async taskDeal(token, taskId) {
       try {

@@ -14,10 +14,10 @@ vi.mock("./FundingRecovery",()=>({FundingRecovery:({contributionId}:{contributio
 function Probe(){const context=useMemberNotifications();return <output>{context?.items.map(i=><span key={i.id}>{i.title} {i.description} {i.action && <button onClick={i.action.onClick}>{i.action.label}</button>}</span>)}</output>;}
 describe("Sponsor pipeline",()=>{
  let root:Root,container:HTMLDivElement;
- const load=vi.fn(),save=vi.fn(),createOrganization=vi.fn(),renameOrganization=vi.fn(),confirmWon=vi.fn();
- beforeEach(()=>{vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);container=document.createElement("div");document.body.append(container);root=createRoot(container);load.mockReset().mockResolvedValue(structuredClone(data));save.mockReset().mockResolvedValue(undefined);confirmWon.mockReset().mockResolvedValue(undefined);});
+ const load=vi.fn(),save=vi.fn(),createOrganization=vi.fn(),renameOrganization=vi.fn(),requestFinanceReview=vi.fn(),confirmWon=vi.fn();
+ beforeEach(()=>{vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);container=document.createElement("div");document.body.append(container);root=createRoot(container);load.mockReset().mockResolvedValue(structuredClone(data));save.mockReset().mockResolvedValue(undefined);requestFinanceReview.mockReset().mockResolvedValue(undefined);confirmWon.mockReset().mockResolvedValue(undefined);});
  afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();});
- async function render(){const router=createMemoryRouter([{path:"/sponsor-pipeline",element:<MemberThemeProvider><MemberNotificationsProvider><SponsorPipeline repository={{load,save,createOrganization,renameOrganization,confirmWon}}/><Probe/></MemberNotificationsProvider></MemberThemeProvider>}],{initialEntries:["/sponsor-pipeline"]});await act(async()=>root.render(<RouterProvider router={router}/>));}
+ async function render(){const router=createMemoryRouter([{path:"/sponsor-pipeline",element:<MemberThemeProvider><MemberNotificationsProvider><SponsorPipeline repository={{load,save,createOrganization,renameOrganization,requestFinanceReview,confirmWon}}/><Probe/></MemberNotificationsProvider></MemberThemeProvider>}],{initialEntries:["/sponsor-pipeline"]});await act(async()=>root.render(<RouterProvider router={router}/>));}
  async function select(stage:string){const element=container.querySelector<HTMLSelectElement>('[aria-label="Stage for Engine deal"]')!;await act(async()=>{element.value=stage;element.dispatchEvent(new Event("change",{bubbles:true}));});}
  const button=(name:string)=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(el=>el.textContent===name)!;
  it("shows six stages and moves a deal without generating a won transition",async()=>{await render();for(const name of ["Lead","Contacted","In discussion","Proposal sent","Won","Lost"])expect(container.querySelector(`[aria-label="${name}"]`)).not.toBeNull();await select("lost");expect(save).toHaveBeenCalledWith(expect.objectContaining({id:"one",expectedRevision:3,stage:"lost"}));expect(save.mock.calls[0][0].contributions[0].id).toBe("contribution-1");expect(save.mock.calls[0][0].deliverables[0].id).toBe("deliverable-1");expect(confirmWon).not.toHaveBeenCalled();});
@@ -33,8 +33,17 @@ describe("Sponsor pipeline",()=>{
   load.mockResolvedValueOnce({...structuredClone(data),canReviewFunding:false});
   confirmWon.mockRejectedValueOnce(new PipelineError("Existing funding",409,"funding_possible_duplicate"));
   await render();await select("won");await act(async()=>button("Confirm won").click());
-  expect(document.body.textContent).toContain("Ask a member with Finance access");
+  expect(document.body.textContent).toContain("Request a limited review from Finance");
+  await act(async()=>button("Request review").click());
+  expect(requestFinanceReview).toHaveBeenCalledWith("one",3);
   expect(button("Review funding")).toBeUndefined();
+ });
+ it("does not restore a stale pipeline response after access is revoked",async()=>{
+  let resolve!: (value:PipelineData)=>void;
+  load.mockReset().mockReturnValueOnce(new Promise<PipelineData>(r=>{resolve=r;})).mockRejectedValueOnce(new PipelineError("Access denied",403));
+  await render();await act(async()=>window.dispatchEvent(new Event("focus")));
+  await act(async()=>resolve(structuredClone(data)));
+  expect(container.textContent).not.toContain("Engine deal");
  });
  it("hides private deal data after access is denied",async()=>{load.mockRejectedValueOnce(new PipelineError("Access denied",403));await render();expect(container.textContent).not.toContain("Engine deal");expect(container.textContent).toContain("Could not load sponsor pipeline");});
  it("preserves the duplicate funding response code",async()=>{

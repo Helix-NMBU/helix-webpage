@@ -29,7 +29,7 @@ import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
-import { canViewAgreements, pipelineRepository } from "@/features/PartnerDeals/repository";
+import { canViewAgreements, canViewFinanceReviews, pipelineRepository } from "@/features/PartnerDeals/repository";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -54,10 +54,12 @@ export function AppSidebar({
   const [savingOrder, setSavingOrder] = React.useState(false);
   const [pipelineAllowed, setPipelineAllowed] = React.useState(false);
   const [agreementsAllowed, setAgreementsAllowed] = React.useState(false);
+  const [financeReviewsAllowed, setFinanceReviewsAllowed] = React.useState(false);
   React.useEffect(() => {
     let active = true; let version = 0;
     const check = () => {
       const request = ++version;
+      void canViewFinanceReviews().then(allowed => { if (active && request === version) setFinanceReviewsAllowed(allowed); }).catch(() => { if (active && request === version) setFinanceReviewsAllowed(false); });
       void canViewAgreements().then(allowed => { if (active && request === version) setAgreementsAllowed(allowed); }).catch(() => { if (active && request === version) setAgreementsAllowed(false); });
       void pipelineRepository().load().then(result => { if (active && request === version) setPipelineAllowed(result.canManage); }).catch(() => { if (active && request === version) setPipelineAllowed(false); });
     };
@@ -98,6 +100,7 @@ export function AppSidebar({
         { title: "Overview", url: "/finance" },
         { title: "Purchases", url: "/finance/purchases" },
         { title: "Budgets", url: "/finance/budgets" },
+        ...(financeReviewsAllowed ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
         ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
       ],
     }] : []),

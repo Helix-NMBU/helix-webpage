@@ -29,7 +29,7 @@ beforeAll(async()=>{
  }
  await pg.exec(`insert into identity.member_roles values('${admin}','platform_administrator'),('${pm}','project_manager');`);
  await pg.exec(readFileSync(new URL("../../../db/migrations/035_partner_deals.sql",import.meta.url),"utf8"));
- await pg.exec(`create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid);`);
+ await pg.exec(`create table partner_deals.separate_funding_approvals(contribution_id uuid,candidate_snapshot jsonb); create function partner_deals.funding_candidate_snapshot(uuid) returns jsonb language sql as $$ select '[]'::jsonb $$; create table partner_deals.finance_reviews(contribution_id uuid,organization_name text,season_id uuid,amount_ore bigint,status text); create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid);`);
  await pg.exec(`insert into partner_deals.member_grants values ('${business}','business',true),('${marketing}','marketing',true);`);
  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  services=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});
