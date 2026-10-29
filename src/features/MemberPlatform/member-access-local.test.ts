@@ -27,3 +27,17 @@ it("persists local Finance access and never grants it outside signed-in local mo
   mode.signedIn = true; mode.local = false;
   expect(reloaded.localMemberHasFinancials()).toBe(false);
 });
+it("persists independently granted partner spaces in local mode", async () => {
+  const api = await import("./member-access-api");
+  const memberId = "00000000-0000-4000-8000-000000000001";
+  expect(api.localMemberHasPartnerSpace("pipeline")).toBe(true);
+  await api.saveWorkspaceAccess({ current: null }, { memberId, expectedRevision: 1, departments: [], spaceKeys: ["partner-agreements"] });
+  expect(api.localMemberHasPartnerSpace("pipeline")).toBe(false);
+  expect(api.localMemberHasPartnerSpace("partner-agreements")).toBe(true);
+  vi.resetModules();
+  const reloaded = await import("./member-access-api");
+  expect(reloaded.localMemberHasPartnerSpace("pipeline")).toBe(false);
+  expect(reloaded.localMemberHasPartnerSpace("partner-agreements")).toBe(true);
+  mode.signedIn = false;
+  expect(reloaded.localMemberHasPartnerSpace("partner-agreements")).toBe(false);
+});

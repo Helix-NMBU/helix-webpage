@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const env=vi.hoisted(()=>({local:true,signedIn:true}));
 vi.mock('../MemberPlatform/local-mode',()=>({isLocalMemberMode:()=>env.local,localMemberSignedIn:()=>env.signedIn}));
-vi.mock('../MemberPlatform/member-access-api',()=>({localMemberHasFinancials:()=>true}));
+vi.mock('../MemberPlatform/member-access-api',()=>({localMemberHasFinancials:()=>true,localMemberHasPartnerSpace:()=>env.local&&env.signedIn}));
 import { pipelineRepository, createPipelineRepository } from './repository';
 import { localSponsorFunding, localTaskDealId, localWonDeals, readLocalPartnerState } from './local-fixture';
 import { createLocalProjectRepository } from '../ProjectManagement/local-repository';

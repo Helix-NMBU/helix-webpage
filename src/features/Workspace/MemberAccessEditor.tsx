@@ -90,8 +90,12 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
     </fieldset>
     <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-medium">Space access</legend>
+      <p className="text-sm text-muted-foreground">Pipeline access includes Partner agreements.</p>
       {WORKSPACE_SPACES.map(space => <Label key={space.key} className="flex items-center gap-2 font-normal">
-        <Checkbox checked={spaceKeys.includes(space.key)} onCheckedChange={checked => setSpaceKeys(keys => checked === true ? [...keys, space.key] : keys.filter(key => key !== space.key))} />{space.label}
+        <Checkbox checked={spaceKeys.includes(space.key)} onCheckedChange={checked => setSpaceKeys(keys => {
+          if (checked === true) return [...new Set([...keys, space.key, ...(space.key === "pipeline" ? ["partner-agreements" as const] : [])])];
+          return keys.filter(key => key !== space.key && !(space.key === "partner-agreements" && key === "pipeline"));
+        })} />{space.label}
       </Label>)}
     </fieldset>
     <div className="flex justify-end"><Button type="submit" disabled={busy || !changed}>{busy ? "Saving…" : "Save access"}</Button></div>

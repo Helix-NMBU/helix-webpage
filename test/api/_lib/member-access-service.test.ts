@@ -14,7 +14,7 @@ let seededPlatformAdmin = false;
 beforeAll(async () => {
   pg = new PGlite();
   await pg.exec("create schema identity; create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text);");
-  await pg.exec("create schema project_management; create table project_management.access(member_id uuid primary key,active boolean default true);");
+  await pg.exec("create schema project_management; create table project_management.access(member_id uuid primary key,active boolean default true); create schema partner_deals; create table partner_deals.space_access(member_id uuid primary key,pipeline boolean not null,agreements boolean not null);");
   await pg.query("insert into identity.members values ($1, 'henrik-google', 'henrik.engdal@helixnmbu.no', 'Henrik Engdal')", [adminId]);
   await pg.exec(readFileSync(new URL("../../../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };

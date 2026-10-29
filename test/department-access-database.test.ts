@@ -41,6 +41,8 @@ beforeAll(async () => {
     await db.exec(readFileSync(new URL("../db/migrations/041_project_current_season.sql", import.meta.url), "utf8"));
   await db.exec("drop index if exists project_management.project_department_lead_idx");
   await db.exec(readFileSync(new URL("../db/migrations/057_optional_manager_department_membership.sql", import.meta.url), "utf8"));
+  await db.exec("create schema partner_deals; create table partner_deals.member_grants(member_id uuid not null,capability text not null,active boolean not null default true,primary key(member_id,capability));");
+  await db.exec(readFileSync(new URL("../db/migrations/058_partner_deal_space_access.sql", import.meta.url), "utf8"));
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) values($1,$2,'viewer')", [departmentId,id(3)]);
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Electronics'", [id(7)]);
 }, 60000);
