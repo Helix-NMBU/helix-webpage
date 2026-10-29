@@ -23,7 +23,7 @@ beforeAll(async()=>{
  insert into neon_auth.account values('${actor}','google','sub'),('${other}','google','other');
  insert into identity.members values('${actor}','${actor}','sub','member@example.test','Member','Member'),('${other}','${other}','other','other@example.test','Other','Member');
  insert into identity.platform_roles values('platform_administrator','Admin',1);`);
- for(const file of ["011_finance_core.sql","012_finance_season_budgets.sql","013_finance_funding.sql","024_financials_member_role.sql","035_partner_deals.sql","037_partner_deal_funding.sql"]) await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`,import.meta.url),"utf8"));
+ for(const file of ["011_finance_core.sql","012_finance_season_budgets.sql","013_finance_funding.sql","024_financials_member_role.sql","035_partner_deals.sql","037_partner_deal_funding.sql","039_partner_deal_funding_recovery.sql"]) await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`,import.meta.url),"utf8"));
  await pg.exec(`insert into partner_deals.member_grants values('${actor}','business',true);
  insert into finance.seasons(code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values
  ('S27','S27','2026-08-01','2027-07-31','active','${actor}','${actor}'),('S28','S28','2027-08-01','2028-07-31','planning','${actor}','${actor}');`);
@@ -39,8 +39,8 @@ describe('partner deal funding',()=>{
  it('creates audited secured funding per season, never for in-kind, and retries idempotently',async()=>{
   const id=(await svc.save('actor',payload('First',[cash(current),cash(future),{seasonId:current,kind:'product',amountOre:'12345'}]))).id;
   await call(id);await call(id);
-  const rows=(await pg.query<{status:string,received_date:string|null,amount_ore:string}>("select status,received_date,amount_ore::text from finance.funding order by public_ref")).rows;
-  expect(rows).toEqual([{status:'secured',received_date:null,amount_ore:'100000'},{status:'secured',received_date:null,amount_ore:'100000'}]);
+  const rows=(await pg.query<{status:string,received_date:string|null,expected_date:string|null,amount_ore:string}>("select status,received_date,expected_date,amount_ore::text from finance.funding order by public_ref")).rows;
+  expect(rows).toEqual([{status:'secured',received_date:null,expected_date:null,amount_ore:'100000'},{status:'secured',received_date:null,expected_date:null,amount_ore:'100000'}]);
   expect((await pg.query('select * from partner_deals.funding_links')).rows).toHaveLength(2);
   expect((await pg.query("select * from finance.audit_log where entity='funding'")).rows.length).toBeGreaterThan(0);
  });
@@ -55,14 +55,44 @@ describe('partner deal funding',()=>{
   const id=(await svc.save('actor',payload('Candidate',[cash(current)]))).id;
   await expect(call(id)).rejects.toThrow('deal_funding_possible_duplicate');
   expect((await pg.query('select * from finance.funding')).rows).toHaveLength(4);
+  const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
+  await expect(svc.fundingCandidates('actor',contribution)).rejects.toMatchObject({status:403});
+  await pg.exec(`insert into identity.member_roles values('${actor}','financials');`);
+  const result=await svc.fundingCandidates('actor',contribution);
+  expect(result.candidates).toHaveLength(1);
+  await svc.approveSeparateFunding('actor',contribution,result.candidates,true);
+  await pg.query('update finance.funding set revision=revision+1, amount_ore=amount_ore+1 where id=$1',[result.candidates[0].id]);
+  await expect(call(id)).rejects.toThrow('deal_funding_possible_duplicate');
+  const refreshed=await svc.fundingCandidates('actor',contribution);
+  await expect(svc.approveSeparateFunding('actor',contribution,result.candidates,true)).rejects.toMatchObject({status:409});
+  await svc.approveSeparateFunding('actor',contribution,refreshed.candidates,true);
+  await call(id);
+  expect((await pg.query("select * from partner_deals.audit where action='separate_funding_approved' and deal_id=$1",[id])).rows).toHaveLength(2);
  });
  it('requires existing financial authority for linking and refuses reuse of a linked funding record',async()=>{
   const id=(await svc.save('actor',payload('Third',[cash(current)]))).id;
   const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
   const funding=(await pg.query<{id:string}>("select f.id from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id where f.season_id=$1 limit 1",[current])).rows[0].id;
+  await pg.exec(`delete from identity.member_roles where member_id='${actor}' and role_key='financials'`);
   await expect(svc.linkFunding('actor',contribution,funding)).rejects.toMatchObject({status:403});
   await pg.exec(`insert into identity.member_roles values('${actor}','financials');`);
   await expect(svc.linkFunding('actor',contribution,funding)).rejects.toMatchObject({status:400});
+ });
+ it('returns no candidate data when finance access is revoked during the read',async()=>{
+  const id=(await svc.save('actor',payload('Revocation',[cash(current)]))).id;
+  const contribution=(await pg.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id])).rows[0].id;
+  let revoked=false;
+  const db:CvDatabase={query:async<T>(sql:string,params?:unknown[])=>{
+   const rows=(await pg.query<T>(sql,params)).rows;
+   if(!revoked && sql.includes('partner_deals.funding_candidates(')) {
+    revoked=true; await pg.query("delete from identity.member_roles where member_id=$1 and role_key='financials'",[actor]);
+   }
+   return {rows};
+  }};
+  const reading=createDealServices({db,authenticate:async()=>identity});
+  await expect(reading.fundingCandidates('actor',contribution)).rejects.toMatchObject({status:403});
+  expect(revoked).toBe(true);
+  await pg.query("insert into identity.member_roles values($1,'financials')",[actor]);
  });
  it('links a matching pre-existing record without changing received status, and supports unlink before Won',async()=>{
   await pg.exec("insert into partner.organizations(name,active) values('NewCo',false)");

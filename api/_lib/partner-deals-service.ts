@@ -5,6 +5,8 @@ import { withVerifyFullSsl } from "./pg-ssl.js";
 
 type DealView = "pipeline" | "shared";
 export type DealWorkspace = { canManage: boolean; deals: unknown[]; organizations: unknown[]; seasons: unknown[] };
+export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
+export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
   load(token: string, view: DealView): Promise<DealWorkspace>;
   createOrganization(token: string, name: unknown): Promise<{ id: string }>;
@@ -12,6 +14,8 @@ export interface DealServices {
   save(token: string, body: unknown): Promise<{ id: string }>;
   linkFunding(token: string, contributionId: unknown, fundingId: unknown): Promise<{ ok: true }>;
   unlinkFunding(token: string, contributionId: unknown): Promise<{ ok: true }>;
+  fundingCandidates(token: string, contributionId: unknown): Promise<FundingCandidates>;
+  approveSeparateFunding(token: string, contributionId: unknown, snapshot: unknown, confirmed: unknown): Promise<{ ok: true }>;
   confirmWon(token: string, dealId: unknown, revision: unknown, confirmed: unknown): Promise<{ id: string }>;
 }
 
@@ -66,6 +70,7 @@ function errorFor(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("deal_funding_candidates_changed")) throw new MemberCvError(409, "Funding changed. Reload the candidates before continuing.");
   if (message.includes("deal_funding_possible_duplicate")) throw new MemberCvError(409, "Existing funding may match this partner and season. Ask Finance to link the existing record before confirming the deal.");
   if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
   if (message.includes("deal_funding_closed")) throw new MemberCvError(409, "A deal season is closed. Review the agreement with Finance.");
@@ -119,6 +124,25 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         const result = await deps.db.query<{id: string}>("select partner_deals.rename_organization($1::uuid,$2,$3,$4::uuid,$5::integer,$6) as id", [actor.userId,actor.googleSub,actor.email,id,revision,name]);
         if (!result.rows[0]?.id) throw new Error("Missing identifier");
         return result.rows[0];
+      } catch (error) { return errorFor(error); }
+    },
+    async fundingCandidates(token, contributionId) {
+      try {
+        if (typeof contributionId !== "string") throw new MemberCvError(400, "Choose a cash contribution.");
+        const actor = await identity(token);
+        const result = await deps.db.query<{ value: FundingCandidates }>("select partner_deals.funding_candidates($1::uuid,$2,$3,$4::uuid) as value", [actor.userId,actor.googleSub,actor.email,contributionId]);
+        const recheck = await deps.db.query<{ allowed: boolean }>("select coalesce((select pipeline from partner_deals.capabilities($1::uuid,$2,$3)),false) and coalesce((finance.capability_flags($1::uuid)->>'manageFunding')::boolean,false) as allowed", [actor.userId,actor.googleSub,actor.email]);
+        if (!recheck.rows[0]?.allowed) throw new MemberCvError(403, "You do not have access to sponsor funding.");
+        if (!result.rows[0]?.value) throw new Error("Missing candidates");
+        return result.rows[0].value;
+      } catch (error) { return errorFor(error); }
+    },
+    async approveSeparateFunding(token, contributionId, snapshot, confirmed) {
+      try {
+        if (confirmed !== true || typeof contributionId !== "string" || !Array.isArray(snapshot) || snapshot.length > 100) throw new MemberCvError(400, "Review the matching funding records before confirming.");
+        const actor = await identity(token);
+        await deps.db.query("select partner_deals.approve_separate_funding($1::uuid,$2,$3,$4::uuid,$5::jsonb)", [actor.userId,actor.googleSub,actor.email,contributionId,JSON.stringify(snapshot)]);
+        return { ok: true };
       } catch (error) { return errorFor(error); }
     },
     async linkFunding(token, contributionId, fundingId) {

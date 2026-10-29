@@ -88,7 +88,7 @@ begin
    end if;
    ref:='F-'||season_code||'-'||case when refnum<1000 then lpad(refnum::text,3,'0') else refnum::text end;
    insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,expected_date,agreement_link,created_by_member_id,updated_by_member_id)
-   values(c.season_id,ref,org,owner_name,'sponsor_cash',c.amount_ore,'secured',c.invoice_date,nullif(d.agreement_link,''),p_member,p_member)
+   values(c.season_id,ref,org,owner_name,'sponsor_cash',c.amount_ore,'secured',null,nullif(d.agreement_link,''),p_member,p_member)
    returning id into target;
    insert into partner_deals.funding_links(contribution_id,funding_id,linked_by_member_id) values(c.id,target,p_member);
    perform finance.audit_change(p_member,'funding',target::text,'source_name',null,org);
@@ -96,7 +96,6 @@ begin
    perform finance.audit_change(p_member,'funding',target::text,'funding_type',null,'sponsor_cash');
    perform finance.audit_change(p_member,'funding',target::text,'amount_nok',null,finance.format_ore(c.amount_ore));
    perform finance.audit_change(p_member,'funding',target::text,'status',null,'secured');
-   perform finance.audit_change(p_member,'funding',target::text,'expected_date',null,to_char(c.invoice_date,'YYYY-MM-DD'));
    perform finance.audit_change(p_member,'funding',target::text,'agreement_link',null,nullif(d.agreement_link,''));
    perform finance.audit_change(p_member,'funding',target::text,'partner_deal_link',null,d.id::text);
    changed:=true;
