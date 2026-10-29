@@ -19,6 +19,8 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
    if (Number(req.headers["content-length"] ?? 0) > 64000) throw new MemberCvError(413,"This request is too large.");
    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) throw new MemberCvError(400,"Check the deal details and try again.");
    if (req.body.action === "markReviewNotificationsRead") return res.status(200).json(await service.markReviewNotificationsRead(token,req.body.ids));
+   if (req.body.action === "recordAgreementChange") return res.status(200).json(await service.recordAgreementChange(token,req.body.dealId,req.body.expectedRevision,req.body.kind,req.body.reason,req.body.terms,req.body.confirmed));
+   if (req.body.action === "resolveAgreementChange") return res.status(200).json(await service.resolveAgreementChange(token,req.body.changeId,req.body.note,req.body.confirmed,req.body.manualConfirmed));
    if (req.body.action === "requestFinanceReview") return res.status(200).json(await service.requestFinanceReview(token,req.body.dealId,req.body.expectedRevision));
    if (req.body.action === "resolveFinanceReview") return res.status(200).json(await service.resolveFinanceReview(token,req.body.reviewId,req.body.resolution,req.body.fundingId,req.body.expectedRevision,req.body.snapshot,req.body.confirmed));
    if (req.body.action === "createOrganization") return res.status(200).json(await service.createOrganization(token,req.body.name));
