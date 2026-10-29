@@ -11,7 +11,9 @@ let pg: PGlite; let services: ReturnType<typeof createDealServices>; let dealId=
 const identities = new Map([business,marketing,admin,pm].map(id=>[id,{ userId:id, googleSub:`sub-${id}`,email:`${id}@helixnmbu.no` } as WorkspaceIdentity]));
 beforeAll(async()=>{
  pg=new PGlite();
- await pg.exec(`create schema identity; create schema neon_auth; create schema partner; create schema finance;
+ await pg.exec(`create schema identity; create schema neon_auth; create schema partner; create schema finance; create schema project_management;
+ create table project_management.tasks(id uuid primary key,title text,status text);
+ create function project_management.can_access_task(uuid,uuid) returns boolean language sql as $$ select false $$;
  create table neon_auth."user"(id uuid primary key,email text,"emailVerified" boolean,banned boolean);
  create table neon_auth.account("userId" uuid,"providerId" text,"accountId" text);
  create table identity.members(id uuid primary key,auth_user_id uuid,google_sub text,email text);
@@ -26,6 +28,7 @@ beforeAll(async()=>{
  }
  await pg.exec(`insert into identity.member_roles values('${admin}','platform_administrator'),('${pm}','project_manager');`);
  await pg.exec(readFileSync(new URL("../../../db/migrations/035_partner_deals.sql",import.meta.url),"utf8"));
+ await pg.exec(`create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid);`);
  await pg.exec(`insert into partner_deals.member_grants values ('${business}','business',true),('${marketing}','marketing',true);`);
  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  services=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});

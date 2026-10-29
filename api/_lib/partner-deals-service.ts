@@ -12,6 +12,7 @@ export interface DealServices {
   save(token: string, body: unknown): Promise<{ id: string }>;
   linkFunding(token: string, contributionId: unknown, fundingId: unknown): Promise<{ ok: true }>;
   unlinkFunding(token: string, contributionId: unknown): Promise<{ ok: true }>;
+  confirmWon(token: string, dealId: unknown, revision: unknown, confirmed: unknown): Promise<{ id: string }>;
 }
 
 // One SQL statement binds the projection to the current grant and linked Google identity.
@@ -22,6 +23,7 @@ const readSql = `select caps.pipeline as "canManage",
   'ownerMemberId',d.owner_member_id,'contactName',d.contact_name,'contactEmail',d.contact_email,
   'startsOn',d.starts_on,'endsOn',d.ends_on,'agreementLink',d.agreement_link,'revision',d.revision,
   'wonAt',d.won_at,'wonByMemberId',d.won_by_member_id,
+  'tasks',coalesce((select jsonb_agg(jsonb_build_object('id',t.id,'title',t.title,'status',t.status,'kind',l.kind,'deliverableId',l.deliverable_id,'seasonId',l.season_id,'canOpen',project_management.can_access_task($1::uuid,t.id)) order by l.kind,t.title) from partner_deals.task_links l join project_management.tasks t on t.id=l.task_id where l.deal_id=d.id),'[]'::jsonb),
   'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id),'[]'::jsonb),
   'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id),'[]'::jsonb)
  ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes) else '{}'::jsonb end order by d.updated_at desc,d.id)
@@ -66,7 +68,14 @@ function errorFor(error: unknown): never {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (message.includes("deal_funding_possible_duplicate")) throw new MemberCvError(409, "Existing funding may match this partner and season. Ask Finance to link the existing record before confirming the deal.");
   if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
+  if (message.includes("deal_funding_closed")) throw new MemberCvError(409, "A deal season is closed. Review the agreement with Finance.");
   if (message.includes("deal_forbidden") || code === "42501") throw new MemberCvError(403, "You do not have access to sponsor deals.");
+  if (message.includes("deal_no_current_season")) throw new MemberCvError(409, "Set an active current season before confirming the deal.");
+  if (message.includes("deal_task_season_unavailable")) throw new MemberCvError(409, "Tasks are not yet available for the current season.");
+  if (message.includes("deal_marketing_department_missing")) throw new MemberCvError(409, "Set up the Business & Marketing department before confirming the deal.");
+  if (message.includes("deal_finance_department_missing")) throw new MemberCvError(409, "Set up the Finance department before confirming the deal.");
+  if (message.includes("deal_invalid_marketing_owner")) throw new MemberCvError(409, "Choose a deliverable owner in the Business & Marketing department.");
+  if (message.includes("deal_funding_unavailable")) throw new MemberCvError(503, "Funding is not configured. Ask an administrator to complete setup, then try again.");
   if (message.includes("deal_not_found")) throw new MemberCvError(404, "This deal is no longer available.");
   if (message.includes("deal_conflict") || message.includes("deal_won_locked") || code === "40001") throw new MemberCvError(409, "This deal changed or has been won. Reload it before saving.");
   if (message.includes("deal_invalid") || ["23502","23503","23505","23514","22007","22008","22P02","22003"].includes(code)) throw new MemberCvError(400, "Check the deal details and try again.");
@@ -126,6 +135,15 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
         const actor = await identity(token);
         await deps.db.query("select partner_deals.remove_funding_link($1::uuid,$2,$3,$4::uuid)", [actor.userId,actor.googleSub,actor.email,contributionId]);
         return { ok: true };
+      } catch (error) { return errorFor(error); }
+    },
+    async confirmWon(token, dealId, revision, confirmed) {
+      try {
+        if (confirmed !== true || typeof dealId !== "string" || !Number.isSafeInteger(revision) || Number(revision) < 0) throw new MemberCvError(400, "Confirm the agreed deal before continuing.");
+        const actor = await identity(token);
+        const result = await deps.db.query<{id: string}>("select partner_deals.confirm_won($1::uuid,$2,$3,$4::uuid,$5::integer) as id", [actor.userId,actor.googleSub,actor.email,dealId,revision]);
+        if (!result.rows[0]?.id) throw new Error("Missing identifier");
+        return result.rows[0];
       } catch (error) { return errorFor(error); }
     },
     async save(token, body) {
