@@ -29,6 +29,7 @@ import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
+import { pipelineRepository } from "@/features/PartnerDeals/repository";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -51,7 +52,18 @@ export function AppSidebar({
   const workspace = workspaceSession?.data;
   const notify = useNotify();
   const [savingOrder, setSavingOrder] = React.useState(false);
+  const [pipelineAllowed, setPipelineAllowed] = React.useState(false);
+  React.useEffect(() => {
+    let active = true; let version = 0;
+    const check = () => {
+      const request = ++version;
+      void pipelineRepository().load().then(result => { if (active && request === version) setPipelineAllowed(result.canManage); }).catch(() => { if (active && request === version) setPipelineAllowed(false); });
+    };
+    check(); window.addEventListener("focus", check);
+    return () => { active = false; window.removeEventListener("focus", check); };
+  }, [location.pathname]);
   const spaceItems = [
+    ...(pipelineAllowed ? [{ title: "Sponsor pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban, isActive: location.pathname === "/sponsor-pipeline" }] : []),
     ...(workspace?.projectAccess
       ? [
           {
