@@ -1,6 +1,5 @@
 import * as React from "react";
 import {
-  IconChartBar,
   IconBell,
   IconLayoutKanban,
   IconLayoutDashboard,
@@ -80,6 +79,16 @@ export function AppSidebar({
   const recruitingAllowed = featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed";
   const managementItems = recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : [];
   const managementActive = managementItems.some(item => item.url === location.pathname);
+  const financePath = departmentPath("Finance");
+  const financeDepartment = workspace?.departments?.find(department => departmentPath(department.name) === financePath);
+  const financeItems = finance.access === "allowed" ? [
+    { title: "Financial overview", url: "/finance" },
+    { title: "Purchases", url: "/finance/purchases" },
+    { title: "Budgets", url: "/finance/budgets" },
+    ...(financeReviewsAllowed ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
+    ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
+  ] : [];
+  const financeActive = financeItems.some(item => item.url === location.pathname);
   const spaceItems = [
     ...(workspace?.projectAccess
       ? [
@@ -91,32 +100,18 @@ export function AppSidebar({
           },
         ]
       : []),
-    ...(finance.access === "allowed" ? [{
-      title: "Financials",
-      url: "/finance",
-      icon: IconChartBar,
-      isActive: location.pathname.startsWith("/finance"),
-      defaultOpen: true,
-      subMenuClassName: "border-l-0",
-      items: [
-        { title: "Overview", url: "/finance" },
-        { title: "Purchases", url: "/finance/purchases" },
-        { title: "Budgets", url: "/finance/budgets" },
-        ...(financeReviewsAllowed ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
-        ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
-      ],
-    }] : []),
-    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (businessItems.length > 0 && departmentPath(department.name) === businessPath) || (recruitingAllowed && departmentPath(department.name) === managementPath))
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (businessItems.length > 0 && departmentPath(department.name) === businessPath) || (recruitingAllowed && departmentPath(department.name) === managementPath) || (financeItems.length > 0 && departmentPath(department.name) === financePath))
       .map((department) => {
         const url = departmentPath(department.name);
         const member = department.memberIds.includes(workspace.viewerId);
         const isBusiness = url === businessPath;
         const isManagement = url === managementPath;
+        const isFinance = url === financePath;
         return {
           title: department.name,
           url,
           icon: getDepartmentIcon(department.name),
-          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (isBusiness && businessActive) || (isManagement && managementActive),
+          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (isBusiness && businessActive) || (isManagement && managementActive) || (isFinance && financeActive),
           subMenuClassName: "border-l-0",
           items: [
             ...(member ? [
@@ -126,9 +121,11 @@ export function AppSidebar({
             ] : []),
             ...(isBusiness ? businessItems : []),
             ...(isManagement ? managementItems : []),
+            ...(isFinance ? financeItems : []),
           ],
         };
       }) ?? []),
+    ...(financeItems.length > 0 && !financeDepartment ? [{ title: "Finance", url: financePath, icon: getDepartmentIcon("Finance"), isActive: financeActive, subMenuClassName: "border-l-0", items: financeItems }] : []),
     ...(recruitingAllowed && !managementDepartment ? [{ title: "Management", url: managementPath, icon: getDepartmentIcon("Management"), isActive: managementActive, subMenuClassName: "border-l-0", items: managementItems }] : []),
     ...(businessItems.length > 0 && !businessDepartment ? [{ title: "Business & Marketing", url: businessPath, icon: getDepartmentIcon("Business & Marketing"), isActive: businessActive, subMenuClassName: "border-l-0", items: businessItems }] : []),
   ];
