@@ -34,7 +34,7 @@ beforeAll(async () => {
     insert into neon_auth.account values ('${auth}','google','user-sub');
     create role anon; create role authenticated; create role anonymous;
   `);
-  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "016_finance_fulfillment.sql", "024_financials_member_role.sql"]) {
+  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "016_finance_fulfillment.sql", "024_financials_member_role.sql", "034_finance_bank_snapshot.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
   db = { query: async <T>(text: string, params?: unknown[]) => {
@@ -56,7 +56,7 @@ it("requires the independent Season Overview grant and a verified linked account
   await pg.exec(`update project_management.access set active=true where member_id='${user}'; update neon_auth."user" set banned=true where id='${auth}';`);
   await expect(services.summary("user")).rejects.toMatchObject({ status: 403 });
   await pg.exec(`update neon_auth."user" set banned=false where id='${auth}';`);
-  expect(await services.summary("user")).toMatchObject({ budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], canOpenFinancials: false });
+  expect(await services.summary("user")).toMatchObject({ budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], canOpenFinancials: false, bank: { status: "available", snapshot: null } });
 });
 
 it("hides draft amounts until the Financials capability is granted", async () => {
@@ -159,4 +159,35 @@ it("requires bearer authentication on the read-only HTTP endpoint", async () => 
   await handler({ method: "GET", headers: { authorization: "Bearer user" } } as never, res as never);
   expect(res.status).toHaveBeenLastCalledWith(200);
   expect(res.json.mock.lastCall?.[0]).toMatchObject({ budgetStatus: "approved", actualNok: "25.00" });
+});
+
+
+it("provides only a dated manual balance to an authorized Season Overview reader", async () => {
+  await pg.exec(`update finance.bank_snapshot set amount_ore=0, as_of_date='2026-10-28', updated_at=now(), updated_by='${admin}', revision=1; select finance.bump_view_version();`);
+  const view = await services.summary("user");
+  expect(view.bank).toMatchObject({ status: "available", snapshot: { amountNok: "0.00", asOfDate: "2026-10-28" } });
+  expect(Object.keys(view.bank.status === "available" ? view.bank.snapshot ?? {} : {})).toEqual(["amountNok", "asOfDate", "updatedAt"]);
+  await pg.exec(`delete from finance.settings where setting_key='current_season';`);
+  const noSeason = await services.summary("user");
+  expect(noSeason.seasonCode).toBeNull();
+  expect(noSeason.bank).toMatchObject({ status: "available", snapshot: { amountNok: "0.00" } });
+  await pg.exec(`update project_management.access set active=false where member_id='${user}';`);
+  await expect(services.summary("user")).rejects.toMatchObject({ status: 403 });
+  await pg.exec(`update project_management.access set active=true where member_id='${user}';`);
+});
+
+it("isolates a bank read failure and rechecks authorization after the snapshot read", async () => {
+  const unavailable: CvDatabase = { query: async <T>(text: string, params?: unknown[]) => {
+    if (text.includes("from finance.bank_snapshot")) throw new Error("database offline");
+    return db.query<T>(text, params);
+  } };
+  const failing = createSeasonFinancialServices({ db: unavailable, authenticate: async () => identity });
+  expect((await failing.summary("user")).bank).toEqual({ status: "unavailable" });
+  afterQuery = async text => {
+    if (!text.includes("from finance.bank_snapshot")) return;
+    afterQuery = null;
+    await pg.exec(`update project_management.access set active=false where member_id='${user}';`);
+  };
+  await expect(services.summary("user")).rejects.toMatchObject({ status: 403 });
+  await pg.exec(`update project_management.access set active=true where member_id='${user}';`);
 });
