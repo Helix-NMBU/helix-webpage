@@ -549,7 +549,7 @@ export function memberSignInCallbackUrl(source: unknown, origin: string): string
   if (target.origin !== allowedOrigin) return fallback;
   if (isMemberPlatform(origin)) {
     if (target.pathname === "/member/profile") target.pathname = paths.profile;
-    if (![paths.home, paths.profile, "/recruiting"].includes(target.pathname) && !isProjectTaskPath(target.pathname) && !isWorkspacePath(target.pathname) && !financeReturnPath(target.pathname)) return fallback;
+    if (![paths.home, paths.profile, "/recruiting", "/sponsor-pipeline", "/partner-deals", "/finance/sponsor-reviews"].includes(target.pathname) && !isProjectTaskPath(target.pathname) && !isWorkspacePath(target.pathname) && !financeReturnPath(target.pathname)) return fallback;
   } else if (target.pathname !== "/member" && !target.pathname.startsWith("/member/")) return fallback;
   return new URL(`${target.pathname}${target.search}${target.hash}`, origin).href;
 }

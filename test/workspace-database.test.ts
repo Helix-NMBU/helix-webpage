@@ -90,6 +90,8 @@ describe("Workspace directory authorization and persistence", () => {
       "033_project_status",
     ])
       await db.exec(migration(name));
+    await db.exec("create schema finance; create table finance.settings(setting_key text,setting_value jsonb);");
+    await db.exec(readFileSync(new URL("../db/migrations/041_project_current_season.sql", import.meta.url), "utf8"));
     for (const person of identities) {
       await db.query(
         'insert into neon_auth."user" values($1,$2,$3,true,false)',

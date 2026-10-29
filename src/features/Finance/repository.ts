@@ -15,6 +15,7 @@ import type {
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
+import { localSponsorFunding } from "../PartnerDeals/local-fixture";
 
 let localBankSnapshot: BankSnapshot | null = null;
 let localBankVersion = 0;
@@ -31,25 +32,25 @@ export class FinanceRequestError extends Error {
 function localCapabilities(): FinanceCapabilitiesResponse {
   return {
     memberId: "local-member",
-    viewVersion: 0,
+    viewVersion: localBankVersion,
     profiles: ["finance"],
     capabilities: capabilitiesForProfiles(["finance"]),
-    seasonCode: null,
+    seasonCode: "S27",
     approvalThresholdNok: null,
     today: osloToday(),
   };
 }
 
 function localOverview(): PublicOverview {
-  return { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] };
+  return { viewVersion: localBankVersion, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] };
 }
 
 function localBudgets(): PublicBudgets {
-  return { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 0, departments: [], choices: { systems: [], items: [] } };
+  return { viewVersion: localBankVersion, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 0, departments: [], choices: { systems: [], items: [] } };
 }
 
 function localPurchases(): PurchasesView {
-  return { viewVersion: 0, ownRequests: [] };
+  return { viewVersion: localBankVersion, ownRequests: [] };
 }
 
 export function createFinanceApi(owner: { current: string | null }) {
@@ -97,9 +98,9 @@ export function createFinanceApi(owner: { current: string | null }) {
   return {
     bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),
     capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
-    version: () => local() ? Promise.resolve({ viewVersion: 0 } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
+    version: () => local() ? Promise.resolve({ viewVersion: localBankVersion } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
     recovery: (deliveryAfter?: string, uploadAfter?: string) => {
-      if (local()) return Promise.reject(new FinanceRequestError("Finance access is required.", 403));
+      if (local()) return localMemberHasFinancials() ? Promise.resolve({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null } satisfies FinanceRecoveryView) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
       const params = new URLSearchParams();
       if (deliveryAfter) params.set("deliveryAfter", deliveryAfter);
       if (uploadAfter) params.set("uploadAfter", uploadAfter);
@@ -117,7 +118,7 @@ export function createFinanceApi(owner: { current: string | null }) {
       return request<PurchasesView>(extra ? `purchases&${extra}` : "purchases");
     },
     financing: () => local()
-      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: 0, seasonCode: null, funding: [], parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
+      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: localBankVersion, seasonCode: "S27", funding: localSponsorFunding(), parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
       : request<FinancingView>("financing"),
     mutate,
   };

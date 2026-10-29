@@ -51,7 +51,7 @@ function Workspace({ children }: { children?: ReactNode }) {
     ? location.pathname.slice(departmentPath(department.name).length + 1).split("/")[0]
     : null;
   const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department ? departmentSubpage ? departmentSubpage[0].toUpperCase() + departmentSubpage.slice(1) : department.name : "Departments" : null;
-  const pageTitle = financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
+  const pageTitle = (location.pathname === "/finance/sponsor-reviews" ? "Sponsor funding reviews" : location.pathname === "/sponsor-pipeline" ? "Pipeline" : location.pathname === "/partner-deals" ? "Partner agreements" : null) ?? financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
@@ -93,21 +93,22 @@ function Workspace({ children }: { children?: ReactNode }) {
     <>
       <MemberPagePreferences />
       <AppSidebar
+        variant="inset"
         onNavigate={go}
         onSignOut={() => void logout()}
         disabled={disabled}
       />
-      <SidebarInset className={`member-workspace-content min-w-0 ${mail ? "h-svh min-h-0 overflow-hidden" : bounded ? "md:h-svh md:min-h-0 md:overflow-hidden" : ""}`}>
+      <SidebarInset className="member-workspace-content min-w-0 md:h-[calc(100svh-1rem)] md:min-h-0 md:overflow-clip md:border md:border-border/70">
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             <Suspense fallback={<MemberRouteSkeleton />}>{children ?? <Outlet />}</Suspense>
           </div>
         ) : (
           <>
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border/60 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
               <div className="flex min-w-0 items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
-                <Separator orientation="vertical" className="mr-2 h-4" />
+                <Separator orientation="vertical" className="mr-2 h-4 data-vertical:self-center" />
                 <Breadcrumb className="min-w-0">
                   <BreadcrumbList className="min-w-0 flex-nowrap">
                     <BreadcrumbItem className="hidden md:block">
@@ -160,7 +161,7 @@ function Workspace({ children }: { children?: ReactNode }) {
                 </Breadcrumb>
               </div>
             </header>
-            <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 ${bounded ? "md:min-h-0 md:overflow-hidden" : ""}`}>
+            <div className={`flex min-h-0 flex-1 flex-col gap-4 p-4 ${bounded ? "md:overflow-hidden" : "md:overflow-y-auto md:overscroll-none"}`}>
               <Suspense fallback={<MemberRouteSkeleton />}>{children ?? <Outlet />}</Suspense>
             </div>
           </>

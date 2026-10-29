@@ -94,6 +94,7 @@ describe("internal member platform", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("/api/finance")) return financeResponse(url);
+      if (url.startsWith("/api/partner-deals")) return { ok: false, status: 403, json: async () => ({ error: "Access denied" }) } as unknown as Response;
       const body = url.startsWith("/api/member-access?action=self") ? selfAccess : url === "/api/member-login?__module=workspace" ? workspaceDirectory : url === "/api/gmail-status" ? { connected: false } : {};
       return { ok: true, status: 200, json: async () => body } as unknown as Response;
     }));
@@ -235,7 +236,7 @@ describe("internal member platform", () => {
     { department: true, financials: false },
     { department: false, financials: true },
     { department: false, financials: false },
-  ])("shows Finance and Financials in Your spaces according to independent access: $department / $financials", async ({ department, financials }) => {
+  ])("groups financial tools under Finance while preserving independent access: $department / $financials", async ({ department, financials }) => {
     session.landing.mockResolvedValue(signedIn);
     workspaceDirectory.departments = department ? departmentDirectory.filter((item) => item.name === "Finance") : [];
     financialsAllowed = financials;
@@ -243,8 +244,14 @@ describe("internal member platform", () => {
     const group = [...container.querySelectorAll('[data-sidebar="group"]')].find((item) => item.querySelector('[data-sidebar="group-label"]')?.textContent === "Your spaces");
     expect(group).toBeTruthy();
     const names = [...group!.querySelectorAll("button")].map((button) => button.textContent?.trim());
-    expect(names.includes("Finance")).toBe(department);
-    expect(names.includes("Financials")).toBe(financials);
+    expect(names.includes("Finance")).toBe(department || financials);
+    expect(names.includes("Financials")).toBe(false);
+    if (department || financials) {
+      const finance = [...group!.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Finance")!;
+      await act(async () => finance.click());
+      expect(group!.querySelector('a[href="/departments/finance"]') !== null).toBe(department);
+      expect(group!.querySelector('a[href="/finance"]') !== null).toBe(financials);
+    }
   });
 
   it("redirects legacy recruitment links to the Recruiting route", async () => {
@@ -260,7 +267,9 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue({ ...signedIn, account: { ...signedIn.account, role } });
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     await open("/");
-    const link = container.querySelector<HTMLButtonElement>('[aria-label="Recruiting"]');
+    const management = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Management")!;
+    await act(async () => management.click());
+    const link = container.querySelector<HTMLAnchorElement>('a[href="/recruiting"]');
     expect(link).not.toBeNull();
     await act(async () => link!.click());
     expect(router.state.location.pathname).toBe("/recruiting");
@@ -313,6 +322,8 @@ describe("internal member platform", () => {
     session.landing.mockResolvedValue(signedIn);
     selfAccess = { ...selfAccess, features: ["*"] };
     await open("/");
+    const finance = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Finance")!;
+    await act(async () => finance.click());
     expect(container.querySelector('a[href="/finance/budgets"]')).not.toBeNull();
     expect(container.querySelector('a[href="/finance/purchases"]')).not.toBeNull();
     expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();

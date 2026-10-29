@@ -73,7 +73,7 @@ export function createDepartmentHomeServices(deps: {
     from project_management.departments d join project_management.department_members dm on dm.department_id=d.id and dm.member_id=$1::uuid
     join identity.members m on m.id=dm.member_id join neon_auth."user" u on u.id=m.auth_user_id
     left join project_management.department_homes h on h.department_id=d.id
-    where d.id=$2::uuid and d.season='S27' and m.google_sub=$3 and m.email=$4 and lower(u.email)=m.email and u."emailVerified" is true and u.banned is not true
+    where d.id=$2::uuid and d.season=project_management.current_season() and m.google_sub=$3 and m.email=$4 and lower(u.email)=m.email and u."emailVerified" is true and u.banned is not true
       and exists(select 1 from neon_auth.account a where a."userId"=u.id and a."providerId"='google' and a."accountId"=m.google_sub)`,
         [identity.userId, id, identity.googleSub, identity.email],
       )

@@ -14,6 +14,14 @@
   },
   "rewrites": [
     {
+      "source": "/api/partner-invoice-runner",
+      "destination": "/api/member-login?__module=partner-invoice-runner"
+    },
+    {
+      "source": "/api/partner-deals",
+      "destination": "/api/member-login?__module=partner-deals"
+    },
+    {
       "source": "/api/auth/:path*",
       "destination": "/api/auth?__path=:path*"
     },

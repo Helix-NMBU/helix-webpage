@@ -1,0 +1,9 @@
+# Partner deal access
+
+The Business & Marketing department does not distinguish Business from Marketing. Pipeline access therefore requires an explicit active `partner_deals.member_grants` business grant or the existing `project_manager` role. Won deal access additionally accepts explicit marketing or finance grants. A platform administrator, department membership, a partner OTP session, or a Finance grant alone does not confer access. Every request checks the linked verified, unbanned Google account and current grant.
+
+No grants or organizations are seeded. Provision and revoke the explicit grants through an authorized operator as a deliberate deployment step; set `active=false` to revoke. No management UI is included in this foundation. Organization creation leaves `partner.organizations.active=false` and creates no partner portal membership or entitlement. Confirm the actual portal provisioning process before changing that status.
+
+`GET /api/partner-deals?view=pipeline` returns negotiation notes only to pipeline users. `view=shared` returns only won deals and omits those notes. POST actions `createOrganization`, `renameOrganization`, and `saveDeal` are limited to pipeline users. Generic saving deliberately refuses Won and edits to won deals: the later transition must create the required task and funding effects and provide reconciliation before that operation is exposed. Organization renames and deal writes use optimistic revisions; each atomic save stores before/after snapshots. Existing won data is never deleted or replaced by this path.
+
+The schema references finance seasons, including future seasons, but this foundation does not provision them, create tasks, link funding, implement a scheduler, or grant portal access. Explicit grant administration, organizational ownership decisions, and secured later transition need implementation and validation before release.

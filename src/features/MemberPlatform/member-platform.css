@@ -91,7 +91,7 @@ html[data-member-theme="dark"] .project-timeline-bar:hover { background: #242528
   .mcv-account-actions { flex-wrap: wrap; }
 }
 
-/* Content integration only. Sidebar geometry comes from sidebar-07. */
+/* Content integration for the member workspace. */
 .member-workspace-content .mcv-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "editor"; }
 .member-workspace-content .mcv-section-overview { display: none; }
 
@@ -100,4 +100,18 @@ html[data-member-theme="dark"] .project-timeline-bar:hover { background: #242528
   background: var(--popover);
   color: var(--popover-foreground);
   border-color: var(--border);
+}
+
+/* Keep the workspace frame fixed even when a scroll gesture reaches an edge. */
+@media (min-width: 768px) {
+  html:has(.member-workspace-content),
+  body:has(.member-workspace-content) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .member-workspace-content,
+  .member-workspace-content [class*="overflow-y-auto"],
+  .member-platform [data-sidebar="content"] {
+    overscroll-behavior: none;
+  }
 }

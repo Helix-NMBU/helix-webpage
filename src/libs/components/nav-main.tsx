@@ -77,7 +77,7 @@ function NavEntry({ item, activeUrl, onNavigate, disabled, reorder }: EntryProps
         </SidebarMenuButton>
       </CollapsibleTrigger>
       <CollapsibleTrigger asChild>
-        <button type="button" aria-label={`Toggle ${item.title} pages`} disabled={disabled} className="flex size-7 shrink-0 items-center justify-center rounded-md bg-transparent text-sidebar-foreground/70 outline-none transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:pointer-events-none disabled:opacity-50" onClick={() => { if (state === "collapsed") setOpen(true); }}>
+        <button type="button" aria-label={`Toggle ${item.title} pages`} disabled={disabled} className="flex size-7 shrink-0 items-center justify-center rounded-md bg-transparent group-data-[collapsible=icon]:hidden text-sidebar-foreground/70 outline-none transition-colors hover:bg-transparent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:pointer-events-none disabled:opacity-50" onClick={() => { if (state === "collapsed") setOpen(true); }}>
           <IconChevronRight aria-hidden="true" className="size-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
         </button>
       </CollapsibleTrigger>
