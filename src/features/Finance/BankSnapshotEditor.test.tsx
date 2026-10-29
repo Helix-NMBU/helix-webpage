@@ -36,3 +36,63 @@ it("keeps input after a failed save and provides recovery", async () => {
   expect(notify).toHaveBeenCalledWith("Could not save bank balance", "Balance changed", expect.objectContaining({ action: expect.objectContaining({ label: "Reload balance" }) }));
   container.remove();
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+const snapshot = (amountNok: string, revision: number) => ({ amountNok, revision, asOfDate: "2026-10-29", updatedAt: "2026-10-29T12:00:00Z" });
+
+it("ignores older responses and responses after unmount", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const older = deferred<ReturnType<typeof snapshot> | null>();
+  const newer = deferred<ReturnType<typeof snapshot> | null>();
+  session.bankSnapshot.mockImplementationOnce(() => older.promise).mockImplementationOnce(() => newer.promise);
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => { root?.render(<BankSnapshotEditor />); });
+  session.viewVersion++;
+  await act(async () => { root?.render(<BankSnapshotEditor />); });
+  await act(async () => { newer.resolve(snapshot("200.00", 2)); await newer.promise; });
+  expect(container.textContent).toContain("200.00");
+  await act(async () => { older.resolve(snapshot("100.00", 1)); await older.promise; });
+  expect(container.textContent).toContain("200.00");
+  expect(container.textContent).not.toContain("100.00");
+  const later = deferred<ReturnType<typeof snapshot> | null>();
+  session.bankSnapshot.mockImplementationOnce(() => later.promise);
+  session.viewVersion++;
+  await act(async () => { root?.render(<BankSnapshotEditor />); });
+  await act(async () => { root?.unmount(); root = null; later.reject(new Error("offline")); try { await later.promise; } catch { /* expected */ } });
+  expect(notify).not.toHaveBeenCalled();
+  container.remove();
+});
+
+it("marks a failed refresh stale, retains unsaved input, and recovers after retry", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  session.bankSnapshot.mockResolvedValueOnce(snapshot("100.00", 1));
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => { root?.render(<BankSnapshotEditor />); });
+  await act(async () => { container.querySelector("button")?.click(); });
+  const amount = container.querySelector<HTMLInputElement>("#bank-amount")!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(amount, "150"); amount.dispatchEvent(new Event("input", { bubbles: true })); });
+  session.bankSnapshot.mockRejectedValueOnce(new Error("offline"));
+  session.viewVersion++;
+  await act(async () => { root?.render(<BankSnapshotEditor />); });
+  expect(container.textContent).toContain("may be out of date");
+  expect(amount.value).toBe("150");
+  expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+  const call = notify.mock.calls.find(([title]) => title === "Could not load bank balance");
+  expect(call).toBeDefined();
+  session.bankSnapshot.mockResolvedValueOnce(snapshot("120.00", 2));
+  await act(async () => { call?.[2].action.onClick(); });
+  expect(container.textContent).not.toContain("may be out of date");
+  expect(container.textContent).toContain("120.00");
+  expect(amount.value).toBe("150");
+  expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+  container.remove();
+});
