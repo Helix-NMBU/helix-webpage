@@ -75,6 +75,7 @@ function errorFor(error: unknown): never {
   if (message.includes("deal_funding_mismatch")) throw new MemberCvError(409, "The funding record does not match this deal or has changed. Review it with Finance.");
   if (message.includes("deal_funding_closed")) throw new MemberCvError(409, "A deal season is closed. Review the agreement with Finance.");
   if (message.includes("deal_forbidden") || code === "42501") throw new MemberCvError(403, "You do not have access to sponsor deals.");
+  if (message.includes("deal_linked_contribution")) throw new MemberCvError(409, "This contribution is linked to funding. Ask Finance to unlink it before changing or removing it.");
   if (message.includes("deal_no_current_season")) throw new MemberCvError(409, "Set an active current season before confirming the deal.");
   if (message.includes("deal_task_season_unavailable")) throw new MemberCvError(409, "Tasks are not yet available for the current season.");
   if (message.includes("deal_marketing_department_missing")) throw new MemberCvError(409, "Set up the Business & Marketing department before confirming the deal.");
