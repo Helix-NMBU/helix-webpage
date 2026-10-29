@@ -36,7 +36,7 @@ export interface DealServices {
 const readSql = `select caps.pipeline as "canManage",
  coalesce((select jsonb_agg(jsonb_build_object(
   'id',d.id,'organizationId',d.organization_id,'organizationName',o.name,'title',d.title,'stage',d.stage,
-  'ownerMemberId',d.owner_member_id,'contactName',d.contact_name,'contactEmail',d.contact_email,
+  'ownerMemberId',d.owner_member_id,'sponsorLevel',d.sponsor_level,'probability',d.probability,'followUpOn',d.follow_up_on,'createdAt',d.created_at,'contactName',d.contact_name,'contactEmail',d.contact_email,
   'startsOn',d.starts_on,'endsOn',d.ends_on,'agreementLink',d.agreement_link,'revision',d.revision,
   'wonAt',d.won_at,'wonByMemberId',d.won_by_member_id,'cancelledAt',d.cancelled_at,
   'changes',coalesce((select jsonb_agg(jsonb_build_object('id',ac.id,'kind',ac.kind,'reason',ac.reason,'beforeTerms',ac.before_terms,'proposedTerms',ac.proposed_terms,'status',ac.status,'createdAt',ac.created_at,'resolvedAt',ac.resolved_at,'withdrawnAt',ac.withdrawn_at,'resolutionNote',ac.resolution_note,'manualItems',coalesce((select jsonb_agg(jsonb_build_object('kind',mr.kind,'itemId',mr.item_id)) from partner_deals.manual_reconciliation_items mr where mr.change_id=ac.id),'[]'::jsonb)) order by ac.created_at,ac.id) from partner_deals.agreement_changes ac where ac.deal_id=d.id),'[]'::jsonb),
@@ -71,6 +71,8 @@ function checkSave(value: unknown): Record<string, unknown> {
       (data.id !== undefined && (typeof data.id !== "string" || !Number.isSafeInteger(data.expectedRevision) || Number(data.expectedRevision) < 0))) {
     throw new MemberCvError(400, "Check the deal details and try again.");
   }
+  if (data.probability != null && (typeof data.probability !== "number" || !Number.isInteger(data.probability) || data.probability < 0 || data.probability > 100)) throw new MemberCvError(400, "Enter a probability between 0 and 100.");
+  if (data.sponsorLevel != null && !["partner","service","bronze","silver","gold","platinum","main"].includes(String(data.sponsorLevel))) throw new MemberCvError(400, "Choose a valid sponsor level.");
   if (data.agreementLink !== undefined && data.agreementLink !== "") {
     if (typeof data.agreementLink !== "string") throw new MemberCvError(400, "Enter a valid agreement link.");
     try { if (!["http:","https:"].includes(new URL(data.agreementLink).protocol)) throw new Error(); } catch { throw new MemberCvError(400, "Enter a valid agreement link."); }

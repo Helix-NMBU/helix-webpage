@@ -5,6 +5,7 @@ export function ProgressRing({
   label,
   showTotal = true,
   valueFormat = "percent",
+  unit = "tasks",
 }: {
   done: number;
   total: number;
@@ -12,6 +13,7 @@ export function ProgressRing({
   label: string;
   showTotal?: boolean;
   valueFormat?: "percent" | "count";
+  unit?: string;
 }) {
   return (
     <span
@@ -20,8 +22,8 @@ export function ProgressRing({
       aria-valuenow={percent}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuetext={`${done} of ${total} tasks complete`}
-      aria-label={`${label}: ${done} of ${total} tasks complete, ${percent}%`}
+      aria-valuetext={`${done} of ${total} ${unit} complete`}
+      aria-label={`${label}: ${done} of ${total} ${unit} complete, ${percent}%`}
     >
       <svg viewBox="0 0 20 20" className="size-4 -rotate-90" aria-hidden="true">
         <circle

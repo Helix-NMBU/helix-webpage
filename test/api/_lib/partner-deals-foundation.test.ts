@@ -29,13 +29,14 @@ beforeAll(async()=>{
  }
  await pg.exec(`insert into identity.member_roles values('${admin}','platform_administrator'),('${pm}','project_manager');`);
  await pg.exec(readFileSync(new URL("../../../db/migrations/035_partner_deals.sql",import.meta.url),"utf8"));
+ await pg.exec(readFileSync(new URL("../../../db/migrations/056_partner_deal_sponsor_level.sql",import.meta.url),"utf8"));
  await pg.exec(`alter table partner_deals.deals add column cancelled_at timestamptz; alter table partner_deals.contributions add column retired_at timestamptz; alter table partner_deals.contributions add column pending_change_id uuid; alter table partner_deals.deliverables add column retired_at timestamptz; alter table partner_deals.deliverables add column pending_change_id uuid; create table finance.funding(id uuid,status text); create table partner_deals.funding_links(contribution_id uuid,funding_id uuid); create table partner_deals.manual_reconciliation_items(change_id uuid,kind text,item_id uuid); create table partner_deals.agreement_changes(id uuid,deal_id uuid,kind text,reason text,before_terms jsonb,proposed_terms jsonb,status text,created_at timestamptz,resolved_at timestamptz,withdrawn_at timestamptz,resolution_note text); create table partner_deals.manual_funding_reviews(id uuid,contribution_id uuid,note text,reviewed_at timestamptz); create function partner_deals.manual_finance_review_ready(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_needs_review(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_review_token(uuid) returns text language sql as $$ select null::text $$; create function partner_deals.linked_funding_mismatch(uuid) returns boolean language sql as $$ select false $$; create table partner_deals.separate_funding_approvals(contribution_id uuid,candidate_snapshot jsonb); create function partner_deals.funding_candidate_snapshot(uuid) returns jsonb language sql as $$ select '[]'::jsonb $$; create table partner_deals.finance_reviews(contribution_id uuid,organization_name text,season_id uuid,amount_ore bigint,status text); create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid,contribution_id uuid);`);
  await pg.exec(`insert into partner_deals.member_grants values ('${business}','business',true),('${marketing}','marketing',true);`);
  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  services=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});
 });
 afterAll(async()=>pg.close());
-const input=()=>({organizationId:orgId,title:"Partner agreement",stage:"lead",ownerMemberId:business,contactName:"Contact",contactEmail:"person@example.test",startsOn:"2026-08-01",endsOn:"2028-07-31",agreementLink:"https://example.test/agreement",negotiationNotes:"Private negotiation",contributions:[{seasonId:season,kind:"cash",amountOre:"100000",invoiceDate:"2026-11-01"},{seasonId:future,kind:"product",amountOre:"12000",description:"Parts"}],deliverables:[{title:"Logo",description:"On car"}]});
+const input=()=>({sponsorLevel:"silver",probability:65,followUpOn:"2026-11-15",organizationId:orgId,title:"Partner agreement",stage:"lead",ownerMemberId:business,contactName:"Contact",contactEmail:"person@example.test",startsOn:"2026-08-01",endsOn:"2028-07-31",agreementLink:"https://example.test/agreement",negotiationNotes:"Private negotiation",contributions:[{seasonId:season,kind:"cash",amountOre:"100000",invoiceDate:"2026-11-01"},{seasonId:future,kind:"product",amountOre:"12000",description:"Parts"}],deliverables:[{title:"Logo",description:"On car"}]});
 describe("partner deals access and persistence",()=>{
  it("separates explicit pipeline grants from marketing, admin and unauthenticated sessions",async()=>{
   await expect(services.load(marketing,"pipeline")).rejects.toMatchObject({status:403});
@@ -54,6 +55,7 @@ describe("partner deals access and persistence",()=>{
   await services.save(business,{...input(),title:"Second agreement"});
   const pipeline=await services.load(business,"pipeline"); expect(pipeline.deals).toHaveLength(2);
   expect(JSON.stringify(pipeline)).toContain("Private negotiation");
+  expect(pipeline.deals[0]).toMatchObject({sponsorLevel:"silver",probability:65,followUpOn:"2026-11-15"});
   expect((await services.load(marketing,"shared")).deals).toHaveLength(0);
   expect((await pg.query("select * from partner_deals.contributions where deal_id=$1",[dealId])).rows).toHaveLength(2);
  });
@@ -61,7 +63,7 @@ describe("partner deals access and persistence",()=>{
   await services.save(business,{...input(),id:dealId,expectedRevision:0,title:"Updated"});
   await expect(services.save(business,{...input(),id:dealId,expectedRevision:0})).rejects.toMatchObject({status:409});
   await expect(services.save(business,{...input(),stage:"won"})).rejects.toMatchObject({status:400});
-  expect((await pg.query("select * from partner_deals.audit where deal_id=$1",[dealId])).rows).toHaveLength(2);
+  expect((await pg.query("select * from partner_deals.audit where deal_id=$1 and action in ('created','updated')",[dealId])).rows).toHaveLength(2);
  });
  it("rejects duplicate seasonal cash and rolls back the entire attempted update",async()=>{
   const before = await services.load(business,"pipeline");
