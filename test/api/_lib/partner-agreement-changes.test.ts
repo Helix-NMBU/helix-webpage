@@ -30,7 +30,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','040_partner_stable_draft_items','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history']) await db.exec(read(n));
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
@@ -109,6 +109,19 @@ it('keeps amendments pending until reviewed, preserves history, and pauses cance
  expect((await db.query<{title:string}>("select title from partner_deals.deliverables where deal_id=$1",[id(101)])).rows[0].title).toBe('Changed completed work');
  const manualView=await dealService(0).load('test','shared');const manualDeal=(manualView.deals as {id:string;contributions:{seasonId:string;manualHandling:boolean;fundingNeedsReview:boolean}[]}[]).find(d=>d.id===id(101))!;expect(manualDeal.contributions.find(c=>c.seasonId===id(21))).toMatchObject({manualHandling:true,fundingNeedsReview:false});
  expect((await db.query<{title:string;status:string}>("select title,status from project_management.tasks where id=(select task_id from partner_deals.task_links where deal_id=$1 and kind='marketing')",[id(101)])).rows[0]).toMatchObject({title:'Publish logo',status:'done'});
+ const followupTerms={...manualTerms,title:'Metadata correction'};
+ const followup=await dealService(0).recordAgreementChange('test',id(101),3,'amendment','Correct name',followupTerms,true);
+ await dealService(0).resolveAgreementChange('test',followup.id,'Reviewed metadata',true,false);
+ expect((await db.query<{title:string}>("select title from partner_deals.deals where id=$1",[id(101)])).rows[0].title).toBe('Metadata correction');
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[manualFunding])).rows[0].amount_ore).toBe('10000');
+ expect((await db.query<{title:string;status:string}>("select title,status from project_management.tasks where id=(select task_id from partner_deals.task_links where deal_id=$1 and kind='marketing')",[id(101)])).rows[0]).toMatchObject({title:'Publish logo',status:'done'});
+
+
+ await db.query("update finance.funding set amount_ore=9000,revision=revision+1 where id=$1",[manualFunding]);
+ const later=await dealService(0).recordAgreementChange('test',id(101),5,'amendment','Correct another detail',{...followupTerms,title:'Second correction'},true);
+ await expect(dealService(0).resolveAgreementChange('test',later.id,'Review changed funding',true,false)).rejects.toMatchObject({status:409});
+ await dealService(0).resolveAgreementChange('test',later.id,'Finance handled the new discrepancy',true,true);
+ expect((await db.query<{amount_ore:string}>("select amount_ore::text from finance.funding where id=$1",[manualFunding])).rows[0].amount_ore).toBe('9000');
  expect((await db.query<{result:{created:number}}>("select partner_deals.materialize_invoices_on('2027-08-02') result")).rows[0].result.created).toBe(0);
  expect((await db.query("select task_id from partner_deals.task_links where deal_id=$1 and season_id=$2",[id(91),id(21)])).rows).toHaveLength(0);
  await dealService(0).resolveAgreementChange('test',reopening.id,'Finance and Marketing restored records',true,false);

@@ -54,3 +54,15 @@ it("lets Business request a limited Finance review for a mismatched won deal",as
  expect(request).toHaveBeenCalledWith("/api/partner-deals",expect.objectContaining({method:"POST",body:JSON.stringify({action:"requestFinanceReview",dealId:"deal-review",expectedRevision:3})}));
  await act(async()=>root.unmount());el.remove();vi.unstubAllGlobals();
 });
+
+it("labels pending reopening accurately and does not claim an expired agreement is active",async()=>{
+ const base:WonDeal={id:"deal",title:"Agreement",organizationName:"Partner",startsOn:"2020-01-01",endsOn:"2021-01-01",contactName:"",contactEmail:"",agreementLink:"",contributions:[],deliverables:[],tasks:[]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async()=>root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[base]})}/></MemoryRouter>));
+ expect(el.textContent).not.toContain("Active");await act(async()=>root.unmount());el.remove();
+ const pending:WonDeal={...base,changes:[{id:"change",kind:"reopening",reason:"Renewed",beforeTerms:{title:"Agreement",contactName:"",contactEmail:"",startsOn:base.startsOn,endsOn:base.endsOn,agreementLink:"",cashChanges:[],inKindChanges:[],deliverableChanges:[]},proposedTerms:{},status:"pending",createdAt:"now",resolvedAt:null,resolutionNote:null}]};
+ const second=document.createElement("div");document.body.append(second);const secondRoot=createRoot(second);
+ await act(async()=>secondRoot.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[pending]})}/></MemoryRouter>));
+ expect(second.textContent).toContain("Reopening · Review required");expect(second.textContent).not.toContain("Active");
+ await act(async()=>secondRoot.unmount());second.remove();
+});
