@@ -4,9 +4,10 @@ import { TaskListSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Button } from "@libs/components/ui/button";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { projectRepository, ProjectRequestError } from "../ProjectManagement/repository";
-import type { ProjectWorkspace, Task } from "../ProjectManagement/types";
+import type { ProjectMutation, ProjectWorkspace, Task } from "../ProjectManagement/types";
 import type { SaveTaskStatus } from "../ProjectManagement/TaskStatus";
 import { ProjectTaskList } from "./ProjectTaskList";
+import { boardAssignmentMutation } from "../ProjectManagement/TaskBoard";
 import { ProjectsPage } from "./ProjectsPage";
 import { useWorkspace } from "./WorkspaceContext";
 import { LoadDirectory } from "./DirectoryComponents";
@@ -89,19 +90,14 @@ export function DepartmentTasksPage() {
     };
   }, [load]);
 
-  const saveStatus: SaveTaskStatus = async (task, status, blockedReason) => {
+  const save = async (mutation: ProjectMutation) => {
     if (saving.current || !workspace) return false;
     saving.current = true;
     setBusy(true);
     try {
-      const next = await (await getRepository()).mutate({
-        action: "set_status",
-        id: task.id,
-        expectedRevision: task.revision,
-        status,
-        blockedReason,
-      });
+      const next = await (await getRepository()).mutate(mutation);
       if (alive.current) setWorkspace(next);
+      if (mutation.action !== "set_status") notify("Assignments saved", "The task assignments have been updated.", { variant: "success", href: null });
       return true;
     } catch (error) {
       notify("Could not update task", error instanceof Error ? error.message : "Try again.", {
@@ -114,6 +110,7 @@ export function DepartmentTasksPage() {
       if (alive.current) setBusy(false);
     }
   };
+  const saveStatus: SaveTaskStatus = (task, status, blockedReason) => save({ action: "set_status", id: task.id, expectedRevision: task.revision, status, blockedReason });
 
   if (!directory) return directorySession?.loading ? <TaskListSkeleton label="Loading department tasks" board={params.get("view") === "board"} /> : <Button variant="outline" onClick={() => void directorySession?.refresh()}>Try again</Button>;
   if (denied || !department) return null;
@@ -147,6 +144,7 @@ export function DepartmentTasksPage() {
       onClear={() => undefined}
       onOpen={(task: Task) => navigate(`/tasks/${task.id}`)}
       onStatusChange={saveStatus}
+      onSaveAssignees={(task, assigneeIds) => save(boardAssignmentMutation(task, assigneeIds))}
       onCreate={() => undefined}
       boardKind="task"
       heading="Tasks"

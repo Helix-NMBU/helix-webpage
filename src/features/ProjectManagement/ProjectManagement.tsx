@@ -20,6 +20,7 @@ import { clearProjectWorkspaceCache, projectRepository, ProjectRequestError } fr
 import { Choice, ProjectEditor, TaskEditor } from "./TaskEditor";
 import { TaskStatusControl, type SaveTaskStatus } from "./TaskStatus";
 import { PersonalTasks } from "./PersonalTasks";
+import { boardAssignmentMutation } from "./TaskBoard";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { TaskComposer } from "./TaskComposer";
 import { isOrganized } from "./hierarchy";
@@ -191,7 +192,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const descriptions: Record<string, string> = { overview: "A shared view of the season, its progress, and the work ahead.", production: "From design to assembly. Track production work and upcoming milestones.", "partnership-deliverables": "Track recorded commitments to this season's sponsors and partners.", marketing: "Plan campaigns, content, and the Helix story.", operations: "Competition deadlines and the work that keeps the team running." };
   const filtered = scope.filter(task => (status === "all" || (status === "open" ? isOpen(task) : task.status === status)) && (projectId === "all" || task.projectId === projectId) && (milestoneId === "all" || (milestoneId === "unorganized" ? !isOrganized(task, workspace) : task.kind === "task" && task.milestoneId === milestoneId)) && (!search || [task.title, task.description, task.partnerName, workspace.members.filter(member => task.assigneeIds.includes(member.id)).map(member => member.name).join(" ")].join(" ").toLowerCase().includes(search.toLowerCase()))).sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.title.localeCompare(b.title));
   if (personal) return <>
-    <PersonalTasks workspace={workspace} busy={busy} loading={loading} onRefresh={() => { clearProjectWorkspaceCache(); void load(); }} onOpen={openTask} onStatusChange={changeStatus} />
+    <PersonalTasks workspace={workspace} busy={busy} loading={loading} onRefresh={() => { clearProjectWorkspaceCache(); void load(); }} onOpen={openTask} onStatusChange={changeStatus} onSaveAssignees={(task, assigneeIds) => save(boardAssignmentMutation(task, assigneeIds))} />
     {taskEditor?.task && <TaskEditor key={taskEditor.task.id} task={taskEditor.task} workspace={workspace} category={taskEditor.task.category} statusOnly busy={busy} onSave={save} onClose={() => setTaskEditor(null)} />}
   </>;
   return <section className="mx-auto w-full max-w-7xl space-y-10 py-6" aria-labelledby="project-page-title" aria-busy={loading || busy}>

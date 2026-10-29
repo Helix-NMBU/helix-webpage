@@ -13,7 +13,7 @@ function Rows({ columns = 4, rows = 4 }: { columns?: number; rows?: number }) {
   </div>;
 }
 function Board() {
-  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-3" aria-hidden="true">{[0, 1, 2].map(column => <div key={column} className="space-y-3 rounded-xl bg-muted/30 p-3"><Skeleton className="h-4 w-24" />{[0, 1, 2].map(card => <div key={card} className="space-y-3 rounded-lg border bg-card p-4"><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-2/3" /><div className="flex justify-between"><Skeleton className="h-5 w-16 rounded-full" /><Skeleton className="size-6 rounded-full" /></div></div>)}</div>)}</div>;
+  return <div className="flex gap-3 overflow-hidden" aria-hidden="true">{[0, 1, 2].map(column => <div key={column} className="w-72 flex-none space-y-3 rounded-xl bg-muted/30 p-3"><Skeleton className="h-4 w-24" />{[0, 1, 2].map(card => <div key={card} className="space-y-3 rounded-lg border bg-card p-4"><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-2/3" /><div className="flex justify-between"><Skeleton className="h-5 w-16 rounded-full" /><Skeleton className="size-6 rounded-full" /></div></div>)}</div>)}</div>;
 }
 export function TaskListSkeleton({ label = "Loading tasks", title = "Tasks", board = false, personal = false }: { label?: string; title?: string; board?: boolean; personal?: boolean }) {
   return <section role="status" aria-label={label} className={`space-y-4 ${personal ? "mx-auto w-full max-w-7xl py-5" : "min-w-0"}`}>

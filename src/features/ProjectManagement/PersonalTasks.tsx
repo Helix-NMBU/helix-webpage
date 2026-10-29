@@ -19,7 +19,7 @@ import { Badge } from "@libs/components/ui/badge";
 import { TaskStatusControl, type SaveTaskStatus } from "./TaskStatus";
 import { AssigneeAvatars } from "./TaskAssignees";
 import { PriorityIndicator } from "./MilestoneTableControls";
-import { TaskBoard } from "./TaskBoard";
+import { TaskBoard, type SaveBoardAssignees } from "./TaskBoard";
 import { PersonalTaskViewMenu } from "./PersonalTaskViewMenu";
 import {
   assignedTasks,
@@ -36,6 +36,7 @@ export function PersonalTasks({
   onRefresh,
   onOpen,
   onStatusChange,
+  onSaveAssignees,
 }: {
   workspace: ProjectWorkspace;
   busy: boolean;
@@ -43,6 +44,7 @@ export function PersonalTasks({
   onRefresh: () => void;
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
+  onSaveAssignees: SaveBoardAssignees;
 }) {
   const [params, setParams] = useSearchParams();
   const options = personalTaskView(params);
@@ -121,6 +123,7 @@ export function PersonalTasks({
             columns={options.columns}
             onOpen={onOpen}
             onStatusChange={onStatusChange}
+            onSaveAssignees={onSaveAssignees}
           />
         ) : groups.length ? (
           <Table>

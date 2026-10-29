@@ -40,6 +40,7 @@ import { useWorkspace } from "./WorkspaceContext";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
 import { type TaskStatus } from "../ProjectManagement/types";
 import { ProjectTaskList } from "./ProjectTaskList";
+import { boardAssignmentMutation } from "../ProjectManagement/TaskBoard";
 import { ProjectSidebar } from "./ProjectSidebar";
 
 function InlineProjectField({
@@ -536,6 +537,7 @@ export function ProjectDetail({
                   onClear={clearMilestone}
                   onOpen={item => openTask(item.id)}
                   onStatusChange={changeStatus}
+                  onSaveAssignees={(task, assigneeIds) => save(boardAssignmentMutation(task, assigneeIds))}
                   onCreate={() => setComposer("task")}
                 />
                 </div>

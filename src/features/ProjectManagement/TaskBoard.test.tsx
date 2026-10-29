@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TaskBoard } from "./TaskBoard";
+import { boardAssignmentMutation, TaskBoard } from "./TaskBoard";
 import { initialLocalWorkspace } from "./local-repository";
 import type { ProjectWorkspace } from "./types";
 const notify = vi.hoisted(() => vi.fn());
@@ -13,7 +13,8 @@ vi.mock("../MemberPlatform/MemberNotifications", () => ({
 describe("shared task board", () => {
   let root: Root, container: HTMLDivElement;
   const onOpen = vi.fn(),
-    onSave = vi.fn().mockResolvedValue(true);
+    onSave = vi.fn().mockResolvedValue(true),
+    onSaveAssignees = vi.fn().mockResolvedValue(true);
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = document.createElement("div");
@@ -21,6 +22,7 @@ describe("shared task board", () => {
     root = createRoot(container);
     onOpen.mockClear();
     onSave.mockReset().mockResolvedValue(true);
+    onSaveAssignees.mockReset().mockResolvedValue(true);
     notify.mockReset();
   });
   afterEach(async () => {
@@ -50,11 +52,77 @@ describe("shared task board", () => {
             columns={columns}
             onOpen={onOpen}
             onStatusChange={onSave}
+            onSaveAssignees={onSaveAssignees}
           />
         </MemoryRouter>,
       ),
     );
   }
+  it("keeps board columns fixed in width", async () => {
+    await render();
+    for (const column of container.querySelectorAll('section[aria-label$=" column"]')) {
+      expect(column.className).toContain("w-72");
+      expect(column.className).toContain("flex-none");
+    }
+  });
+  it("assigns an unassigned task from its card and leaves a failed selection open", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(item => item.kind === "task")!;
+    task.assigneeIds = [];
+    await render(data);
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Assign ${task.title}"]`)!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${data.members[0].name}"]`)!.click());
+    onSaveAssignees.mockResolvedValueOnce(false);
+    const save = () => [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].find(button => button.textContent === "Save assignees")!;
+    await act(async () => save().click());
+    expect(onSaveAssignees).toHaveBeenCalledWith(task, [data.members[0].id]);
+    expect(save()).toBeTruthy();
+    await act(async () => save().click());
+    expect(onSaveAssignees).toHaveBeenCalledTimes(2);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+  it("shows a non-interactive unassigned indicator without management permission", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(item => item.kind === "task")!;
+    task.assigneeIds = [];
+    data.canManage = false;
+    data.viewerId = "not-a-lead";
+    await render(data);
+    const card = container.querySelector(`[role="article"][aria-label="${task.title}"]`)!;
+    expect(card.querySelector('[role="img"][aria-label="Unassigned"]')).not.toBeNull();
+    expect(card.querySelector(`[aria-label="Assign ${task.title}"]`)).toBeNull();
+  });
+  it("offers an action to organize an unassigned legacy task before saving", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(item => item.kind === "task")!;
+    task.assigneeIds = [];
+    task.milestoneId = null;
+    await render(data);
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Assign ${task.title}"]`)!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${data.members[0].name}"]`)!.click());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].find(button => button.textContent === "Save assignees")!.click());
+    expect(onSaveAssignees).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith("Organize this task first", expect.any(String), expect.objectContaining({ action: expect.objectContaining({ label: "Open task" }) }));
+    notify.mock.calls[notify.mock.calls.length - 1][2].action.onClick();
+    expect(onOpen).toHaveBeenCalledWith(task);
+  });
+  it("uses the correct mutation and revision for tasks and milestones", () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(item => item.kind === "task")!;
+    const milestone = data.tasks.find(item => item.kind === "milestone")!;
+    expect(boardAssignmentMutation(task, ["member"])).toMatchObject({ action: "save_task", id: task.id, expectedRevision: task.revision, task: { assigneeIds: ["member"] } });
+    expect(boardAssignmentMutation(milestone, ["member"])).toEqual({ action: "update_milestone", id: milestone.id, expectedRevision: milestone.revision, changes: { assigneeIds: ["member"] } });
+  });
+  it("assigns milestone leads through the same board control", async () => {
+    const data = initialLocalWorkspace();
+    const milestone = data.tasks.find(item => item.kind === "milestone")!;
+    milestone.assigneeIds = [];
+    await render(data, ["assignee"], false, "milestone");
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Assign leads to ${milestone.title}"]`)!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Assign ${data.members[0].name} as lead"]`)!.click());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].find(button => button.textContent === "Save leads")!.click());
+    expect(onSaveAssignees).toHaveBeenCalledWith(milestone, [data.members[0].id]);
+  });
   async function dragEvent(
     target: Element,
     type: string,

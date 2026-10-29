@@ -30,7 +30,7 @@ import { ProjectDetail } from "./ProjectDetail";
 import { ProjectViewMenu } from "./ProjectViewMenu";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { PROJECT_COLUMNS, projectView, visibleProjects, projectGroups, type ProjectColumn } from "./project-view";
-import { Choice, ProjectEditor } from "../ProjectManagement/TaskEditor";
+import { ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { ProgressRing } from "../ProjectManagement/ProgressRing";
 import {
   PriorityIndicator,
@@ -213,12 +213,12 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
           {departmentId && !departmentIdScope && <Button variant="ghost" size="sm" onClick={() => { const next = new URLSearchParams(params); next.delete("department"); setParams(next); }}>All projects</Button>}
           <div className="w-48 max-w-full sm:w-64"><Search outside label="Find projects" value={search} onChange={setSearch} /></div>
           <ProjectViewMenu data={data} options={scopedOptions} onChange={change} onReset={reset} hideDepartmentFilter={Boolean(departmentIdScope)} />
-          {scopedOptions.view === "timeline" && <><Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button><div className="w-28"><Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scopedOptions.scale} onChange={value => change("scale", value)} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} /></div></>}
+          {scopedOptions.view === "timeline" && <Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button>}
           {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
         </div>}
       >
         <>
-          {scopedOptions.view === "timeline" ? <ProjectTimeline projects={projects} groups={groups} scale={scopedOptions.scale} timelineRef={timelineRef} /> : (groups.length ? groups : [{ id: "all", name: "", projects: [] }]).map(group => <section key={group.id} aria-label={group.name ? `Projects in ${group.name}` : "Projects list view"}>
+          {scopedOptions.view === "timeline" ? <ProjectTimeline projects={projects} groups={groups} directory={data} scale={scopedOptions.scale} timelineRef={timelineRef} /> : (groups.length ? groups : [{ id: "all", name: "", projects: [] }]).map(group => <section key={group.id} aria-label={group.name ? `Projects in ${group.name}` : "Projects list view"}>
             {group.name && <h2 className="border-y bg-muted/40 px-4 py-2 text-sm font-medium">{group.name} <span className="ml-2 text-xs text-muted-foreground">{group.projects.length}</span></h2>}
             <ProjectRows data={data} projects={group.projects} columns={scopedOptions.columns} />
           </section>)}
