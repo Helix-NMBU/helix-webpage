@@ -52,13 +52,7 @@ export function createLocalProjectRepository(): ProjectRepository {
     });
     const previousDepartments = workspace.departments ?? [];
     if (previousDepartments.some(department => canonicalDepartment(department.name) !== department.name) && !localStorage.getItem("helix-member-local-department-archive-v1")) localStorage.setItem("helix-member-local-department-archive-v1", JSON.stringify(previousDepartments));
-    const departments = fixedDepartmentRecords(previousDepartments).map(department => workspace.canManage ? {
-      ...department,
-      memberIds: [...new Set([...department.memberIds, workspace.viewerId])],
-      viewerIds: [...new Set([...(department.viewerIds ?? []), workspace.viewerId])],
-      leadIds: (department.leadIds ?? (department.leadId ? [department.leadId] : [])).filter(id => id !== workspace.viewerId),
-      leadId: (department.leadIds ?? (department.leadId ? [department.leadId] : [])).find(id => id !== workspace.viewerId) ?? null,
-    } : department);
+    const departments = fixedDepartmentRecords(previousDepartments);
     const merged = localPartnerWorkspace({projects:workspace.projects,tasks});
     const progressEvents = workspace.progressEvents ?? tasks.map(item => progressEvent(item));
     const known = new Set(progressEvents.map(event => event.taskId));

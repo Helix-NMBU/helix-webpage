@@ -39,6 +39,8 @@ beforeAll(async () => {
   await db.exec(readFileSync(new URL("../db/migrations/033_project_status.sql", import.meta.url), "utf8"));
     await db.exec("create schema finance; create table finance.settings(setting_key text,setting_value jsonb);");
     await db.exec(readFileSync(new URL("../db/migrations/041_project_current_season.sql", import.meta.url), "utf8"));
+  await db.exec("drop index if exists project_management.project_department_lead_idx");
+  await db.exec(readFileSync(new URL("../db/migrations/057_optional_manager_department_membership.sql", import.meta.url), "utf8"));
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) values($1,$2,'viewer')", [departmentId,id(3)]);
   await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Electronics'", [id(7)]);
 }, 60000);
@@ -96,6 +98,23 @@ describe("department access authorization", () => {
       await projects.mutate(person,{action:"save_task",id:current.id,expectedRevision:current.revision,task:{...task,title:person}});
     }
   });
+  it("lets managers and administrators choose membership without losing management permissions", async () => {
+    for (const person of ["manager", "admin"]) {
+      const memberId = people.find(p => p.name === person)!.userId;
+      const workspace = await directory.load("admin");
+      const member = workspace.members.find(m => m.id === memberId)!;
+      const levels = ["lead", "member", "viewer", null, null, null, null] as const;
+      const departments = workspace.departments.map((d, i) => ({ id: d.id, revision: d.revision, member: levels[i] !== null, lead: levels[i] === "lead", access: levels[i] }));
+      await access.saveWorkspace("admin", { memberId, expectedRevision: member.revision, departments, spaceKeys: [] });
+      const memberships = (await db.query<{department_id:string;access_level:string}>("select department_id,access_level from project_management.department_members where member_id=$1", [memberId])).rows;
+      expect(memberships).toHaveLength(3);
+      for (const choice of departments) expect(memberships.find(m => m.department_id === choice.id)?.access_level ?? null).toBe(choice.access);
+      const noMembership = departments.find(d => d.access === null)!;
+      expect((await homes.load(person, noMembership.id)).canEdit).toBe(true);
+      await homes.save(person, { action: "save_department_home", departmentId: noMembership.id, expectedRevision: (await homes.load(person, noMembership.id)).revision, description: "Managed without membership", driveFolderUrl: null });
+      expect((await projects.load(person)).canManage).toBe(true);
+    }
+  });
   it("persists Member to Viewer changes, keeps them on detail saves, and rejects stale revisions", async () => {
     const workspace=await directory.load("admin");
     const member=workspace.members.find(m=>m.id===id(2))!;
@@ -109,12 +128,18 @@ describe("department access authorization", () => {
     expect(fresh.departments.find(d=>d.id===departmentId)?.viewerIds).toContain(member.id);
     await expect(projects.mutate("member",{action:"set_status",id:id(102),expectedRevision:4,status:"done",blockedReason:""})).rejects.toMatchObject({status:403});
   });
-  it("applies and revokes role overrides immediately while keeping Viewer membership", async () => {
+  it("preserves an existing department choice when a management role is granted", async () => {
+    await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')", [id(3)]);
+    expect((await db.query<{access_level:string}>("select access_level from project_management.department_members where department_id=$1 and member_id=$2", [departmentId, id(3)])).rows[0].access_level).toBe("viewer");
+    expect((await db.query("select 1 from project_management.department_members where member_id=$1", [id(3)])).rows).toHaveLength(1);
+    await db.query("delete from identity.member_roles where member_id=$1 and role_key='project_manager'", [id(3)]);
+  });
+  it("applies and revokes role overrides without creating Viewer memberships", async () => {
     await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(6)]);
     expect((await projects.load("outsider")).canManage).toBe(true);
-    expect((await directory.load("outsider")).departments.filter(d=>d.viewerIds?.includes(id(6)))).toHaveLength(7);
+    expect((await directory.load("outsider")).departments.filter(d=>d.memberIds.includes(id(6)))).toHaveLength(0);
     await db.query("delete from identity.member_roles where member_id=$1 and role_key='project_manager'",[id(6)]);
-    expect((await projects.load("outsider")).canManage).toBe(false);
+    await expect(projects.load("outsider")).rejects.toMatchObject({status:403});
     await expect(projects.mutate("outsider",{action:"delete_task",id:id(102),expectedRevision:4})).rejects.toMatchObject({status:403});
   });
   it("allows deletion of projects and descendants only for Leads and role overrides", async () => {
