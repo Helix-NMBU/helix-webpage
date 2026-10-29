@@ -12,7 +12,7 @@ import { SeasonFinancialRequestError } from "./season-financials-repository";
 import type { SeasonFinancialSummary } from "./season-financials-types";
 
 const summary: SeasonFinancialSummary = {
-  moneyFlow: { status: "available", moneyInNok: "0.00", moneyOutNok: "0.00" },
+  moneyFlow: { status: "available", months: [{ month: "2026-09", moneyInNok: "120.00", moneyOutNok: "20.00" }], otherInNok: "0.00", otherOutNok: "0.00", moneyInNok: "0.00", moneyOutNok: "0.00" },
   seasonCode: "S27", budgetStatus: "approved", plannedNok: "1000.00", actualNok: "1250.50", canOpenFinancials: true, viewVersion: 1,
   bank: { status: "available", snapshot: { amountNok: "9876.54", asOfDate: "2026-10-28", updatedAt: "2026-10-29T10:00:00Z" } },
   departments: [{ departmentKey: "mechanical", name: "Mechanical", plannedNok: "1000.00", actualNok: "1250.50", unbudgetedNok: "100.00", systems: [{ id: "1", code: "SYS", name: "Frame", active: true, plannedNok: "1000.00", actualNok: "1250.50", unbudgetedNok: "100.00" }] }],
@@ -188,9 +188,10 @@ it("places the finance slot between Progress and Projects", async () => {
 function flowCard() { return container.querySelector<HTMLElement>('[role="group"][aria-label="Money in and out"]')!; }
 
 it("compares recorded sponsor cash received with money paid out", async () => {
-  await render(async () => ({ ...summary, moneyFlow: { status: "available", moneyInNok: "152000.01", moneyOutNok: "68500.75" } }));
+  await render(async () => ({ ...summary, moneyFlow: { status: "available", months: [{ month: "2026-09", moneyInNok: "120.00", moneyOutNok: "20.00" }], otherInNok: "0.00", otherOutNok: "0.00", moneyInNok: "152000.01", moneyOutNok: "68500.75" } }));
   expect(flowCard().textContent).toContain("NOK 152 000,01");
   expect(flowCard().textContent).toContain("NOK 68 500,75");
+  expect(flowCard().querySelector('button[aria-label="Sep 2026: Money in NOK 120,00, money out NOK 20,00"]')).not.toBeNull();
   expect(flowCard().textContent).toContain("sponsor cash marked received");
   expect(flowCard().textContent).toContain("paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records");
   expect(flowCard().textContent).toContain("not bank-reconciled");
@@ -205,7 +206,7 @@ it("shows actual zero flow, and does not fabricate it when there is no season", 
 });
 
 it("suppresses mismatched seasons and reports unavailable flows with retry", async () => {
-  await render(async () => ({ ...summary, moneyFlow: { status: "available", moneyInNok: "12345.00", moneyOutNok: "678.00" } }), "S28");
+  await render(async () => ({ ...summary, moneyFlow: { status: "available", months: [{ month: "2026-09", moneyInNok: "120.00", moneyOutNok: "20.00" }], otherInNok: "0.00", otherOutNok: "0.00", moneyInNok: "12345.00", moneyOutNok: "678.00" } }), "S28");
   expect(flowCard().textContent).toContain("Finance is set to S27, not S28");
   expect(flowCard().textContent).not.toContain("NOK 12 345,00");
   await render(async () => ({ ...summary, moneyFlow: { status: "unavailable" } }));
@@ -215,7 +216,7 @@ it("suppresses mismatched seasons and reports unavailable flows with retry", asy
 });
 
 it("marks retained money flow and previously absent finance season as stale", async () => {
-  const load = vi.fn().mockResolvedValueOnce({ ...summary, moneyFlow: { status: "available", moneyInNok: "20.00", moneyOutNok: "15.00" } }).mockRejectedValueOnce(new Error("Offline"));
+  const load = vi.fn().mockResolvedValueOnce({ ...summary, moneyFlow: { status: "available", months: [{ month: "2026-09", moneyInNok: "120.00", moneyOutNok: "20.00" }], otherInNok: "0.00", otherOutNok: "0.00", moneyInNok: "20.00", moneyOutNok: "15.00" } }).mockRejectedValueOnce(new Error("Offline"));
   await render(load);
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(flowCard().textContent).toContain("Last loaded values.");

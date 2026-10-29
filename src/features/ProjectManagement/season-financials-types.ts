@@ -24,7 +24,7 @@ export type SeasonBankView =
   | { status: "unavailable" };
 
 export type SeasonMoneyFlow =
-  | { status: "available"; moneyInNok: string; moneyOutNok: string }
+  | { status: "available"; moneyInNok: string; moneyOutNok: string; months: Array<{ month: string; moneyInNok: string; moneyOutNok: string }>; otherInNok: string; otherOutNok: string }
   | { status: "no-season" | "unavailable" };
 
 export type SeasonFinancialSummary = {

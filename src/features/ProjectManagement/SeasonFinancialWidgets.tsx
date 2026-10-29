@@ -3,13 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Skeleton } from "@libs/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@libs/components/ui/tooltip";
 import { CvRequestError } from "../MemberCV/repository";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { financeRoutes } from "../Finance/routes";
 import { getDepartmentIcon } from "../Workspace/department-icons";
 import { nokToOre } from "../Finance/finance-calculations";
 import { loadSeasonFinancialSummary, SeasonFinancialRequestError } from "./season-financials-repository";
-import type { SeasonFinancialDepartment, SeasonFinancialSummary } from "./season-financials-types";
+import type { SeasonFinancialDepartment, SeasonFinancialSummary, SeasonMoneyFlow } from "./season-financials-types";
 
 // Format canonical decimal strings without converting large values to a floating-point number.
 function money(value: string): string {
@@ -52,6 +53,26 @@ function DepartmentRow({ department }: { department: SeasonFinancialDepartment }
     <div className="flex min-w-0 items-center gap-2 text-sm"><Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span>{department.name}</span></div>
     <div className="min-w-0 space-y-1"><div aria-hidden="true" className="text-right text-xs tabular-nums text-muted-foreground">{money(department.actualNok)} / {money(department.plannedNok)}</div><div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={label} title={label} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${percent}%` }} /></div></div>
   </li>;
+}
+
+function MonthlyMoneyChart({ flow }: { flow: Extract<SeasonMoneyFlow, { status: "available" }> }) {
+  const maximum = flow.months.reduce((max, month) => {
+    const input = nokToOre(month.moneyInNok), output = nokToOre(month.moneyOutNok);
+    return input > max ? (input > output ? input : output) : (output > max ? output : max);
+  }, 0n);
+  return <TooltipProvider><div className="space-y-3">
+    <div className="flex gap-4 text-xs text-muted-foreground"><span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-primary" />Money in</span><span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-muted-foreground" />Money out</span></div>
+    <div className="flex h-36 items-end gap-1 sm:gap-2" aria-label="Monthly money in and out">
+      {flow.months.map(item => {
+        const date = new Date(`${item.month}-01T12:00:00Z`);
+        const month = new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(date);
+        const label = `${month} ${item.month.slice(0, 4)}: Money in ${money(item.moneyInNok)}, money out ${money(item.moneyOutNok)}`;
+        const height = (value: string) => maximum === 0n ? 0 : Number(nokToOre(value) * 10000n / maximum) / 100;
+        return <Tooltip key={item.month}><TooltipTrigger asChild><button type="button" aria-label={label} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"><span className="flex w-full flex-1 items-end justify-center gap-0.5" aria-hidden="true"><span className="w-2 max-w-[38%] rounded-t-sm bg-primary sm:w-3" style={{ height: `${height(item.moneyInNok)}%` }} /><span className="w-2 max-w-[38%] rounded-t-sm bg-muted-foreground sm:w-3" style={{ height: `${height(item.moneyOutNok)}%` }} /></span><span className="text-[10px] text-muted-foreground sm:text-xs">{month}</span></button></TooltipTrigger><TooltipContent><div><p className="font-medium">{month} {item.month.slice(0, 4)}</p><p>Money in: {money(item.moneyInNok)}</p><p>Money out: {money(item.moneyOutNok)}</p></div></TooltipContent></Tooltip>;
+      })}
+    </div>
+    {(nokToOre(flow.otherInNok) > 0n || nokToOre(flow.otherOutNok) > 0n) && <p className="text-xs text-muted-foreground">Totals include amounts outside September–July or without a date: {money(flow.otherInNok)} in and {money(flow.otherOutNok)} out.</p>}
+  </div></TooltipProvider>;
 }
 
 export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinancialSummary }: { season: string; userId: string; load?: typeof loadSeasonFinancialSummary }) {
@@ -113,16 +134,16 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
   const snapshot = bank?.status === "available" ? bank.snapshot : null;
   const flow = summary?.moneyFlow;
   const flowVisible = summary?.seasonCode === season && flow?.status === "available";
-  const flowScale = flowVisible ? (nokToOre(flow.moneyInNok) > nokToOre(flow.moneyOutNok) ? flow.moneyInNok : flow.moneyOutNok) : "0.00";
   const flowNote = mismatch ? `${stale ? "Last checked: finance was" : "Finance is"} set to ${summary.seasonCode}, not ${season}.` : flow?.status === "no-season" || (summary && !summary.seasonCode) ? (stale ? "Last checked: no finance season configured." : "No finance season configured.") : flow?.status === "unavailable" || !summary ? "Money in and out unavailable." : stale ? "Last loaded values." : `Recorded for ${season}.`;
   return <section className="space-y-4" aria-labelledby="season-financial-title">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="season-financial-title" className="text-lg font-medium">Season finances</h2><p className="text-sm text-muted-foreground">Planned costs, recorded spending and money in the bank.</p></div>{summary?.canOpenFinancials && <Button asChild variant="outline" size="sm"><Link to={financeRoutes.overview}>Open Financials</Link></Button>}</div>
     <div className="grid gap-3 md:grid-cols-2">
       <Card role="group" aria-label="Money in and out" className="gap-4 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Money in and out</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader><CardContent className="space-y-4 px-5">
         <dl className="space-y-3 tabular-nums">
-          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money in</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>{flowVisible && <div className="h-2 rounded-full bg-muted" aria-hidden="true"><div className="h-full rounded-full bg-primary" style={{ width: `${usage(flow.moneyInNok, flowScale)}%` }} /></div>}</div>
-          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money out</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>{flowVisible && <div className="h-2 rounded-full bg-muted" aria-hidden="true"><div className="h-full rounded-full bg-muted-foreground" style={{ width: `${usage(flow.moneyOutNok, flowScale)}%` }} /></div>}</div>
+          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money in</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div></div>
+          <div className="space-y-1"><div className="flex flex-wrap justify-between gap-x-3"><dt className="text-sm text-muted-foreground">Money out</dt><dd className="font-medium">{loading && !summary ? <Skeleton className="h-5 w-24" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div></div>
         </dl>
+        {flowVisible && <MonthlyMoneyChart flow={flow} />}
         <p className="sr-only">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
       </CardContent></Card>
       <Card className="min-h-56 gap-2 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Bank balance</CardTitle><CardDescription>{snapshot ? <span>As of <time dateTime={snapshot.asOfDate}>{snapshotDate(snapshot.asOfDate)}</time>{stale ? " · Last loaded value" : ""}</span> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</CardDescription></CardHeader><CardContent className="flex flex-1 flex-col justify-end px-5">

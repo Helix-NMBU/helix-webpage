@@ -173,7 +173,7 @@ it("shows only aggregate money flow even when draft budget figures are hidden", 
   expect(view).toMatchObject({ budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, moneyFlow: { status: "available", moneyInNok: "123.45", moneyOutNok: "5.00" } });
   expect(JSON.stringify(view)).not.toContain("Private sponsor");
   const failing: CvDatabase = { query: async <T>(text: string, params?: unknown[]) => {
-    if (text.includes("as money_in_ore")) throw new Error("offline");
+    if (text.includes("with season as")) throw new Error("offline");
     return db.query<T>(text, params);
   } };
   expect((await createSeasonFinancialServices({ db: failing, authenticate: async () => identity }).summary("user")).moneyFlow).toEqual({ status: "unavailable" });
