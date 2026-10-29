@@ -28,7 +28,7 @@ async function render(load: (owner: { current: string | null }) => Promise<Seaso
   await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><SeasonFinancialWidgets season={season} userId={userId} load={load} /><Notifications /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
 }
 
-it("shows exact amounts, a dated manual balance, and keyboard-accessible department drilldown", async () => {
+it("shows exact amounts, a dated manual balance, and accessible department spending bars", async () => {
   await render(async () => summary);
   expect(container.textContent).toContain("NOK 1 000,00");
   expect(container.textContent).toContain("NOK 1 250,50");
@@ -37,13 +37,10 @@ it("shows exact amounts, a dated manual balance, and keyboard-accessible departm
   expect(container.textContent).toContain("Includes unpaid invoices");
   expect(container.querySelector('[role="img"][aria-label*="over budget"]')).not.toBeNull();
   expect(container.textContent).toContain("Spending by department");
-  expect(container.textContent).toContain("Over budget · Unbudgeted NOK 100,00");
   expect(container.querySelector('a[href="/finance"]')).not.toBeNull();
-  const button = [...container.querySelectorAll("button")].find(item => item.textContent?.includes("Show systems"))!;
-  expect(button.getAttribute("aria-expanded")).toBe("false");
-  await act(async () => button.click());
-  expect(button.getAttribute("aria-expanded")).toBe("true");
-  expect(container.textContent).toContain("Frame");
+  const bar = container.querySelector('[role="progressbar"][aria-label*="Mechanical"]');
+  expect(bar?.getAttribute("aria-valuetext")).toContain("NOK 1 250,50 spent of NOK 1 000,00 allocated, over budget, NOK 100,00 unbudgeted");
+  expect(bar?.getAttribute("aria-valuenow")).toBe("100");
 });
 
 it("distinguishes a zero snapshot from an absent budget and hides restricted Financials links", async () => {
@@ -123,7 +120,7 @@ it("labels retained department values and a previously absent balance after refr
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("Last checked: no balance entered.");
   expect(container.textContent).not.toContain("No balance entered yet.");
-  expect(container.textContent).toContain("Last loaded values. Recorded spending compared with the planned budget.");
+  expect(container.textContent).toContain("Last loaded values.");
   expect(container.textContent).toContain("Could not load financial overview Try again");
 });
 
