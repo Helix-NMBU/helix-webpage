@@ -36,10 +36,7 @@ it("shows exact amounts, a dated manual balance, and keyboard-accessible departm
   expect(container.textContent).toContain("as of 2026-10-28");
   expect(container.textContent).toContain("Includes unpaid invoices");
   expect(container.querySelector('[role="img"][aria-label*="over budget"]')).not.toBeNull();
-  const expand = [...container.querySelectorAll("button")].find(item => item.textContent === "Show departments")!;
-  expect(expand.getAttribute("aria-expanded")).toBe("false");
-  await act(async () => expand.click());
-  expect(expand.getAttribute("aria-expanded")).toBe("true");
+  expect(container.textContent).toContain("Spending by department");
   expect(container.textContent).toContain("Over budget · Unbudgeted NOK 100,00");
   expect(container.querySelector('a[href="/finance"]')).not.toBeNull();
   const button = [...container.querySelectorAll("button")].find(item => item.textContent?.includes("Show systems"))!;
@@ -123,7 +120,6 @@ it("refreshes a visible tab periodically without overlapping requests and clears
 it("labels retained department values and a previously absent balance after refresh fails", async () => {
   const load = vi.fn().mockResolvedValueOnce({ ...summary, bank: { status: "available", snapshot: null } }).mockRejectedValueOnce(new Error("Offline"));
   await render(load);
-  await act(async () => [...container.querySelectorAll("button")].find(item => item.textContent === "Show departments")!.click());
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("Last checked: no balance entered.");
   expect(container.textContent).not.toContain("No balance entered yet.");

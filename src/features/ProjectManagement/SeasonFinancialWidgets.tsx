@@ -55,7 +55,6 @@ function DepartmentRow({ department }: { department: SeasonFinancialDepartment }
 
 export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinancialSummary }: { season: string; userId: string; load?: typeof loadSeasonFinancialSummary }) {
   const [summary, setSummary] = useState<SeasonFinancialSummary | null>(null);
-  const [showDepartments, setShowDepartments] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
   const owner = useRef<string | null>(userId);
@@ -126,14 +125,18 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
         <p className="text-xs text-muted-foreground">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
       </CardContent></Card>
       <Card className="gap-2 py-5"><CardHeader className="px-5"><CardDescription>Bank balance</CardDescription><CardTitle className="text-2xl font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-8 w-32" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{snapshot ? <>Manually entered combined balance · as of <time dateTime={snapshot.asOfDate}>{snapshot.asOfDate}</time>{stale ? " · Last loaded value" : ""}</> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</CardContent></Card>
-      <Card className="gap-4 py-5 md:col-span-2"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Season budget and spending</CardTitle><CardDescription>{summary ? budgetDisplay : "Unavailable"}{stale && summary && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</CardDescription></CardHeader><CardContent className="space-y-4 px-5">
-        <div className="flex flex-wrap items-center gap-5">
-          {visible && summary.plannedNok !== null && summary.actualNok !== null && <BudgetRing planned={summary.plannedNok} actual={summary.actualNok} />}
-          <dl className="grid flex-1 grid-cols-2 gap-4 tabular-nums"><div><dt className="text-sm text-muted-foreground">Season budget</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</dd></div><div><dt className="text-sm text-muted-foreground">Recorded spending</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</dd></div></dl>
+      <Card className="gap-4 py-5 md:col-span-2"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Season budget and spending</CardTitle><CardDescription>{summary ? budgetDisplay : "Unavailable"}{stale && summary && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</CardDescription></CardHeader><CardContent className="px-5">
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] md:gap-8">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-5">
+              {visible && summary.plannedNok !== null && summary.actualNok !== null && <BudgetRing planned={summary.plannedNok} actual={summary.actualNok} />}
+              <dl className="grid flex-1 gap-3 tabular-nums"><div><dt className="text-sm text-muted-foreground">Season budget</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</dd></div><div><dt className="text-sm text-muted-foreground">Recorded spending</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</dd></div></dl>
+            </div>
+            {visible && summary.plannedNok !== null && summary.actualNok !== null && nokToOre(summary.actualNok) > nokToOre(summary.plannedNok) && <p className="text-xs text-destructive">Over budget</p>}
+            <p className="text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</p>
+          </div>
+          {visible && <><div aria-hidden="true" className="h-px bg-border md:my-3 md:h-auto md:w-px" /><div className="space-y-3"><h3 className="font-medium">Spending by department</h3><p className="text-xs text-muted-foreground">{stale ? "Last loaded values. " : ""}Recorded spending compared with the planned budget.</p>{summary.departments.length ? <ul className="divide-y">{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul> : <p className="text-sm text-muted-foreground">No departments to show.</p>}</div></>}
         </div>
-        {visible && summary.plannedNok !== null && summary.actualNok !== null && nokToOre(summary.actualNok) > nokToOre(summary.plannedNok) && <p className="text-xs text-destructive">Over budget</p>}
-        <p className="text-xs text-muted-foreground">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</p>
-        {visible && <><Button type="button" variant="outline" size="sm" aria-expanded={showDepartments} aria-controls="season-finance-departments" onClick={() => setShowDepartments(value => !value)}>{showDepartments ? "Hide departments" : "Show departments"}</Button>{showDepartments && <div id="season-finance-departments" className="space-y-3 border-t pt-4"><h3 className="font-medium">Spending by department</h3><p className="text-xs text-muted-foreground">{stale ? "Last loaded values. " : ""}Recorded spending compared with the planned budget.</p><ul className="divide-y">{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul></div>}</>}
       </CardContent></Card>
     </div>
   </section>;
