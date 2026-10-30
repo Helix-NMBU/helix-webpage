@@ -60,7 +60,6 @@ import {
 } from "@libs/components/ui/dialog";
 import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
 import { ExperienceEditor } from "./ExperienceEditor";
-import { OptionalReferencesInput } from "./OptionalReferencesInput";
 import { moveProjectRoleToExperience } from "./experience";
 import { hasRegisteredCv } from "./translations";
 import { CvTranslationsProvider, FieldTranslations } from "./CvTranslations";
@@ -83,10 +82,14 @@ import "./member-cv.css";
 
 type Row = { id: string; [key: string]: string | undefined };
 const cvSteps = [
-  { id: "basics", label: "The basics" },
+  { id: "basics", label: "Contact details" },
+  { id: "introduction", label: "About you" },
   { id: "education", label: "Education" },
   { id: "experience", label: "Experience" },
   { id: "projects", label: "Projects" },
+  { id: "languages", label: "Languages" },
+  { id: "links", label: "Social links" },
+  { id: "references", label: "References" },
 ] as const;
 type CvStep = typeof cvSteps[number]["id"];
 
@@ -293,7 +296,8 @@ function Section({
       <section
         className="mcv-section mcv-collapsible"
         id={`mcv-${id}`}
-        aria-labelledby={`mcv-${id}-title`}
+        aria-labelledby={showHeading ? `mcv-${id}-title` : undefined}
+        aria-label={showHeading ? undefined : title}
       >
         <Card className="mcv-card">
           {showHeading ? <CardHeader className="mcv-card-header">
@@ -346,33 +350,25 @@ function RepeatableEntry({
   removeLabel,
   onRemove,
   children,
-  defaultOpen = false,
 }: {
   entryId?: string;
   title: string;
   removeLabel: string;
   onRemove: () => void;
   children: ReactNode;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   return (
-    <Collapsible className="mcv-entry" data-entry-id={entryId} open={open} onOpenChange={setOpen}>
+    <div className="mcv-entry" data-entry-id={entryId}>
       <div className="mcv-entry-title">
-        <CollapsibleTrigger asChild>
-          <Button type="button" variant="ghost" className="mcv-entry-trigger" aria-expanded={open}>
-            <span>{title}</span>
-            <IconChevronDown aria-hidden="true" className={open ? "mcv-nav-chevron-open" : ""} />
-          </Button>
-        </CollapsibleTrigger>
+        <h3 className="mcv-entry-heading" tabIndex={-1}>{title}</h3>
         <Button variant="ghost" type="button" className="mcv-remove" aria-label={removeLabel} onClick={onRemove}>
           Remove
         </Button>
       </div>
-      <CollapsibleContent forceMount className="mcv-entry-content" aria-hidden={!open}>
+      <div className="mcv-entry-content">
         {children}
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </div>
   );
 }
 
@@ -389,10 +385,9 @@ export default function MemberCV() {
   const navigate = useNavigate();
   const [setupOpen, setSetupOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<CvStep>("basics");
-  const [basicsSection, setBasicsSection] = useState<string | null>("introduction");
   const [pendingEntryIds, setPendingEntryIds] = useState<Partial<Record<AddableSection, string>>>({});
-  const activeEntrySection: AddableSection | null = wizardStep === "education" ? "education"
-    : wizardStep === "basics" && (basicsSection === "languages" || basicsSection === "links") ? basicsSection : null;
+  const [newExperienceIds, setNewExperienceIds] = useState<Set<string>>(() => new Set());
+  const activeEntrySection: AddableSection | null = isAddableSection(wizardStep) ? wizardStep : null;
   const isLastCvStep = wizardStep === cvSteps[cvSteps.length - 1].id;
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [downloadLanguage, setDownloadLanguage] = useState<CvOutputLanguage>("nb");
@@ -403,13 +398,12 @@ export default function MemberCV() {
   const demo = isLocalMemberMode();
   const sharingId = useId();
   function sectionProps(id: string) {
-    const inBasics = wizardStep === "basics" && ["introduction", "languages", "links"].includes(id);
     return {
       id,
       locale,
-      open: !inBasics || basicsSection === id,
-      expandable: inBasics,
-      onOpenChange: (open: boolean) => { if (inBasics) setBasicsSection(open ? id : null); },
+      open: true,
+      expandable: false,
+      onOpenChange: () => {},
     };
   }
   const boundUserId = useRef<string | null>(null);
@@ -510,19 +504,17 @@ export default function MemberCV() {
   const editorLoaded = Boolean(draft);
   useEffect(() => {
     const section = location.hash.replace(/^#mcv-/, "");
-    if (!editorLoaded || !["contact", "basics", "introduction", "education", "experience", "projects", "languages", "links"].includes(section)) return;
+    if (!editorLoaded || !["contact", "basics", "introduction", "education", "experience", "projects", "languages", "links", "references"].includes(section)) return;
     if (section !== "contact") {
       const current = latestInput.current;
       if (current.draft) setupStart.current = structuredClone({ draft: current.draft, sharing: current.sharing });
       autosave.current?.setBlocked(true);
       setDraft((previous) => previous && !hasRegisteredCv(previous) ? { ...previous, cvRegistered: false, cvLanguage: previous.cvLanguage ?? "nb" } : previous);
       setSetupOpen(true);
-      const inBasics = ["basics", "introduction", "languages", "links"].includes(section);
-      setWizardStep(inBasics ? "basics" : section as CvStep);
-      if (inBasics) setBasicsSection(section === "basics" ? "introduction" : section);
+      setWizardStep(section as CvStep);
     }
     const frame = requestAnimationFrame(() => {
-      const targetSection = section === "basics" ? "introduction" : section;
+      const targetSection = section;
       document.getElementById(`mcv-${targetSection}-title`)?.focus({ preventScroll: true });
       document.getElementById(`mcv-${targetSection}`)?.scrollIntoView({ block: "start", behavior: "instant" });
     });
@@ -901,7 +893,16 @@ export default function MemberCV() {
         ...previous.experience.slice(0, insertAt), role, ...previous.experience.slice(insertAt),
       ] };
     });
+    setNewExperienceIds((previous) => new Set(previous).add(role.id));
     setWizardStep("experience");
+  }
+
+  function cancelEntry(section: AddableSection) {
+    const id = pendingEntryIds[section];
+    if (!id) return;
+    setDraft((previous) => previous ? { ...previous, [section]: previous[section].filter((entry) => entry.id !== id) } : previous);
+    setPendingEntryIds((previous) => ({ ...previous, [section]: undefined }));
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`#mcv-${section} [data-add-entry]`)?.focus());
   }
 
   function beginEntry(section: AddableSection) {
@@ -927,7 +928,7 @@ export default function MemberCV() {
       validateProfileMutation({ action: "save", draft: { ...baseline, [section]: [entry] }, sharing: current.sharing }, baseline);
       setPendingEntryIds((previous) => ({ ...previous, [section]: undefined }));
       setError(null);
-      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`.mcv-entry[data-entry-id="${entry.id}"] .mcv-entry-trigger`)?.focus());
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`.mcv-entry[data-entry-id="${entry.id}"] .mcv-entry-heading`)?.focus());
       return true;
     } catch (failure) {
       const title = section === "education" ? "Check education entry" : section === "languages" ? "Check language" : "Check social link";
@@ -955,10 +956,10 @@ export default function MemberCV() {
     autosave.current?.setBlocked(true);
     setupStart.current = structuredClone({ draft, sharing });
     setPendingEntryIds({});
+    setNewExperienceIds(new Set());
     setSetupExitOpen(false);
     if (!hasRegisteredCv(draft)) setDraft((previous) => previous ? { ...previous, cvRegistered: false, cvLanguage: previous.cvLanguage ?? "nb" } : previous);
     setWizardStep("basics");
-    setBasicsSection("introduction");
     setSetupOpen(true);
   }
   function requestSetupExit(opener?: HTMLElement) {
@@ -971,6 +972,7 @@ export default function MemberCV() {
     setSetupExitOpen(false);
     setSetupOpen(false);
     setPendingEntryIds({});
+    setNewExperienceIds(new Set());
   }
   function abortCvSetup() {
     const initial = setupStart.current;
@@ -983,7 +985,7 @@ export default function MemberCV() {
     closeCvSetup();
   }
   function nextCvStep(offset: number) {
-    const sections: readonly AddableSection[] = wizardStep === "basics" ? ["languages", "links"] : wizardStep === "education" ? ["education"] : [];
+    const sections: readonly AddableSection[] = activeEntrySection ? [activeEntrySection] : [];
     if (offset > 0) for (const section of sections) {
       const id = pendingEntryIds[section];
       if (!id) continue;
@@ -1157,7 +1159,7 @@ export default function MemberCV() {
                 })}
               </div>
             </nav>
-            <div className="min-h-0 flex-1 overflow-y-auto p-5 pt-0">
+            <div key={wizardStep} className="min-h-0 flex-1 overflow-y-auto p-5 pt-0">
             <form
               noValidate
               onSubmit={(event) => {
@@ -1172,23 +1174,28 @@ export default function MemberCV() {
                   disabled={Boolean(busy) || ended}
                   className="mcv-form-fieldset"
                 >
-                  <div className={`mcv-editor${wizardStep === "basics" ? " mcv-basics" : ""}`}>
-                    {wizardStep === "basics" && <Section {...sectionProps("introduction")} title={t("About you")}>
+                  <div className="mcv-editor">
+                    {wizardStep === "basics" && <Section {...sectionProps("basics")} title="Contact details" showHeading={false}>
                       <div className="mcv-grid">
                         <Field label={t("Contact email")} type="email" value={draft.contactEmail} onChange={(value) => edit("contactEmail", value)} />
                         <Field label={t("City")} translationKey="city" value={draft.city} onChange={(value) => edit("city", value)} />
+                      </div>
+                    </Section>}
+                    {wizardStep === "introduction" && <Section {...sectionProps("introduction")} title={t("About you")} showHeading={false}>
+                      <div className="mcv-grid">
                         <Field label={t("Introduction")} value={draft.summary} translationKey="summary" multiline onChange={(value) => edit("summary", value)} />
                       </div>
                     </Section>}
-                    {definitions.filter(({ key }) => key === wizardStep || (wizardStep === "basics" && (key === "languages" || key === "links"))).map(({ key, title, singular, fields }) => (
+                    {definitions.filter(({ key }) => key === wizardStep).map(({ key, title, singular, fields }) => (
                       <Section
                         key={key}
                         {...sectionProps(key)}
                         title={t(title)}
-                        showHeading={key !== "education"}
+                        showHeading={false}
                       >
                         {key === "experience" ? (
                           <ExperienceEditor rows={draft.experience} locale={locale} disabled={Boolean(busy) || ended}
+                            newEntryIds={newExperienceIds}
                             onChange={(id, field, value) => changeRowField("experience", id, field, value)}
                             onRemove={(id) => setDraft((previous) => previous ? {
                               ...previous, experience: previous.experience.filter((entry) => entry.id !== id),
@@ -1268,7 +1275,8 @@ export default function MemberCV() {
                           if (isAddableSection(key) && row.id === pendingEntryIds[key]) return (
                             <div key={row.id} className="mcv-entry-form" data-section={key} role="group" aria-label={key === "education" ? "Education entry" : key === "languages" ? "Language entry" : "Social link entry"}>
                               {entryContent}
-                              <div className="mt-4 flex justify-end">
+                              <div className="mt-4 flex justify-end gap-2">
+                                {key === "education" && <Button type="button" variant="outline" onClick={() => cancelEntry(key)}>{t("Cancel")}</Button>}
                                 <Button type="button" disabled={!hasEntryInput(key, row) || Boolean(busy) || ended} onClick={() => addEntry(key)}>{t("Add")}</Button>
                               </div>
                             </div>
@@ -1286,6 +1294,7 @@ export default function MemberCV() {
                         {(!isAddableSection(key) || !pendingEntryIds[key]) && <Button
                           variant="outline"
                           type="button"
+                          data-add-entry=""
                           disabled={draft[key].length >= 30}
                           onClick={() => isAddableSection(key) ? beginEntry(key) :
                             edit(key, [
@@ -1299,12 +1308,12 @@ export default function MemberCV() {
                         >
                           {t("+ Add {entry}", { entry: t(singular) })}
                         </Button>}
-                        {key === "projects" && <div className="mt-5 border-t pt-4">
-                          <OptionalReferencesInput value={draft.references ?? ""} onChange={(value) => edit("references", value)} locale={locale} disabled={Boolean(busy) || ended} />
-                        </div>}
                         </>}
                       </Section>
                     ))}
+                    {wizardStep === "references" && <Section {...sectionProps("references")} title={t("References")} showHeading={false}>
+                      <Field label={t("References (optional)")} value={draft.references ?? ""} translationKey="references" multiline maxLength={2000} placeholder={t("Provided on request")} onChange={(value) => edit("references", value)} />
+                    </Section>}
                   </div>
                 </fieldset>
               </div>

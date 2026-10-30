@@ -85,3 +85,22 @@ export function hasRegisteredCv(data: CvData): boolean {
   if (data.cvRegistered !== undefined) return data.cvRegistered;
   return Boolean(data.headline.trim() || data.summary.trim() || data.references?.trim() || data.education.length || data.experience.length || data.projects.length || data.skills.length || data.languages.length || data.links.length);
 }
+
+/** Build independent language drafts from an existing CV without changing the source. */
+export function splitLegacyCv(data: CvData): Partial<Record<CvOutputLanguage, CvData>> {
+  const originalLanguage = data.cvLanguage ?? "en";
+  const otherLanguage = originalLanguage === "en" ? "nb" : "en";
+  const original = structuredClone(data);
+  original.cvLanguage = originalLanguage;
+  delete original.translations;
+  const result: Partial<Record<CvOutputLanguage, CvData>> = { [originalLanguage]: original };
+  const allowed = translationFields(data);
+  const otherTranslations = data.translations?.[otherLanguage];
+  if (otherTranslations && Object.entries(otherTranslations).some(([key, value]) => allowed.has(key) && typeof value === "string" && value.trim())) {
+    const translated = localizedCv(data, otherLanguage);
+    translated.cvLanguage = otherLanguage;
+    delete translated.translations;
+    result[otherLanguage] = translated;
+  }
+  return result;
+}

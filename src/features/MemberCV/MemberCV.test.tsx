@@ -92,12 +92,13 @@ describe("member profile", () => {
     const actions = [...container.querySelectorAll('[aria-labelledby="member-cv-title"] button')].map(item => item.getAttribute("aria-label"));
     expect(actions.filter(Boolean)).toEqual(["Preview CV", "CV actions"]);
     await cvMenu("Edit");
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 1 of 4");
-    expect(document.querySelectorAll(".mcv-wizard-progress-bar span")).toHaveLength(4);
-    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("The basics");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 1 of 8");
+    expect(document.querySelectorAll(".mcv-wizard-progress-bar span")).toHaveLength(8);
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Contact details");
     expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Fill out each section");
     expect(document.querySelector('[aria-label="Original CV language"]')).toBeNull();
     expect(document.querySelector('[aria-label="Jump to step"]')).toBeNull();
+    await click("Next step");
     await click("Next step");
     await click("Remove MSc Mechanical engineering");
     await click("Next step");
@@ -130,8 +131,11 @@ describe("member profile", () => {
     expect(container.textContent).toContain("No CV yet");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.cvRegistered).toBe(false);
     await click("Setup CV");
-    for (let index = 0; index < 3; index += 1) await click("Next step");
-    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Projects");
+    for (const title of ["About you", "Education", "Experience", "Projects", "Languages", "Social links", "References"]) {
+      await click("Next step");
+      expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe(title);
+    }
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("References");
     expect(button("Next step").disabled).toBe(true);
     expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Review & sharing");
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("References (optional)");
@@ -277,6 +281,7 @@ describe("member profile", () => {
     await cvMenu("Edit");
     expect(document.querySelector('[role="dialog"] [role="status"]')).toBeNull();
     await click("Next");
+    await click("Next");
     await click("Remove MSc Mechanical engineering");
     await click("Close");
     await click("Discard changes");
@@ -284,6 +289,7 @@ describe("member profile", () => {
     expect(document.querySelector('[data-sonner-toast][data-type="info"]')?.textContent).toContain("Changes discarded");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual(before);
     await cvMenu("Edit");
+    await click("Next");
     await click("Next");
     expect(button("Remove MSc Mechanical engineering")).toBeDefined();
   });
@@ -300,7 +306,7 @@ describe("member profile", () => {
     await open();
     await cvMenu("Edit");
     await click("Next");
-    await click("Mechanical engineering");
+    await click("Next");
     const section = document.querySelector("#mcv-education")!;
     expect([...section.querySelectorAll("label")].map((label) => label.textContent)).toEqual([
       "Institution", "Degree or programme", "Field of study", "Start date", "Expected end date",
@@ -313,7 +319,7 @@ describe("member profile", () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Robotics");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(button("Robotics").getAttribute("aria-expanded")).toBe("true");
+    expect(document.querySelector("#mcv-education .mcv-entry-heading")?.textContent).toBe("Robotics");
     expect(button("Remove Robotics")).toBeDefined();
     await click("Close");
     await click("Save as draft");
@@ -325,6 +331,7 @@ describe("member profile", () => {
     localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
     await open();
     await cvMenu("Edit");
+    await click("Next");
     await click("Next");
     await click("+ Add education");
     const section = document.querySelector("#mcv-education")!;
@@ -343,7 +350,8 @@ describe("member profile", () => {
     expect(section.querySelector(".mcv-entry")).toBeNull();
     await click("Add");
     expect(section.querySelector('.mcv-entry-form[data-section="education"]')).toBeNull();
-    expect(button("Robotics").getAttribute("aria-expanded")).toBe("false");
+    expect(section.querySelector(".mcv-entry-heading")?.textContent).toBe("Robotics");
+    expect(section.querySelector<HTMLInputElement>("input")?.value).toBe("NMBU");
     expect(button("+ Add education")).toBeDefined();
     await click("Close");
     await click("Save as draft");
@@ -358,17 +366,53 @@ describe("member profile", () => {
     await open();
     await cvMenu("Edit");
     await click("Next");
+    await click("Next");
     await click("+ Add education");
     await click("Close");
     await click("Save as draft");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual([]);
   });
-  it("edits languages and social links in The basics without adding wizard steps", async () => {
+  it("cancels an education entry without changing existing education", async () => {
+    const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education;
+    await open("#mcv-education");
+    await click("+ Add education");
+    const form = document.querySelector<HTMLElement>('#mcv-education .mcv-entry-form')!;
+    const input = form.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Unsaved university");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Cancel", form).click());
+    expect(document.querySelector('#mcv-education .mcv-entry-form')).toBeNull();
+    expect(button("+ Add education")).toBeDefined();
+    await click("Close");
+    await click("Save as draft");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual(before);
+  });
+  it("cancels a new experience without changing existing experience", async () => {
+    const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.experience;
+    await open("#mcv-experience");
+    await click("+ Add experience");
+    const cancel = [...document.querySelectorAll<HTMLButtonElement>('#mcv-experience button')].find((item) => item.getAttribute("aria-label")?.startsWith("Cancel experience"))!;
+    const entry = cancel.closest(".mcv-role-entry")!;
+    const input = entry.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Unsaved role");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => cancel.click());
+    expect(document.querySelector('#mcv-experience [aria-label^="Cancel experience"]')).toBeNull();
+    expect(button("+ Add experience")).toBeDefined();
+    await click("Close");
+    await click("Save as draft");
+    expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.experience).toEqual(before);
+  });
+  it("edits languages and social links in separate steps", async () => {
     await open();
     await cvMenu("Edit");
-    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("The basics");
-    await click("Languages");
-    expect(document.querySelector("#mcv-introduction")?.getAttribute("data-state")).toBe("closed");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Contact details");
+    for (let index = 0; index < 5; index += 1) await click("Next step");
+    expect(document.querySelector("#mcv-introduction")).toBeNull();
     expect(document.querySelector("#mcv-languages")?.getAttribute("data-state")).toBe("open");
     await click("+ Add language");
     async function fill(section: string, label: string, value: string) {
@@ -386,9 +430,10 @@ describe("member profile", () => {
     await fill("languages", "Language", "Spanish");
     await act(async () => button("Add", languageForm).click());
     expect(document.querySelector('#mcv-languages .mcv-entry-form')).toBeNull();
-    expect(button("Spanish").getAttribute("aria-expanded")).toBe("false");
-    await click("Social links");
-    expect(document.querySelector("#mcv-languages")?.getAttribute("data-state")).toBe("closed");
+    expect([...document.querySelectorAll("#mcv-languages .mcv-entry-heading")].map((item) => item.textContent)).toContain("Spanish");
+    expect([...document.querySelectorAll<HTMLInputElement>("#mcv-languages input")].map((item) => item.value)).toContain("Spanish");
+    await click("Next step");
+    expect(document.querySelector("#mcv-languages")).toBeNull();
     await click("+ Add link");
     const linkForm = document.querySelector('#mcv-links .mcv-entry-form')!;
     expect(linkForm.querySelector(".mcv-entry-trigger, .mcv-remove")).toBeNull();
@@ -397,17 +442,18 @@ describe("member profile", () => {
     await fill("links", "URL", "https://example.invalid/alex");
     await act(async () => button("Add", linkForm).click());
     expect(document.querySelector('#mcv-links .mcv-entry-form')).toBeNull();
-    expect(button("LinkedIn").getAttribute("aria-expanded")).toBe("false");
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 1 of 4");
+    expect(document.querySelector("#mcv-links .mcv-entry-heading")?.textContent).toBe("LinkedIn");
+    expect(document.querySelector<HTMLInputElement>("#mcv-links input")?.value).toBe("LinkedIn");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 7 of 8");
     await click("Close");
     await click("Save as draft");
     const saved = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft;
     expect(saved.languages).toEqual(expect.arrayContaining([expect.objectContaining({ name: "Spanish" })]));
     expect(saved.links).toEqual([expect.objectContaining({ label: "LinkedIn", url: "https://example.invalid/alex" })]);
   });
-  it.each(["languages", "links"])("opens %s deep links inside The basics", async (section) => {
+  it.each(["languages", "links"])("opens %s deep links in their own step", async (section) => {
     await open(`#mcv-${section}`);
-    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("The basics");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe(section === "languages" ? "Languages" : "Social links");
     expect(document.querySelector(`#mcv-${section}`)?.getAttribute("data-state")).toBe("open");
   });
   it.each([
@@ -417,7 +463,8 @@ describe("member profile", () => {
     const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft[section];
     await open();
     await cvMenu("Edit");
-    await click(title);
+    for (let index = 0; index < (section === "languages" ? 5 : 6); index += 1) await click("Next step");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe(title);
     await click(add);
     const form = document.querySelector(`#mcv-${section} .mcv-entry-form`)!;
     expect(form.querySelector(".mcv-entry-trigger, .mcv-remove")).toBeNull();
@@ -429,7 +476,7 @@ describe("member profile", () => {
   it("keeps an invalid social link in its form and reports the problem as a notification", async () => {
     await open();
     await cvMenu("Edit");
-    await click("Social links");
+    for (let index = 0; index < 6; index += 1) await click("Next step");
     await click("+ Add link");
     const form = document.querySelector("#mcv-links .mcv-entry-form")!;
     const label = [...form.querySelectorAll("label")].find((item) => item.textContent === "URL")!;

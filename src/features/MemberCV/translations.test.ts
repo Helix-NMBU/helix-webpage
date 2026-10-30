@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyCv, validateCvData } from "./model";
-import { changeCvLanguage, hasRegisteredCv, localizedCv } from "./translations";
+import { changeCvLanguage, hasRegisteredCv, localizedCv, splitLegacyCv } from "./translations";
 
 function bilingualCv() {
   return { ...emptyCv("Alex", "alex@example.invalid"), cvLanguage: "nb" as const, headline: "Maskiningeniørstudent", summary: "Utvikler hjuloppheng.",
@@ -10,6 +10,30 @@ function bilingualCv() {
 }
 
 describe("manually translated CVs", () => {
+  it("preserves the original and authored translations in independent language drafts", () => {
+    const source = bilingualCv();
+    const versions = splitLegacyCv(source);
+    expect(versions.nb).toMatchObject({ cvLanguage: "nb", summary: source.summary });
+    expect(versions.en).toMatchObject({ cvLanguage: "en", summary: "Developing suspension.", education: [{ degree: "Mechanical engineering", institution: "NMBU" }] });
+    expect(versions.nb?.translations).toBeUndefined();
+    expect(versions.en?.translations).toBeUndefined();
+    expect(source.translations.en.summary).toBe("Developing suspension.");
+    versions.en!.education[0].degree = "Changed English degree";
+    expect(versions.nb!.education[0].degree).toBe("Maskinteknikk");
+    expect(source.education[0].degree).toBe("Maskinteknikk");
+  });
+  it("uses the legacy default language and preserves untranslated fields in the new draft", () => {
+    const source = { ...bilingualCv(), cvLanguage: undefined, translations: { nb: { summary: "Norsk tekst" } } };
+    const versions = splitLegacyCv(source);
+    expect(versions.en?.cvLanguage).toBe("en");
+    expect(versions.nb?.summary).toBe("Norsk tekst");
+    expect(versions.nb?.education).toEqual(source.education);
+  });
+  it("does not create another CV for missing, empty, or stale translations", () => {
+    const source = bilingualCv();
+    expect(Object.keys(splitLegacyCv({ ...source, translations: { en: { "education:removed:degree": "Old" } } }))).toEqual(["nb"]);
+    expect(Object.keys(splitLegacyCv({ ...source, translations: { en: { summary: "  " } } }))).toEqual(["nb"]);
+  });
   it("stores only English and Norwegian translations and applies them without modifying the original", () => {
     const source = validateCvData(bilingualCv());
     const english = localizedCv(source, "en");

@@ -1404,11 +1404,11 @@ body:has(.mcv-profile) button[aria-label="Scroll to top"] {
   gap: 12px;
 }
 .mcv-wizard-progress-bar {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
   gap: 4px;
 }
 .mcv-wizard-progress-bar span {
+  flex: 1;
   height: 4px;
   border-radius: 999px;
   background: var(--muted);
@@ -1418,8 +1418,16 @@ body:has(.mcv-profile) button[aria-label="Scroll to top"] {
   background: var(--primary);
 }
 .mcv-wizard .mcv-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "editor"; }
-.mcv-wizard .mcv-card { padding: 20px; border-radius: var(--radius-xl); }
+.mcv-wizard .mcv-card { padding: 12px 0 24px; border: 0; border-radius: 0; background: transparent; }
 .mcv-wizard .mcv-card h2 { font-size: 16px; font-weight: 500; }
+.mcv-wizard #mcv-basics .mcv-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.mcv-wizard #mcv-introduction textarea,
+.mcv-wizard #mcv-references textarea { min-height: 200px; }
+.mcv-wizard .mcv-entry:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.mcv-wizard .mcv-entry-heading { margin: 0; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.mcv-wizard .mcv-role-content { margin-top: 16px; }
+.mcv-wizard .mcv-role-details { margin-top: 24px; }
+.mcv-wizard .mcv-role-details-heading { margin: 0 0 16px; color: var(--muted-foreground); font-size: 14px; }
 .mcv-wizard .mcv-field, .mcv-wizard .mcv-field [data-slot="label"] { color: var(--foreground); }
 .mcv-wizard .mcv-field-header { min-height: 24px; }
 .mcv-wizard .mcv-basics { gap: 10px; }
@@ -1440,5 +1448,5 @@ body:has(.mcv-profile) button[aria-label="Scroll to top"] {
 .mcv-wizard .cv-translations-trigger { height: 24px; padding: 0 6px; font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
 @media (max-width: 640px) {
   .mcv-wizard-progress-bar { gap: 3px; }
-  .mcv-wizard .mcv-card { padding: 16px; }
+  .mcv-wizard .mcv-card { padding: 8px 0 24px; }
 }

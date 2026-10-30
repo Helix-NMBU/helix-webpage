@@ -36,7 +36,8 @@ describe("grouped experience presentation", () => {
   it.each(["en", "nb"] as const)("retains optional role details and the primary editable fields in %s", (locale) => {
     const markup = renderToStaticMarkup(<ExperienceEditor rows={[rows[0]]} locale={locale} disabled={false}
       onChange={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />);
-    expect(markup).toMatch(/class="mcv-role-details-content"[^>]*aria-hidden="false"/);
+    expect(markup).toContain('class="mcv-role-details"');
+    expect(markup).not.toContain('aria-hidden="true"><div class="mcv-grid"');
     for (const value of ["Team lead", "Helix NMBU", "Chassis", "S27", "https://example.com/chassis", "Ås"]) {
       expect(markup).toContain(`value="${value}"`);
     }
@@ -46,10 +47,10 @@ describe("grouped experience presentation", () => {
     expect(markup).toContain(locale === "en" ? "I currently work here" : "Jeg jobber her fortsatt");
   });
 
-  it("keeps empty optional details collapsed and all inputs mounted", () => {
+  it("shows empty optional details without a collapsed section", () => {
     const markup = renderToStaticMarkup(<ExperienceEditor rows={[rows[1]]} locale="en" disabled={false}
       onChange={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />);
-    expect(markup).toMatch(/class="mcv-role-details-content"[^>]*aria-hidden="true"/);
+    expect(markup).toContain('class="mcv-role-details"');
     expect(markup).toContain("Department</label>");
     expect(markup).toContain("Season</label>");
     expect(markup).toContain("Role link</label>");

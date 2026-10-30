@@ -1,10 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { IconChevronDown } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Textarea } from "@libs/components/ui/textarea";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@libs/components/ui/collapsible";
 import { ChoiceInput, PeriodInputs } from "./ProfileInputs";
 import { employmentTypes, locationTypes } from "./profile-inputs";
 import { groupExperience } from "./experience";
@@ -37,29 +35,22 @@ function RoleDetails({ role, locale, disabled, onChange }: {
   disabled: boolean;
   onChange: (key: ExperienceField, value: string) => void;
 }) {
-  const [open, setOpen] = useState(Boolean(role.department || role.season || role.url));
   const t = (key: "Role details (optional)" | "Department" | "Season" | "Role link") => memberText(locale, key);
-  return <Collapsible className="mcv-role-details" open={open} onOpenChange={setOpen}>
-    <CollapsibleTrigger asChild>
-      <Button variant="ghost" type="button" disabled={disabled}>
-        {t("Role details (optional)")}
-        <IconChevronDown aria-hidden="true" className={open ? "mcv-nav-chevron-open" : ""} />
-      </Button>
-    </CollapsibleTrigger>
-    <CollapsibleContent forceMount className="mcv-role-details-content" aria-hidden={!open}>
+  return <div className="mcv-role-details">
+    <p className="mcv-role-details-heading">{t("Role details (optional)")}</p>
       <div className="mcv-grid">
         <TextField label={t("Department")} translationKey={`experience:${role.id}:department`} disabled={disabled} value={role.department ?? ""} onChange={(value) => onChange("department", value)} />
         <TextField label={t("Season")} translationKey={`experience:${role.id}:season`} disabled={disabled} value={role.season ?? ""} maxLength={30} onChange={(value) => onChange("season", value)} />
         <TextField label={t("Role link")} disabled={disabled} value={role.url ?? ""} maxLength={2000} onChange={(value) => onChange("url", value)} />
       </div>
-    </CollapsibleContent>
-  </Collapsible>;
+  </div>;
 }
 
-export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, onAdd }: {
+export function ExperienceEditor({ rows, locale, disabled, newEntryIds, onChange, onRemove, onAdd }: {
   rows: CvExperience[];
   locale: MemberLocale;
   disabled: boolean;
+  newEntryIds?: ReadonlySet<string>;
   onChange: (id: string, key: ExperienceField, value: string) => void;
   onRemove: (id: string) => void;
   onAdd: (organization: string, beforeId?: string) => void;
@@ -67,12 +58,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
   const id = useId();
   // Retain groups while focus is inside the editor, including adjacent controls and Tab targets.
   const [editingOrganizations, setEditingOrganizations] = useState<Map<string, string> | null>(null);
-  const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
   const editor = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!expandedRoleId || rows.some((role) => role.id === expandedRoleId)) return;
-    setExpandedRoleId(null);
-  }, [expandedRoleId, rows]);
   useEffect(() => {
     if (!editingOrganizations) return;
     // Regroup after an outside button/link activates, so changing layout cannot swallow its click.
@@ -119,6 +105,7 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
       <ol className="mcv-role-list" data-connected={group.roles.length > 1} role="list">
         {group.roles.map((groupRole) => {
           const role = currentRoles.get(groupRole.id)!;
+          const isNew = newEntryIds?.has(role.id) ?? false;
           const index = rows.findIndex((entry) => entry.id === role.id);
           const change = (key: ExperienceField, value: string) => {
             if (key === "organization") {
@@ -137,23 +124,18 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
             }
             onChange(role.id, key, value);
           };
-          return <Collapsible key={role.id} open={expandedRoleId === role.id} onOpenChange={(open) => setExpandedRoleId(open ? role.id : null)} asChild>
-            <li className="mcv-role-entry">
+          return <li key={role.id} className="mcv-role-entry">
               <div className="mcv-entry-title">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" type="button" className="mcv-role-trigger" aria-expanded={expandedRoleId === role.id}>
-                    <h4>{role.title || `${memberText(locale, "Role")} ${index + 1}`}</h4>
-                    <IconChevronDown aria-hidden="true" className={expandedRoleId === role.id ? "mcv-nav-chevron-open" : ""} />
-                  </Button>
-                </CollapsibleTrigger>
+                <h4>{role.title || `${memberText(locale, "Role")} ${index + 1}`}</h4>
                 <Button variant="ghost" type="button" className="mcv-remove" disabled={disabled}
-                  aria-label={memberText(locale, "Remove {entry} {number}", { entry: memberText(locale, "experience"), number: index + 1 })}
+                  aria-label={isNew ? `${memberText(locale, "Cancel")} ${memberText(locale, "experience")} ${index + 1}` : memberText(locale, "Remove {entry} {number}", { entry: memberText(locale, "experience"), number: index + 1 })}
                   onClick={() => {
                     previousEndDates.current.delete(role.id);
                     onRemove(role.id);
-                  }}>{memberText(locale, "Remove")}</Button>
+                    if (isNew) requestAnimationFrame(() => editor.current?.querySelector<HTMLButtonElement>("[data-add-experience]")?.focus());
+                  }}>{memberText(locale, isNew ? "Cancel" : "Remove")}</Button>
               </div>
-              <CollapsibleContent forceMount className="mcv-role-content" aria-hidden={expandedRoleId !== role.id}>
+              <div className="mcv-role-content">
               <div className="mcv-grid">
               <TextField label={memberText(locale, "Job title")} translationKey={`experience:${role.id}:title`} disabled={disabled} value={role.title} onChange={(value) => change("title", value)} />
               <TextField label={memberText(locale, "Company or organisation")} translationKey={`experience:${role.id}:organization`} disabled={disabled} value={role.organization}
@@ -173,14 +155,13 @@ export function ExperienceEditor({ rows, locale, disabled, onChange, onRemove, o
               </div>
               </div>
               <RoleDetails role={role} locale={locale} disabled={disabled} onChange={change} />
-              </CollapsibleContent>
-            </li>
-          </Collapsible>;
+              </div>
+            </li>;
         })}
       </ol>
     </section>)}
     <div className="mcv-experience-actions">
-      <Button variant="outline" type="button" disabled={disabled || rows.length >= 30} onClick={() => onAdd("")}>
+      <Button variant="outline" type="button" data-add-experience="" disabled={disabled || rows.length >= 30} onClick={() => onAdd("")}>
         {memberText(locale, "+ Add {entry}", { entry: memberText(locale, "experience") })}
       </Button>
       <Button variant="outline" type="button" disabled={disabled || rows.length >= 30} onClick={() => onAdd("Helix NMBU")}>
