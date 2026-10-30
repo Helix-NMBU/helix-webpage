@@ -122,3 +122,42 @@ describe("member notifications", () => {
     expect(retry).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('durable sponsor review notifications',()=>{
+ let container:HTMLDivElement,root:Root;
+ beforeEach(()=>{vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT',true);container=document.createElement('div');document.body.append(container);root=createRoot(container);});
+ afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();});
+ it('merges persisted review events into the shared feed and stores read state',async()=>{
+  const item={id:'11111111-1111-4111-8111-111111111111',title:'Sponsor funding review requested',description:'Business requested a funding review.',createdAt:'2026-10-29T10:00:00Z',href:'/finance/sponsor-reviews' as const,variant:'info' as const};
+  let events=[item];
+  const api={list:vi.fn(async()=>events),markRead:vi.fn(async(ids:string[])=>{events=events.filter(e=>!ids.includes(e.id));})};
+  const router=createMemoryRouter([{path:'/notifications',element:<MemberNotificationsPage/>}],{initialEntries:['/notifications']});
+  await act(async()=>root.render(<MemberThemeProvider><MemberNotificationsProvider reviewApi={api}><SendNotification/><RouterProvider router={router}/></MemberNotificationsProvider></MemberThemeProvider>));
+  expect(container.textContent).toContain('Sponsor funding review requested');
+  expect(container.querySelector('output')?.textContent).toBe('1 unread');
+  await act(async()=>container.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
+  await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='Mark as read')!.click());
+  expect(api.markRead).toHaveBeenCalledWith([item.id]);expect(container.textContent).not.toContain(item.title);
+  await act(async()=>root.render(<MemberThemeProvider><MemberNotificationsProvider key="new-session" reviewApi={api}><SendNotification/><RouterProvider router={router}/></MemberNotificationsProvider></MemberThemeProvider>));
+  expect(container.textContent).not.toContain(item.title);
+ });
+ it('clears a previously visible event when access is revoked on refresh',async()=>{
+  const item={id:'11111111-1111-4111-8111-111111111111',title:'Sponsor funding review requested',description:'Business requested a funding review.',createdAt:'2026-10-29T10:00:00Z',href:'/finance/sponsor-reviews' as const,variant:'info' as const};
+  const api={list:vi.fn().mockResolvedValueOnce([item]).mockResolvedValue([]),markRead:vi.fn()};
+  const router=createMemoryRouter([{path:'/notifications',element:<MemberNotificationsPage/>}],{initialEntries:['/notifications']});
+  await act(async()=>root.render(<MemberThemeProvider><MemberNotificationsProvider reviewApi={api}><RouterProvider router={router}/></MemberNotificationsProvider></MemberThemeProvider>));
+  expect(container.textContent).toContain(item.title);
+  await act(async()=>window.dispatchEvent(new Event('focus')));
+  expect(container.textContent).not.toContain(item.title);
+ });
+});
+it('opens the Finance review view from a durable notification',async()=>{
+ const container=document.createElement('div');document.body.append(container);const root=createRoot(container);
+ const item={id:'11111111-1111-4111-8111-111111111111',title:'Sponsor funding review requested',description:'Business requested a funding review.',createdAt:'2026-10-29T10:00:00Z',href:'/finance/sponsor-reviews' as const,variant:'info' as const};
+ const api={list:vi.fn().mockResolvedValue([item]),markRead:vi.fn()};
+ const router=createMemoryRouter([{path:'/notifications',element:<MemberNotificationsPage/>},{path:'/finance/sponsor-reviews',element:<p>Finance review page</p>}],{initialEntries:['/notifications']});
+ await act(async()=>root.render(<MemberThemeProvider><MemberNotificationsProvider reviewApi={api}><RouterProvider router={router}/></MemberNotificationsProvider></MemberThemeProvider>));
+ await act(async()=>[...container.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent==='View')!.click());
+ expect(router.state.location.pathname).toBe('/finance/sponsor-reviews');
+ await act(async()=>root.unmount());container.remove();
+});

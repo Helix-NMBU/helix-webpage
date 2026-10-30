@@ -1,0 +1,9 @@
+# Partner deal access
+
+Pipeline and Partner agreements are assigned separately in Members → Access → Space access. Pipeline includes agreement access; agreement-only access shows won deals without negotiation notes. Administrators can remove either permission from a project manager. Migration 058 preserves the effective permissions previously granted by the project manager role and the legacy business, marketing, and finance partner grants. Subsequent changes use `partner_deals.space_access`; the legacy grants remain for history and no longer confer access. Every request checks the linked verified, unbanned Google account and current space permissions.
+
+Organization creation leaves `partner.organizations.active=false` and creates no partner portal membership or entitlement. Confirm the actual portal provisioning process before changing that status.
+
+`GET /api/partner-deals?view=pipeline` returns negotiation notes only to pipeline users. `view=shared` returns only won deals and omits those notes. POST actions `createOrganization`, `renameOrganization`, and `saveDeal` are limited to pipeline users. Generic saving deliberately refuses Won and edits to won deals: the later transition must create the required task and funding effects and provide reconciliation before that operation is exposed. Organization renames and deal writes use optimistic revisions; each atomic save stores before/after snapshots. Existing won data is never deleted or replaced by this path.
+
+The schema references finance seasons, including future seasons, but this foundation does not provision them, create tasks, link funding, implement a scheduler, or grant portal access. Explicit grant administration, organizational ownership decisions, and secured later transition need implementation and validation before release.

@@ -1,0 +1,62 @@
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { PGlite } from "@electric-sql/pglite";
+const actor="00000000-0000-4000-8000-000000000001", marketing="00000000-0000-4000-8000-000000000002", season="00000000-0000-4000-8000-000000000003", org="00000000-0000-4000-8000-000000000004", deal="00000000-0000-4000-8000-000000000005", lost="00000000-0000-4000-8000-000000000006";
+let db: PGlite;
+beforeAll(async () => {
+ db=new PGlite();
+ await db.exec(`create schema identity; create schema neon_auth; create schema partner; create schema finance; create schema project_management;
+ create table neon_auth."user"(id uuid primary key,email text,"emailVerified" boolean,banned boolean);
+ create table neon_auth.account("userId" uuid,"providerId" text,"accountId" text);
+ create table identity.members(id uuid primary key,auth_user_id uuid,google_sub text,email text);
+ create table identity.member_roles(member_id uuid,role_key text);
+ create table partner.organizations(id uuid primary key default gen_random_uuid(),name text not null,active boolean not null default false);
+ create table finance.seasons(id uuid primary key,code text,name text,start_date date,end_date date,status text);
+ create table finance.settings(setting_key text,setting_value jsonb);
+ create table project_management.departments(id uuid primary key,season text,name text);
+ create table project_management.department_members(department_id uuid,member_id uuid,access_level text);
+ create table project_management.projects(id uuid primary key,season text,name text,description text,category text,departments text[],deadline date);
+ create table project_management.tasks(id uuid primary key,season text,title text,description text,category text,project_id uuid,milestone_id uuid,deadline date,status text,priority text,kind text,partner_name text);
+ create table project_management.task_assignees(task_id uuid,member_id uuid);
+ insert into neon_auth."user" values('${actor}','a@helixnmbu.no',true,false),('${marketing}','m@helixnmbu.no',true,false);
+ insert into neon_auth.account values('${actor}','google','sub-a'),('${marketing}','google','sub-m');
+ insert into identity.members values('${actor}','${actor}','sub-a','a@helixnmbu.no'),('${marketing}','${marketing}','sub-m','m@helixnmbu.no');
+ insert into partner.organizations(id,name) values('${org}','Partner');
+ insert into finance.seasons values('${season}','S27','S27','2026-08-01','2027-07-31','active');
+ insert into finance.settings values('current_season','"S27"');
+ insert into project_management.departments values(gen_random_uuid(),'S27','Finance'),(gen_random_uuid(),'S27','Business & Marketing');
+ insert into project_management.department_members select id,'${marketing}','member' from project_management.departments where name='Business & Marketing';`);
+ await db.exec(readFileSync(new URL('../../../db/migrations/035_partner_deals.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../../../db/migrations/038_partner_won_handoff.sql',import.meta.url),'utf8'));
+ await db.exec(`insert into partner_deals.member_grants values('${actor}','business',true);
+ insert into partner_deals.deals(id,organization_id,title,stage,created_by_member_id,updated_by_member_id) values('${deal}','${org}','Agreement','proposal','${actor}','${actor}'),('${lost}','${org}','Lost','lost','${actor}','${actor}');
+ insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,invoice_date) values('${deal}','${season}','cash',10000,'2026-11-01');
+ insert into partner_deals.deliverables(deal_id,title,owner_member_id) values('${deal}','Show logo','${marketing}');`);
+});
+afterAll(async()=>db.close());
+const confirm=(id=deal)=>db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[actor,'sub-a','a@helixnmbu.no',id]);
+it('fails closed with no funding implementation and creates no tasks',async()=>{
+ await expect(confirm()).rejects.toThrow('deal_funding_unavailable');
+ expect((await db.query('select * from project_management.tasks')).rows).toHaveLength(0);
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[deal])).rows[0].stage).toBe('proposal');
+});
+it('rolls back task and deal changes when funding rejects the agreement',async()=>{
+ await db.exec(`create function partner_deals.attach_won_funding(uuid,uuid) returns void language plpgsql as $$ begin raise exception 'deal_funding_possible_duplicate'; end $$;`);
+ await expect(confirm()).rejects.toThrow('deal_funding_possible_duplicate');
+ expect((await db.query('select * from project_management.tasks')).rows).toHaveLength(0);
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[deal])).rows[0].stage).toBe('proposal');
+});
+it('creates visible department work once, assigns only explicit owner and records confirmation',async()=>{
+ await db.exec('drop function partner_deals.attach_won_funding(uuid,uuid); create function partner_deals.attach_won_funding(uuid,uuid) returns void language plpgsql as $$ begin return; end $$;');
+ await confirm(); await confirm();
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[deal])).rows[0].stage).toBe('won');
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[deal])).rows).toHaveLength(2);
+ const projects=await db.query<{departments:string[]}>('select departments from project_management.projects');
+ expect(projects.rows.map(x=>x.departments)).toEqual(expect.arrayContaining([['Finance'],['Business & Marketing']]));
+ expect((await db.query('select * from project_management.task_assignees')).rows).toHaveLength(1);
+ expect((await db.query('select * from partner_deals.audit where action=\'won\' and deal_id=$1',[deal])).rows).toHaveLength(1);
+});
+it('rejects Lost and unauthorized actors',async()=>{
+ await expect(confirm(lost)).rejects.toThrow('deal_invalid_stage');
+ await expect(db.query('select partner_deals.confirm_won($1,$2,$3,$4,0)',[marketing,'sub-m','m@helixnmbu.no',deal])).rejects.toThrow('deal_forbidden');
+});

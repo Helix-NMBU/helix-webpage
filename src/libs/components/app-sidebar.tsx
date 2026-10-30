@@ -1,8 +1,10 @@
+import { LOCAL_ACCESS_CHANGED } from "@/features/MemberPlatform/member-access-api";
 import * as React from "react";
 import {
-  IconChartBar,
   IconBell,
   IconLayoutKanban,
+  IconLayoutDashboard,
+  IconContract,
   IconSmartHome,
   IconCube,
   IconUsers,
@@ -29,6 +31,7 @@ import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
+import { canViewAgreements, canViewFinanceReviews, pipelineRepository } from "@/features/PartnerDeals/repository";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -51,57 +54,81 @@ export function AppSidebar({
   const workspace = workspaceSession?.data;
   const notify = useNotify();
   const [savingOrder, setSavingOrder] = React.useState(false);
+  const [pipelineAllowed, setPipelineAllowed] = React.useState(false);
+  const [agreementsAllowed, setAgreementsAllowed] = React.useState(false);
+  const [financeReviewsAllowed, setFinanceReviewsAllowed] = React.useState(false);
+  React.useEffect(() => {
+    let active = true; let version = 0;
+    const check = () => {
+      const request = ++version;
+      void canViewFinanceReviews().then(allowed => { if (active && request === version) setFinanceReviewsAllowed(allowed); }).catch(() => { if (active && request === version) setFinanceReviewsAllowed(false); });
+      void canViewAgreements().then(allowed => { if (active && request === version) setAgreementsAllowed(allowed); }).catch(() => { if (active && request === version) setAgreementsAllowed(false); });
+      void pipelineRepository().load().then(result => { if (active && request === version) setPipelineAllowed(result.canManage); }).catch(() => { if (active && request === version) setPipelineAllowed(false); });
+    };
+    check(); window.addEventListener("focus", check); window.addEventListener(LOCAL_ACCESS_CHANGED, check);
+    return () => { active = false; window.removeEventListener("focus", check); window.removeEventListener(LOCAL_ACCESS_CHANGED, check); };
+  }, [location.pathname]);
+  const businessPath = departmentPath("Business & Marketing");
+  const businessDepartment = workspace?.departments?.find(department => departmentPath(department.name) === businessPath);
+  const businessItems = [
+    ...(pipelineAllowed ? [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] : []),
+    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconContract }] : []),
+  ];
+  const businessActive = businessItems.some(item => item.url === location.pathname);
+  const managementPath = departmentPath("Management");
+  const managementDepartment = workspace?.departments?.find(department => departmentPath(department.name) === managementPath);
+  const recruitingAllowed = featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed";
+  const managementItems = recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : [];
+  const managementActive = managementItems.some(item => item.url === location.pathname);
+  const financePath = departmentPath("Finance");
+  const financeDepartment = workspace?.departments?.find(department => departmentPath(department.name) === financePath);
+  const financeItems = finance.access === "allowed" ? [
+    { title: "Financial overview", url: "/finance" },
+    { title: "Purchases", url: "/finance/purchases" },
+    { title: "Budgets", url: "/finance/budgets" },
+    ...(financeReviewsAllowed ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
+    ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
+  ] : [];
+  const financeActive = financeItems.some(item => item.url === location.pathname);
   const spaceItems = [
     ...(workspace?.projectAccess
       ? [
           {
             title: "Season Overview",
             url: "/season-overview",
-            icon: IconLayoutKanban,
+            icon: IconLayoutDashboard,
             isActive: location.pathname === "/season-overview",
           },
         ]
       : []),
-    ...(featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed"
-      ? [
-          {
-            title: "Recruiting",
-            url: "/recruiting",
-            icon: IconUsersGroup,
-            isActive: location.pathname === "/recruiting",
-          },
-        ]
-      : []),
-    ...(finance.access === "allowed" ? [{
-      title: "Financials",
-      url: "/finance",
-      icon: IconChartBar,
-      isActive: location.pathname.startsWith("/finance"),
-      defaultOpen: true,
-      subMenuClassName: "border-l-0",
-      items: [
-        { title: "Overview", url: "/finance" },
-        { title: "Purchases", url: "/finance/purchases" },
-        { title: "Budgets", url: "/finance/budgets" },
-        ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
-      ],
-    }] : []),
-    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId))
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (businessItems.length > 0 && departmentPath(department.name) === businessPath) || (recruitingAllowed && departmentPath(department.name) === managementPath) || (financeItems.length > 0 && departmentPath(department.name) === financePath))
       .map((department) => {
         const url = departmentPath(department.name);
+        const member = department.memberIds.includes(workspace.viewerId);
+        const isBusiness = url === businessPath;
+        const isManagement = url === managementPath;
+        const isFinance = url === financePath;
         return {
           title: department.name,
           url,
           icon: getDepartmentIcon(department.name),
-          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`),
+          isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (isBusiness && businessActive) || (isManagement && managementActive) || (isFinance && financeActive),
           subMenuClassName: "border-l-0",
           items: [
-            { title: "Home", url, icon: IconSmartHome },
-            { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
-            { title: "Projects", url: `${url}/projects`, icon: IconCube },
+            ...(member ? [
+              { title: "Home", url, icon: IconSmartHome },
+              { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
+              { title: "Projects", url: `${url}/projects`, icon: IconCube },
+            ] : []),
+            ...(isBusiness ? businessItems : []),
+            ...(isManagement ? managementItems : []),
+            ...(isFinance ? financeItems : []),
           ],
         };
       }) ?? []),
+    ...(financeItems.length > 0 && !financeDepartment ? [{ title: "Finance", url: financePath, icon: getDepartmentIcon("Finance"), isActive: financeActive, subMenuClassName: "border-l-0", items: financeItems }] : []),
+    ...(recruitingAllowed && !managementDepartment ? [{ title: "Management", url: managementPath, icon: getDepartmentIcon("Management"), isActive: managementActive, subMenuClassName: "border-l-0", items: managementItems }] : []),
+    ...(businessItems.length > 0 && !businessDepartment ? [{ title: "Business & Marketing", url: businessPath, icon: getDepartmentIcon("Business & Marketing"), isActive: businessActive, subMenuClassName: "border-l-0", items: businessItems }] : []),
   ];
   const order = workspace?.spaceOrder ?? [];
   spaceItems.sort((a, b) => {
@@ -120,7 +147,7 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher onNavigate={onNavigate} disabled={disabled} />
+        <TeamSwitcher />
       </SidebarHeader>
       <SidebarContent>
         <NavMain

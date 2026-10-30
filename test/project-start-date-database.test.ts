@@ -25,6 +25,8 @@ describe("project start dates in Postgres",()=>{
     await db.exec(migration("031_pending_milestone_leads"));
     await db.exec(migration("032_estimated_task_history"));
     await db.exec(migration("033_project_status"));
+    await db.exec("create schema finance; create table finance.settings(setting_key text,setting_value jsonb);");
+    await db.exec(readFileSync(new URL("../db/migrations/041_project_current_season.sql", import.meta.url), "utf8"));
     for(const person of identities){
       await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[person.userId,person.name,person.email]);
       await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[person.googleSub,person.userId]);

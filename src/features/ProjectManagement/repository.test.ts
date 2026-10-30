@@ -56,7 +56,7 @@ describe("dedicated local project mode", () => {
     expect(saved.projects.find(p=>p.id===change.id)?.name).toBe("Batch build");
     expect(saved.tasks.find(t=>t.id===change.milestones[0].id)).toMatchObject({projectId:change.id,kind:"milestone",status:"todo"});
     expect(saved.progressEvents.filter(e=>e.taskId===change.milestones[0].id)).toHaveLength(1);
-    localStorage.setItem("helix-member-local-projects-v1",JSON.stringify({...saved,canManage:false,taskLeadCategories:[]}));
+    localStorage.setItem("helix-member-local-projects-v1",JSON.stringify({...saved,canManage:false,taskLeadCategories:[],departments:saved.departments.map(d=>({...d,leadId:d.leadId === saved.viewerId ? null : d.leadId,leadIds:(d.leadIds ?? []).filter(id=>id !== saved.viewerId),viewerIds:[...new Set([...(d.viewerIds ?? []),saved.viewerId])]}))}));
     const withoutLead=localStorage.getItem("helix-member-local-projects-v1");
     await expect(repository.mutate({...change,id:crypto.randomUUID(),milestones:[{...change.milestones[0],id:crypto.randomUUID()}]})).rejects.toMatchObject({status:403});
     expect(localStorage.getItem("helix-member-local-projects-v1")).toBe(withoutLead);
@@ -140,7 +140,7 @@ describe("dedicated local project mode", () => {
     localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...workspace, canManage: true, taskLeadCategories: [] }));
     const saved = await repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 1, changes: { priority: "high" } });
     expect(saved.tasks.find(task => task.id === goal.id)?.priority).toBe("high");
-    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...saved, canManage: false }));
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify({ ...saved, canManage: false, departments: saved.departments.map(d => ({ ...d, leadId: d.leadId === saved.viewerId ? null : d.leadId, leadIds: (d.leadIds ?? []).filter(id => id !== saved.viewerId), viewerIds: [...new Set([...(d.viewerIds ?? []), saved.viewerId])] })) }));
     await expect(repository.mutate({ action: "update_milestone", id: goal.id, expectedRevision: 2, changes: { priority: "low" } })).rejects.toMatchObject({ status: 403 });
     await expect(repository.mutate({ action: "update_milestone", id: workspace.tasks[0].id, expectedRevision: 1, changes: { priority: "high" } })).rejects.toThrow("Milestone");
   });

@@ -1,6 +1,6 @@
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "./local-mode";
-import type { WorkspaceAccessChange, WorkspaceSpace } from "../Workspace/access";
+import { WORKSPACE_SPACES, type WorkspaceAccessChange, type WorkspaceSpace } from "../Workspace/access";
 import type { PlatformRole, PlatformRoleKey } from "./MemberFeatureAccess";
 
 export type AccessDepartment = { id: string; name: string };
@@ -22,11 +22,29 @@ const departmentOptions: AccessDepartment[] = [
   { id: "business-marketing", name: "Business & Marketing" },
   { id: "logistics", name: "Logistics" },
 ];
+const LOCAL_SPACE_ACCESS_KEY = "helix-member-local-space-access-v1";
+export const LOCAL_ACCESS_CHANGED = "helix-member-local-access-changed";
+function savedLocalSpaces(): Record<string, WorkspaceSpace[]> {
+  if (!isLocalMemberMode() || !localMemberSignedIn()) return {};
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(LOCAL_SPACE_ACCESS_KEY) ?? "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const spaces = Object.fromEntries(Object.entries(value).filter((entry): entry is [string, WorkspaceSpace[]] => Array.isArray(entry[1]) && entry[1].every((key: unknown) => WORKSPACE_SPACES.some(space => space.key === key))));
+    const viewerId = "00000000-0000-4000-8000-000000000001";
+    if (!localStorage.getItem("helix-member-local-partner-spaces-v1")) {
+      if (spaces[viewerId]) spaces[viewerId] = [...new Set<WorkspaceSpace>([...spaces[viewerId], "pipeline", "partner-agreements"])];
+      localStorage.setItem(LOCAL_SPACE_ACCESS_KEY, JSON.stringify(spaces));
+      localStorage.setItem("helix-member-local-partner-spaces-v1", "1");
+    }
+    return spaces;
+  } catch { return {}; }
+}
 let localDirectory: AccessDirectory | null = null;
 async function localAccessDirectory(): Promise<AccessDirectory> {
   const { createLocalWorkspaceRepository } = await import("../Workspace/local-repository");
   const workspace = await createLocalWorkspaceRepository().load();
   const previous = localDirectory;
+  const savedSpaces = savedLocalSpaces();
   localDirectory = {
     departments: departmentOptions,
     roles: roleOptions,
@@ -34,15 +52,29 @@ async function localAccessDirectory(): Promise<AccessDirectory> {
       id: member.id, name: member.name,
       email: member.id === workspace.viewerId ? localMemberAccount.email : `${member.id}@example.invalid`,
       departmentId: previous?.members.find(item => item.id === member.id)?.departmentId ?? "mechanical-production",
-      spaceKeys: previous?.members.find(item => item.id === member.id)?.spaceKeys ?? (member.id === workspace.viewerId ? ["season-overview", "recruiting"] : []),
+      spaceKeys: savedSpaces[member.id] ?? previous?.members.find(item => item.id === member.id)?.spaceKeys ?? (member.id === workspace.viewerId ? ["season-overview", "recruiting", "pipeline", "partner-agreements"] : []),
       roleKeys: previous?.members.find(item => item.id === member.id)?.roleKeys ?? (member.id === workspace.viewerId ? ["team_member", "platform_administrator"] : ["team_member"]),
     })),
   };
   return structuredClone(localDirectory);
 }
 
+export function localMemberHasSeasonOverview(): boolean {
+  if (!localDirectory) return true; // Matches the default local workspace access.
+  return localDirectory.members.some(member => member.email === localMemberAccount.email && member.spaceKeys.includes("season-overview"));
+}
+
 export function localMemberHasFinancials(): boolean {
-  return localDirectory?.members.some(member => member.email === localMemberAccount.email && (member.spaceKeys.includes("financials") || member.roleKeys.includes("financials"))) ?? false;
+  if (!isLocalMemberMode() || !localMemberSignedIn()) return false;
+  if (localDirectory) return localDirectory.members.some(member => member.email === localMemberAccount.email && (member.spaceKeys.includes("financials") || member.roleKeys.includes("financials")));
+  return savedLocalSpaces()["00000000-0000-4000-8000-000000000001"]?.includes("financials") ?? false;
+}
+
+export function localMemberHasPartnerSpace(space: "pipeline" | "partner-agreements"): boolean {
+  if (!isLocalMemberMode() || !localMemberSignedIn()) return false;
+  const id = "00000000-0000-4000-8000-000000000001";
+  const selected = savedLocalSpaces()[id];
+  return selected ? selected.includes(space) : true;
 }
 
 async function getToken(owner: { current: string | null }) {
@@ -92,13 +124,15 @@ export async function saveWorkspaceAccess(owner: { current: string | null }, inp
     const directory = await localAccessDirectory();
     await repository.saveMember({ action: "save_member", id: member.id, expectedRevision: input.expectedRevision, name: member.name, helixRole: member.helixRole, departments: input.departments });
     localDirectory = { ...directory, members: directory.members.map(item => item.id === input.memberId ? { ...item, spaceKeys: input.spaceKeys } : item) };
+    try { localStorage.setItem(LOCAL_SPACE_ACCESS_KEY, JSON.stringify({ ...savedLocalSpaces(), [input.memberId]: input.spaceKeys })); } catch { /* Keep the grant in memory when storage is unavailable. */ }
+    window.dispatchEvent(new Event(LOCAL_ACCESS_CHANGED));
     return;
   }
   const token = await getToken(owner);
   const response = await fetch("/api/member-access", {
     method: "POST", cache: "no-store", credentials: "include",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "save_workspace_access", ...input }),
+    body: JSON.stringify({ action: "save_workspace_access", ...input, partnerSpacesConfigured: true }),
   });
   const body = await response.json().catch(() => null) as { error?: string } | null;
   if (!response.ok) throw new Error(body?.error || "Could not save member access.");

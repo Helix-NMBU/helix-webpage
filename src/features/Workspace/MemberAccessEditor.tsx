@@ -73,12 +73,12 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
     <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-medium">Department access</legend>
       <p className="text-sm text-muted-foreground">Leads manage department content and work. Members can update their assigned task statuses. Viewers have read-only access.</p>
-      {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department access is set to Viewer.</p>}
+      {roleOverride && <p className="text-sm text-muted-foreground">Their platform role grants full management access to every department. Department membership can be chosen independently.</p>}
       {data.departments.map(department => {
         const choice = departments.find(d => d.id === department.id)!;
         return <div key={department.id} className="flex items-center justify-between gap-3 rounded-md border p-2 text-sm">
           <Label htmlFor={`department-access-${department.id}`} className="font-normal">{department.name}</Label>
-          <Select value={roleOverride ? "viewer" : choice.access ?? "none"} disabled={busy || roleOverride} onValueChange={value => {
+          <Select value={choice.access ?? "none"} disabled={busy} onValueChange={value => {
             const level = value === "none" ? null : value as DepartmentAccess;
             setDepartments(values => values.map(item => item.id === department.id ? { ...item, access: level, member: level !== null, lead: level === "lead" } : item));
           }}>
@@ -90,8 +90,12 @@ export function MemberAccessEditor({ member, data, busy, setBusy, onSaved }: {
     </fieldset>
     <fieldset disabled={busy} className="space-y-3">
       <legend className="mb-2 font-medium">Space access</legend>
+      <p className="text-sm text-muted-foreground">Pipeline access includes Partner agreements.</p>
       {WORKSPACE_SPACES.map(space => <Label key={space.key} className="flex items-center gap-2 font-normal">
-        <Checkbox checked={spaceKeys.includes(space.key)} onCheckedChange={checked => setSpaceKeys(keys => checked === true ? [...keys, space.key] : keys.filter(key => key !== space.key))} />{space.label}
+        <Checkbox checked={spaceKeys.includes(space.key)} onCheckedChange={checked => setSpaceKeys(keys => {
+          if (checked === true) return [...new Set([...keys, space.key, ...(space.key === "pipeline" ? ["partner-agreements" as const] : [])])];
+          return keys.filter(key => key !== space.key && !(space.key === "partner-agreements" && key === "pipeline"));
+        })} />{space.label}
       </Label>)}
     </fieldset>
     <div className="flex justify-end"><Button type="submit" disabled={busy || !changed}>{busy ? "Saving…" : "Save access"}</Button></div>

@@ -1,0 +1,145 @@
+import { readFileSync } from "node:fs";
+import { PGlite } from "@electric-sql/pglite";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import { createProjectServices } from "../../../api/_lib/project-management-service.js";
+import { createDealServices } from "../../../api/_lib/partner-deals-service.js";
+const id=(n:number)=>`80000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const people=['manager','finance','marketing','outsider'].map((name,i)=>({userId:id(i+1),googleSub:name,email:`${name}@helixnmbu.no`,name}));
+const read=(name:string)=>readFileSync(new URL(`../../../db/migrations/${name}.sql`,import.meta.url),'utf8');
+let db:PGlite;
+const auth=(n:number)=>async()=>people[n];
+const dealService=(n:number)=>createDealServices({db,authenticate:auth(n)});
+const projectService=(n:number)=>createProjectServices({db,authenticate:auth(n)});
+const confirm=(n:number,deal:number)=>dealService(n).confirmWon('test',id(deal),0,true);
+async function setupDeal(number:number,orgName:string,seasons:number[]){
+ await db.query('insert into partner.organizations(id,name,active) values($1,$2,false)',[id(number),orgName]);
+ await db.query("insert into partner_deals.deals(id,organization_id,title,stage,negotiation_notes,created_by_member_id,updated_by_member_id) values($1,$2,'Agreement','proposal','Private negotiation',$3,$3)",[id(number+1),id(number),id(1)]);
+ for(const season of seasons) await db.query("insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,invoice_date) values($1,$2,'cash',10000,'2026-11-01')",[id(number+1),id(season)]);
+ await db.query("insert into partner_deals.deliverables(deal_id,title,owner_member_id) values($1,'Publish logo',$2)",[id(number+1),id(3)]);
+}
+beforeAll(async()=>{
+ db=new PGlite();
+ await db.exec('create schema neon_auth;create table neon_auth."user"(id uuid primary key,name text,email text,"emailVerified" boolean,banned boolean);create table neon_auth.account(id uuid primary key default gen_random_uuid(),"accountId" text,"providerId" text,"userId" uuid references neon_auth."user"(id),"createdAt" timestamptz default now()); create role anon; create role authenticated; create role anonymous;');
+ for(const n of ["001_member_cv","002_member_helix_role","009_platform_access_and_managed_positions","009_project_management","010_department_lead_tasks","011_task_assignees","012_project_milestones","013_project_hierarchy","014_milestone_field_updates","015_project_departments","016_fixed_departments","017_workspace_directory","020_project_start_dates","021_project_creation_milestones","018_department_homes","019_department_settings_permissions","025_workspace_space_access","026_department_access_levels","032_estimated_task_history","033_project_status","022_task_backlog_status"]) await db.exec(read(n));
+ await db.exec(`create schema partner; create table partner.organizations(id uuid primary key default gen_random_uuid(),name text,active boolean);`);
+ for(const p of people){
+  await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[p.userId,p.name,p.email]);
+  await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[p.googleSub,p.userId]);
+  await db.query('insert into identity.members(id,auth_user_id,google_sub,email,full_name) values($1,$1,$2,$3,$4)',[p.userId,p.googleSub,p.email,p.name]);
+ }
+ await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
+ await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
+ await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review','054_partner_manual_finance_review','055_partner_manual_review_gate']) await db.exec(read(n));
+ await db.exec("alter table partner_deals.deals add column if not exists primary_season_id uuid");
+ await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
+ insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
+ insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
+},60000);
+afterAll(async()=>db.close());
+it('confirms once with real secured funding, audited season links and department-scoped tasks',async()=>{
+ await setupDeal(30,'Acme',[20,21]);
+ await db.query("insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,description) values($1,$2,'product',12345,'Parts')",[id(31),id(20)]);
+ await expect(confirm(2,31)).rejects.toMatchObject({status:403});
+ await confirm(0,31); await confirm(0,31);
+ const funding=await db.query<{status:string; funding_type:string; received_date:string|null}>('select status,funding_type,received_date from finance.funding order by public_ref');
+ expect(funding.rows).toEqual([{status:'secured',funding_type:'sponsor_cash',received_date:null},{status:'secured',funding_type:'sponsor_cash',received_date:null}]);
+ expect((await db.query('select * from partner_deals.funding_links')).rows).toHaveLength(2);
+ expect((await db.query("select * from finance.audit_log where entity='funding'")).rows.length).toBeGreaterThan(0);
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(31)])).rows).toHaveLength(2);
+ expect((await db.query("select * from partner_deals.audit where deal_id=$1 and action='won'",[id(31)])).rows).toHaveLength(1);
+ const marketing=await dealService(2).load('test','shared'); expect(marketing.deals).toHaveLength(1);expect(JSON.stringify(marketing)).not.toContain('Private negotiation');
+ await expect(dealService(2).load('test','pipeline')).rejects.toMatchObject({status:403});
+ await expect(dealService(3).load('test','shared')).rejects.toMatchObject({status:403});
+ const links=(await db.query<{kind:string;task_id:string}>('select kind,task_id from partner_deals.task_links where deal_id=$1',[id(31)])).rows;
+ const invoice=links.find(x=>x.kind==='invoice')!.task_id, logo=links.find(x=>x.kind==='marketing')!.task_id;
+ expect((await projectService(1).load('test')).tasks.some(t=>t.id===invoice)).toBe(true);
+ expect((await projectService(2).load('test')).tasks.some(t=>t.id===invoice)).toBe(false);
+ expect((await projectService(2).load('test')).tasks.some(t=>t.id===logo)).toBe(true);
+ await projectService(1).mutate('test',{action:'set_status',id:invoice,expectedRevision:1,status:'in_progress',blockedReason:''});
+ await projectService(2).mutate('test',{action:'set_status',id:logo,expectedRevision:1,status:'done',blockedReason:''});
+});
+it('leaves the deal, tasks and funding untouched if an existing funding source may duplicate it',async()=>{
+ await setupDeal(40,'DuplicateCo',[20]);
+ await db.query("insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-998','DuplicateCo','Owner','sponsor_cash',10000,'secured',$2,$2)",[id(20),id(1)]);
+ const before=(await db.query('select * from finance.funding')).rows.length;
+ await expect(confirm(0,41)).rejects.toMatchObject({status:409,code:'funding_possible_duplicate'});
+ expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(41)])).rows).toHaveLength(0);
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(41)])).rows[0].stage).toBe('proposal');
+ const contribution=(await db.query<{id:string}>('select id from partner_deals.contributions where deal_id=$1',[id(41)])).rows[0].id;
+ const existing=(await db.query<{id:string}>("select id from finance.funding where public_ref='F-S27-998'")).rows[0].id;
+ await expect(dealService(0).linkFunding('test',contribution,existing,0)).rejects.toMatchObject({status:403});
+ expect((await dealService(0).load('test','pipeline')).canReviewFunding).toBe(false);
+ await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(1)]);
+ expect((await dealService(0).load('test','pipeline')).canReviewFunding).toBe(true);
+ await dealService(0).linkFunding('test',contribution,existing,0);
+ await confirm(0,41);
+ expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(41)])).rows).toHaveLength(2);
+});
+it('rolls back earlier season effects if a later deal season is closed',async()=>{
+ await setupDeal(50,'ClosedCo',[20,21]);
+ await db.query("update finance.seasons set status='closed' where id=$1",[id(21)]);
+ const before=(await db.query('select * from finance.funding')).rows.length;
+ await expect(confirm(0,51)).rejects.toMatchObject({status:409});
+ expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(51)])).rows).toHaveLength(0);
+ expect((await db.query("select l.* from partner_deals.funding_links l join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1",[id(51)])).rows).toHaveLength(0);
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(51)])).rows[0].stage).toBe('proposal');
+});
+it('rolls back funding when task creation fails after funding was inserted',async()=>{
+ await setupDeal(60,'TaskFailCo',[20]);
+ const before=(await db.query('select * from finance.funding')).rows.length;
+ await db.exec(`create function project_management.test_reject_invoice() returns trigger language plpgsql as $$ begin if new.kind='task' and new.category='operations' then raise exception 'test_invoice_write_failed'; end if; return new; end $$;
+ create trigger test_reject_invoice before insert on project_management.tasks for each row execute function project_management.test_reject_invoice();`);
+ await expect(confirm(0,61)).rejects.toMatchObject({status:503});
+ expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(61)])).rows).toHaveLength(0);
+ expect((await db.query("select l.* from partner_deals.funding_links l join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1",[id(61)])).rows).toHaveLength(0);
+ expect((await db.query<{stage:string}>('select stage from partner_deals.deals where id=$1',[id(61)])).rows[0].stage).toBe('proposal');
+ await db.exec('drop trigger test_reject_invoice on project_management.tasks; drop function project_management.test_reject_invoice();');
+ await confirm(0,61);
+ expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(61)])).rows).toHaveLength(2);
+});
+
+
+it('provisions a future season without changing the active setting and denies non-admins',async()=>{
+ await expect(db.query("select finance.provision_future_season($1,'S29','S29','2028-08-01','2029-07-31')",[id(2)])).rejects.toThrow('deal_operator_forbidden');
+ await db.query("insert into identity.member_roles(member_id,role_key) values($1,'platform_administrator')",[id(1)]);
+ const future=await db.query<{id:string}>("select finance.provision_future_season($1,'S29','S29','2028-08-01','2029-07-31') as id",[id(1)]);
+ const again=await db.query<{id:string}>("select finance.provision_future_season($1,'S29','S29','2028-08-01','2029-07-31') as id",[id(1)]);
+ expect(future.rows[0].id).toBe(again.rows[0].id);
+ expect((await db.query<{code:string}>("select setting_value #>> '{}' as code from finance.settings where setting_key='current_season'")).rows[0].code).toBe('S27');
+ await expect(db.query("select finance.provision_future_season($1,'S29','S29','2028-09-01','2029-07-31')",[id(1)])).rejects.toThrow('finance:SEASON_CONFLICT');
+ await expect(db.query("select finance.provision_future_season($1,'S30','S30','2029-01-01','2030-07-31')",[id(1)])).rejects.toThrow('finance:SEASON_OVERLAP');
+ await expect(db.query("insert into finance.seasons(code,name,start_date,end_date,created_by_member_id,updated_by_member_id) values('S30','S30','2029-01-01','2030-07-31',$1,$1)",[id(1)])).rejects.toMatchObject({code:'23P01'});
+});
+
+it('reports a due invoice blocked by a pending amendment, then catches up after resolution',async()=>{
+ await setupDeal(160,'PendingInvoiceCo',[20]);
+ await db.query("update partner_deals.deals set stage='won',won_at=now(),won_by_member_id=$2 where id=$1",[id(161),id(1)]);
+ const contribution=(await db.query<{id:string}>("select id from partner_deals.contributions where deal_id=$1 and kind='cash'",[id(161)])).rows[0].id;
+ await db.query('select partner_deals.attach_one_cash($1,$2,$3)',[id(1),id(161),contribution]);
+ const change=(await db.query<{id:string}>("insert into partner_deals.agreement_changes(deal_id,kind,reason,before_terms,proposed_terms,created_by) values($1,'amendment','Review','{}','{}',$2) returning id",[id(161),id(1)])).rows[0].id;
+ const blocked=(await db.query<{r:{created:number;failed:number;failures:{contributionId:string;code:string}[]}}>("select partner_deals.materialize_invoices_on('2027-01-01') r")).rows[0].r;
+ expect(blocked.failures).toEqual(expect.arrayContaining([expect.objectContaining({contributionId:contribution,code:'agreement_change_pending'})]));expect(blocked.failed).toBeGreaterThan(0);
+ expect((await db.query('select * from partner_deals.task_links where contribution_id=$1',[contribution])).rows).toHaveLength(0);
+ await db.query("update partner_deals.agreement_changes set status='resolved',resolved_by=$2,resolved_at=now(),resolution_note='Reviewed' where id=$1",[change,id(1)]);
+ const result=(await db.query<{r:{created:number;failed:number}}>("select partner_deals.materialize_invoices_on('2027-01-02') r")).rows[0].r;
+ expect(result.created).toBeGreaterThan(0);
+ expect((await db.query('select * from partner_deals.task_links where contribution_id=$1',[contribution])).rows).toHaveLength(1);
+});
+
+it('attaches only added cash when an earlier funded season is closed',async()=>{
+ await db.query("update finance.seasons set status='planning' where id=$1",[id(21)]);
+ await setupDeal(170,'PastSeasonCo',[20]);await confirm(0,171);
+ const old=(await db.query<{id:string;status:string}>("select f.id,f.status from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1",[id(171)])).rows[0];
+ await db.query("update finance.seasons set status='closed' where id=$1",[id(20)]);
+ const change=(await db.query<{id:string}>("insert into partner_deals.agreement_changes(deal_id,kind,reason,before_terms,proposed_terms,created_by) values($1,'amendment','Add next season','{}','{}',$2) returning id",[id(171),id(1)])).rows[0].id;
+ const added=(await db.query<{id:string}>("insert into partner_deals.contributions(deal_id,season_id,kind,amount_ore,invoice_date,pending_change_id) values($1,$2,'cash',20000,'2027-11-01',$3) returning id",[id(171),id(21),change])).rows[0].id;
+ await db.query('select partner_deals.attach_change_funding($1,$2,$3)',[id(1),id(171),change]);
+ await db.query('select partner_deals.attach_change_funding($1,$2,$3)',[id(1),id(171),change]);
+ expect((await db.query('select * from partner_deals.funding_links where contribution_id=$1',[added])).rows).toHaveLength(1);
+ expect((await db.query<{status:string}>('select status from finance.funding where id=$1',[old.id])).rows[0].status).toBe(old.status);
+});

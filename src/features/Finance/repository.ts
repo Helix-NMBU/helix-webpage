@@ -1,6 +1,7 @@
 import { capabilitiesForProfiles } from "./access";
-import { osloToday } from "./money";
+import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money";
 import type {
+  BankSnapshot,
   FinanceCapabilitiesResponse,
   FinanceFieldError,
   FinanceMutationResult,
@@ -14,6 +15,15 @@ import type {
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
+import { localSponsorFunding } from "../PartnerDeals/local-fixture";
+
+let localBankSnapshot: BankSnapshot | null = null;
+let localBankVersion = 0;
+
+/** Read only from the dedicated loopback development mode. */
+export function localBankSnapshotForDevelopment(): BankSnapshot | null {
+  return isLocalMemberMode() && localMemberSignedIn() ? localBankSnapshot : null;
+}
 
 export class FinanceRequestError extends Error {
   constructor(message: string, readonly status: number, readonly errors: FinanceFieldError[] = []) { super(message); }
@@ -22,25 +32,25 @@ export class FinanceRequestError extends Error {
 function localCapabilities(): FinanceCapabilitiesResponse {
   return {
     memberId: "local-member",
-    viewVersion: 0,
+    viewVersion: localBankVersion,
     profiles: ["finance"],
     capabilities: capabilitiesForProfiles(["finance"]),
-    seasonCode: null,
+    seasonCode: "S27",
     approvalThresholdNok: null,
     today: osloToday(),
   };
 }
 
 function localOverview(): PublicOverview {
-  return { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] };
+  return { viewVersion: localBankVersion, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] };
 }
 
 function localBudgets(): PublicBudgets {
-  return { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 0, departments: [], choices: { systems: [], items: [] } };
+  return { viewVersion: localBankVersion, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 0, departments: [], choices: { systems: [], items: [] } };
 }
 
 function localPurchases(): PurchasesView {
-  return { viewVersion: 0, ownRequests: [] };
+  return { viewVersion: localBankVersion, ownRequests: [] };
 }
 
 export function createFinanceApi(owner: { current: string | null }) {
@@ -60,7 +70,20 @@ export function createFinanceApi(owner: { current: string | null }) {
     return body as T;
   }
   async function mutate(action: Record<string, unknown>): Promise<FinanceMutationResult> {
-    if (local()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
+    if (local()) {
+      if (action.action !== "setBankSnapshot" || !localMemberHasFinancials()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
+      if (action.expectedRevision !== (localBankSnapshot?.revision ?? 0)) throw new FinanceRequestError("The balance changed. Reload it before saving.", 409);
+      let amount: bigint | null;
+      let asOfDate: string;
+      try {
+        amount = parseNokToOre(typeof action.amountNok === "string" ? action.amountNok : "");
+        asOfDate = parseIsoDate(typeof action.asOfDate === "string" ? action.asOfDate : "");
+        if (amount === null || amount > 9223372036854775807n || amount < -9223372036854775808n) throw new Error();
+      } catch { throw new FinanceRequestError("Enter a valid balance and as-of date.", 400); }
+      localBankSnapshot = { amountNok: formatOre(amount), asOfDate, updatedAt: new Date().toISOString(), revision: (localBankSnapshot?.revision ?? 0) + 1 };
+      localBankVersion += 1;
+      return { ok: true, viewVersion: localBankVersion, revision: localBankSnapshot.revision, warnings: [], errors: [] };
+    }
     const token = await memberSessionToken(owner);
     const response = await fetch("/api/finance", {
       method: "POST",
@@ -73,10 +96,11 @@ export function createFinanceApi(owner: { current: string | null }) {
     return body as FinanceMutationResult;
   }
   return {
+    bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),
     capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
-    version: () => local() ? Promise.resolve({ viewVersion: 0 } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
+    version: () => local() ? Promise.resolve({ viewVersion: localBankVersion } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
     recovery: (deliveryAfter?: string, uploadAfter?: string) => {
-      if (local()) return Promise.reject(new FinanceRequestError("Finance access is required.", 403));
+      if (local()) return localMemberHasFinancials() ? Promise.resolve({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null } satisfies FinanceRecoveryView) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
       const params = new URLSearchParams();
       if (deliveryAfter) params.set("deliveryAfter", deliveryAfter);
       if (uploadAfter) params.set("uploadAfter", uploadAfter);
@@ -94,7 +118,7 @@ export function createFinanceApi(owner: { current: string | null }) {
       return request<PurchasesView>(extra ? `purchases&${extra}` : "purchases");
     },
     financing: () => local()
-      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: 0, seasonCode: null, funding: [], parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
+      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: localBankVersion, seasonCode: "S27", funding: localSponsorFunding(), parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
       : request<FinancingView>("financing"),
     mutate,
   };

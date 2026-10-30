@@ -39,6 +39,9 @@ import "@fontsource-variable/geist";
 import "./member-platform.css";
 import "./member-theme.css";
 
+const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
+const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
+const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
 const MailWorkspace = lazy(() => import("./MailWorkspace").then(module => ({ default: module.MailWorkspace })));
 const RecruitmentPortal = lazy(() => import("../Recruitment/RecruitmentPortal"));
 const FinanceEntry = lazy(() => import("../Finance/FinancePages").then(module => ({ default: module.FinanceEntry })));
@@ -170,6 +173,9 @@ export default function MemberPlatform() {
                 <Route path="profile" element={<MemberCV />} />
                 <Route path="notifications" element={<MemberNotificationsPage />} />
                 <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
+                <Route path="sponsor-pipeline" element={<SponsorPipeline />} />
+                <Route path="partner-deals" element={<WonDeals />} />
+                <Route path="finance/sponsor-reviews" element={<FinanceReviews />} />
                 <Route path="finance" element={<FinanceEntry page="overview" />} />
                 <Route path="finance/purchases" element={<FinanceEntry page="purchases" />} />
                 <Route path="finance/budgets" element={<FinanceEntry page="budgets" />} />

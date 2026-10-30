@@ -37,7 +37,7 @@ export function DepartmentsPage() {
   const denied =
     !!data &&
     !!departmentId &&
-    (!selected || !selected.memberIds.includes(data.viewerId));
+    (!selected || (!data.canManageProjects && !selected.memberIds.includes(data.viewerId)));
   useEffect(() => {
     if (denied)
       notify(
@@ -81,12 +81,13 @@ export function DepartmentsPage() {
           {departments.map((d) => {
             const DepartmentIcon = getDepartmentIcon(d.name);
             const joined = d.memberIds.includes(data.viewerId);
+            const canOpen = joined || data.canManageProjects;
             const memberIds = departmentMemberIds(d);
             const members = memberIds.filter((id) => data.members.some((m) => m.id === id));
             return (
               <TableRow
                 key={d.id}
-                className={joined ? undefined : "opacity-70 grayscale"}
+                className={canOpen ? undefined : "opacity-70 grayscale"}
               >
                 <TableCell className="py-4 pl-4 font-medium">
                   <span className="inline-flex items-center gap-2">
@@ -94,7 +95,7 @@ export function DepartmentsPage() {
                       aria-hidden="true"
                       className="size-4 shrink-0 text-muted-foreground"
                     />
-                    {joined ? (
+                    {canOpen ? (
                       <button
                         type="button"
                         className="hover:underline"

@@ -94,7 +94,7 @@ function ExistingProjectEditor({ project, category, members = [], busy, onSave, 
     catch (error) { notify("Could not save project", error instanceof Error ? error.message : "Check the project details and try again.", { variant: "error", href: null }); }
   }
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90svh] overflow-y-auto" showCloseButton={!busy}>
-    <DialogHeader><DialogTitle>{project ? "Edit project" : "New project"}</DialogTitle><DialogDescription>Group related work within the S27 season. Projects can span departments.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{project ? "Edit project" : "New project"}</DialogTitle><DialogDescription>Group related work within the current season. Projects can span departments.</DialogDescription></DialogHeader>
     <form onSubmit={event => void submit(event)} className="space-y-4"><fieldset disabled={busy} className="space-y-4">
       <Field id="project-name" label="Project name"><Input id="project-name" autoFocus required maxLength={200} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></Field>
       <Field id="project-description" label="Description"><Textarea id="project-description" maxLength={2000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></Field>

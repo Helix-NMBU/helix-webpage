@@ -77,6 +77,8 @@ describe("project management database and authorization", () => {
     for (const name of ["018_department_homes", "019_department_settings_permissions", "025_workspace_space_access", "026_department_access_levels"]) await db.exec(readFileSync(new URL(`../db/migrations/${name}.sql`, import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/032_estimated_task_history.sql", import.meta.url), "utf8"));
     await db.exec(readFileSync(new URL("../db/migrations/033_project_status.sql", import.meta.url), "utf8"));
+    await db.exec("create schema finance; create table finance.settings(setting_key text,setting_value jsonb);");
+    await db.exec(readFileSync(new URL("../db/migrations/041_project_current_season.sql", import.meta.url), "utf8"));
     departmentAccessInstalled = true;
     await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[manager.userId]);
     await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name in ('Mechanical & Production','Business & Marketing')",[member.userId]);

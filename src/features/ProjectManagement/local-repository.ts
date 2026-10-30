@@ -3,6 +3,7 @@ import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { addDays, osloDate, validateProjectMilestones, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
 import { canonicalDepartment, fixedDepartmentRecords, fixedProjectDepartments } from "./departments";
 import { progressEvent } from "./progress";
+import { localPartnerWorkspace } from "../PartnerDeals/local-fixture";
 import { ProjectRequestError } from "./repository";
 import { TASK_CATEGORIES, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
 
@@ -51,14 +52,12 @@ export function createLocalProjectRepository(): ProjectRepository {
     });
     const previousDepartments = workspace.departments ?? [];
     if (previousDepartments.some(department => canonicalDepartment(department.name) !== department.name) && !localStorage.getItem("helix-member-local-department-archive-v1")) localStorage.setItem("helix-member-local-department-archive-v1", JSON.stringify(previousDepartments));
-    const departments = fixedDepartmentRecords(previousDepartments).map(department => workspace.canManage ? {
-      ...department,
-      memberIds: [...new Set([...department.memberIds, workspace.viewerId])],
-      viewerIds: [...new Set([...(department.viewerIds ?? []), workspace.viewerId])],
-      leadIds: (department.leadIds ?? (department.leadId ? [department.leadId] : [])).filter(id => id !== workspace.viewerId),
-      leadId: (department.leadIds ?? (department.leadId ? [department.leadId] : [])).find(id => id !== workspace.viewerId) ?? null,
-    } : department);
-    return { ...workspace, tasks, projects: workspace.projects.map(project => ({ ...project, departments: fixedProjectDepartments(project.departments) })), departments, progressEvents: workspace.progressEvents ?? tasks.map(item => progressEvent(item)), taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
+    const departments = fixedDepartmentRecords(previousDepartments);
+    const merged = localPartnerWorkspace({projects:workspace.projects,tasks});
+    const progressEvents = workspace.progressEvents ?? tasks.map(item => progressEvent(item));
+    const known = new Set(progressEvents.map(event => event.taskId));
+    const missing = merged.tasks.filter(item => !known.has(item.id)).map(item => progressEvent(item));
+    return { ...workspace, tasks:merged.tasks, projects:merged.projects.map(project => ({ ...project, departments: fixedProjectDepartments(project.departments) })), departments, progressEvents: [...progressEvents, ...missing], taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
   }
   return {
     async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return workspace; },

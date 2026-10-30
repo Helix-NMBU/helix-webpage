@@ -126,3 +126,34 @@ html[data-member-theme="dark"] [data-project-progress] {
   --progress-started: var(--chart-2);
   --progress-completed: var(--chart-1);
 }
+
+/* Member shell surfaces follow the inset workspace: a quiet outer rail, a
+   slightly raised canvas, and distinct cards in each color scheme. */
+html[data-member-theme="light"] .member-platform,
+html[data-member-theme="light"] body:has(.member-platform) {
+  --sidebar: #ededee;
+  --sidebar-foreground: #353538;
+  --sidebar-accent: #dedee0;
+  --sidebar-accent-foreground: #18181a;
+  --sidebar-border: #dedee0;
+  --background: #f7f7f8;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --muted: #eeeeef;
+  --accent: #e8e8ea;
+  --border: #e3e3e5;
+}
+html[data-member-theme="dark"] .member-platform,
+html[data-member-theme="dark"] body:has(.member-platform) {
+  --sidebar: #08090a;
+  --sidebar-foreground: #d7d7d9;
+  --sidebar-accent: #222225;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #252527;
+  --background: #101012;
+  --card: #19191b;
+  --popover: #19191b;
+  --muted: #202022;
+  --accent: #252528;
+  --border: #29292b;
+}

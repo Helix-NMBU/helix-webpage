@@ -48,7 +48,9 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
            , array_remove(array[
             case when exists(select 1 from project_management.access where member_id=m.id and active) then 'season-overview' end,
             case when identity.member_has_feature(m.id,'recruitment.manage') then 'recruiting' end,
-            case when exists(select 1 from identity.member_roles where member_id=m.id and role_key='financials') then 'financials' end
+            case when exists(select 1 from identity.member_roles where member_id=m.id and role_key='financials') then 'financials' end,
+            case when exists(select 1 from partner_deals.space_access where member_id=m.id and pipeline) then 'pipeline' end,
+            case when exists(select 1 from partner_deals.space_access where member_id=m.id and agreements) then 'partner-agreements' end
           ], null) as space_keys
           from identity.members m left join identity.member_departments md on md.member_id = m.id order by lower(m.email)`),
       ]);
@@ -61,9 +63,9 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
       const input = body as Record<string, unknown>;
       const change = parseMemberChange({ action: "save_member", id: input.memberId, expectedRevision: input.expectedRevision, name: "Access update", helixRole: null, departments: input.departments });
       const spaces = input.spaceKeys;
-      if (!Array.isArray(spaces) || spaces.length > WORKSPACE_SPACES.length || new Set(spaces).size !== spaces.length || spaces.some(key => !WORKSPACE_SPACES.some(space => space.key === key))) throw new MemberCvError(400, "Choose valid spaces.");
+      if (!Array.isArray(spaces) || spaces.length > WORKSPACE_SPACES.length || new Set(spaces).size !== spaces.length || spaces.some(key => !WORKSPACE_SPACES.some(space => space.key === key)) || (spaces.includes("pipeline") && !spaces.includes("partner-agreements"))) throw new MemberCvError(400, "Choose valid spaces.");
       try {
-        await db.query("select identity.save_workspace_access($1::uuid,$2,$3,$4::jsonb)", [actorId, identity.googleSub, identity.email, JSON.stringify({ memberId: change.id, expectedRevision: change.expectedRevision, departments: change.departments, spaceKeys: spaces })]);
+        await db.query("select identity.save_workspace_access($1::uuid,$2,$3,$4::jsonb)", [actorId, identity.googleSub, identity.email, JSON.stringify({ memberId: change.id, expectedRevision: change.expectedRevision, departments: change.departments, spaceKeys: spaces, partnerSpacesConfigured: input.partnerSpacesConfigured === true })]);
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         if (/forbidden/.test(message)) throw new MemberCvError(403, "Platform administrator access is required.");

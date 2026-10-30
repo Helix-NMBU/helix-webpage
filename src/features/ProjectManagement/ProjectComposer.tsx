@@ -139,7 +139,7 @@ export function ProjectComposer({
           <IconChevronRight className="size-3.5 text-muted-foreground" aria-hidden="true" />
           <DialogTitle className="text-sm font-normal">New project</DialogTitle>
           <DialogDescription className="sr-only">
-            Create an S27 project, set its properties and optionally add milestones.
+            Create a project, set its properties and optionally add milestones.
           </DialogDescription>
         </div>
         <form onSubmit={(event) => void submit(event)} className="flex min-h-0 flex-1 flex-col">
