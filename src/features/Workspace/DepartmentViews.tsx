@@ -7,7 +7,7 @@ import { projectRepository, ProjectRequestError } from "../ProjectManagement/rep
 import type { ProjectMutation, ProjectWorkspace, Task } from "../ProjectManagement/types";
 import type { SaveTaskStatus } from "../ProjectManagement/TaskStatus";
 import { ProjectTaskList } from "./ProjectTaskList";
-import { boardAssignmentMutation } from "../ProjectManagement/TaskBoard";
+import { boardAssignmentMutation, boardPropertyMutation } from "../ProjectManagement/TaskBoard";
 import { ProjectsPage } from "./ProjectsPage";
 import { useWorkspace } from "./WorkspaceContext";
 import { LoadDirectory } from "./DirectoryComponents";
@@ -145,6 +145,7 @@ export function DepartmentTasksPage() {
       onOpen={(task: Task) => navigate(`/tasks/${task.id}`)}
       onStatusChange={saveStatus}
       onSaveAssignees={(task, assigneeIds) => save(boardAssignmentMutation(task, assigneeIds))}
+      onSaveProperties={(task, changes) => save(boardPropertyMutation(task, changes))}
       onCreate={() => undefined}
       boardKind="task"
       heading="Tasks"

@@ -1,5 +1,3 @@
-import { TaskEditor } from "../ProjectManagement/TaskEditor";
-import { DeleteWorkButton } from "../ProjectManagement/DeleteWorkButton";
 import { canManageProject } from "../ProjectManagement/permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -19,7 +17,10 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@libs/components/ui/empty";
-import { Badge } from "@libs/components/ui/badge";
+import { IconDiamonds } from "@tabler/icons-react";
+import { TaskStatusIcon } from "../ProjectManagement/TaskStatus";
+import { PriorityIndicator } from "../ProjectManagement/MilestoneTableControls";
+import { AssigneeAvatars } from "../ProjectManagement/TaskAssignees";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import {
   projectRepository,
@@ -35,12 +36,12 @@ import type {
 } from "../ProjectManagement/types";
 import { STATUS_LABELS } from "../ProjectManagement/types";
 import { TaskComposer } from "../ProjectManagement/TaskComposer";
-import { summarize, validateProject } from "../ProjectManagement/model";
+import { formatDate, validateProject } from "../ProjectManagement/model";
 import { useWorkspace } from "./WorkspaceContext";
 import type { WorkspaceDirectory, WorkspaceProject } from "./types";
 import { type TaskStatus } from "../ProjectManagement/types";
 import { ProjectTaskList } from "./ProjectTaskList";
-import { boardAssignmentMutation } from "../ProjectManagement/TaskBoard";
+import { boardAssignmentMutation, boardPropertyMutation } from "../ProjectManagement/TaskBoard";
 import { ProjectSidebar } from "./ProjectSidebar";
 
 function InlineProjectField({
@@ -124,7 +125,6 @@ export function ProjectDetail({
   const [loading, setLoading] = useState(directory.projectAccess);
   const [denied, setDenied] = useState(!directory.projectAccess);
   const [busy, setBusy] = useState(false);
-  const [editingMilestone, setEditingMilestone] = useState<Task | null>(null);
   const [composer, setComposer] = useState<TaskInput["kind"] | null>(null);
   const repository = useRef<Promise<ProjectRepository> | null>(null);
   const generation = useRef(0);
@@ -231,15 +231,6 @@ export function ProjectDetail({
         (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(directory.viewerId) &&
         project.departments.includes(department.name),
     );
-  const counts = workspace
-    ? summarize(tasks)
-    : {
-        done: project.done,
-        total: project.total,
-        percent: project.total
-          ? Math.round((project.done / project.total) * 100)
-          : 0,
-      };
   function selectTab(value: string) {
     const next = new URLSearchParams(params);
     if (value === "tasks") next.delete("tab");
@@ -356,7 +347,8 @@ export function ProjectDetail({
       blockedReason,
     });
   }
-  const taskIds = new Set(tasks.map((task) => task.id));
+  const projectWork = [...tasks, ...milestones];
+  const taskIds = new Set(projectWork.map((task) => task.id));
   const events = (workspace?.progressEvents ?? [])
     .filter((event) => taskIds.has(event.taskId))
     .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))
@@ -418,100 +410,42 @@ export function ProjectDetail({
               className={`min-w-0 md:min-h-0 md:overscroll-y-contain md:pb-2 md:pr-2 ${tab === "tasks" && params.get("view") === "board" ? "md:flex md:flex-col md:overflow-hidden" : "md:overflow-y-auto"}`}
             >
               {tab === "overview" ? (
-                <section
-                  aria-label="Project overview"
-                  className="space-y-6 py-2"
-                >
-                  <h2 className="text-2xl font-semibold tracking-tight">
-                    {canEdit ? <InlineProjectField label="name" value={project.name} placeholder="Project name" disabled={busy} onSave={value => saveProjectProperties({ name: value })} /> : project.name}
-                  </h2>
-                  <div className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                    {canEdit ? <InlineProjectField label="description" value={project.description} placeholder="Add a project description…" multiline disabled={busy} onSave={value => saveProjectProperties({ description: value })} /> : <p className="whitespace-pre-wrap">{project.description || "No project description yet."}</p>}
+                <section aria-label="Project overview" className="mx-auto max-w-4xl space-y-8 py-4">
+                  <div className="space-y-3">
+                    <h2 className="text-2xl font-semibold tracking-tight">
+                      {canEdit ? <InlineProjectField label="name" value={project.name} placeholder="Project name" disabled={busy} onSave={value => saveProjectProperties({ name: value })} /> : project.name}
+                    </h2>
+                    <div className="text-sm leading-relaxed text-muted-foreground">
+                      {canEdit ? <InlineProjectField label="description" value={project.description} placeholder="Add a project description…" multiline disabled={busy} onSave={value => saveProjectProperties({ description: value })} /> : <p className="whitespace-pre-wrap">{project.description || "No project description yet."}</p>}
+                    </div>
                   </div>
-                  <dl className="grid max-w-2xl grid-cols-3 gap-5 border-y py-5">
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Tasks</dt>
-                      <dd className="mt-2 text-xl font-medium tabular-nums">
-                        {counts.total}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">
-                        Completed
-                      </dt>
-                      <dd className="mt-2 text-xl font-medium tabular-nums">
-                        {counts.done}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">
-                        Milestones
-                      </dt>
-                      <dd className="mt-2 text-xl font-medium tabular-nums">
-                        {workspace
-                          ? milestones.length
-                          : project.milestones.length}
-                      </dd>
-                    </div>
-                  </dl>
-                  <Button variant="outline" onClick={() => selectTab("tasks")}>
-                    View tasks
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-3 text-sm" aria-label="Project summary">
+                    <span className="text-muted-foreground">Properties</span>
+                    <span className="inline-flex items-center gap-2"><TaskStatusIcon status={project.status ?? "todo"} />{STATUS_LABELS[project.status ?? "todo"]}</span>
+                    <span className="inline-flex items-center gap-2"><PriorityIndicator priority={project.priority ?? "normal"} />{project.priority === "normal" || !project.priority ? "Medium" : project.priority[0].toUpperCase() + project.priority.slice(1)}</span>
+                    <AssigneeAvatars assigneeIds={project.leadIds ?? []} members={directory.members} assignmentRole="lead" showNames />
+                    <span className="text-muted-foreground">{formatDate(project.startDate ?? null)} – {formatDate(project.deadline)}</span>
+                  </div>
+                  <button type="button" onClick={() => selectTab("activity")} className="w-full rounded-xl border px-4 py-5 text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View project activity</button>
                 </section>
               ) : loading && !workspace ? (
                 tab === "activity" ? <ActivitySkeleton /> : <TaskListSkeleton label="Loading project tasks" board={params.get("view") === "board"} />
               ) : !workspace ? (
                 accessState
               ) : tab === "activity" ? (
-                <section aria-label="Project activity" className="space-y-4">
-                  <h2 className="text-xl font-medium">Activity</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Recorded status history for the project’s current tasks.
-                  </p>
-                  {events.length ? (
-                    <ul className="divide-y rounded-xl border px-4">
-                      {events.map((event, index) => (
-                        <li
-                          key={`${event.taskId}-${event.recordedAt}-${index}`}
-                          className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <button type="button" className="text-left hover:underline" onClick={() => openTask(event.taskId)}>
-                              {tasks.find((task) => task.id === event.taskId)?.title}
-                            </button>
-                            <span className="ml-2 text-muted-foreground">
-                              Recorded
-                            </span>{" "}
-                            <Badge variant="secondary">
-                              {STATUS_LABELS[event.status]}
-                            </Badge>
-                          </span>
-                          <time
-                            className="text-xs text-muted-foreground"
-                            dateTime={event.recordedAt}
-                          >
-                            {new Intl.DateTimeFormat("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              timeZone: "Europe/Oslo",
-                            }).format(new Date(event.recordedAt))}
-                          </time>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <Empty className="min-h-48 border">
-                      <EmptyHeader>
-                        <EmptyTitle>No recorded activity yet</EmptyTitle>
-                      </EmptyHeader>
-                    </Empty>
-                  )}
+                <section aria-label="Project activity" className="mx-auto max-w-4xl space-y-6 py-4">
+                  <div className="space-y-1"><h2 className="text-xl font-medium">Activity</h2><p className="text-sm text-muted-foreground">Status history for this project’s tasks and milestones.</p></div>
+                  {events.length ? <ul className="space-y-1">{events.map((event, index) => {
+                    const item = projectWork.find(work => work.id === event.taskId);
+                    if (!item) return null;
+                    return <li key={`${event.taskId}-${event.recordedAt}-${index}`} className="flex items-start gap-2.5 py-2 text-sm text-muted-foreground">
+                      {event.kind === "milestone" ? <IconDiamonds aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : <span className="mt-0.5 shrink-0"><TaskStatusIcon status={event.status} /></span>}
+                      <span className="min-w-0"><button type="button" className="text-left font-medium text-foreground hover:underline" onClick={() => openTask(event.taskId)}>{item.title}</button>{" · "}{event.kind === "milestone" ? "Milestone" : "Task"} status recorded as {STATUS_LABELS[event.status]}{" · "}<time dateTime={event.recordedAt}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Oslo" }).format(new Date(event.recordedAt))}</time></span>
+                    </li>;
+                  })}</ul> : <Empty className="min-h-48 border"><EmptyHeader><EmptyTitle>No recorded activity yet</EmptyTitle></EmptyHeader></Empty>}
                 </section>
               ) : (
                 <div className={params.get("view") === "board" ? "flex min-h-0 flex-1 flex-col gap-3" : "space-y-3"}>
-                {selected && canCreate && <div className="flex justify-end gap-2"><Button variant="outline" size="sm" disabled={busy} onClick={() => setEditingMilestone(selected)}>Edit milestone</Button><DeleteWorkButton kind="milestone" title={selected.title} busy={busy} onDelete={() => save({ action: "delete_task", id: selected.id, expectedRevision: selected.revision })} /></div>}
                 <ProjectTaskList
                   key={project.id}
                   tasks={filtered}
@@ -538,7 +472,9 @@ export function ProjectDetail({
                   onOpen={item => openTask(item.id)}
                   onStatusChange={changeStatus}
                   onSaveAssignees={(task, assigneeIds) => save(boardAssignmentMutation(task, assigneeIds))}
+                  onSaveProperties={(task, changes) => save(boardPropertyMutation(task, changes))}
                   onCreate={() => setComposer("task")}
+                  simplifiedProject
                 />
                 </div>
               )}
@@ -560,8 +496,6 @@ export function ProjectDetail({
           </div>
         </TabsContent>
       </Tabs>
-      {canEdit && workspace && <div className="pt-4"><DeleteWorkButton kind="project" title={project.name} busy={busy} onDelete={() => save({ action: "delete_project", id: project.id, expectedRevision: project.revision })} /></div>}
-      {editingMilestone && workspace && canCreate && <TaskEditor task={editingMilestone} workspace={workspace} category={project.category} busy={busy} onSave={async change => { const saved = await save(change); if (saved) setEditingMilestone(null); return saved; }} onClose={() => setEditingMilestone(null)} />}
       {composer && workspace && canCreate && (
         <TaskComposer
           initialKind={composer}

@@ -273,7 +273,7 @@ describe("internal member platform", () => {
     expect(link).not.toBeNull();
     await act(async () => link!.click());
     expect(router.state.location.pathname).toBe("/recruiting");
-    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Applications"));
+    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Recruiting"));
     expect(container.querySelector('[aria-label="Profile menu"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Recruiter sign in");
   });

@@ -12,6 +12,7 @@ export const OVERVIEW_PROJECT_COLUMNS = [
   ["milestones", "Milestones"],
   ["tasks", "Tasks"],
   ["status", "Status"],
+  ["progress", "Progress"],
 ] as const;
 export const OVERVIEW_MILESTONE_COLUMNS = [
   ["department", "Project"],
@@ -20,11 +21,16 @@ export const OVERVIEW_MILESTONE_COLUMNS = [
   ["deadline", "Target date"],
   ["tasks", "Tasks"],
   ["status", "Status"],
+  ["progress", "Progress"],
 ] as const;
 
 export function overviewColumns(params: URLSearchParams, key: string, columns: readonly OverviewColumn[]) {
   const keys = columns.map(([column]) => column);
-  return params.has(key) ? keys.filter(column => params.get(key)!.split(",").includes(column)) : keys;
+  if (!params.has(key)) return keys;
+  const selected = params.get(key)!.split(",");
+  // Older saved views combined progress with status; retain that visibility.
+  if (selected.includes("status") && !selected.includes("!progress") && !selected.includes("progress")) selected.push("progress");
+  return keys.filter(column => selected.includes(column));
 }
 
 export function OverviewColumnMenu({ label, columns, visible, onToggle }: {

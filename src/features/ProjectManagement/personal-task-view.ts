@@ -17,6 +17,7 @@ export type PersonalTaskColumn = (typeof PERSONAL_TASK_COLUMNS)[number][0];
 const defaults: PersonalTaskColumn[] = ["deadline", "project", "assignee"];
 const boardDefaults: PersonalTaskColumn[] = [
   "deadline",
+  "project",
   "milestone",
   "assignee",
   "priority",
@@ -37,10 +38,7 @@ export function personalTaskView(params: URLSearchParams) {
     : board
       ? boardDefaults
       : defaults;
-  // Existing project-badge preferences now display the connected milestone on Board.
-  const columns = board
-    ? selected.map((key) => (key === "project" ? "milestone" : key))
-    : selected;
+  const columns = selected;
   return {
     view: params.get("view") === "board" ? "board" : "list",
     area: params.get("area") ?? "all",

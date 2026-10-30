@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
-import { TaskBoard, type SaveBoardAssignees } from "../ProjectManagement/TaskBoard";
+import { BoardAssignees, TaskBoard, MilestonePill, type SaveBoardAssignees, type SaveTaskProperties } from "../ProjectManagement/TaskBoard";
+import { canManageTask } from "../ProjectManagement/permissions";
 import { ProjectTaskViewMenu } from "./ProjectTaskViewMenu";
 import { projectTaskView, visibleProjectTasks } from "./project-task-view";
 import { IconChevronDown } from "@tabler/icons-react";
@@ -17,8 +18,9 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@libs/components/ui/empty";
-import { AssigneeAvatars } from "../ProjectManagement/TaskAssignees";
 import {
+  MilestoneDateControl,
+  MilestonePriorityControl,
   PriorityIndicator,
   TargetDate,
 } from "../ProjectManagement/MilestoneTableControls";
@@ -43,10 +45,12 @@ export function ProjectTaskList({
   onOpen,
   onStatusChange,
   onSaveAssignees,
+  onSaveProperties,
   onCreate,
   boardKind = "milestone",
   heading,
   filterLabelText = "Milestone:",
+  simplifiedProject = false,
 }: {
   tasks: Task[];
   allTasks: Task[];
@@ -62,10 +66,12 @@ export function ProjectTaskList({
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
   onSaveAssignees?: SaveBoardAssignees;
+  onSaveProperties?: SaveTaskProperties;
   onCreate: () => void;
   boardKind?: "task" | "milestone";
   heading?: string;
   filterLabelText?: string;
+  simplifiedProject?: boolean;
 }) {
   const [params, setParams] = useSearchParams();
   const search = params.get("search") ?? "";
@@ -183,7 +189,7 @@ export function ProjectTaskList({
             onChange={change}
             onReset={resetFilters}
           />
-          {canCreate && (
+          {canCreate && !(simplifiedProject && board) && (
             <Button
               variant="outline"
               size="sm"
@@ -204,7 +210,7 @@ export function ProjectTaskList({
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
-      {filterLabel && (
+      {filterLabel && !simplifiedProject && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">{filterLabelText}</span>
           <span>{filterLabel}</span>
@@ -224,6 +230,7 @@ export function ProjectTaskList({
           onOpen={boardKind === "milestone" ? onOpenMilestone : onOpen}
           onStatusChange={onStatusChange}
           onSaveAssignees={onSaveAssignees}
+          onSaveProperties={onSaveProperties}
         />
       ) : (
         <div className="space-y-5">
@@ -263,14 +270,15 @@ export function ProjectTaskList({
                   </button>
                 )}
                 {open && (
-                  <ul className="divide-y divide-border/50">
+                  <ul>
                     {group.map((task) => {
+                      const milestone = workspace.tasks.find(item => item.kind === "milestone" && item.id === task.milestoneId && item.projectId === task.projectId);
                       return (
                         <li
                           key={task.id}
-                          className={`flex items-center gap-3 px-3 py-4 ${task.status === "done" || task.status === "cancelled" ? "text-muted-foreground" : ""}`}
+                          className={`flex flex-wrap items-center gap-2 px-3 py-1 ${task.status === "done" || task.status === "cancelled" ? "text-muted-foreground" : ""}`}
                         >
-                          <PriorityIndicator priority={task.priority} />
+                          {onSaveProperties && canManageTask(task, workspace) ? <MilestonePriorityControl task={task} busy={busy} onSave={onSaveProperties} /> : <PriorityIndicator priority={task.priority} />}
                           <TaskStatusControl
                             task={task}
                             workspace={workspace}
@@ -292,14 +300,12 @@ export function ProjectTaskList({
                                 </p>
                               )}
                           </div>
+                          {!selectedMilestone && milestone && task.projectId && <MilestonePill milestone={milestone} projectId={task.projectId} />}
                           <span className="shrink-0">
-                            <AssigneeAvatars
-                              assigneeIds={task.assigneeIds}
-                              members={workspace.members}
-                            />
+                            <BoardAssignees task={task} workspace={workspace} busy={busy} onSave={onSaveAssignees} onOpen={onOpen} />
                           </span>
-                          <span className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground sm:inline">
-                            <TargetDate deadline={task.deadline} />
+                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                            {onSaveProperties && canManageTask(task, workspace) ? <MilestoneDateControl task={task} busy={busy} onSave={onSaveProperties} /> : <TargetDate deadline={task.deadline} />}
                           </span>
                         </li>
                       );

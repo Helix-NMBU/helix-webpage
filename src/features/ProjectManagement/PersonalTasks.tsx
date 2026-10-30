@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { IconCube, IconDiamonds, IconRefresh } from "@tabler/icons-react";
+import { IconCube, IconRefresh } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import {
   Table,
@@ -17,9 +17,10 @@ import {
 } from "@libs/components/ui/empty";
 import { Badge } from "@libs/components/ui/badge";
 import { TaskStatusControl, type SaveTaskStatus } from "./TaskStatus";
-import { AssigneeAvatars } from "./TaskAssignees";
 import { PriorityIndicator } from "./MilestoneTableControls";
-import { TaskBoard, type SaveBoardAssignees } from "./TaskBoard";
+import { BoardAssignees, TaskBoard, MilestonePill, type SaveBoardAssignees, type SaveTaskProperties } from "./TaskBoard";
+import { canManageTask } from "./permissions";
+import { MilestoneDateControl, MilestonePriorityControl } from "./MilestoneTableControls";
 import { PersonalTaskViewMenu } from "./PersonalTaskViewMenu";
 import {
   assignedTasks,
@@ -37,6 +38,7 @@ export function PersonalTasks({
   onOpen,
   onStatusChange,
   onSaveAssignees,
+  onSaveProperties,
 }: {
   workspace: ProjectWorkspace;
   busy: boolean;
@@ -45,6 +47,7 @@ export function PersonalTasks({
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
   onSaveAssignees: SaveBoardAssignees;
+  onSaveProperties: SaveTaskProperties;
 }) {
   const [params, setParams] = useSearchParams();
   const options = personalTaskView(params);
@@ -124,6 +127,7 @@ export function PersonalTasks({
             onOpen={onOpen}
             onStatusChange={onStatusChange}
             onSaveAssignees={onSaveAssignees}
+            onSaveProperties={onSaveProperties}
           />
         ) : groups.length ? (
           <Table>
@@ -209,7 +213,7 @@ export function PersonalTasks({
                         <TableCell
                           className={`whitespace-nowrap ${!closed && task.deadline && task.deadline < today ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}
                         >
-                          {task.deadline
+                          {canManageTask(task, workspace) ? <MilestoneDateControl task={task} busy={busy || loading} onSave={onSaveProperties} /> : task.deadline
                             ? formatDate(task.deadline)
                             : "No due date"}
                         </TableCell>
@@ -237,38 +241,17 @@ export function PersonalTasks({
                       )}
                       {show("milestone") && (
                         <TableCell>
-                          {milestone && project ? (
-                            <Link
-                              className="inline-flex max-w-56 items-center gap-2 underline-offset-4 hover:underline"
-                              title={milestone.title}
-                              to={`/projects/${project.id}?milestone=${milestone.id}`}
-                            >
-                              <IconDiamonds
-                                aria-hidden="true"
-                                className="size-4 shrink-0 text-muted-foreground"
-                              />
-                              <span className="truncate">
-                                {milestone.title}
-                              </span>
-                            </Link>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              No milestone
-                            </span>
-                          )}
+                          {milestone && project ? <MilestonePill milestone={milestone} projectId={project.id} /> : <span className="text-muted-foreground">No milestone</span>}
                         </TableCell>
                       )}
                       {show("assignee") && (
                         <TableCell>
-                          <AssigneeAvatars
-                            assigneeIds={task.assigneeIds}
-                            members={workspace.members}
-                          />
+                          <BoardAssignees task={task} workspace={workspace} busy={busy || loading} onSave={onSaveAssignees} onOpen={onOpen} />
                         </TableCell>
                       )}
                       {show("priority") && (
                         <TableCell>
-                          <PriorityIndicator priority={task.priority} />
+                          {canManageTask(task, workspace) ? <MilestonePriorityControl task={task} busy={busy || loading} onSave={onSaveProperties} /> : <PriorityIndicator priority={task.priority} />}
                         </TableCell>
                       )}
                       {show("partner") && (

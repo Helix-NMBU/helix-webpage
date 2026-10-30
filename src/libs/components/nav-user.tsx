@@ -58,8 +58,8 @@ export function NavUser({
               aria-label="Profile menu"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg" style={avatarFallbackStyle(account?.email || name)}>
+              <Avatar className="h-8 w-8">
+                <AvatarFallback style={avatarFallbackStyle(account?.email || name)}>
                   {initials}
                 </AvatarFallback>
               </Avatar>

@@ -14,13 +14,14 @@ import { CATEGORY_LABELS, TASK_CATEGORIES, TASK_PRIORITIES, ORGANIZATION_DEPARTM
 import { compatibleMilestones, updateTaskDraft } from "./progress";
 import { validateProject, validateTask } from "./model";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
+import { PriorityGlyph } from "./PriorityGlyph";
 
 export function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return <div className="space-y-2"><Label htmlFor={id}>{label}</Label>{children}</div>;
 }
 
-export function Choice({ id, value, onChange, options, disabled = false, ariaLabel }: { id: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[]; disabled?: boolean; ariaLabel?: string }) {
-  return <Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger id={id} aria-label={ariaLabel} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>;
+export function Choice({ id, value, onChange, options, disabled = false, ariaLabel }: { id: string; value: string; onChange: (value: string) => void; options: { value: string; label: string; icon?: ReactNode }[]; disabled?: boolean; ariaLabel?: string }) {
+  return <Select value={value} onValueChange={onChange} disabled={disabled}><SelectTrigger id={id} aria-label={ariaLabel} className="w-full"><SelectValue>{options.find(option => option.value === value)?.label}</SelectValue></SelectTrigger><SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}><span className="flex items-center gap-2">{option.icon}{option.label}</span></SelectItem>)}</SelectContent></Select>;
 }
 
 const categoryOptions = TASK_CATEGORIES.map(value => ({ value, label: CATEGORY_LABELS[value] }));
@@ -64,7 +65,7 @@ export function TaskEditor({ task, workspace, category, busy, onSave, onClose, s
           {draft.kind === "task" && <Field id="task-milestone" label="Milestone"><Choice id="task-milestone" disabled={busy || !manager} value={draft.milestoneId ?? "none"} onChange={value => change("milestoneId", value === "none" ? null : value)} options={milestoneOptions} /></Field>}
           <Field id="task-start" label="Start date"><Input id="task-start" type="date" min="2000-01-01" max="2100-12-31" value={draft.startDate ?? ""} onChange={event => change("startDate", event.target.value || null)} /></Field>
           <Field id="task-deadline" label="Deadline"><Input id="task-deadline" type="date" min={draft.startDate ?? "2000-01-01"} max="2100-12-31" required={draft.kind === "milestone"} value={draft.deadline ?? ""} onChange={event => change("deadline", event.target.value || null)} /></Field>
-          <Field id="task-priority" label="Priority"><Choice id="task-priority" disabled={busy || !manager} value={draft.priority} onChange={value => change("priority", value as TaskInput["priority"])} options={TASK_PRIORITIES.map(value => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} /></Field>
+          <Field id="task-priority" label="Priority"><Choice id="task-priority" disabled={busy || !manager} value={draft.priority} onChange={value => change("priority", value as TaskInput["priority"])} options={TASK_PRIORITIES.map(value => ({ value, label: value === "normal" ? "Medium" : value[0].toUpperCase() + value.slice(1), icon: <PriorityGlyph priority={value} /> }))} /></Field>
           {draft.category === "partnership-deliverables" && <Field id="task-partner" label="Sponsor or partner"><Input id="task-partner" required maxLength={200} value={draft.partnerName} onChange={event => change("partnerName", event.target.value)} /></Field>}
         </div>
       </fieldset>
@@ -100,7 +101,7 @@ function ExistingProjectEditor({ project, category, members = [], busy, onSave, 
       <Field id="project-description" label="Description"><Textarea id="project-description" maxLength={2000} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} /></Field>
       <Field id="project-category" label="Area"><Choice id="project-category" disabled={busy} value={draft.category} options={categoryOptions} onChange={value => setDraft({ ...draft, category: value as TaskCategory })} /></Field>
       <Field id="project-departments" label="Departments"><div id="project-departments" role="group" aria-label="Project departments" className="grid gap-2 sm:grid-cols-2">{ORGANIZATION_DEPARTMENTS.map(name => <label key={name} className="flex items-center gap-2 text-sm"><Checkbox checked={draft.departments.includes(name)} disabled={busy} aria-label={name} onCheckedChange={checked => setDraft(previous => ({ ...previous, departments: checked === true ? [...previous.departments, name] : previous.departments.filter(value => value !== name) }))} />{name}</label>)}</div></Field>
-      <Field id="project-priority" label="Priority"><Choice id="project-priority" disabled={busy} value={draft.priority ?? "normal"} options={TASK_PRIORITIES.map(value => ({ value, label: value === "normal" ? "Medium" : value[0].toUpperCase() + value.slice(1) }))} onChange={value => setDraft({ ...draft, priority: value as ProjectInput["priority"] })} /></Field>
+      <Field id="project-priority" label="Priority"><Choice id="project-priority" disabled={busy} value={draft.priority ?? "normal"} options={TASK_PRIORITIES.map(value => ({ value, label: value === "normal" ? "Medium" : value[0].toUpperCase() + value.slice(1), icon: <PriorityGlyph priority={value} /> }))} onChange={value => setDraft({ ...draft, priority: value as ProjectInput["priority"] })} /></Field>
       <Field id="project-status" label="Status"><TaskStatusSelect id="project-status" disabled={busy} value={draft.status ?? "todo"} onChange={value => setDraft({ ...draft, status: value })} /></Field>
       <Field id="project-leads" label="Leads"><AssigneePicker id="project-leads" triggerLabel="Choose project leads" assignmentRole="lead" members={members} value={draft.leadIds ?? []} disabled={busy || members.length === 0} onChange={leadIds => setDraft({ ...draft, leadIds })} /></Field>
       <Field id="project-start" label="Start date"><Input id="project-start" type="date" min="2000-01-01" max={draft.deadline ?? "2100-12-31"} value={draft.startDate ?? ""} onChange={event => setDraft({ ...draft, startDate: event.target.value || null })} /></Field>

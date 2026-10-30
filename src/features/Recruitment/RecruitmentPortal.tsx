@@ -79,7 +79,7 @@ export default function RecruitmentPortal() {
     <main className="text-foreground">
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
-          <div><h1 className="text-3xl font-medium">Applications</h1></div>
+          <div><h1 className="text-3xl font-medium">Recruiting</h1></div>
           <Button variant="outline" size="icon" aria-label="Refresh applications" title="Refresh applications" disabled={loading || busy} onClick={() => void load()}><IconRefresh aria-hidden="true" /></Button>
         </header>
         <Tabs defaultValue="applications">

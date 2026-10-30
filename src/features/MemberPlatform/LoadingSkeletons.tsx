@@ -13,7 +13,7 @@ function Rows({ columns = 4, rows = 4 }: { columns?: number; rows?: number }) {
   </div>;
 }
 function Board() {
-  return <div className="flex gap-3 overflow-hidden" aria-hidden="true">{[0, 1, 2].map(column => <div key={column} className="w-72 flex-none space-y-3 rounded-xl bg-muted/30 p-3"><Skeleton className="h-4 w-24" />{[0, 1, 2].map(card => <div key={card} className="space-y-3 rounded-lg border bg-card p-4"><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-2/3" /><div className="flex justify-between"><Skeleton className="h-5 w-16 rounded-full" /><Skeleton className="size-6 rounded-full" /></div></div>)}</div>)}</div>;
+  return <div className="flex gap-3 overflow-hidden" aria-hidden="true">{[0, 1, 2].map(column => <div key={column} className="w-[22rem] flex-none space-y-3 rounded-xl bg-muted/60 p-3 dark:bg-black/20"><Skeleton className="h-4 w-24" />{[0, 1, 2].map(card => <div key={card} className="space-y-3 rounded-lg border bg-card p-4"><Skeleton className="h-4 w-4/5" /><Skeleton className="h-3 w-2/3" /><div className="flex justify-between"><Skeleton className="h-5 w-16 rounded-full" /><Skeleton className="size-6 rounded-full" /></div></div>)}</div>)}</div>;
 }
 export function TaskListSkeleton({ label = "Loading tasks", title = "Tasks", board = false, personal = false }: { label?: string; title?: string; board?: boolean; personal?: boolean }) {
   return <section role="status" aria-label={label} className={`space-y-4 ${personal ? "mx-auto w-full max-w-7xl py-5" : "min-w-0"}`}>
@@ -35,7 +35,7 @@ export function TaskDetailSkeleton() {
     <div className="flex justify-between pb-4"><Skeleton className="h-8 w-16" /><Skeleton className="h-8 w-24" /></div>
     <div className="grid min-w-0 flex-1 gap-6 md:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
       <div className="space-y-7 px-2 pt-4 md:px-6"><Skeleton className="h-7 w-2/3" /><div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-11/12" /><Skeleton className="h-4 w-3/5" /></div></div>
-      <aside className="space-y-6 border-t px-4 pt-4 md:border-l md:border-t-0"><h2 className="text-sm font-medium text-muted-foreground">Properties</h2>{[0, 1, 2, 3, 4, 5].map(index => <div key={index} className="space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-4 w-28" /></div>)}</aside>
+      <aside className="rounded-xl border bg-card p-4 md:mr-2"><h2 className="mb-5 text-sm font-medium text-muted-foreground">Properties</h2><div className="space-y-5">{[0, 1, 2, 3, 4, 5].map(index => <div key={index} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3"><Skeleton className="h-3 w-16" /><Skeleton className="h-4 w-28 max-w-full" /></div>)}</div></aside>
     </div>
   </section>;
 }
@@ -52,7 +52,7 @@ export function RecruitmentListSkeleton({ positions = false }: { positions?: boo
   </div>;
 }
 export function RecruitmentPageSkeleton({ label = "Checking recruitment access" }: { label?: string }) {
-  return <main role="status" aria-label={label} className="mx-auto max-w-5xl space-y-8"><div className="flex items-center justify-between"><h1 className="text-3xl font-medium">Applications</h1><Skeleton className="size-9" /></div><div className="flex gap-2"><Skeleton className="h-9 w-28" /><Skeleton className="h-9 w-24" /></div><RecruitmentListSkeleton /></main>;
+  return <main role="status" aria-label={label} className="mx-auto max-w-5xl space-y-8"><div className="flex items-center justify-between"><h1 className="text-3xl font-medium">Recruiting</h1><Skeleton className="size-9" /></div><div className="flex gap-2"><Skeleton className="h-9 w-28" /><Skeleton className="h-9 w-24" /></div><RecruitmentListSkeleton /></main>;
 }
 export function FinancePageSkeleton({ page, label = "Loading finance" }: { page: FinancePageId; label?: string }) {
   return <section role="status" aria-label={label} className="mx-auto w-full max-w-5xl space-y-8 px-2 py-8 sm:px-6"><div className="space-y-3"><p className="text-sm text-muted-foreground">Finance</p><h1 className="text-3xl font-medium capitalize tracking-tight">{page[0].toUpperCase() + page.slice(1)}</h1><Skeleton className="h-4 w-80 max-w-full" /></div><div className="flex gap-2">{[0, 1, 2].map(i => <Skeleton key={i} className="h-8 w-24" />)}</div><FinanceContentSkeleton page={page} /></section>;

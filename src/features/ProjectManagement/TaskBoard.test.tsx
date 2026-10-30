@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { boardAssignmentMutation, TaskBoard } from "./TaskBoard";
+import { boardAssignmentMutation, boardPropertyMutation, TaskBoard } from "./TaskBoard";
 import { initialLocalWorkspace } from "./local-repository";
 import type { ProjectWorkspace } from "./types";
 const notify = vi.hoisted(() => vi.fn());
@@ -14,7 +14,8 @@ describe("shared task board", () => {
   let root: Root, container: HTMLDivElement;
   const onOpen = vi.fn(),
     onSave = vi.fn().mockResolvedValue(true),
-    onSaveAssignees = vi.fn().mockResolvedValue(true);
+    onSaveAssignees = vi.fn().mockResolvedValue(true),
+    onSaveProperties = vi.fn().mockResolvedValue(true);
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = document.createElement("div");
@@ -23,6 +24,7 @@ describe("shared task board", () => {
     onOpen.mockClear();
     onSave.mockReset().mockResolvedValue(true);
     onSaveAssignees.mockReset().mockResolvedValue(true);
+    onSaveProperties.mockReset().mockResolvedValue(true);
     notify.mockReset();
   });
   afterEach(async () => {
@@ -53,6 +55,7 @@ describe("shared task board", () => {
             onOpen={onOpen}
             onStatusChange={onSave}
             onSaveAssignees={onSaveAssignees}
+            onSaveProperties={onSaveProperties}
           />
         </MemoryRouter>,
       ),
@@ -61,7 +64,7 @@ describe("shared task board", () => {
   it("keeps board columns fixed in width", async () => {
     await render();
     for (const column of container.querySelectorAll('section[aria-label$=" column"]')) {
-      expect(column.className).toContain("w-72");
+      expect(column.className).toContain("w-[22rem]");
       expect(column.className).toContain("flex-none");
     }
   });
@@ -112,6 +115,26 @@ describe("shared task board", () => {
     const milestone = data.tasks.find(item => item.kind === "milestone")!;
     expect(boardAssignmentMutation(task, ["member"])).toMatchObject({ action: "save_task", id: task.id, expectedRevision: task.revision, task: { assigneeIds: ["member"] } });
     expect(boardAssignmentMutation(milestone, ["member"])).toEqual({ action: "update_milestone", id: milestone.id, expectedRevision: milestone.revision, changes: { assigneeIds: ["member"] } });
+    expect(boardPropertyMutation(task, { priority: "high", milestoneId: "another" })).toMatchObject({ action: "save_task", expectedRevision: task.revision, task: { priority: "high", milestoneId: "another" } });
+    expect(boardPropertyMutation(milestone, { deadline: "2026-12-01" })).toEqual({ action: "update_milestone", id: milestone.id, expectedRevision: milestone.revision, changes: { deadline: "2026-12-01" } });
+    expect(() => boardPropertyMutation(milestone, { milestoneId: "another" })).toThrow();
+  });
+  it("allows editing assignees already present on a task", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(item => item.kind === "task" && item.assigneeIds.length > 0)!;
+    await render(data);
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Assign ${task.title}"]`)!.click());
+    expect(document.querySelector('[aria-label="Task assignees"]')).not.toBeNull();
+  });
+  it("provides editable priority and deadline controls and a milestone link for managers", async () => {
+    const data = initialLocalWorkspace();
+    const task = data.tasks.find(item => item.kind === "task")!;
+    await render(data);
+    const card = container.querySelector(`[role="article"][aria-label="${task.title}"]`)!;
+    expect(card.querySelector(`[aria-label="Change priority for ${task.title}"]`)).not.toBeNull();
+    expect(card.querySelector(`[aria-label="Change target date for ${task.title}"]`)).not.toBeNull();
+    expect(card.querySelector(`[aria-label="Change milestone for ${task.title}"]`)).toBeNull();
+    expect(card.querySelector('a[aria-label^="Open milestone "]')).not.toBeNull();
   });
   it("assigns milestone leads through the same board control", async () => {
     const data = initialLocalWorkspace();
@@ -412,7 +435,7 @@ describe("shared task board", () => {
     expect(card.querySelector("a")?.getAttribute("href")).toContain(
       `?milestone=${child.milestoneId}`,
     );
-    expect(card.querySelector("a")?.textContent).toBe(
+    expect(card.querySelector('a[aria-label^="Open milestone "]')?.textContent).toContain(
       data.tasks.find((item) => item.id === child.milestoneId)!.title,
     );
     expect(card.querySelector('[aria-label$=" priority"]')).not.toBeNull();
