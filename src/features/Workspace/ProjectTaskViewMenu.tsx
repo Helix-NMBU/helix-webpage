@@ -1,3 +1,4 @@
+import { PriorityGlyph } from "../ProjectManagement/PriorityGlyph";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import {
@@ -115,8 +116,9 @@ export function ProjectTaskViewMenu({
               onChange={(value) => onChange("priority", value)}
               options={[
                 { value: "all", label: "All priorities" },
-                ...["urgent", "high", "normal", "low"].map((value) => ({
+                ...(["urgent", "high", "normal", "low"] as const).map((value) => ({
                   value,
+                  icon: <PriorityGlyph priority={value} />,
                   label:
                     value === "normal"
                       ? "Medium"

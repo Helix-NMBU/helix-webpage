@@ -25,16 +25,16 @@ const dayDate = (value: string) => new Date(`${value}T12:00:00Z`);
 
 export function PriorityIndicator({ priority }: { priority: TaskPriority }) {
   const choice = priorities.find(item => item.value === priority)!;
-  return <span className="inline-flex text-muted-foreground" role="img" aria-label={`${choice.label} priority`} title={`${choice.label} priority`}><PriorityGlyph priority={priority} /></span>;
+  return <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-muted-foreground/30 text-muted-foreground [&_svg]:size-3.5" role="img" aria-label={`${choice.label} priority`} title={`${choice.label} priority`}><PriorityGlyph priority={priority} /></span>;
 }
 
 export function TargetDate({ deadline }: { deadline: string | null }) {
   return deadline ? <span className="inline-flex items-center gap-2"><IconCalendar aria-hidden="true" className="size-4 text-muted-foreground" /><time dateTime={deadline} title={formatDate(deadline)}>{compactDate.format(dayDate(deadline))}</time></span> : <span>No target date</span>;
 }
 
-export function MilestonePriorityControl({ task, busy, onSave }: { task: Task; busy: boolean; onSave: SaveMilestone }) {
+export function MilestonePriorityControl({ task, busy, onSave, compact = false }: { task: Task; busy: boolean; onSave: SaveMilestone; compact?: boolean }) {
   const [open, setOpen] = useState(false);
-  return <DropdownMenu open={open} onOpenChange={next => { if (!busy) setOpen(next); }}><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="-mx-2 size-8" disabled={busy} aria-label={`Change priority for ${task.title}`}><PriorityIndicator priority={task.priority} /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" className="w-56"><DropdownMenuLabel>Change priority</DropdownMenuLabel><DropdownMenuRadioGroup value={task.priority} onValueChange={value => { if (!busy) void onSave(task, { priority: value as TaskPriority }).then(saved => { if (saved) setOpen(false); }); }}>{priorities.map(choice => <DropdownMenuRadioItem key={choice.value} value={choice.value} disabled={busy} onSelect={event => event.preventDefault()}><span className="text-muted-foreground"><PriorityGlyph priority={choice.value} /></span>{choice.label}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuContent></DropdownMenu>;
+  return <DropdownMenu open={open} onOpenChange={next => { if (!busy) setOpen(next); }}><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={compact ? "size-6 rounded-full" : "size-8"} disabled={busy} aria-label={`Change priority for ${task.title}`}><PriorityIndicator priority={task.priority} /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" className="w-44"><DropdownMenuLabel>Change priority</DropdownMenuLabel><DropdownMenuRadioGroup value={task.priority} onValueChange={value => { if (!busy) void onSave(task, { priority: value as TaskPriority }).then(saved => { if (saved) setOpen(false); }); }}>{priorities.map(choice => <DropdownMenuRadioItem key={choice.value} value={choice.value} disabled={busy} onSelect={event => event.preventDefault()}><PriorityGlyph priority={choice.value} />{choice.label}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuContent></DropdownMenu>;
 }
 
 export function MilestoneLeadsControl({ task, members, busy, onSave }: { task: Task; members: ProjectMember[]; busy: boolean; onSave: SaveMilestone }) {
@@ -51,7 +51,7 @@ function shiftMonth(date: string, offset: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-export function MilestoneDateControl({ task, busy, onSave }: { task: Task; busy: boolean; onSave: SaveMilestone }) {
+export function MilestoneDateControl({ task, busy, onSave, pill = false }: { task: Task; busy: boolean; onSave: SaveMilestone; pill?: boolean }) {
   const initial = task.deadline ?? osloDate();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(initial);
@@ -84,7 +84,7 @@ export function MilestoneDateControl({ task, busy, onSave }: { task: Task; busy:
     else return;
     event.preventDefault(); navigate(next, true);
   }
-  return <Popover open={open} onOpenChange={changeOpen}><PopoverTrigger asChild><Button variant="ghost" className="-mx-2 h-8 px-2 font-normal" disabled={busy} aria-label={`Change target date for ${task.title}`}><TargetDate deadline={task.deadline} /></Button></PopoverTrigger><PopoverContent align="start" className="w-80 gap-3 p-3" aria-label={`Target date for ${task.title}`}>
+  return <Popover open={open} onOpenChange={changeOpen}><PopoverTrigger asChild><Button variant="ghost" className={pill ? "h-6 rounded-full border border-border px-2 text-xs font-normal" : "-mx-2 h-8 px-2 font-normal"} disabled={busy} aria-label={`Change target date for ${task.title}`}><TargetDate deadline={task.deadline} /></Button></PopoverTrigger><PopoverContent align="start" className="w-80 gap-3 p-3" aria-label={`Target date for ${task.title}`}>
     <Label htmlFor={`milestone-date-${task.id}`} className="text-xs text-muted-foreground">Target date</Label>
     <Input id={`milestone-date-${task.id}`} aria-label={`Target date for ${task.title}`} type="date" min={minimum} max={maximum} value={draft} disabled={busy} onChange={event => { const value = event.target.value; setDraft(value); if (/^\d{4}-\d{2}-\d{2}$/.test(value)) navigate(value); }} />
     <div className="flex items-center justify-between"><span className="text-sm" aria-live="polite">{monthLabel.format(dayDate(month))}</span><div className="flex"><Button variant="ghost" size="icon" className="size-7" aria-label="Previous month" disabled={busy || month.slice(0, 7) <= minimum.slice(0, 7)} onClick={() => navigate(shiftMonth(month, -1))}><IconChevronLeft className="size-4" aria-hidden="true" /></Button><Button variant="ghost" size="icon" className="size-7" aria-label="Next month" disabled={busy || month.slice(0, 7) >= maximum.slice(0, 7)} onClick={() => navigate(shiftMonth(month, 1))}><IconChevronRight className="size-4" aria-hidden="true" /></Button></div></div>

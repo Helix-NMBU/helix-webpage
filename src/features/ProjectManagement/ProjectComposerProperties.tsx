@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@libs/components/ui/select";
 import { AssigneePicker } from "./TaskAssignees";
+import { PriorityIndicator } from "./MilestoneTableControls";
 import { PriorityGlyph } from "./PriorityGlyph";
 import { TaskStatusIcon } from "./TaskStatus";
 import { ProjectDatePicker } from "./ProjectDatePicker";
@@ -37,7 +38,7 @@ function PropertyChoice({
   id: string;
   label: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: ReactNode }[];
   onChange: (value: string) => void;
   disabled: boolean;
   icon?: ReactNode;
@@ -50,12 +51,12 @@ function PropertyChoice({
         className="h-8 gap-2 rounded-full bg-muted/40 px-3 shadow-none [&>svg:last-child]:hidden"
       >
         {icon}
-        <SelectValue />
+        <SelectValue>{options.find(option => option.value === value)?.label}</SelectValue>
       </SelectTrigger>
       <SelectContent position="popper" align="start">
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
-            {option.label}
+            <span className="flex items-center gap-2">{option.icon}{option.label}</span>
           </SelectItem>
         ))}
       </SelectContent>
@@ -85,8 +86,9 @@ export function ProjectComposerProperties({
         options={TASK_PRIORITIES.map((value) => ({
           value,
           label: value === "normal" ? "Medium" : value[0].toUpperCase() + value.slice(1),
+          icon: <PriorityGlyph priority={value} />,
         }))}
-        icon={<PriorityGlyph priority={draft.priority ?? "normal"} />}
+        icon={<PriorityIndicator priority={draft.priority ?? "normal"} />}
         disabled={busy}
         onChange={(value) =>
           setDraft({

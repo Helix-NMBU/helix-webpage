@@ -22,6 +22,7 @@ import {
 import { AssigneePicker } from "./TaskAssignees";
 import { Field } from "./TaskEditor";
 import { TaskStatusIcon } from "./TaskStatus";
+import { PriorityIndicator } from "./MilestoneTableControls";
 import { PriorityGlyph } from "./PriorityGlyph";
 import {
   STATUS_LABELS,
@@ -59,12 +60,12 @@ function AttributeChoice({
         <span aria-hidden="true" className="shrink-0 text-muted-foreground">
           {icon}
         </span>
-        <SelectValue className="min-w-0 truncate" />
+        <SelectValue className="min-w-0 truncate">{options.find(option => option.value === value)?.label}</SelectValue>
       </SelectTrigger>
       <SelectContent position="popper" align="start">
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
-            {option.icon}{option.label}
+            <span className="flex items-center gap-2">{option.icon}{option.label}</span>
           </SelectItem>
         ))}
       </SelectContent>
@@ -109,10 +110,11 @@ export function TaskComposerAttributes({
         onChange={(value) =>
           onChange("priority", value as TaskInput["priority"])
         }
-        icon={<PriorityGlyph priority={draft.priority} />}
+        icon={<PriorityIndicator priority={draft.priority} />}
         disabled={busy}
         options={TASK_PRIORITIES.map((value) => ({
           value,
+          icon: <PriorityGlyph priority={value} />,
           label:
             value === "normal"
               ? "Medium"

@@ -143,9 +143,10 @@ describe("personal task view", () => {
   });
 });
 
-it("defaults board cards to priority and milestone while respecting display preferences", () => {
+it("defaults board cards to project and milestone properties while respecting display preferences", () => {
   expect(personalTaskView(new URLSearchParams("view=board")).columns).toEqual([
     "deadline",
+    "project",
     "milestone",
     "assignee",
     "priority",
@@ -153,7 +154,7 @@ it("defaults board cards to priority and milestone while respecting display pref
   expect(
     personalTaskView(new URLSearchParams("view=board&columns=project,assignee"))
       .columns,
-  ).toEqual(["milestone", "assignee"]);
+  ).toEqual(["project", "assignee"]);
   expect(
     personalTaskView(new URLSearchParams("view=board&columns=")).columns,
   ).toEqual([]);

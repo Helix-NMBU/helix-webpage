@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { overviewColumns, OVERVIEW_PROJECT_COLUMNS } from "./OverviewColumnMenu";
 import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPlatform/MemberNotifications";
 import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import ProjectManagement from "./ProjectManagement";
@@ -24,6 +25,11 @@ function NotificationProbe() {
 }
 
 describe("project management interface", () => {
+  it("preserves progress for older column selections and allows it to be hidden independently", () => {
+    expect(overviewColumns(new URLSearchParams("overviewProjectColumns=status"), "overviewProjectColumns", OVERVIEW_PROJECT_COLUMNS)).toEqual(["status", "progress"]);
+    expect(overviewColumns(new URLSearchParams("overviewProjectColumns=status,!progress"), "overviewProjectColumns", OVERVIEW_PROJECT_COLUMNS)).toEqual(["status"]);
+    expect(overviewColumns(new URLSearchParams("overviewProjectColumns=progress"), "overviewProjectColumns", OVERVIEW_PROJECT_COLUMNS)).toEqual(["progress"]);
+  });
   let root: Root, container: HTMLDivElement;
   const load = vi.fn(), mutate = vi.fn();
   beforeEach(() => {
@@ -44,7 +50,7 @@ describe("project management interface", () => {
   }
   const button = (title: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(element => element.textContent === title)!;
   async function click(title: string) { await act(async () => button(title).click()); }
-  async function editTask() { await click(button("Edit task") ? "Edit task" : "Update status"); }
+  async function editTask() { await act(async () => container.querySelector<HTMLButtonElement>('h1 button')!.click()); }
   async function fill(id: string, value: string) {
     const element = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement;
     const prototype = element.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -111,6 +117,28 @@ describe("project management interface", () => {
     await click("Deliver partner team photographs");
     expect(container.querySelector('[aria-label="Task properties"] [aria-label="Assigned to Alex Example, Sam Example"]')).not.toBeNull();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
+  });
+  it("edits task widget priority with the current task revision", async () => {
+    const workspace = initialLocalWorkspace();
+    const task = workspace.tasks.find(item => item.title === "Deliver partner team photographs")!;
+    await open("overview", true);
+    await click(task.title);
+    const trigger = document.querySelector<HTMLButtonElement>('[aria-label="Task priority"]')!;
+    await act(async () => trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item => item.textContent === "Urgent")!;
+    await act(async () => option.click());
+    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_task", id: task.id, expectedRevision: task.revision, task: expect.objectContaining({ priority: "urgent" }) }));
+  });
+  it("shows the task project and milestone as a hierarchy without the old header buttons", async () => {
+    await open("production");
+    await click("Confirm material delivery");
+    const details = container.querySelector('[aria-label="Task properties"]')!;
+    expect(details.querySelector('[aria-label="Toggle Project"]')).not.toBeNull();
+    expect(details.querySelector('a[href^="/projects/"]')?.textContent).toBe("Chassis & assembly");
+    expect(details.querySelector('[aria-label="Change milestone for Confirm material delivery"]')).not.toBeNull();
+    expect(button("Edit task")).toBeUndefined();
+    expect(button("Delete task")).toBeUndefined();
+    expect([...container.querySelectorAll("a")].some(link => link.textContent === "Back")).toBe(false);
   });
   it("removes one co-assignee without clearing the other member", async () => {
     await open("partnership-deliverables");
@@ -250,12 +278,13 @@ describe("project management interface", () => {
     await act(async () => property.click());
     expect(property.getAttribute("aria-pressed")).toBe("true");
     expect([...container.querySelectorAll("th")].map(item => item.textContent)).toContain("Milestone");
-    expect(container.querySelector('td a[href*="?milestone="]')?.textContent).toBe("Chassis ready for assembly");
+    expect(container.querySelector('td a[aria-label^="Open milestone "]')?.textContent).toContain("Chassis ready for assembly");
+    expect(container.querySelector('td a[href*="?milestone="]')).not.toBeNull();
     expect(new URLSearchParams(router.state.location.search).get("columns")).toContain("milestone");
     await act(async()=>router.navigate(router.state.location.pathname+router.state.location.search));
     expect([...container.querySelectorAll("th")].map(item => item.textContent)).toContain("Milestone");
     await click("Confirm material delivery");
-    await act(async () => [...container.querySelectorAll<HTMLAnchorElement>("a")].find(link => link.textContent === "Back")!.click());
+    await act(async () => router.navigate(-1));
     expect([...container.querySelectorAll("th")].map(item => item.textContent)).toContain("Milestone");
   });
   it("restores personal filters and clears them through Reset", async () => {
@@ -402,7 +431,10 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     const table = tables[tables.length - 1];
     expect([...table.querySelectorAll("tbody tr")].map(row => row.querySelector("button")?.textContent)).toEqual(["Due today", "Due in 30 days"]);
-    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Project", "Priority", "Leads", "Target date", "Tasks", "Status"]);
+    expect([...table.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Milestone", "Project", "Priority", "Leads", "Target date", "Tasks", "Status", "Progress"]);
+    const firstRow = table.querySelector("tbody tr")!;
+    expect(firstRow.querySelectorAll("td")[6].querySelector('[role="img"]')).not.toBeNull();
+    expect(firstRow.querySelectorAll("td")[7].querySelector('[role="progressbar"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Search tasks"]')).toBeNull();
     expect(button("Timeline")).toBeUndefined();
   });
@@ -633,8 +665,8 @@ describe("project management interface", () => {
   });
   it("shows one department per table row with members, Lead, task count and circular status", async () => {
     await open();
-    const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
-    expect(areas.querySelector("#progress-areas-title")?.textContent).toBe("Areas");
+    const areas = container.querySelector('section[aria-labelledby="progress-distribution-title"]')!;
+    expect(areas.querySelector("#progress-distribution-title")?.textContent).toBe("Distribution");
     expect(areas.querySelector('[aria-label="Mechanical & Production: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(areas.querySelector('[aria-label="Electronics: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect([...areas.querySelectorAll("tbody td:first-child")].map(cell => cell.textContent)).not.toContain("Production");
@@ -651,7 +683,7 @@ describe("project management interface", () => {
     const workspace = initialLocalWorkspace();
     load.mockResolvedValue({ ...workspace, projects: workspace.projects.map(project => ({ ...project, departments: [] })) });
     await open();
-    const areas = container.querySelector('section[aria-labelledby="progress-areas-title"]')!;
+    const areas = container.querySelector('section[aria-labelledby="progress-distribution-title"]')!;
     expect(areas.querySelector('[aria-label="No department: 1 of 5 tasks complete, 20%"]')).not.toBeNull();
   });
 
@@ -735,7 +767,7 @@ describe("project management interface", () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: ["production"] }); await open();
     expect(button("Add department")).toBeUndefined();
     expect(container.querySelector('[aria-label="Edit department Mechanical & Production"]')).toBeNull();
-    expect(container.querySelector('section[aria-labelledby="progress-areas-title"]')?.textContent).toContain("Mechanical & Production");
+    expect(container.querySelector('section[aria-labelledby="progress-distribution-title"]')?.textContent).toContain("Mechanical & Production");
   });
 
 });

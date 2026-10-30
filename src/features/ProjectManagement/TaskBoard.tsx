@@ -2,8 +2,9 @@ import { useId, useState } from "react";
 import { useTaskBoardDrag } from "./useTaskBoardDrag";
 import { BlockedTaskDropDialog } from "./BlockedTaskDropDialog";
 import { Link } from "react-router-dom";
-import { IconDiamonds, IconUserPlus } from "@tabler/icons-react";
+import { IconCube, IconDiamonds, IconUserPlus } from "@tabler/icons-react";
 import { Card, CardContent } from "@libs/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { AssigneeAvatars, AssigneePicker } from "./TaskAssignees";
 import { canManageTask } from "./permissions";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -12,7 +13,7 @@ import {
   TaskStatusIcon,
   type SaveTaskStatus,
 } from "./TaskStatus";
-import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
+import { MilestoneDateControl, MilestonePriorityControl, PriorityIndicator, TargetDate } from "./MilestoneTableControls";
 import { ProgressRing } from "./ProgressRing";
 import { milestoneProgress } from "./progress";
 import { osloDate } from "./model";
@@ -22,21 +23,39 @@ import {
   type ProjectWorkspace,
   type ProjectMutation,
   type Task,
+  type TaskInput,
 } from "./types";
 import type { PersonalTaskColumn } from "./personal-task-view";
 
 export type SaveBoardAssignees = (task: Task, assigneeIds: string[]) => Promise<boolean>;
-export function boardAssignmentMutation(task: Task, assigneeIds: string[]): ProjectMutation {
+export type TaskPropertyChanges = Partial<Pick<TaskInput, "priority" | "assigneeIds" | "deadline" | "milestoneId">>;
+export type SaveTaskProperties = (task: Task, changes: TaskPropertyChanges) => Promise<boolean>;
+export function boardPropertyMutation(task: Task, changes: TaskPropertyChanges): ProjectMutation {
+  if (task.kind === "milestone" && "milestoneId" in changes) throw new Error("A milestone cannot be assigned to another milestone.");
   return task.kind === "milestone"
-    ? { action: "update_milestone", id: task.id, expectedRevision: task.revision, changes: { assigneeIds } }
-    : { action: "save_task", id: task.id, expectedRevision: task.revision, task: { ...task, assigneeIds } };
+    ? { action: "update_milestone", id: task.id, expectedRevision: task.revision, changes }
+    : { action: "save_task", id: task.id, expectedRevision: task.revision, task: { ...task, ...changes } };
 }
 
-function BoardAssignees({ task, workspace, busy, onSave, onOpen }: { task: Task; workspace: ProjectWorkspace; busy: boolean; onSave?: SaveBoardAssignees; onOpen: (task: Task) => void }) {
+export function MilestonePill({ milestone, projectId }: { milestone: Task; projectId: string }) {
+  return <Link draggable={false} to={`/projects/${projectId}?milestone=${encodeURIComponent(milestone.id)}`} title={milestone.title} aria-label={`Open milestone ${milestone.title}`} className="relative z-10 inline-flex h-6 min-w-0 max-w-40 items-center gap-1.5 rounded-full border px-2 text-xs text-muted-foreground hover:bg-accent"><IconDiamonds aria-hidden="true" className="size-3.5 shrink-0 text-primary" /><span className="truncate">{milestone.title}</span></Link>;
+}
+
+export function TaskMilestoneControl({ task, workspace, busy, onSave, compact = false, property = false }: { task: Task; workspace: ProjectWorkspace; busy: boolean; onSave: SaveTaskProperties; compact?: boolean; property?: boolean }) {
+  const milestones = workspace.tasks.filter(item => item.kind === "milestone" && item.projectId === task.projectId);
+  return <Select value={task.milestoneId ?? "none"} disabled={busy} onValueChange={value => void onSave(task, { milestoneId: value })}>
+    <SelectTrigger aria-label={`Change milestone for ${task.title}`} className={compact ? "size-8 justify-center border-transparent bg-transparent p-0 shadow-none hover:bg-muted [&>svg:last-child]:hidden" : property ? "-mx-2 h-8 max-w-full gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted [&>svg:last-child]:opacity-0" : "h-7 max-w-40 gap-1 px-2 text-xs"}><IconDiamonds aria-hidden="true" fill={property && task.milestoneId ? "currentColor" : "none"} className={`size-3.5 shrink-0 ${property && task.milestoneId ? "text-primary" : ""}`} />{compact ? <span className="sr-only"><SelectValue placeholder="No milestone" /></span> : <SelectValue placeholder="No milestone" />}</SelectTrigger>
+    <SelectContent position="popper" align="start">{!task.milestoneId && <SelectItem value="none" disabled>No milestone</SelectItem>}{milestones.map(item => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent>
+  </Select>;
+}
+export function boardAssignmentMutation(task: Task, assigneeIds: string[]): ProjectMutation {
+  return boardPropertyMutation(task, { assigneeIds });
+}
+
+export function BoardAssignees({ task, workspace, busy, onSave, onOpen }: { task: Task; workspace: ProjectWorkspace; busy: boolean; onSave?: SaveBoardAssignees; onOpen: (task: Task) => void }) {
   const [draft, setDraft] = useState(task.assigneeIds);
   const notify = useNotify();
-  if (task.assigneeIds.length) return <AssigneeAvatars assigneeIds={task.assigneeIds} members={workspace.members} maxVisible={2} assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} />;
-  if (!onSave || !canManageTask(task, workspace)) return <span role="img" aria-label={task.kind === "milestone" ? "No leads" : "Unassigned"} title={task.kind === "milestone" ? "No leads" : "Unassigned"} className="flex size-7 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground"><IconUserPlus aria-hidden="true" className="size-4" /></span>;
+  if (!onSave || !canManageTask(task, workspace)) return task.assigneeIds.length ? <AssigneeAvatars assigneeIds={task.assigneeIds} members={workspace.members} maxVisible={2} assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} /> : <span role="img" aria-label={task.kind === "milestone" ? "No leads" : "Unassigned"} title={task.kind === "milestone" ? "No leads" : "Unassigned"} className="flex size-7 items-center justify-center rounded-full border border-dashed border-muted-foreground/50 text-muted-foreground"><IconUserPlus aria-hidden="true" className="size-4" /></span>;
   return <AssigneePicker id={`board-assignees-${task.id}`} value={draft} members={workspace.members} onChange={setDraft} disabled={busy} assignmentRole={task.kind === "milestone" ? "lead" : "assignee"} inline inlineShowNames={false} emptyIcon triggerLabel={`${task.kind === "milestone" ? "Assign leads to" : "Assign"} ${task.title}`} onOpenChange={() => setDraft(task.assigneeIds)} onCommit={ids => {
     if (task.kind === "task" && (!task.projectId || !task.milestoneId)) {
       notify("Organize this task first", "Choose a project and milestone before assigning this task.", { variant: "warning", href: null, action: { label: "Open task", onClick: () => onOpen(task) } });
@@ -55,6 +74,7 @@ export function TaskBoard({
   onOpen,
   onStatusChange,
   onSaveAssignees,
+  onSaveProperties,
 }: {
   tasks: Task[];
   kind?: Task["kind"];
@@ -64,6 +84,7 @@ export function TaskBoard({
   onOpen: (task: Task) => void;
   onStatusChange: SaveTaskStatus;
   onSaveAssignees?: SaveBoardAssignees;
+  onSaveProperties?: SaveTaskProperties;
 }) {
   const records = tasks.filter((task) => task.kind === kind);
   const drag = useTaskBoardDrag(records, workspace, busy, onStatusChange);
@@ -86,6 +107,7 @@ export function TaskBoard({
       </p>
       <div
         ref={drag.boardRef}
+        data-task-board
         onDragOver={drag.boardOver}
         onDragLeave={drag.boardLeave}
         aria-describedby={instructionsId}
@@ -108,7 +130,7 @@ export function TaskBoard({
               onDragOver={(event) => drag.enter(event, status)}
               onDragLeave={(event) => drag.leave(event, status)}
               onDrop={(event) => drag.drop(event, status)}
-              className={`flex w-72 flex-none flex-col rounded-xl p-2 transition-colors ${drag.over === status ? "bg-accent ring-2 ring-inset ring-primary" : "bg-muted/40"}`}
+              className={`flex w-[22rem] flex-none flex-col rounded-xl p-2 transition-colors ${drag.over === status ? "bg-accent ring-2 ring-inset ring-primary" : "bg-muted/60 dark:bg-black/20"}`}
             >
               <h3 className="flex shrink-0 items-center gap-2 px-2 py-3 text-sm font-medium">
                 <TaskStatusIcon status={status} />
@@ -144,11 +166,11 @@ export function TaskBoard({
                       onDragStart={(event) => drag.start(event, task)}
                       onDragEnd={drag.end}
                       onClickCapture={drag.preventDragClick}
-                      className={`relative h-28 min-h-28 shrink-0 gap-0 py-2.5 transition-colors hover:border-muted-foreground/40 dark:bg-muted dark:ring-foreground/20 dark:hover:ring-foreground/35 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
+                      className={`relative min-h-32 shrink-0 gap-0 py-2.5 transition-colors bg-card hover:border-muted-foreground/40 dark:bg-card dark:ring-foreground/5 dark:hover:ring-foreground/35 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
                       role="article"
                       aria-label={task.title}
                     >
-                      <CardContent className="h-full min-w-0 gap-1.5 px-2.5">
+                      <CardContent className="flex h-full min-w-0 flex-col gap-2 px-3">
                         <div className="flex min-w-0 shrink-0 items-start gap-1.5">
                           <div className="relative z-10 -ml-1 -mt-1">
                             <TaskStatusControl
@@ -174,31 +196,15 @@ export function TaskBoard({
                             </span>
                           )}
                         </div>
-                        <div className="flex h-6 min-w-0 shrink-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                           {show("priority") && (
-                            <span className="inline-flex h-6 shrink-0 items-center rounded-full border px-1.5">
-                              <PriorityIndicator priority={task.priority} />
+                            <span className="relative z-10 inline-flex shrink-0 items-center">
+                              {onSaveProperties && canManageTask(task, workspace) ? <MilestonePriorityControl task={task} busy={busy || drag.locked} onSave={onSaveProperties} compact /> : <PriorityIndicator priority={task.priority} />}
                             </span>
                           )}
-                          {kind === "task" &&
-                            show("milestone") &&
-                            milestone &&
-                            project && (
-                              <Link
-                                draggable={false}
-                                to={`/projects/${project.id}?milestone=${milestone.id}`}
-                                title={milestone.title}
-                                className="relative z-10 inline-flex h-6 min-w-0 max-w-40 flex-1 items-center gap-1 rounded-full border px-2 hover:bg-accent"
-                              >
-                                <IconDiamonds
-                                  aria-hidden="true"
-                                  className="size-3.5 shrink-0"
-                                />
-                                <span className="truncate">
-                                  {milestone.title}
-                                </span>
-                              </Link>
-                            )}
+                          {show("deadline") && <span className={`relative z-10 ${overdue ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}>{onSaveProperties && canManageTask(task, workspace) ? <MilestoneDateControl task={task} busy={busy || drag.locked} onSave={onSaveProperties} pill /> : <span className="inline-flex h-6 items-center rounded-full border px-2">{task.deadline ? <TargetDate deadline={task.deadline} /> : "No target date"}</span>}</span>}
+                          {kind === "task" && show("project") && project && <Link draggable={false} to={`/projects/${project.id}`} title={project.name} aria-label={`Open project ${project.name}`} className="relative z-10 inline-flex h-6 min-w-0 max-w-44 items-center gap-1.5 rounded-full border px-2 hover:bg-accent"><IconCube aria-hidden="true" className="size-3.5 shrink-0 text-primary" /><span className="truncate">{project.name}</span></Link>}
+                          {kind === "task" && show("milestone") && milestone && project && <MilestonePill milestone={milestone} projectId={project.id} />}
                           {kind === "milestone" && (
                             <span className="inline-flex h-6 shrink-0 items-center rounded-full border px-2">
                               <ProgressRing
@@ -224,29 +230,7 @@ export function TaskBoard({
                             </button>
                           )}
                         </div>
-                        <div className="mt-auto flex h-4 min-w-0 shrink-0 items-center gap-2 text-xs leading-4">
-                          {task.status === "blocked" && task.blockedReason && (
-                            <button
-                              type="button"
-                              onClick={() => onOpen(task)}
-                              className="relative z-10 min-w-0 flex-1 truncate text-left text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              title={task.blockedReason}
-                            >
-                              {task.blockedReason}
-                            </button>
-                          )}
-                          {show("deadline") && (
-                            <span
-                              className={`shrink-0 ${overdue ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}
-                            >
-                              {task.deadline ? (
-                                <TargetDate deadline={task.deadline} />
-                              ) : (
-                                "No due date"
-                              )}
-                            </span>
-                          )}
-                        </div>
+                        <p className="text-xs text-muted-foreground"><time dateTime={task.createdAt}>Created {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/Oslo" }).format(new Date(task.createdAt))}</time></p>
                       </CardContent>
                     </Card>
                   );

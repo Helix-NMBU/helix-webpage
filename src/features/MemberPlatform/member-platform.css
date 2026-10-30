@@ -64,7 +64,7 @@ html[data-member-theme="dark"] .project-timeline-bar:hover { background: #242528
   min-height: 100dvh;
   padding: 24px;
 }
-.member-platform .mcv-profile { min-height: 0; }
+.member-platform .mcv-page.mcv-profile { min-height: 0; background: transparent; }
 .member-platform .mcv-profile .mcv-container { max-width: 960px; padding: 32px 24px 64px; }
 .mcv-profile-heading { margin-bottom: 24px; }
 .mcv-profile-heading h1 { font-size: 30px; font-weight: 500; line-height: 1.2; letter-spacing: -0.025em; margin: 0 0 8px; }
@@ -113,5 +113,9 @@ html[data-member-theme="dark"] .project-timeline-bar:hover { background: #242528
   .member-workspace-content [class*="overflow-y-auto"],
   .member-platform [data-sidebar="content"] {
     overscroll-behavior: none;
+  }
+  /* Vertical card lists must pass horizontal gestures to their board. */
+  .member-workspace-content [data-task-board] [class*="overflow-y-auto"] {
+    overscroll-behavior-x: auto;
   }
 }

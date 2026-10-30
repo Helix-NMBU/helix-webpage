@@ -1,19 +1,23 @@
-import { DeleteWorkButton } from "./DeleteWorkButton";
 import { canManageTask, canUpdateTaskStatus } from "./permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { IconCube, IconDiamonds } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { TaskDetailSkeleton } from "../MemberPlatform/LoadingSkeletons";
+import { PropertyWidget } from "../MemberPlatform/PropertyWidget";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { projectRepository, ProjectRequestError } from "./repository";
-import { CATEGORY_LABELS, type ProjectMutation, type ProjectRepository, type ProjectWorkspace } from "./types";
+import { CATEGORY_LABELS, TASK_PRIORITIES, type ProjectMutation, type ProjectRepository, type ProjectWorkspace, type TaskInput } from "./types";
 import { TaskStatusControl } from "./TaskStatus";
 import { TaskEditor } from "./TaskEditor";
-import { AssigneeAvatars } from "./TaskAssignees";
+import { AssigneeAvatars, AssigneePicker } from "./TaskAssignees";
 import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
+import { PriorityGlyph } from "./PriorityGlyph";
+import { ProjectDatePicker } from "./ProjectDatePicker";
+import { TaskMilestoneControl } from "./TaskBoard";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
 import { Textarea } from "@libs/components/ui/textarea";
@@ -46,6 +50,7 @@ function TaskDetail({ taskId, repository: supplied, loadPartnerDeal }: { taskId:
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [assigneeDraft, setAssigneeDraft] = useState<string[] | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimatedCreated, setEstimatedCreated] = useState("");
   const [estimatedCompleted, setEstimatedCompleted] = useState("");
@@ -131,36 +136,42 @@ function TaskDetail({ taskId, repository: supplied, loadPartnerDeal }: { taskId:
   if (loading && !workspace) return <TaskDetailSkeleton />;
   const task = visibleTask;
   if (!task || !workspace) return <Empty className="min-h-64"><EmptyHeader><EmptyTitle>{denied || !access ? "Task access required" : workspace ? "Task not found" : "Could not load task"}</EmptyTitle><EmptyDescription>{denied || !access ? "Ask a platform administrator for project access." : workspace ? "This task may have been removed or is no longer available to you." : "Try loading this task again."}</EmptyDescription></EmptyHeader><div className="flex gap-2"><Button variant="outline" asChild><Link to="/tasks">My tasks</Link></Button>{!denied && !workspace && <Button onClick={() => void load()}>Try again</Button>}</div></Empty>;
-  const from = (location.state as { from?: unknown } | null)?.from;
-  const personalOrigin = typeof from === "string" && /^\/tasks(?:\?|$)/.test(from);
   const canLead = canManageTask(task, workspace);
   const canUpdate = canUpdateTaskStatus(task, workspace);
+  const from = (location.state as { from?: unknown } | null)?.from;
+  const personalOrigin = typeof from === "string" && /^\/tasks(?:\?|$)/.test(from);
   const project = workspace.projects.find(item => item.id === task.projectId);
   const milestone = workspace.tasks.find(item => item.kind === "milestone" && item.id === task.milestoneId && item.projectId === task.projectId);
   const members = directory?.data?.members ?? workspace.members;
-  const backTo = typeof from === "string" && /^\/(?:tasks(?:\?|$)|projects(?:\/|\?|$)|season-overview(?:\?|$)|project-management\/)/.test(from) ? from : "/tasks";
+  const saveProperties = (changes: Partial<TaskInput>) => save({ action: "save_task", id: task.id, expectedRevision: task.revision, task: { ...task, ...changes } });
   return <section aria-label="Task details" aria-busy={busy} className="flex min-h-0 min-w-0 flex-1 flex-col">
-    <div className="flex shrink-0 items-center justify-between gap-3 pb-4">
-      <Button variant="ghost" size="sm" asChild><Link to={backTo}>Back</Link></Button>
-      <div className="flex gap-2">{canLead && <DeleteWorkButton kind="task" title={task.title} busy={busy} onDelete={() => save({ action: "delete_task", id: task.id, expectedRevision: task.revision })} />}
-      {canUpdate && <Button variant="outline" size="sm" disabled={busy} onClick={() => setEditing(true)}>{canLead && !personalOrigin ? "Edit task" : "Update status"}</Button>}</div>
-    </div>
     <div className="grid min-w-0 flex-1 gap-6 md:min-h-0 md:grid-cols-[minmax(0,1fr)_18rem] md:overflow-hidden xl:grid-cols-[minmax(0,1fr)_21rem]">
       <article tabIndex={0} aria-label="Task content" className="min-w-0 space-y-7 px-2 pb-8 pt-4 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:px-6">
-        <h1 className="max-w-4xl break-words text-2xl font-semibold tracking-tight">{task.title}</h1>
+        <h1 className="max-w-4xl break-words text-2xl font-semibold tracking-tight">{canUpdate ? <button type="button" className="rounded text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="Edit task details" onClick={() => setEditing(true)}>{task.title}</button> : task.title}</h1>
         <p className="max-w-4xl whitespace-pre-wrap break-words text-base leading-7 text-foreground/90">{task.description || "No description yet."}</p>
       </article>
-      <aside tabIndex={0} aria-label="Task properties" className="min-w-0 space-y-6 border-t px-4 pb-8 pt-4 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:border-l md:border-t-0">
-        <h2 className="text-sm font-medium text-muted-foreground">Properties</h2>
-        <dl className="space-y-6 text-sm [&_dt]:mb-2 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:break-words">
-          <div><dt>Status</dt><dd><TaskStatusControl task={task} workspace={workspace} busy={busy} showLabel onSave={(task, status, blockedReason) => save({ action: "set_status", id: task.id, expectedRevision: task.revision, status, blockedReason })} /></dd></div>
-          <div><dt>Priority</dt><dd className="flex items-center gap-2"><PriorityIndicator priority={task.priority} />{task.priority === "normal" ? "Medium" : task.priority[0].toUpperCase() + task.priority.slice(1)}</dd></div>
-          <div><dt>Assignees</dt><dd><AssigneeAvatars assigneeIds={task.assigneeIds} members={members} showNames /></dd></div>
-          <div><dt>Target date</dt><dd><TargetDate deadline={task.deadline} /></dd></div>
-          {task.startDate && <div><dt>Start date</dt><dd><TargetDate deadline={task.startDate} /></dd></div>}
+      <aside tabIndex={0} aria-label="Task properties" className="min-w-0 space-y-3 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:pb-2 md:pr-2">
+        <PropertyWidget title="Properties">
+        <dl className="space-y-2 text-sm [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words [&_dd>div]:max-w-full">
+          <div><dt className="sr-only">Status</dt><dd><TaskStatusControl task={task} workspace={workspace} busy={busy} showLabel onSave={(task, status, blockedReason) => save({ action: "set_status", id: task.id, expectedRevision: task.revision, status, blockedReason })} /></dd></div>
+          <div><dt className="sr-only">Priority</dt><dd>{canLead ? <Select value={task.priority} disabled={busy} onValueChange={priority => void saveProperties({ priority: priority as TaskInput["priority"] })}>
+            <SelectTrigger aria-label="Task priority" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted focus-visible:bg-muted dark:bg-transparent dark:hover:bg-muted [&>svg:last-child]:opacity-0"><PriorityIndicator priority={task.priority} /><SelectValue>{task.priority === "normal" ? "Medium" : task.priority[0].toUpperCase() + task.priority.slice(1)}</SelectValue></SelectTrigger>
+            <SelectContent position="popper" align="start">{TASK_PRIORITIES.map(priority => <SelectItem key={priority} value={priority}><span className="flex items-center gap-2"><PriorityGlyph priority={priority} />{priority === "normal" ? "Medium" : priority[0].toUpperCase() + priority.slice(1)}</span></SelectItem>)}</SelectContent>
+          </Select> : <span className="inline-flex items-center gap-2"><PriorityIndicator priority={task.priority} />{task.priority === "normal" ? "Medium" : task.priority[0].toUpperCase() + task.priority.slice(1)}</span>}</dd></div>
+          <div><dt className="sr-only">Assignees</dt><dd>{canLead ? <div className="min-w-0 [&>button]:max-w-full [&>button]:overflow-hidden"><AssigneePicker id={`task-detail-assignees-${task.id}`} members={members} value={assigneeDraft ?? task.assigneeIds} onChange={setAssigneeDraft} disabled={busy} inline triggerLabel="Edit task assignees" onOpenChange={open => setAssigneeDraft(open ? task.assigneeIds : null)} onCommit={assigneeIds => saveProperties({ assigneeIds })} /></div> : <AssigneeAvatars assigneeIds={task.assigneeIds} members={members} showNames />}</dd></div>
+        </dl>
+        </PropertyWidget>
+        <PropertyWidget title="Project">
+          {project ? <div className="space-y-1 text-sm">
+            <Link to={`/projects/${project.id}`} className="inline-flex max-w-full items-center gap-2 rounded px-1 py-1 hover:bg-muted"><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="truncate">{project.name}</span></Link>
+            <div className="ml-2 border-l pl-4">{canLead ? <TaskMilestoneControl task={task} workspace={workspace} busy={busy} property onSave={(_task, changes) => saveProperties(changes)} /> : milestone ? <Link to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} className="inline-flex items-center gap-2 rounded px-1 py-1 hover:bg-muted"><IconDiamonds aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />{milestone.title}</Link> : <span className="text-muted-foreground">No milestone</span>}</div>
+          </div> : <p className="text-sm text-muted-foreground">Needs organization</p>}
+        </PropertyWidget>
+        <PropertyWidget title="Details">
+        <dl className="space-y-4 text-sm [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-start [&>div]:gap-3 [&_dt]:text-muted-foreground [&_dd]:min-w-0 [&_dd]:break-words">
+          <div><dt>Start date</dt><dd>{canLead ? <ProjectDatePicker id={`task-start-${task.id}`} label="Set task start date" value={task.startDate} maximum={task.deadline ?? "2100-12-31"} disabled={busy} inline onChange={startDate => void saveProperties({ startDate })} /> : task.startDate ? <TargetDate deadline={task.startDate} /> : <span className="text-muted-foreground">Not set</span>}</dd></div>
+          <div><dt>Target date</dt><dd>{canLead ? <ProjectDatePicker id={`task-deadline-${task.id}`} label="Set task target date" value={task.deadline} minimum={task.startDate ?? "2000-01-01"} disabled={busy} inline onChange={deadline => void saveProperties({ deadline })} /> : <TargetDate deadline={task.deadline} />}</dd></div>
           {task.historicalEstimate && <div><dt>Estimated historical dates</dt><dd>Created {formatDate(task.historicalEstimate.createdDate)} · Completed {formatDate(task.historicalEstimate.completedDate)}<p className="mt-2 whitespace-pre-wrap">{task.historicalEstimate.basis}</p></dd></div>}
-          <div><dt>Project</dt><dd>{project ? <Link to={`/projects/${project.id}`} className="inline-flex items-start gap-2 hover:underline"><IconCube aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{project.name}</Link> : "Needs organization"}</dd></div>
-          <div><dt>Milestone</dt><dd>{milestone && project ? <Link to={`/projects/${project.id}?milestone=${encodeURIComponent(milestone.id)}`} className="inline-flex items-start gap-2 hover:underline"><IconDiamonds aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />{milestone.title}</Link> : "Needs organization"}</dd></div>
           <div><dt>Department</dt><dd>{project?.departments.join(", ") || "No department"}</dd></div>
           <div><dt>Area</dt><dd>{CATEGORY_LABELS[task.category]}</dd></div>
           <div><dt>Season</dt><dd>{task.season}</dd></div>
@@ -168,6 +179,7 @@ function TaskDetail({ taskId, repository: supplied, loadPartnerDeal }: { taskId:
           {partnerDealId && <div><dt>Agreement</dt><dd><Link to={`/partner-deals?deal=${encodeURIComponent(partnerDealId)}`} className="underline">View partner agreement</Link></dd></div>}
           {task.blockedReason && <div><dt>Blocked reason</dt><dd className="whitespace-pre-wrap">{task.blockedReason}</dd></div>}
         </dl>
+        </PropertyWidget>
       </aside>
     </div>
     {canLead && <div className="px-2 pb-4"><Button variant="outline" size="sm" disabled={busy} onClick={() => { setEstimatedCreated(task.historicalEstimate?.createdDate ?? ""); setEstimatedCompleted(task.historicalEstimate?.completedDate ?? ""); setEstimateBasis(task.historicalEstimate?.basis ?? ""); setEstimating(true); }}>Set estimated historical dates</Button></div>}
