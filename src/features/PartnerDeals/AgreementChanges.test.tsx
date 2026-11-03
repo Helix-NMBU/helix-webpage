@@ -100,3 +100,13 @@ it("keeps a draft and requires review of the latest revision before retry",async
  expect(document.body.textContent).toContain("Updated by colleague");expect(button("Save proposed amendment").disabled).toBe(true);await act(async()=>button("I reviewed the latest agreement").click());await act(async()=>button("Save proposed amendment").click());
  expect(JSON.parse(request.mock.calls[2][1].body)).toMatchObject({expectedRevision:3,reason:"Keep my draft"});await act(async()=>root.unmount());el.remove();
 });
+it("allows Finance review requests while a cancellation is pending on a cancelled agreement",async()=>{
+ const request=vi.fn().mockResolvedValue({ok:true,json:async()=>({count:1})});vi.stubGlobal("fetch",request);
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ const pending={...deal,cancelledAt:'2026-11-03',changes:[{id:'change',kind:'cancellation' as const,reason:'Ended',beforeTerms:{...deal,cashChanges:[],inKindChanges:[],deliverableChanges:[]},proposedTerms:{},status:'pending' as const,createdAt:'now',resolvedAt:null,resolutionNote:null}]};
+ await act(async()=>root.render(<AgreementChanges deal={pending} canManage onReload={()=>{}}/>));
+ expect(button('Request Finance review').disabled).toBe(false);
+ await act(async()=>button('Request Finance review').click());
+ expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({action:'requestFinanceReview',dealId:'deal',expectedRevision:2});
+ await act(async()=>root.unmount());el.remove();
+});

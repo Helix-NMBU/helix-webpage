@@ -15,10 +15,10 @@ vi.mock("./FundingRecovery",()=>({FundingRecovery:({contributionId}:{contributio
 function Probe(){const context=useMemberNotifications();return <output>{context?.items.map(i=><span key={i.id}>{i.title} {i.description} {i.action && <button onClick={i.action.onClick}>{i.action.label}</button>}</span>)}</output>;}
 describe("Pipeline",()=>{
  let root:Root,container:HTMLDivElement;
- const load=vi.fn(),save=vi.fn(),createOrganization=vi.fn(),renameOrganization=vi.fn(),requestFinanceReview=vi.fn(),confirmWon=vi.fn();
- beforeEach(()=>{vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);container=document.createElement("div");document.body.append(container);root=createRoot(container);load.mockReset().mockResolvedValue(structuredClone(data));save.mockReset().mockResolvedValue(undefined);requestFinanceReview.mockReset().mockResolvedValue(undefined);confirmWon.mockReset().mockResolvedValue(undefined);});
+ const load=vi.fn(),save=vi.fn(),createOrganization=vi.fn(),renameOrganization=vi.fn(),requestFinanceReview=vi.fn(),confirmWon=vi.fn(),proposeWonChange=vi.fn();
+ beforeEach(()=>{proposeWonChange.mockReset().mockResolvedValue(undefined);vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);container=document.createElement("div");document.body.append(container);root=createRoot(container);load.mockReset().mockResolvedValue(structuredClone(data));save.mockReset().mockResolvedValue(undefined);requestFinanceReview.mockReset().mockResolvedValue(undefined);confirmWon.mockReset().mockResolvedValue(undefined);});
  afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.unstubAllGlobals();});
- async function render(){const router=createMemoryRouter([{path:"/sponsor-pipeline",element:<MemberThemeProvider><MemberNotificationsProvider><SponsorPipeline repository={{load,save,createOrganization,renameOrganization,requestFinanceReview,confirmWon}}/><Probe/></MemberNotificationsProvider></MemberThemeProvider>}],{initialEntries:["/sponsor-pipeline"]});await act(async()=>root.render(<RouterProvider router={router}/>));}
+ async function render(){const router=createMemoryRouter([{path:"/sponsor-pipeline",element:<MemberThemeProvider><MemberNotificationsProvider><SponsorPipeline repository={{load,save,createOrganization,renameOrganization,requestFinanceReview,confirmWon,proposeWonChange}}/><Probe/></MemberNotificationsProvider></MemberThemeProvider>}],{initialEntries:["/sponsor-pipeline"]});await act(async()=>root.render(<RouterProvider router={router}/>));}
  async function select(stage:string){const element=container.querySelector<HTMLButtonElement>('[aria-label="Stage for Engine deal"]')!;await act(async()=>element.dispatchEvent(new KeyboardEvent("keydown",{key:" ",bubbles:true})));const label=stage==="won"?"Won":"Lost";const option=[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item=>item.textContent===label)!;await act(async()=>option.click());}
  const button=(name:string)=>[...document.querySelectorAll<HTMLButtonElement>("button")].find(el=>el.textContent===name)!;
  it("shows the requested deal card details and totals across seasons",async()=>{
@@ -52,6 +52,21 @@ describe("Pipeline",()=>{
   await act(async()=>button("Over 50%").click());
   expect(save).toHaveBeenCalledWith(expect.objectContaining({probability:75,stage:"lead",contributions:expect.arrayContaining([expect.objectContaining({id:"contribution-1",invoiceDate:"2026-11-01"})])}));
   expect(confirmWon).not.toHaveBeenCalled();
+ });
+ it("proposes a Won card edit only after an explicit reason and preserves the saved value",async()=>{
+  load.mockResolvedValue({...data,deals:[{...deal,stage:"won",probability:25}]});
+  await render();
+  await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Probability for Engine deal"]')!.click());
+  await act(async()=>button("Over 50%").click());
+  expect(save).not.toHaveBeenCalled();expect(proposeWonChange).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain("Review won deal change");
+  expect(button("Save proposed amendment").disabled).toBe(true);
+  const reason=document.querySelector("textarea")!;
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(reason,"Reviewed follow-up probability");reason.dispatchEvent(new Event("input",{bubbles:true}));});
+  await act(async()=>button("Save proposed amendment").click());
+  expect(proposeWonChange).toHaveBeenCalledWith(expect.objectContaining({stage:"won",probability:25}),expect.objectContaining({probability:75,expectedRevision:3}),"Reviewed follow-up probability");
+  expect(save).not.toHaveBeenCalled();expect(confirmWon).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("Under 50%");
  });
  it("moves a dragged card to a different column",async()=>{
   await render();

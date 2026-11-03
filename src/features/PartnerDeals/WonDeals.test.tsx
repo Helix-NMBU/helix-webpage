@@ -67,11 +67,11 @@ it("labels pending reopening accurately and does not claim an expired agreement 
  await act(async()=>secondRoot.unmount());second.remove();
 });
 
-it("offers Finance review during cancellation only for a stale manual item",async()=>{
+it("offers Finance review for pending cancellations and stale manual items",async()=>{
  const base:WonDeal={id:"deal",revision:4,title:"Agreement",organizationName:"Partner",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",cancelledAt:"now",contributions:[{id:"cash",seasonId:"s",seasonCode:"S27",seasonName:"S27",kind:"cash",description:"",amountOre:"10000",invoiceDate:"2027-01-01",fundingNeedsReview:true}],deliverables:[],tasks:[],changes:[{id:"change",kind:"cancellation",reason:"Ended",beforeTerms:{title:"Agreement",contactName:"",contactEmail:"",startsOn:null,endsOn:null,agreementLink:"",cashChanges:[],inKindChanges:[],deliverableChanges:[]},proposedTerms:{},status:"pending",createdAt:"now",resolvedAt:null,resolutionNote:null}]};
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[base],canManage:true})}/></MemoryRouter>));
- expect(el.textContent).not.toContain("Request Finance review");await act(async()=>root.unmount());el.remove();
+ expect(el.textContent).toContain("Request Finance review");await act(async()=>root.unmount());el.remove();
  const second=document.createElement("div");document.body.append(second);const secondRoot=createRoot(second);const manual={...base,contributions:[{...base.contributions[0],manualHandling:true,manualFinanceReviewed:false}]};
  await act(async()=>secondRoot.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[manual],canManage:true})}/></MemoryRouter>));
  expect(second.textContent).toContain("Request Finance review");expect(second.textContent).not.toContain("Record manual funding review");await act(async()=>secondRoot.unmount());second.remove();

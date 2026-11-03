@@ -1,0 +1,30 @@
+name: Partner invoice catch-up
+
+on:
+  schedule:
+    # Daily catch-up; SQL uses Europe/Oslo and rechecks season prerequisites.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: partner-invoice-catch-up
+  cancel-in-progress: false
+
+jobs:
+  catch-up:
+    # Explicit opt-in after the runner secret and season leads are configured.
+    if: vars.PARTNER_INVOICE_SCHEDULER_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Create due invoice tasks
+        env:
+          PARTNER_INVOICE_RUNNER_SECRET: ${{ secrets.PARTNER_INVOICE_RUNNER_SECRET }}
+        run: node scripts/run-partner-invoices.mjs

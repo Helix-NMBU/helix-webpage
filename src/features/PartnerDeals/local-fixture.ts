@@ -1,3 +1,4 @@
+import { localMemberHasPartnerSpace } from '../MemberPlatform/member-access-api';
 import { isLocalMemberMode, localMemberSignedIn } from '../MemberPlatform/local-mode';
 import { formatOre } from '../Finance/money';
 import type { FundingRecord } from '../Finance/types';
@@ -60,8 +61,9 @@ export function localTaskDealId(taskId:string):string|null {
 export function localWonDeals() {
  const state=readLocalPartnerState();
  const saved=localStorage.getItem(PROJECT_KEY);const workspace=saved?JSON.parse(saved) as {tasks:Task[]}:null;
- return {deals:state.deals.filter(deal=>deal.stage==='won').map(deal=>({
-  ...deal, negotiationNotes:undefined,
+ return {canManage:localMemberHasPartnerSpace('pipeline'),canViewFinance:false,seasons:localSeasons,deals:state.deals.filter(deal=>deal.stage==='won').map(deal=>({
+  ...deal, negotiationNotes:undefined, probability:undefined,followUpOn:undefined,
+  changes:localMemberHasPartnerSpace('pipeline')?deal.changes:deal.changes?.map(change=>({...change,beforeTerms:{...change.beforeTerms,cardFields:change.beforeTerms.cardFields?{...change.beforeTerms.cardFields,probability:undefined,followUpOn:undefined}:undefined},proposedTerms:{...change.proposedTerms,cardFields:change.proposedTerms.cardFields?{...change.proposedTerms.cardFields,probability:undefined,followUpOn:undefined}:undefined}})),
   contributions:deal.contributions.map(c=>{const season=localSeasons.find(s=>s.id===c.seasonId);return {...c,id:c.id!,seasonCode:season?.code??'',seasonName:season?.name??''};}),
   deliverables:deal.deliverables.map(d=>({...d,id:d.id!})),
   tasks:state.taskLinks.filter(link=>link.dealId===deal.id).map(link=>{const task=workspace?.tasks.find(t=>t.id===link.taskId)??state.tasks.find(t=>t.id===link.taskId)!;return {id:task.id,title:task.title,status:task.status,kind:link.kind,deliverableId:link.deliverableId,seasonId:link.seasonId,contributionId:link.contributionId??(link.kind==='invoice'?deal.contributions.find(c=>c.kind==='cash'&&c.seasonId===link.seasonId)?.id??null:null),canOpen:true};}),

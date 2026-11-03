@@ -9,20 +9,20 @@ import { editableDeal, sponsorLevelLabels, sponsorLevels, type Contribution, typ
 
 type Field = "Company" | "Assignee" | "Deal value" | "In-kind value" | "Sponsor level" | "Season" | "Probability" | "Follow-up date";
 type Member = { id:string; name:string };
-export function InlineDealFields({deal,data,members,busy,onSave,onWonEdit,onInvalid}:{deal:Deal;data:PipelineData;members:Member[];busy:boolean;onSave:(input:DealInput)=>Promise<boolean>;onWonEdit:()=>void;onInvalid:(message:string)=>void}) {
+export function InlineDealFields({deal,data,members,busy,onSave,onWonSave,onInvalid}:{deal:Deal;data:PipelineData;members:Member[];busy:boolean;onSave:(input:DealInput)=>Promise<boolean>;onWonSave:(input:DealInput)=>Promise<boolean>;onInvalid:(message:string)=>void}) {
  const [field,setField]=useState<Field|null>(null);
  const [draft,setDraft]=useState<DealInput>(()=>editableDeal(deal));
  const [probabilityInput,setProbabilityInput]=useState("");
  const [search,setSearch]=useState("");
  const [amounts,setAmounts]=useState<Record<number,string>>({});
- const begin=(next:Field)=>{setSearch("");if(deal.stage==="won"){onWonEdit();return;} const value=editableDeal(deal);setDraft(value);setProbabilityInput(value.probability==null?"":String(value.probability));setAmounts(Object.fromEntries(value.contributions.map((c,i)=>[i,c.amountOre?formatOre(BigInt(c.amountOre)):""])));setField(next);};
+ const begin=(next:Field)=>{setSearch("");const value=editableDeal(deal);setDraft(value);setProbabilityInput(value.probability==null?"":String(value.probability));setAmounts(Object.fromEntries(value.contributions.map((c,i)=>[i,c.amountOre?formatOre(BigInt(c.amountOre)):""])));setField(next);};
  const patch=(index:number,value:Partial<Contribution>)=>setDraft(current=>({...current,contributions:current.contributions.map((c,i)=>i===index?{...c,...value}:c)}));
  const add=(kind:"cash"|"product")=>setDraft(current=>({...current,contributions:[...current.contributions,{seasonId:current.seasonId??"",kind,description:"",amountOre:null,invoiceDate:null}]}));
  async function save(nextDraft=draft,nextProbability=probabilityInput){try{
   const contributions=nextDraft.contributions.map((c,i)=>{const parsed=parseNokToOre(amounts[i]??"");if(parsed!==null&&parsed<=0n)throw new Error("Enter a positive amount.");if(!c.seasonId)throw new Error("Choose a season for each contribution.");if(c.kind==="cash"&&parsed===null)throw new Error("Enter an amount for each cash contribution.");return {...c,amountOre:parsed?.toString()??null};});
   const cash=contributions.filter(c=>c.kind==="cash");if(new Set(cash.map(c=>c.seasonId)).size!==cash.length)throw new Error("Use one cash contribution per season.");
   const probability=nextProbability.trim()===""?null:Number(nextProbability);if(probability!==null&&(!Number.isInteger(probability)||probability<0||probability>100))throw new Error("Enter a probability between 0 and 100.");
-  if(await onSave({...nextDraft,probability,contributions}))setField(null);
+  if(await (deal.stage==="won"?onWonSave:onSave)({...nextDraft,probability,contributions}))setField(null);
  }catch(error){onInvalid(error instanceof Error?error.message:"Check the deal details.");}}
  const live=deal.contributions.filter(c=>!((c as {retiredAt?:string|null}).retiredAt));
  const cash=live.filter(c=>c.kind==="cash"&&c.amountOre!==null), goods=live.filter(c=>c.kind!=="cash"), valued=goods.filter(c=>c.amountOre!==null);
@@ -42,6 +42,7 @@ export function InlineDealFields({deal,data,members,busy,onSave,onWonEdit,onInva
  {name==="Season"&&simpleSeason&&quickChoice(data.seasons.map(s=>({id:s.id,name:s.code})),draft.contributions[0]?.seasonId??draft.seasonId??"",id=>void save({...draft,seasonId:id,contributions:draft.contributions.map(c=>({...c,seasonId:id}))}),"Search...")}
 
  {(name==="Deal value"||name==="In-kind value")&&amountIndexes(name==="Deal value"?"cash":"product").length===1&&<label className="flex items-center gap-2"><span className="text-sm text-muted-foreground">NOK</span><Input autoFocus aria-label={`${name} in NOK`} inputMode="decimal" value={amounts[amountIndexes(name==="Deal value"?"cash":"product")[0].i]??""} onChange={event=>setAmounts(a=>({...a,[amountIndexes(name==="Deal value"?"cash":"product")[0].i]:event.target.value}))} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();void save();}}}/></label>}
+ {deal.stage==="won"&&name==="Deal value"&&amountIndexes("cash").length===1&&<label className="block space-y-1 text-xs">Invoice date<Input aria-label="Invoice date" type="date" value={draft.contributions[amountIndexes("cash")[0].i].invoiceDate??""} onChange={event=>patch(amountIndexes("cash")[0].i,{invoiceDate:event.target.value||null})}/></label>}
  {name==="Follow-up date"&&<label className="block space-y-1 text-xs">Follow-up date<Input aria-label="Follow-up date" type="date" value={draft.followUpOn??""} onChange={event=>setDraft(d=>({...d,followUpOn:event.target.value||null}))}/></label>}
  {name==="Company"&&select("Company",draft.organizationId,data.organizations.map(o=>({id:o.id,name:o.name})),id=>setDraft(d=>({...d,organizationId:id})))}
 
