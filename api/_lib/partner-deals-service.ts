@@ -6,6 +6,7 @@ import { withVerifyFullSsl } from "./pg-ssl.js";
 type DealView = "pipeline" | "shared";
 export class DuplicateFundingError extends MemberCvError { readonly code = "funding_possible_duplicate"; }
 export class FundingMismatchError extends MemberCvError { readonly code = "funding_mismatch"; }
+export class FundingReviewNoMatchesError extends MemberCvError { readonly code = "funding_no_matches"; }
 export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; canViewFinance: boolean; deals: unknown[]; organizations: unknown[]; seasons: unknown[] };
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
@@ -44,6 +45,14 @@ const readSql = `select caps.pipeline as "canManage",
   'contributions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'seasonId',c.season_id,'seasonCode',s.code,'seasonName',s.name,'kind',c.kind,'retiredAt',c.retired_at,'description',c.description,'amountOre',c.amount_ore::text,'invoiceDate',c.invoice_date,
    'manualHandling',exists(select 1 from partner_deals.manual_reconciliation_items mr where mr.kind='cash' and mr.item_id=c.id),
    'fundingStatus',case when coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then (select f.status from partner_deals.funding_links l join finance.funding f on f.id=l.funding_id where l.contribution_id=c.id) else null end,
+   'sponsorReceipt',case when $4='pipeline' and d.stage='won' and d.cancelled_at is null and c.kind='cash' and c.retired_at is null and c.pending_change_id is null and s.status<>'closed'
+    and s.code=(select setting_value #>> '{}' from finance.settings where setting_key='current_season')
+    and coalesce((finance.capability_flags($1::uuid)->>'manageFunding')::boolean,false) then coalesce((
+     select jsonb_build_object('fundingId',f.id,'revision',f.revision,'receivedDate',f.received_date)
+     from partner_deals.funding_links l join finance.funding f on f.id=l.funding_id
+     where l.contribution_id=c.id and f.status in ('secured','received')
+       and not partner_deals.linked_funding_mismatch(c.id)
+    ), jsonb_build_object('fundingId',null)) else null end,
    'manualReviewNote',case when caps.pipeline or coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then (select r.note from partner_deals.manual_funding_reviews r where r.contribution_id=c.id order by r.reviewed_at desc,r.id desc limit 1) else null end,
    'manualFinanceReviewed',case when caps.pipeline then partner_deals.manual_finance_review_ready(c.id) else false end,
    'manualReviewToken',case when caps.pipeline and partner_deals.manual_finance_review_ready(c.id) and partner_deals.manual_funding_needs_review(c.id) then partner_deals.manual_funding_review_token(c.id) else null end,
@@ -119,7 +128,7 @@ function errorFor(error: unknown): never {
   if (message.includes("deal_change_invalid")) throw new MemberCvError(400,"Check the agreement change and review note.");
   if (message.includes("deal_review_invalid")) throw new MemberCvError(400, "Choose an active review.");
   if (message.includes("deal_review_changed")) throw new MemberCvError(409, "The review or deal changed. Reload before continuing.");
-  if (message.includes("deal_review_no_matches")) throw new MemberCvError(409, "No matching funding currently needs review.");
+  if (message.includes("deal_review_no_matches")) throw new FundingReviewNoMatchesError(409, "No matching funding currently needs review.");
   if (message.includes("deal_funding_candidates_changed")) throw new MemberCvError(409, "Funding changed. Reload the candidates before continuing.");
   if (message.includes("deal_linked_organization")) throw new MemberCvError(409, "This partner has linked funding. Ask Finance to reconcile it before changing the partner name.");
   if (message.includes("deal_funding_stale_link")) throw new MemberCvError(409, "This funding record changed. Reload funding and review it before linking.");
@@ -162,11 +171,15 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
           throw new MemberCvError(403, "You do not have access to sponsor deals.");
         }
         const workspace=result.rows[0];
-        if (!current.can_view_finance) workspace.deals=workspace.deals.map(value => {
+        if (!current.can_view_finance || (view === "pipeline" && !current.can_review_funding)) workspace.deals=workspace.deals.map(value => {
           const deal=value as Record<string,unknown>;
           return {...deal,contributions:Array.isArray(deal.contributions) ? deal.contributions.map(value => {
             const contribution=value as Record<string,unknown>;
-            return {...contribution,fundingStatus:null,manualReviewNote:current.pipeline ? contribution.manualReviewNote : null,fundingNeedsReview:current.pipeline ? contribution.fundingNeedsReview : false};
+            return {...contribution,
+              fundingStatus:current.can_view_finance ? contribution.fundingStatus : null,
+              sponsorReceipt:current.can_review_funding ? contribution.sponsorReceipt : null,
+              manualReviewNote:current.pipeline || current.can_view_finance ? contribution.manualReviewNote : null,
+              fundingNeedsReview:current.pipeline || current.can_view_finance ? contribution.fundingNeedsReview : false};
           }) : []};
         });
         if (view === "shared" && workspace.canManage && !current.pipeline) throw new MemberCvError(403, "Your sponsor deal access changed. Reload the agreements.");

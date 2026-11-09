@@ -18,8 +18,8 @@ type RegisterRow = {
   status: PurchaseStatus;
   buyer_name: string;
   supplier_name: string;
-  requester_member_id: string;
-  requester_name: string;
+  requester_member_id: string | null;
+  requester_name: string | null;
   payment_method: PaymentMethod;
   purchase_date: string;
   justification: string;
@@ -87,7 +87,7 @@ export async function loadPurchaseRegister(
             (select o.paid_on::text from finance.outlay_reimbursements o where o.purchase_id = p.id) as outlay_paid_on
      from finance.purchases p
      join finance.seasons s on s.id = p.season_id
-     join identity.members m on m.id = p.requester_member_id
+     left join identity.members m on m.id = p.requester_member_id
      left join finance.purchase_lines l on l.purchase_id = p.id
      where s.code = $1
        and ($2::boolean is not true or finance.purchase_has_unsettled_obligation(p.id))

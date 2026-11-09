@@ -1,7 +1,8 @@
 export const stages = ["lead", "contacted", "discussion", "proposal", "won", "lost"] as const;
 export type DealStage = typeof stages[number];
 export const stageLabels: Record<DealStage,string> = { lead:"Lead", contacted:"Contacted", discussion:"In discussion", proposal:"Proposal sent", won:"Won", lost:"Lost" };
-export type Contribution = { id?: string; seasonId: string; seasonCode?: string; seasonName?: string; kind: "cash" | "product" | "service"; description: string; amountOre: string | null; invoiceDate: string | null };
+export type SponsorReceipt = { fundingId: string; revision: number; receivedDate: string | null };
+export type Contribution = { id?: string; seasonId: string; seasonCode?: string; seasonName?: string; kind: "cash" | "product" | "service"; description: string; amountOre: string | null; invoiceDate: string | null; sponsorReceipt?: SponsorReceipt | { fundingId: null } | null };
 export type Deliverable = { id?: string; title: string; description: string; dueDate: string | null; ownerMemberId: string | null };
 export const sponsorLevels = ["partner", "service", "bronze", "silver", "gold", "platinum", "main"] as const;
 export const sponsorLevelLabels: Record<string,string> = {partner:"Partner",service:"Service",bronze:"Bronze",silver:"Silver",gold:"Gold",platinum:"Platinum",main:"Main sponsor"};

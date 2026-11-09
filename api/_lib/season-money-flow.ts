@@ -6,27 +6,33 @@ import type { SeasonMoneyFlow } from "../../src/features/ProjectManagement/seaso
 export async function loadSeasonMoneyFlow(db: CvDatabase, seasonCode: string | null): Promise<SeasonMoneyFlow> {
   if (!seasonCode) return { status: "no-season" };
   try {
-    const { rows } = await db.query<{ end_year: number; month: string | null; direction: string | null; amount_ore: string | null }>(`
+    const { rows } = await db.query<{ end_year: number; agreed_ore: string; month: string | null; direction: string | null; amount_ore: string | null }>(`
       with season as (select id, end_date from finance.seasons where code=$1),
+      agreed as (
+        select coalesce(sum(c.amount_ore), 0)::text as amount_ore
+        from partner_deals.contributions c
+        join season s on s.id=c.season_id
+        join partner_deals.deals d on d.id=c.deal_id
+        where d.stage='won' and d.cancelled_at is null and c.kind='cash'
+          and c.retired_at is null and c.pending_change_id is null
+      ),
       events as (
         select to_char(f.received_date, 'YYYY-MM') as month, 'in' as direction, f.amount_ore
         from finance.funding f join season s on s.id=f.season_id
-        where f.funding_type='sponsor_cash' and f.status='received'
+        where f.funding_type='sponsor_cash' and f.status='received' and f.received_date is not null
         union all
-        select to_char(case when p.payment_method='team_account' and p.document_kind='receipt' then p.purchase_date
-          when p.payment_method='outlay' then r.paid_on else i.paid_on end, 'YYYY-MM'), 'out', l.amount_ore
+        select to_char(p.purchase_date, 'YYYY-MM'), 'out', l.amount_ore
         from finance.purchases p join season s on s.id=p.season_id
         join finance.purchase_lines l on l.purchase_id=p.id
-        left join finance.outlay_reimbursements r on r.purchase_id=p.id
-        left join finance.invoice_obligations i on i.purchase_id=p.id
-        where p.status='registered' and (case when p.payment_method='team_account' and p.document_kind='receipt' then true
-          when p.payment_method='outlay' then coalesce(r.paid, false) else coalesce(i.paid, false) end)
+        where p.status='registered'
       )
-      select extract(year from s.end_date)::integer as end_year, e.month, e.direction, sum(e.amount_ore)::text as amount_ore
-      from season s left join events e on true
-      group by s.end_date, e.month, e.direction`, [seasonCode]);
-    if (!rows.length || !Number.isInteger(rows[0].end_year)) return { status: "unavailable" };
-    const endYear = rows[0].end_year;
+      select extract(year from s.end_date)::integer as end_year, a.amount_ore as agreed_ore,
+        e.month, e.direction, sum(e.amount_ore)::text as amount_ore
+      from season s cross join agreed a left join events e on true
+      group by s.end_date, a.amount_ore, e.month, e.direction`, [seasonCode]);
+    const first = rows[0];
+    if (!first || !Number.isInteger(first.end_year) || !/^\d+$/.test(first.agreed_ore)) return { status: "unavailable" };
+    const endYear = first.end_year;
     const months = Array.from({ length: 11 }, (_, index) => {
       const month = (index + 8) % 12 + 1;
       const year = index < 4 ? endYear - 1 : endYear;
@@ -43,7 +49,7 @@ export async function loadSeasonMoneyFlow(db: CvDatabase, seasonCode: string | n
       else { output += amount; if (bucket) bucket.output += amount; else otherOut += amount; }
     }
     for (const item of months) { const bucket = values.get(item.month)!; item.moneyInNok = formatOre(bucket.input); item.moneyOutNok = formatOre(bucket.output); }
-    return { status: "available", moneyInNok: formatOre(input), moneyOutNok: formatOre(output), months, otherInNok: formatOre(otherIn), otherOutNok: formatOre(otherOut) };
+    return { status: "available", agreedSponsorCashNok: formatOre(BigInt(first.agreed_ore)), moneyInNok: formatOre(input), moneyOutNok: formatOre(output), months, otherInNok: formatOre(otherIn), otherOutNok: formatOre(otherOut) };
   } catch {
     return { status: "unavailable" };
   }

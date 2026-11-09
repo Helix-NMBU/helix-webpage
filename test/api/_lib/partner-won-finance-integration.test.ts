@@ -3,6 +3,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createProjectServices } from "../../../api/_lib/project-management-service.js";
 import { createDealServices } from "../../../api/_lib/partner-deals-service.js";
+import { applyFundingMutation } from "../../../api/_lib/finance-funding.js";
+import { loadSeasonMoneyFlow } from "../../../api/_lib/season-money-flow.js";
 const id=(n:number)=>`80000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const people=['manager','finance','marketing','outsider'].map((name,i)=>({userId:id(i+1),googleSub:name,email:`${name}@helixnmbu.no`,name}));
 const read=(name:string)=>readFileSync(new URL(`../../../db/migrations/${name}.sql`,import.meta.url),'utf8');
@@ -77,6 +79,23 @@ it('leaves the deal, tasks and funding untouched if an existing funding source m
  await confirm(0,41);
  expect((await db.query('select * from finance.funding')).rows).toHaveLength(before);
  expect((await db.query('select * from partner_deals.task_links where deal_id=$1',[id(41)])).rows).toHaveLength(2);
+ const pipeline = await dealService(0).load('test','pipeline');
+ expect(pipeline.deals).toEqual(expect.arrayContaining([
+  expect.objectContaining({id:id(41),contributions:[expect.objectContaining({sponsorReceipt:{fundingId:existing,revision:0,receivedDate:null}})]}),
+  expect.objectContaining({id:id(31),contributions:expect.arrayContaining([expect.objectContaining({seasonCode:"S28",sponsorReceipt:null})])}),
+ ]));
+ const payment = { action:"editFunding", requestId:id(501), fundingId:existing, expectedRevision:0, patch:{status:"received",receivedDate:"2026-11-01"} };
+ await applyFundingMutation(db,id(1),payment,false);
+ await applyFundingMutation(db,id(1),payment,false);
+ expect(await loadSeasonMoneyFlow(db,"S27")).toMatchObject({moneyInNok:"100.00",months:expect.arrayContaining([{month:"2026-11",moneyInNok:"100.00",moneyOutNok:"0.00"}])});
+ expect((await dealService(0).load('test','pipeline')).deals).toEqual(expect.arrayContaining([
+  expect.objectContaining({id:id(41),contributions:[expect.objectContaining({sponsorReceipt:{fundingId:existing,revision:1,receivedDate:"2026-11-01"}})]}),
+ ]));
+ await applyFundingMutation(db,id(1),{...payment,requestId:id(502),expectedRevision:1,patch:{status:"received",receivedDate:"2026-10-30"}},false);
+ expect(await loadSeasonMoneyFlow(db,"S27")).toMatchObject({moneyInNok:"100.00",months:expect.arrayContaining([
+  {month:"2026-10",moneyInNok:"100.00",moneyOutNok:"0.00"},
+  {month:"2026-11",moneyInNok:"0.00",moneyOutNok:"0.00"},
+ ])});
 });
 it('rolls back earlier season effects if a later deal season is closed',async()=>{
  await setupDeal(50,'ClosedCo',[20,21]);
@@ -129,6 +148,25 @@ it('reports a due invoice blocked by a pending amendment, then catches up after 
  const result=(await db.query<{r:{created:number;failed:number}}>("select partner_deals.materialize_invoices_on('2027-01-02') r")).rows[0].r;
  expect(result.created).toBeGreaterThan(0);
  expect((await db.query('select * from partner_deals.task_links where contribution_id=$1',[contribution])).rows).toHaveLength(1);
+});
+
+it("links imported Won cash to an existing funding record before recording payment", async () => {
+ await setupDeal(180, "ImportedCo", [20]);
+ await db.query("update partner_deals.deals set stage='won',won_at=now(),won_by_member_id=$2 where id=$1", [id(181), id(1)]);
+ const service = dealService(0);
+ const receipt = async () => (await service.load("test", "pipeline")).deals.find(deal => (deal as { id: string }).id === id(181));
+ expect(await receipt()).toMatchObject({ contributions: [{ sponsorReceipt: { fundingId: null } }] });
+ await expect(service.requestFinanceReview("test", id(181), 0)).rejects.toMatchObject({ code: "funding_no_matches" });
+ const { rows: [funding] } = await db.query<{ id: string }>(
+  "insert into finance.funding(season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1,'F-S27-997','ImportedCo','Owner','sponsor_cash',10000,'secured',$2,$2) returning id",
+  [id(20), id(1)],
+ );
+ await service.requestFinanceReview("test", id(181), 0);
+ const { rows: [review] } = await db.query<{ id: string }>(
+  "select r.id from partner_deals.finance_reviews r join partner_deals.contributions c on c.id=r.contribution_id where c.deal_id=$1", [id(181)],
+ );
+ await service.resolveFinanceReview("test", review.id, "link", funding.id, 0, undefined, true);
+ expect(await receipt()).toMatchObject({ contributions: [{ sponsorReceipt: { fundingId: funding.id, revision: 0, receivedDate: null } }] });
 });
 
 it('attaches only added cash when an earlier funded season is closed',async()=>{

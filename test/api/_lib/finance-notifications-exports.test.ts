@@ -12,6 +12,7 @@ import type { CvDatabase, WorkspaceIdentity } from "../../../api/_lib/member-cv-
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
 import { thirdOsloDayFrom } from "../../../src/features/Finance/request-domain.js";
 import { osloToday } from "../../../src/features/Finance/money.js";
+import { FINANCE_PURCHASES_PATH, FINANCE_SIGN_IN_LINE } from "../../../src/features/Finance/export-text.js";
 
 const operatorId = "11111111-1111-4111-8111-111111111111";
 const financeId = "22222222-2222-4222-8222-222222222222";
@@ -545,8 +546,8 @@ describe("FIN-10-A01 outbox delivery", () => {
     expect(registration?.text).toContain("unbudgeted");
     expect(registration?.text).toContain("over_budget");
     expect(registration?.text).toContain("approval limit");
-    expect(registration?.text).toContain("Sign in to Helix and open /finance/purchases");
-    expect(registration?.html).toContain("/finance/purchases");
+    expect(registration?.text).toContain(FINANCE_SIGN_IN_LINE);
+    expect(registration?.html).toContain(FINANCE_PURCHASES_PATH);
     for (const message of sent) privateMaterial(`${message.subject}\n${message.text}\n${message.html}`);
     expect(sent.some((message) => message.text.includes("80808080"))).toBe(false);
     const second = await call({ token: "finance", body: { action: "retryOutbox", requestId: crypto.randomUUID() } });

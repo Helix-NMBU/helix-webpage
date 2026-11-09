@@ -16,7 +16,11 @@ let afterQuery: ((text: string) => Promise<void>) | null = null;
 beforeAll(async () => {
   pg = new PGlite();
   await pg.exec(`
-    create schema identity; create schema project_management; create schema neon_auth;
+    create schema identity; create schema project_management; create schema neon_auth; create schema partner_deals;
+    create table partner_deals.deals (id uuid primary key, stage text, cancelled_at timestamptz);
+    create table partner_deals.contributions (
+      deal_id uuid, season_id uuid, kind text, amount_ore bigint, retired_at timestamptz, pending_change_id uuid
+    );
     create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text not null, auth_user_id uuid);
     create table identity.departments (department_key text primary key, name text not null unique, sort_order smallint not null unique);
     create table identity.platform_roles (role_key text primary key, label text not null, sort_order smallint not null unique);
@@ -164,13 +168,13 @@ it("requires bearer authentication on the read-only HTTP endpoint", async () => 
 
 it("shows only aggregate money flow even when draft budget figures are hidden", async () => {
   await pg.exec(`
-    insert into finance.funding (season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id)
-      select id,'F-S27-001','Private sponsor','Owner','sponsor_cash',12345,'received','${admin}','${admin}' from finance.seasons where code='S27';
+    insert into finance.funding (season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,received_date,created_by_member_id,updated_by_member_id)
+      select id,'F-S27-001','Private sponsor','Owner','sponsor_cash',12345,'received','2026-11-01','${admin}','${admin}' from finance.seasons where code='S27';
     update finance.budgets set status='draft',approved_by_member_id=null,approved_on=null;
     select finance.bump_view_version();
   `);
   const view = await services.summary("user");
-  expect(view).toMatchObject({ budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, moneyFlow: { status: "available", moneyInNok: "123.45", moneyOutNok: "5.00" } });
+  expect(view).toMatchObject({ budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, moneyFlow: { status: "available", moneyInNok: "123.45", moneyOutNok: "25.00" } });
   expect(JSON.stringify(view)).not.toContain("Private sponsor");
   const failing: CvDatabase = { query: async <T>(text: string, params?: unknown[]) => {
     if (text.includes("with season as")) throw new Error("offline");

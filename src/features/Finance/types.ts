@@ -275,8 +275,8 @@ export type FinancePurchaseSummary = {
   status: PurchaseStatus;
   buyerName: string;
   supplierName: string;
-  requesterMemberId: string;
-  requesterName: string;
+  requesterMemberId: string | null;
+  requesterName: string | null;
   paymentMethod: PaymentMethod;
   purchaseDate: string;
   justification: string;

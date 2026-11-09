@@ -21,7 +21,7 @@ const pages: { id: FinancePageId; label: string; title: string; empty: string; d
 function FinanceSection({ page }: { page: FinancePageId }) {
   const location = useLocation();
   const session = useFinanceAccess();
-  const links = pages.filter((item) => item.id !== "financing" || session.capabilities?.financing);
+  const links = pages.filter((item) => item.id !== "purchases" && (item.id !== "financing" || session.capabilities?.financing));
   const current = pages.find((item) => item.id === page) ?? pages[0];
   const loaded = page === "overview" ? session.overview : page === "budgets" ? session.budgets : page === "purchases" ? session.purchases : session.financing;
   const loadedVersion = loaded?.viewVersion ?? null;
@@ -60,17 +60,17 @@ function FinanceSection({ page }: { page: FinancePageId }) {
   return (
     <section className="mx-auto w-full max-w-5xl space-y-8 px-2 py-8 sm:px-6" aria-labelledby="finance-page-title">
       <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">Finance</p>
+        <p className="text-sm text-muted-foreground">{page === "purchases" ? "Management" : "Finance"}</p>
         <h1 id="finance-page-title" className="text-3xl font-medium tracking-tight">{current.title}</h1>
         <p className="text-muted-foreground">{current.description}</p>
       </div>
-      <nav aria-label="Finance sections" className="flex flex-wrap gap-2">
+      {page !== "purchases" && <nav aria-label="Finance sections" className="flex flex-wrap gap-2">
         {links.map((item) => (
           <Button key={item.id} asChild variant={location.pathname === financeRoutes[item.id] ? "default" : "outline"} size="sm">
             <Link to={financeRoutes[item.id]}>{item.label}</Link>
           </Button>
         ))}
-      </nav>
+      </nav>}
       {page === "overview" && session.capabilities?.draftBudgetItems ? <BankSnapshotEditor /> : null}
       {page === "financing" ? <FinancingPage /> : !loaded ? (
         <FinanceContentSkeleton page={page} canRegister={Boolean(session.capabilities?.registerActual)} />
