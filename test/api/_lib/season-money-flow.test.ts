@@ -9,6 +9,11 @@ beforeAll(async () => {
   pg = new PGlite();
   await pg.exec(`
     create schema finance;
+    create schema partner_deals;
+    create table partner_deals.deals (id integer primary key, stage text, cancelled_at timestamptz);
+    create table partner_deals.contributions (
+      deal_id integer, season_id integer, kind text, amount_ore bigint, retired_at timestamptz, pending_change_id integer
+    );
     create table finance.seasons (id integer primary key, code text unique, end_date date);
     create table finance.funding (season_id integer, funding_type text, status text, amount_ore bigint, received_date date);
     create table finance.purchases (id integer primary key, season_id integer, status text, payment_method text, document_kind text, purchase_date date);
@@ -16,6 +21,16 @@ beforeAll(async () => {
     create table finance.invoice_obligations (purchase_id integer, paid boolean, paid_on date);
     create table finance.outlay_reimbursements (purchase_id integer, paid boolean, paid_on date);
     insert into finance.seasons values (1,'S27','2027-07-31'), (2,'S28','2028-07-31');
+    insert into partner_deals.deals values
+      (1,'won',null), (2,'won',null), (3,'won',null), (4,'won',null), (5,'won',null), (6,'won',null),
+      (7,'proposal',null), (8,'won','2026-09-15');
+    insert into partner_deals.contributions values
+      (1,1,'cash',2500000,null,null), (2,1,'cash',4873700,null,null),
+      (3,1,'cash',1800000,null,null), (4,1,'cash',2000000,null,null),
+      (5,1,'product',10000000,null,null), (6,1,'service',600000,null,null),
+      (7,1,'cash',500000,null,null), (8,1,'cash',500000,null,null),
+      (1,1,'cash',500000,'2026-09-15',null), (1,1,'cash',500000,null,1),
+      (1,2,'cash',10000,null,null);
     insert into finance.funding values
       (1,'sponsor_cash','received',100001,'2026-09-15'), (1,'sponsor_cash','received',1,'2026-09-15'),
       (1,'sponsor_cash','secured',500,'2026-09-15'), (1,'grant','received',900,'2026-09-15'),
@@ -39,25 +54,23 @@ beforeAll(async () => {
 });
 afterAll(async () => { await pg.close(); });
 
-it("sums received sponsor cash and only applicable recorded payments once per purchase", async () => {
+it("reports Won cash separately from receipts and registered purchases for the season", async () => {
   const view = await loadSeasonMoneyFlow(db, "S27");
-  expect(view).toMatchObject({ status: "available", moneyInNok: "1000.02", moneyOutNok: "33.34", otherInNok: "0.00", otherOutNok: "0.00" });
+  expect(view).toMatchObject({ status: "available", agreedSponsorCashNok: "111737.00", moneyInNok: "1000.02", moneyOutNok: "41.34", otherInNok: "0.00", otherOutNok: "0.00" });
   if (view.status !== "available") throw new Error("Missing flow");
   expect(view.months).toHaveLength(11);
   expect(view.months[0]).toEqual({ month: "2026-09", moneyInNok: "1000.02", moneyOutNok: "0.00" });
-  expect(view.months[1]).toEqual({ month: "2026-10", moneyInNok: "0.00", moneyOutNok: "12.34" });
-  expect(view.months[2].moneyOutNok).toBe("2.00");
-  expect(view.months[3].moneyOutNok).toBe("4.00");
-  expect(view.months[10].moneyOutNok).toBe("9.00");
-  expect(await loadSeasonMoneyFlow(db, "S28")).toMatchObject({ status: "available", moneyInNok: "100.00", moneyOutNok: "8.00", otherInNok: "100.00", otherOutNok: "8.00" });
+  expect(view.months[1]).toEqual({ month: "2026-10", moneyInNok: "0.00", moneyOutNok: "41.34" });
+  expect(view.months.slice(2).every((month) => month.moneyOutNok === "0.00")).toBe(true);
+  expect(await loadSeasonMoneyFlow(db, "S28")).toMatchObject({ status: "available", agreedSponsorCashNok: "100.00", moneyInNok: "100.00", moneyOutNok: "8.00", otherInNok: "100.00", otherOutNok: "8.00" });
   expect(await loadSeasonMoneyFlow(db, null)).toEqual({ status: "no-season" });
   expect(await loadSeasonMoneyFlow(db, "S99")).toEqual({ status: "unavailable" });
   expect(await loadSeasonMoneyFlow({ query: async () => { throw new Error("offline"); } }, "S27")).toEqual({ status: "unavailable" });
 });
 
-it("keeps undated and outside-chart funding in the total without assigning a month", async () => {
+it("counts dated receipts outside the chart and excludes undated receipts", async () => {
   await pg.exec("insert into finance.funding values (1,'sponsor_cash','received',5000,null), (1,'sponsor_cash','received',1200,'2026-08-15')");
   const view = await loadSeasonMoneyFlow(db, "S27");
-  expect(view).toMatchObject({ status: "available", moneyInNok: "1062.02", otherInNok: "62.00" });
+  expect(view).toMatchObject({ status: "available", moneyInNok: "1012.02", otherInNok: "12.00" });
   if (view.status === "available") expect(view.months[0].moneyInNok).toBe("1000.02");
 });

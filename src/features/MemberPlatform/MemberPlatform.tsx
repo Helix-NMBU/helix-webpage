@@ -29,6 +29,7 @@ import { MemberFeatureAccessProvider, RequireMemberFeature } from "./MemberFeatu
 import { clearGmailSessionCache } from "./gmail-session-cache";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
 import { FinanceAccessProvider } from "./FinanceAccess";
+import { financeRoutes } from "../Finance/routes";
 import { WorkspaceProvider } from "../Workspace/WorkspaceContext";
 import {
   MemberSettingsPreview,
@@ -177,12 +178,13 @@ export default function MemberPlatform() {
                 <Route path="partner-deals" element={<WonDeals />} />
                 <Route path="finance/sponsor-reviews" element={<FinanceReviews />} />
                 <Route path="finance" element={<FinanceEntry page="overview" />} />
-                <Route path="finance/purchases" element={<FinanceEntry page="purchases" />} />
+                <Route path={financeRoutes.purchases} element={<FinanceEntry page="purchases" />} />
+                <Route path="finance/purchases" element={<LegacyMemberRedirect to={financeRoutes.purchases} />} />
                 <Route path="finance/budgets" element={<FinanceEntry page="budgets" />} />
                 <Route path="finance/financing" element={<FinanceEntry page="financing" />} />
                 <Route path="teams/finance" element={<LegacyMemberRedirect to="/finance" />} />
                 <Route path="teams/finance/budget" element={<LegacyMemberRedirect to="/finance/budgets" />} />
-                <Route path="teams/finance/expenses" element={<LegacyMemberRedirect to="/finance/purchases" />} />
+                <Route path="teams/finance/expenses" element={<LegacyMemberRedirect to={financeRoutes.purchases} />} />
                 <Route path="teams/finance/*" element={<LegacyMemberRedirect to="/finance" />} />
                 <Route path="admin/access" element={<LegacyMemberRedirect to="/members" />} />
                 <Route path="mail" element={<MailWorkspace />} />

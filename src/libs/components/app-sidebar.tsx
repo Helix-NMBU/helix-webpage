@@ -31,6 +31,7 @@ import { departmentPath } from "@/features/Workspace/types";
 import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAccess";
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
+import { financeRoutes } from "@/features/Finance/routes";
 import { canViewAgreements, canViewFinanceReviews, pipelineRepository } from "@/features/PartnerDeals/repository";
 
 export type MemberSidebarActions = {
@@ -78,13 +79,16 @@ export function AppSidebar({
   const managementPath = departmentPath("Management");
   const managementDepartment = workspace?.departments?.find(department => departmentPath(department.name) === managementPath);
   const recruitingAllowed = featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed";
-  const managementItems = recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : [];
+  const purchasesAllowed = finance.access === "allowed" && (finance.capabilities?.ownRequests || finance.capabilities?.registerActual);
+  const managementItems = [
+    ...(recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : []),
+    ...(purchasesAllowed ? [{ title: "Purchases", url: financeRoutes.purchases }] : []),
+  ];
   const managementActive = managementItems.some(item => item.url === location.pathname);
   const financePath = departmentPath("Finance");
   const financeDepartment = workspace?.departments?.find(department => departmentPath(department.name) === financePath);
   const financeItems = finance.access === "allowed" ? [
     { title: "Financial overview", url: "/finance" },
-    { title: "Purchases", url: "/finance/purchases" },
     { title: "Budgets", url: "/finance/budgets" },
     ...(financeReviewsAllowed ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
     ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
@@ -101,7 +105,7 @@ export function AppSidebar({
           },
         ]
       : []),
-    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (businessItems.length > 0 && departmentPath(department.name) === businessPath) || (recruitingAllowed && departmentPath(department.name) === managementPath) || (financeItems.length > 0 && departmentPath(department.name) === financePath))
+    ...(workspace?.departments?.filter((department) => department.memberIds.includes(workspace.viewerId) || (businessItems.length > 0 && departmentPath(department.name) === businessPath) || (managementItems.length > 0 && departmentPath(department.name) === managementPath) || (financeItems.length > 0 && departmentPath(department.name) === financePath))
       .map((department) => {
         const url = departmentPath(department.name);
         const member = department.memberIds.includes(workspace.viewerId);
@@ -127,7 +131,7 @@ export function AppSidebar({
         };
       }) ?? []),
     ...(financeItems.length > 0 && !financeDepartment ? [{ title: "Finance", url: financePath, icon: getDepartmentIcon("Finance"), isActive: financeActive, subMenuClassName: "border-l-0", items: financeItems }] : []),
-    ...(recruitingAllowed && !managementDepartment ? [{ title: "Management", url: managementPath, icon: getDepartmentIcon("Management"), isActive: managementActive, subMenuClassName: "border-l-0", items: managementItems }] : []),
+    ...(managementItems.length > 0 && !managementDepartment ? [{ title: "Management", url: managementPath, icon: getDepartmentIcon("Management"), isActive: managementActive, subMenuClassName: "border-l-0", items: managementItems }] : []),
     ...(businessItems.length > 0 && !businessDepartment ? [{ title: "Business & Marketing", url: businessPath, icon: getDepartmentIcon("Business & Marketing"), isActive: businessActive, subMenuClassName: "border-l-0", items: businessItems }] : []),
   ];
   const order = workspace?.spaceOrder ?? [];

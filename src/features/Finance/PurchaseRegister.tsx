@@ -130,7 +130,7 @@ export function PurchaseRegister({
               <CardTitle className="text-base">{row.publicRef} · {paymentState(row)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <p>{row.supplierName} · {row.buyerName} · {row.requesterName}</p>
+              <p>{[row.supplierName, row.buyerName, row.requesterName].filter(Boolean).join(" · ")}</p>
               <p>{row.purchaseDate} · {row.totalNok} NOK</p>
               <p>{row.justification}</p>
               {row.voidReason ? <p>Void reason: {row.voidReason}</p> : null}

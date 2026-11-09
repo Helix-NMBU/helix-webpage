@@ -1,8 +1,9 @@
 /** Formula-safe CSV and delivery text. Stored finance text stays unchanged. */
+import { financeRoutes } from "./routes.js";
 
 const FORMULA_START = /^[\t\r]|^\s*[=+\-@]/;
 
-export const FINANCE_PURCHASES_PATH = "/finance/purchases";
+export const FINANCE_PURCHASES_PATH = financeRoutes.purchases;
 export const FINANCE_SIGN_IN_LINE = `Sign in to Helix and open ${FINANCE_PURCHASES_PATH}.`;
 
 export const FINANCE_EXPORT_COLUMNS = [

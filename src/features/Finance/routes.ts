@@ -1,6 +1,6 @@
 export const financeRoutes = {
   overview: "/finance",
-  purchases: "/finance/purchases",
+  purchases: "/departments/management/purchases",
   budgets: "/finance/budgets",
   financing: "/finance/financing",
 } as const;
@@ -8,6 +8,7 @@ export const financeRoutes = {
 export type FinancePageId = keyof typeof financeRoutes;
 
 const legacyDestinations: Record<string, string> = {
+  "/finance/purchases": financeRoutes.purchases,
   "/teams/finance": financeRoutes.overview,
   "/teams/finance/budget": financeRoutes.budgets,
   "/teams/finance/expenses": financeRoutes.purchases,

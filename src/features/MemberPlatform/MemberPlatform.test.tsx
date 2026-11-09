@@ -325,7 +325,10 @@ describe("internal member platform", () => {
     const finance = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Finance")!;
     await act(async () => finance.click());
     expect(container.querySelector('a[href="/finance/budgets"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/finance/purchases"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/finance/purchases"]')).toBeNull();
+    const management = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Management")!;
+    await act(async () => management.click());
+    expect(container.querySelector('a[href="/departments/management/purchases"]')).not.toBeNull();
     expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();
     expect(container.textContent).not.toContain("Expenses");
     await act(async () => router.navigate("/finance/financing"));
@@ -337,7 +340,7 @@ describe("internal member platform", () => {
     expect(router.state.location.search).toBe("?season=S27");
     expect(router.state.location.hash).toBe("#items");
     await act(async () => router.navigate("/teams/finance/expenses?view=open#claims"));
-    expect(router.state.location.pathname).toBe("/finance/purchases");
+    expect(router.state.location.pathname).toBe("/departments/management/purchases");
     expect(router.state.location.search).toBe("?view=open");
     expect(router.state.location.hash).toBe("#claims");
   });
@@ -345,7 +348,7 @@ describe("internal member platform", () => {
   it("preserves finance pages as member login destinations", () => {
     const origin = "https://internal.helixnmbu.no";
     expect(memberLoginDestination({ from: "/finance/budgets?season=S27#items" })).toBe("/finance/budgets?season=S27#items");
-    expect(memberLoginDestination({ from: "/teams/finance/expenses?legacy=1#claims" })).toBe("/finance/purchases?legacy=1#claims");
+    expect(memberLoginDestination({ from: "/teams/finance/expenses?legacy=1#claims" })).toBe("/departments/management/purchases?legacy=1#claims");
     expect(googleSignInRequest("/finance/purchases", origin).callbackURL).toBe(`${origin}/finance/purchases`);
     expect(googleSignInRequest("/teams/finance/budget", origin).callbackURL).toBe(`${origin}/teams/finance/budget`);
   });

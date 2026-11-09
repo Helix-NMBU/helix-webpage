@@ -65,12 +65,12 @@ function MonthlyMoneyChart({ flow }: { flow: Extract<SeasonMoneyFlow, { status: 
       {flow.months.map(item => {
         const date = new Date(`${item.month}-01T12:00:00Z`);
         const month = new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(date);
-        const label = `${month} ${item.month.slice(0, 4)}: Money in ${money(item.moneyInNok)}, money out ${money(item.moneyOutNok)}`;
+        const label = `${month} ${item.month.slice(0, 4)}: Sponsor cash received ${money(item.moneyInNok)}, Money out ${money(item.moneyOutNok)}`;
         const height = (value: string) => maximum === 0n ? 0 : Number(nokToOre(value) * 10000n / maximum) / 100;
-        return <Tooltip key={item.month}><TooltipTrigger asChild><button type="button" aria-label={label} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"><span className="flex w-full flex-1 items-end justify-center gap-0.5" aria-hidden="true"><span className="w-2 max-w-[38%] rounded-t-sm bg-primary sm:w-3" style={{ height: `${height(item.moneyInNok)}%` }} /><span className="w-2 max-w-[38%] rounded-t-sm bg-muted-foreground sm:w-3" style={{ height: `${height(item.moneyOutNok)}%` }} /></span><span className="text-[10px] text-muted-foreground sm:text-xs">{month}</span></button></TooltipTrigger><TooltipContent><div><p className="font-medium">{month} {item.month.slice(0, 4)}</p><p>Money in: {money(item.moneyInNok)}</p><p>Money out: {money(item.moneyOutNok)}</p></div></TooltipContent></Tooltip>;
+        return <Tooltip key={item.month}><TooltipTrigger asChild><button type="button" aria-label={label} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1 rounded-sm focus-visible:outline-2 focus-visible:outline-ring"><span className="flex w-full flex-1 items-end justify-center gap-0.5" aria-hidden="true"><span className="w-2 max-w-[38%] rounded-t-sm bg-primary sm:w-3" style={{ height: `${height(item.moneyInNok)}%` }} /><span className="w-2 max-w-[38%] rounded-t-sm bg-muted-foreground sm:w-3" style={{ height: `${height(item.moneyOutNok)}%` }} /></span><span className="text-[10px] text-muted-foreground sm:text-xs">{month}</span></button></TooltipTrigger><TooltipContent><div><p className="font-medium">{month} {item.month.slice(0, 4)}</p><p>Sponsor cash received: {money(item.moneyInNok)}</p><p>Money out: {money(item.moneyOutNok)}</p></div></TooltipContent></Tooltip>;
       })}
     </div>
-    {(nokToOre(flow.otherInNok) > 0n || nokToOre(flow.otherOutNok) > 0n) && <p className="text-xs text-muted-foreground">Totals include amounts outside September–July or without a date: {money(flow.otherInNok)} in and {money(flow.otherOutNok)} out.</p>}
+    {(nokToOre(flow.otherInNok) > 0n || nokToOre(flow.otherOutNok) > 0n) && <p className="text-xs text-muted-foreground">Outside September–July or undated: {money(flow.otherInNok)} received and {money(flow.otherOutNok)} out.</p>}
   </div></TooltipProvider>;
 }
 
@@ -142,8 +142,11 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
           <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-primary" />In</dt><dd className="text-2xl font-medium sm:text-3xl">{loading && !summary ? <Skeleton className="h-9 w-32" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>
           <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground" />Out</dt><dd className="text-2xl font-medium sm:text-3xl">{loading && !summary ? <Skeleton className="h-9 w-32" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>
         </dl></div><CardContent className="space-y-3 px-5">
-        {flowVisible && <MonthlyMoneyChart flow={flow} />}
-        <p className="sr-only">Money in is sponsor cash marked received. Money out includes paid invoices, reimbursed outlays and team-account receipts treated as paid from purchase records. These recorded amounts are not bank-reconciled.</p>
+        {flowVisible && <>
+          {flow.agreedSponsorCashNok !== undefined && <p className="text-sm text-muted-foreground">Agreed sponsor cash: <span className="tabular-nums">{money(flow.agreedSponsorCashNok)}</span></p>}
+          <MonthlyMoneyChart flow={flow} />
+        </>}
+        <p className="text-xs text-muted-foreground">Money in uses the date each sponsor payment was received. Money out uses the date of each registered purchase.</p>
       </CardContent></Card>
       <Card className="min-h-56 gap-2 py-5"><CardHeader className="px-5"><CardTitle className="text-base font-medium">Bank balance</CardTitle><CardDescription>{snapshot ? <span>As of <time dateTime={snapshot.asOfDate}>{snapshotDate(snapshot.asOfDate)}</time>{stale ? " · Last loaded value" : ""}</span> : bank?.status === "available" ? stale ? "Last checked: no balance entered." : "No balance entered yet." : "Balance unavailable."}</CardDescription></CardHeader><CardContent className="flex flex-1 flex-col justify-end px-5">
         <CardTitle className="self-end break-words text-right text-[clamp(1.5rem,3vw,3rem)] font-medium tabular-nums">{loading && !summary ? <Skeleton className="h-12 w-48" /> : snapshot ? money(snapshot.amountNok) : "—"}</CardTitle>
