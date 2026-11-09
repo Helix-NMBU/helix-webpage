@@ -11,6 +11,7 @@ import {
   IconUserSquare,
   IconCheckbox,
   IconMail,
+  IconReceipt,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useLocation } from "react-router-dom";
@@ -82,7 +83,7 @@ export function AppSidebar({
   const purchasesAllowed = finance.access === "allowed" && (finance.capabilities?.ownRequests || finance.capabilities?.registerActual);
   const managementItems = [
     ...(recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : []),
-    ...(purchasesAllowed ? [{ title: "Purchases", url: financeRoutes.purchases }] : []),
+    ...(purchasesAllowed ? [{ title: "Purchases", url: financeRoutes.purchases, icon: IconReceipt }] : []),
   ];
   const managementActive = managementItems.some(item => item.url === location.pathname);
   const financePath = departmentPath("Finance");
