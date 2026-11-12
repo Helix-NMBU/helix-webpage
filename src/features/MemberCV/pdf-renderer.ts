@@ -2,7 +2,7 @@ import { readableProfileDate } from "./profile-inputs.js";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, PDFName, PDFString, rgb, type Color, type PDFFont, type PDFPage } from "pdf-lib";
 import { sharedCvData } from "./model.js";
-import { groupExperience } from "./experience.js";
+import { experienceSection, groupExperience } from "./experience.js";
 import { memberText, type StaticMemberCopyKey } from "./locale.js";
 import { localizedCv } from "./translations.js";
 import type { CvData, CvSharing, CvOutputLanguage } from "./types.js";
@@ -211,11 +211,13 @@ export async function renderCvPdf(data: CvData, sharing: CvSharing, fontBytes: U
     }
   });
 
-  const experience = cv.experience.filter((entry) => hasContent([entry.organization, entry.title, entry.startDate, entry.endDate, entry.description, entry.employmentType, entry.location, entry.locationType, entry.department, entry.season, entry.url]));
+  const roles = cv.experience.filter((entry) => hasContent([entry.organization, entry.title, entry.startDate, entry.endDate, entry.description, entry.employmentType, entry.location, entry.locationType, entry.department, entry.season, entry.url]));
+  const experience = roles.filter(entry => experienceSection(entry) === "experience");
+  const otherRoles = roles.filter(entry => experienceSection(entry) === "otherRoles");
   const projects = cv.projects.filter((entry) => hasContent([entry.name, entry.role, entry.season, entry.description, entry.url, entry.startDate, entry.endDate]));
   const languages = cv.languages.filter((entry) => entry.name.trim() || entry.level.trim());
   const links = cv.links.filter((entry) => entry.label.trim() || entry.url.trim());
-  const hasWhiteTail = Boolean(projects.length || languages.length || links.length || cv.references?.trim());
+  const hasWhiteTail = Boolean(otherRoles.length || projects.length || languages.length || links.length || cv.references?.trim());
 
   if (experience.length) {
     whiteSection = undefined;
@@ -324,6 +326,16 @@ export async function renderCvPdf(data: CvData, sharing: CvSharing, fontBytes: U
       }
     }
   }
+
+  if (otherRoles.length) section(t("Other roles and volunteering"), () => {
+    for (const entry of otherRoles) {
+      ensureWhiteRoom(48);
+      text([entry.title, entry.organization].filter(Boolean).join(" | "), { weight: "medium", size: 12 });
+      text(period(entry.startDate, entry.endDate));
+      text(entry.description);
+      y -= 12;
+    }
+  });
 
   if (projects.length) section(t("Projects"), () => {
     for (const entry of projects) {

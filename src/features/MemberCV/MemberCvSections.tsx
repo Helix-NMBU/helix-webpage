@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IconArrowLeft, IconChevronRight, IconDots, IconPlus, IconX } from "@tabler/icons-react";
+import { Link, useNavigate } from "react-router-dom";
 import type { CountryCode } from "libphonenumber-js/min";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
 import { Badge } from "@libs/components/ui/badge";
@@ -16,36 +17,41 @@ import { Switch } from "@libs/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@libs/components/ui/tabs";
 import { Textarea } from "@libs/components/ui/textarea";
 import { useMemberAccount } from "../MemberPlatform/MemberAccountContext";
+import { accountInitials } from "../MemberPlatform/account";
 import { useMemberLanguage } from "../MemberPlatform/MemberLanguage";
+import { useMemberNavigation } from "../MemberPlatform/MemberNavigation";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { ProfileContent } from "../SponsorWorkspace/DirectoryPanel";
 import { CvTemplatePreview } from "./CvTemplatePreview";
 import { fictionalCv } from "./demo";
 import { localizeCvError } from "./errors";
-import { emptyCv, sharedCvData, validateCvData } from "./model";
+import { sharedCvData, validateCvData } from "./model";
 import { nmbuStudyFieldLabel, nmbuStudyFields } from "./nmbu-study-fields";
 import { formatProfileDateInput, profileDateInputValue, profileDateValidation } from "./profile-dates";
 import { editProfilePhone, profilePhoneCountries, saveProfilePhone, splitProfilePhone } from "./profile-phone";
-import type { CvData, CvEducation, CvExperience, CvExperienceGroup, CvSharing } from "./types";
+import { cvExperienceGroups, experienceSection, experienceSections } from "./experience";
+import { managedHelixRoleId, withManagedHelixRole } from "./helix-role";
+import { createCvRepository, CvRequestError } from "./repository";
+import { memberLoadFailure, memberSessionToken, signOutMember, watchMemberSession } from "./session";
+import { memberPaths } from "../MemberPlatform/routes";
+import type { CvData, CvEducation, CvEnvelope, CvExperience, CvSharing } from "./types";
 import { validateProfileMutation } from "./validate-profile-mutation";
 import "./member-cv.css";
 
-// Local prototype at /profile in member-local mode. Uses its own browser storage.
+// Keep the original development fixture isolated from authenticated CV drafts.
 const storageKey = "helix-local-cv-prototype-v1";
-const memberRoleId = "helix-member-role";
-const experienceSections = { experience: "Experience", otherRoles: "Other roles and volunteering" } as const;
 const sections = {
   contact: "Contact details",
   about: "About you",
   education: "Education",
   ...experienceSections,
 } as const;
-type ExperienceCategory = "workExperience" | "helixRoles" | "otherRoles";
 type ExperienceSection = keyof typeof experienceSections;
 type Section = keyof typeof sections;
 type View = "profile" | "overview" | "review" | "published" | Section;
-type ExperienceEntry = CvExperience & { section?: ExperienceCategory };
-type DraftCv = Omit<CvData, "experience"> & { experience: ExperienceEntry[]; directorySkills?: string[] };
+type ExperienceEntry = CvExperience;
+type DraftCv = CvData;
 type Snapshot = { cv: DraftCv; sharing: CvSharing };
 type Saved = Snapshot & { lastSection: Section | null; published: Snapshot | null };
 type DateField = "startDate" | "endDate";
@@ -77,57 +83,23 @@ function institutionName(value: string) {
     [option.value, ...(option.keywords ?? [])].some(alias => alias.toLowerCase() === name))?.value ?? value;
 }
 
-function experienceSection(entry: ExperienceEntry): ExperienceSection {
-  if (entry.section) return entry.section === "otherRoles" ? "otherRoles" : "experience";
-  const isVolunteering = /^volunteer(?:ing)?$/i.test(entry.employmentType ?? "");
-  const isHelix = /^helix(?:\s+nmbu)?$/i.test(entry.organization.trim());
-  return isVolunteering && !isHelix ? "otherRoles" : "experience";
-}
-
-function withMemberRole(cv: DraftCv, title: string | null | undefined): DraftCv {
-  const existing = cv.experience.find(entry => entry.id === memberRoleId);
-  const experience = cv.experience.filter(entry => entry.id !== memberRoleId);
-  if (!title) return { ...cv, experience };
-  return {
-    ...cv,
-    experience: [{
-      ...emptyExperience,
-      id: memberRoleId,
-      organization: "Helix NMBU",
-      title,
-      description: existing?.description ?? "",
-      section: "helixRoles",
-    }, ...experience],
-  };
-}
-
-function validateDraft(cv: DraftCv, validate: (input: DraftCv) => CvData): DraftCv {
-  // The administrator-assigned role is in addition to the 30 member-authored entries.
-  const memberRole = cv.experience.find(entry => entry.id === memberRoleId);
-  const validated = validate({ ...cv, experience: cv.experience.filter(entry => entry.id !== memberRoleId) });
-  const { skills: directorySkills, experience } = validateCvData({
-    ...emptyCv(), skills: cv.directorySkills ?? [], experience: memberRole ? [memberRole] : [],
-  });
-  validated.experience.unshift(...experience);
-  return { ...restoreExperienceSections(validated, cv), directorySkills };
-}
-
-function restoreExperienceSections(validated: CvData, source: DraftCv): DraftCv {
-  const sectionsById = new Map(source.experience.map(entry => [entry.id, entry.section]));
-  return { ...validated, experience: validated.experience.map(entry => {
-    const section = sectionsById.get(entry.id);
-    return section ? { ...entry, section } : entry;
-  }) };
-}
-
 function loadDraft(): Saved {
   try {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
-      const previous = JSON.parse(saved) as Omit<Saved, "lastSection"> & { lastSection: Section | "workExperience" | "helixRoles" | null };
+      const previous = JSON.parse(saved) as Omit<Saved, "lastSection" | "cv" | "published"> & {
+        lastSection: Section | "workExperience" | "helixRoles" | null;
+        cv: CvData & { directorySkills?: string[] };
+        published: (Snapshot & { cv: CvData & { directorySkills?: string[] } }) | null;
+      };
       const education = previous.cv.education.map(entry => ({ ...entry, institution: institutionName(entry.institution) }));
       const lastSection = previous.lastSection === "workExperience" || previous.lastSection === "helixRoles" ? "experience" : previous.lastSection;
-      return { ...previous, lastSection, cv: { ...previous.cv, city: "", education } };
+      const { directorySkills, ...cv } = previous.cv;
+      const published = previous.published && {
+        ...previous.published,
+        cv: { ...previous.published.cv, skills: previous.published.cv.directorySkills ?? previous.published.cv.skills },
+      };
+      return { ...previous, published, lastSection, cv: { ...cv, city: "", education, skills: directorySkills ?? cv.skills } };
     }
   } catch { /* The fixture is usable when browser storage is unavailable. */ }
   const sample = fictionalCv();
@@ -138,8 +110,7 @@ function loadDraft(): Saved {
       education: sample.education.map(entry => ({ ...entry, institution: nmbu, startDate: "01/09/2023", endDate: "30/06/2028" })),
       projects: [],
       languages: [],
-      skills: [],
-      directorySkills: ["CAD", "Prototyping"],
+      skills: ["CAD", "Prototyping"],
     },
     sharing: { cv: true, email: false, phone: false },
     lastSection: null,
@@ -355,16 +326,18 @@ function hasEntryContent(entry: CvEducation | ExperienceEntry) {
   return Object.entries(entry).some(([key, value]) => key !== "id" && key !== "section" && value?.trim());
 }
 
-function SectionEditor({ section, initial, onSave, onCancel }: {
+function SectionEditor({ section, initial, onSave, onCancel, saving, onDirty }: {
   section: Section;
   initial: Snapshot;
   onSave: (cv: DraftCv, exit: boolean) => void;
   onCancel: () => void;
+  saving: boolean;
+  onDirty: () => void;
 }) {
   const { t: uiText, language } = useMemberLanguage();
   const roleSection = section === "experience" || section === "otherRoles" ? section : null;
   const otherRoleIds = new Set(initial.cv.experience.filter(entry => experienceSection(entry) !== roleSection).map(entry => entry.id));
-  const otherManualRoleCount = initial.cv.experience.filter(entry => entry.id !== memberRoleId && otherRoleIds.has(entry.id)).length;
+  const otherManualRoleCount = initial.cv.experience.filter(entry => entry.id !== managedHelixRoleId && otherRoleIds.has(entry.id)).length;
   const [cv, setCv] = useState<DraftCv>(() => {
     const displayDates = <T extends CvEducation | CvExperience>(entry: T): T => ({
       ...entry,
@@ -387,21 +360,40 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
   const notify = useNotify();
   const phoneCountries = profilePhoneCountries(language);
   const country = phoneCountries.find(option => option.value === phone.country)!;
-  const skills = cv.directorySkills ?? [];
+  const skills = cv.skills;
   const pendingSkill = skill.trim();
   const canAddSkill = pendingSkill && skills.length < 50 && !skills.some(value => value.toLowerCase() === pendingSkill.toLowerCase());
   const sectionRoles = cv.experience.filter(entry => !otherRoleIds.has(entry.id));
   function setField<K extends keyof DraftCv>(key: K, value: DraftCv[K]) {
+    onDirty();
     setInvalidDate(null);
     setCv(previous => ({ ...previous, [key]: value }));
   }
   function addSkill() {
     if (!canAddSkill) return;
-    setField("directorySkills", [...skills, pendingSkill]);
+    setField("skills", [...skills, pendingSkill]);
     setSkill("");
     skillInput.current?.focus();
   }
+  function removeSkill(index: number) {
+    onDirty();
+    setCv(previous => {
+      const translations = structuredClone(previous.translations);
+      for (const entries of Object.values(translations ?? {})) {
+        if (!entries) continue;
+        delete entries[`skills:${index}`];
+        for (let source = index + 1; source < previous.skills.length; source++) {
+          const key = `skills:${source}`;
+          if (entries[key] !== undefined) entries[`skills:${source - 1}`] = entries[key];
+          delete entries[key];
+        }
+      }
+      return { ...previous, ...(translations ? { translations } : {}), skills: previous.skills.filter((_, position) => position !== index) };
+    });
+    skillInput.current?.focus();
+  }
   function save(exit: boolean) {
+    if (saving) return;
     const entries = {
       education: cv.education.filter(hasEntryContent).map(entry => ({ ...entry })),
       experience: cv.experience.filter(entry => otherRoleIds.has(entry.id) || hasEntryContent(entry)).map(entry => ({ ...entry })),
@@ -413,7 +405,11 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
         const previous = initial.cv[collection].find(item => item.id === entry.id);
         for (const field of ["startDate", "endDate"] as const) {
           const value = entry[field];
-          if (!value || value === profileDateInputValue(previous?.[field] ?? "")) continue;
+          if (!value) continue;
+          if (value === profileDateInputValue(previous?.[field] ?? "")) {
+            entry[field] = previous?.[field] ?? value;
+            continue;
+          }
           if (roleSection && field === "endDate" && value === "Present") continue;
           const formatted = formatEntryDate(field, value);
           const matchesFormat = /^\d{2}\/\d{2}\/\d{4}$/.test(formatted) || (field === "startDate" && /^(?:\d{2}\/)?\d{4}$/.test(formatted));
@@ -442,16 +438,17 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
         ...cv,
         ...entries,
         phone: savedPhone,
-        directorySkills: canAddSkill ? [...skills, pendingSkill] : skills,
+        skills: canAddSkill ? [...skills, pendingSkill] : skills,
       };
-      const validated = validateDraft(input, draft => validateProfileMutation({ action: "save", draft, sharing: initial.sharing }, initial.cv).draft!);
+      const validated = validateProfileMutation({ action: "save", draft: input, sharing: initial.sharing }, initial.cv).draft!;
       onSave(validated, exit);
     } catch (error) {
       notify(uiText("Check your CV"), localizeCvError((error as Error).message, language), { id: "cv-prototype-validation", variant: "error" });
     }
   }
   return <Card className="max-w-2xl shadow-none"><CardContent>
-    <form className="space-y-5" noValidate onSubmit={event => { event.preventDefault(); save(false); }}>
+    <form noValidate onSubmit={event => { event.preventDefault(); save(false); }}>
+      <fieldset disabled={saving} className="space-y-5">
       {section === "contact" && <>
         <Field label="Personal email (optional)" type="email" value={cv.contactEmail} onChange={value => setField("contactEmail", value)} />
         <div className="space-y-2">
@@ -461,11 +458,13 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
               triggerText={`${country.value} ${country.detail}`} className="h-9 min-h-9 w-24 shrink-0 gap-1 px-2 [&>span]:whitespace-nowrap"
               emptyLabel={uiText("No results found.")} placeholder={uiText("Country")} searchPlaceholder={uiText("Search countries...")}
               onChange={value => {
+                onDirty();
                 setPhone(previous => ({ ...previous, country: value as CountryCode, changed: true }));
                 setInvalidPhone(false);
               }} />
             <Input ref={phoneInput} id={phoneId} type="tel" autoComplete="tel-national" maxLength={100} className="h-9 min-w-0"
               value={phone.national} aria-invalid={invalidPhone || undefined} onChange={event => {
+                onDirty();
                 setPhone(previous => editProfilePhone(event.target.value, previous));
                 setInvalidPhone(false);
               }} />
@@ -479,7 +478,7 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
           <p id={`${skillId}-hint`} className="text-sm text-muted-foreground">{uiText("Add one skill at a time. These skills appear on your sponsor profile.")}</p>
           <div className="flex items-center gap-2">
             <Input ref={skillInput} id={skillId} aria-describedby={`${skillId}-hint`} value={skill} maxLength={100} placeholder={uiText("e.g. CAD")}
-              onChange={event => setSkill(event.target.value)} onKeyDown={event => {
+              onChange={event => { onDirty(); setSkill(event.target.value); }} onKeyDown={event => {
                 if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
                 event.preventDefault();
                 addSkill();
@@ -490,10 +489,7 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
             {skills.map((value, index) => <li key={`${value}-${index}`} className="min-w-0 max-w-full">
               <Badge variant="secondary" className="h-auto min-h-7 max-w-full gap-1 whitespace-normal pl-3 pr-1">
                 <span className="break-all">{value}</span>
-                <Button variant="ghost" size="icon" className="size-6 rounded-full" type="button" aria-label={uiText("Remove skill {skill}", { skill: value })} onClick={() => {
-                  setField("directorySkills", skills.filter((_, skillIndex) => skillIndex !== index));
-                  skillInput.current?.focus();
-                }}><IconX aria-hidden="true" /></Button>
+                <Button variant="ghost" size="icon" className="size-6 rounded-full" type="button" aria-label={uiText("Remove skill {skill}", { skill: value })} onClick={() => removeSkill(index)}><IconX aria-hidden="true" /></Button>
               </Badge>
             </li>)}
           </ul>}
@@ -505,10 +501,10 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
           <EntryDates startDate={entry.startDate} endDate={entry.endDate} invalidDate={invalidDate} onChange={update} />
         </>} />}
       {roleSection && <EntryList entries={sectionRoles} template={{ ...emptyExperience, section: roleSection === "experience" ? "workExperience" : "otherRoles" }}
-        limit={30 - otherManualRoleCount + Number(sectionRoles.some(entry => entry.id === memberRoleId))}
+        limit={30 - otherManualRoleCount + Number(sectionRoles.some(entry => entry.id === managedHelixRoleId))}
         heading={uiText("Roles")} label="role" activeId={activeEntry} setActiveId={id => { setActiveEntry(id); setInvalidDate(null); }} invalidDate={invalidDate}
-        canDelete={entry => entry.id !== memberRoleId} identify={entry => [entry.title, entry.organization]}
-        onChange={entries => setField("experience", [...cv.experience.filter(entry => otherRoleIds.has(entry.id)), ...entries])} renderFields={(entry, update) => entry.id === memberRoleId
+        canDelete={entry => entry.id !== managedHelixRoleId} identify={entry => [entry.title, entry.organization]}
+        onChange={entries => setField("experience", [...cv.experience.filter(entry => otherRoleIds.has(entry.id)), ...entries])} renderFields={(entry, update) => entry.id === managedHelixRoleId
           ? <Field label="Contribution (optional)" hint="Your role details come from the Helix member directory." value={entry.description} onChange={value => update({ description: value })} multiline />
           : <>
           <Field label="Role title" value={entry.title} onChange={value => update({ title: value })} />
@@ -521,6 +517,7 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
         <Button variant="outline" type="button" onClick={() => save(true)}>{uiText("Save and exit")}</Button>
         <Button variant="ghost" type="button" onClick={onCancel}>{uiText("Cancel")}</Button>
       </div>
+      </fieldset>
     </form>
   </CardContent></Card>;
 }
@@ -528,11 +525,7 @@ function SectionEditor({ section, initial, onSave, onCancel }: {
 function SponsorPreview({ cv, sharing }: Snapshot) {
   const { t: uiText } = useMemberLanguage();
   const profile = sharedCvData(cv, sharing);
-  const experienceGroups: CvExperienceGroup[] = (Object.keys(experienceSections) as ExperienceSection[]).map(key => ({
-    key,
-    label: experienceSections[key],
-    entryIds: cv.experience.filter(entry => experienceSection(entry) === key).map(entry => entry.id),
-  }));
+  const experienceGroups = cvExperienceGroups(cv.experience);
   return <Tabs defaultValue="profile" className="gap-4">
     <TabsList aria-label={uiText("Sponsor preview")}><TabsTrigger value="profile">{uiText("Directory profile")}</TabsTrigger><TabsTrigger value="pdf" disabled={!sharing.cv}>{uiText("CV PDF")}</TabsTrigger></TabsList>
     <TabsContent value="profile">
@@ -541,20 +534,20 @@ function SponsorPreview({ cv, sharing }: Snapshot) {
           <CardTitle className="text-lg">{profile.fullName}</CardTitle>
           <CardDescription>{[profile.fieldOfStudy, profile.graduationYear && uiText("Class of {year}", { year: profile.graduationYear })].filter(Boolean).join(" · ")}</CardDescription>
         </CardHeader>
-        <CardContent><ProfileContent profile={{ ...profile, skills: cv.directorySkills ?? [] }} experienceGroups={experienceGroups} uiText={uiText} /></CardContent>
+        <CardContent><ProfileContent profile={profile} experienceGroups={experienceGroups} /></CardContent>
       </Card>
     </TabsContent>
-    {sharing.cv && <TabsContent value="pdf"><CvTemplatePreview data={cv} sharing={sharing} locale="en" experienceGroups={experienceGroups} /></TabsContent>}
+    {sharing.cv && <TabsContent value="pdf"><CvTemplatePreview data={cv} sharing={sharing} locale={cv.cvLanguage ?? "en"} experienceGroups={experienceGroups} /></TabsContent>}
   </Tabs>;
 }
 
-function SharingOptions({ snapshot, onChange }: { snapshot: Snapshot; onChange?: (sharing: CvSharing) => void }) {
+function SharingOptions({ snapshot, disabled, onChange }: { snapshot: Snapshot; disabled?: boolean; onChange?: (sharing: CvSharing) => void }) {
   const { t: uiText } = useMemberLanguage();
   const id = useId();
   const options = [
     { key: "email", label: "Share personal email", detail: snapshot.cv.contactEmail || uiText("No email in this draft"), available: Boolean(snapshot.cv.contactEmail) },
     { key: "phone", label: "Share phone number", detail: snapshot.cv.phone || uiText("No phone in this draft"), available: Boolean(snapshot.cv.phone) },
-    { key: "cv", label: "Allow CV download", detail: `PDF · ${uiText("English")}`, available: true },
+    { key: "cv", label: "Allow CV download", detail: `PDF · ${uiText(snapshot.cv.cvLanguage === "nb" ? "Norwegian" : "English")}`, available: true },
   ] as const;
   return <Card className="shadow-none">
     <CardHeader>
@@ -567,7 +560,7 @@ function SharingOptions({ snapshot, onChange }: { snapshot: Snapshot; onChange?:
           {onChange ? <Label htmlFor={`${id}-${key}`}>{uiText(label)}</Label> : <p className="text-sm font-medium">{uiText(label)}</p>}
           <p id={`${id}-${key}-detail`} className="break-all text-sm text-muted-foreground">{detail}</p>
         </div>
-        {onChange ? <Switch id={`${id}-${key}`} aria-describedby={`${id}-${key}-detail`} checked={available && snapshot.sharing[key]} disabled={!available}
+        {onChange ? <Switch id={`${id}-${key}`} aria-describedby={`${id}-${key}-detail`} checked={available && snapshot.sharing[key]} disabled={!available || disabled}
           onCheckedChange={checked => onChange({ ...snapshot.sharing, [key]: checked })} />
           : <Badge variant="outline">{uiText(available && snapshot.sharing[key] ? "Shared" : "Private")}</Badge>}
       </div>)}
@@ -575,19 +568,111 @@ function SharingOptions({ snapshot, onChange }: { snapshot: Snapshot; onChange?:
   </Card>;
 }
 
-export default function MemberCvPrototype() {
+function stateFromEnvelope(envelope: CvEnvelope, previous?: Saved): Saved {
+  const { draft, sharing, published, publishedRevision } = envelope.document;
+  return {
+    cv: draft,
+    sharing,
+    lastSection: previous?.lastSection ?? null,
+    published: published ?? (publishedRevision !== null ? previous?.published ?? null : null),
+  };
+}
+
+export default function MemberCvSections() {
   const { t: uiText, language } = useMemberLanguage();
   const account = useMemberAccount();
-  const [saved, setSaved] = useState(loadDraft);
+  const local = isLocalMemberMode();
+  const navigate = useNavigate();
+  const setEditor = useMemberNavigation()?.setEditor;
+  const boundUserId = useRef<string | null>(null);
+  const revision = useRef(0);
+  const publishedRevision = useRef<number | null>(null);
+  const alive = useRef(true);
+  const operation = useRef(false);
+  const dirty = useRef(false);
+  const repository = useMemo(() => local ? null : createCvRepository(() => memberSessionToken(boundUserId)), [local]);
+  const [saved, setSaved] = useState<Saved | null>(() => local ? loadDraft() : null);
   const [view, setView] = useState<View>("profile");
   const [sectionReturn, setSectionReturn] = useState<"overview" | "review">("overview");
+  const [loading, setLoading] = useState(!local);
+  const [saving, setSaving] = useState(false);
+  const [leave, setLeave] = useState<{ proceed: () => void } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const notify = useNotify();
-  useEffect(() => { heading.current?.focus(); }, [view]);
+  const login = memberPaths().login;
+  useEffect(() => { heading.current?.focus(); }, [view, loading]);
 
+  function changeView(next: View) {
+    dirty.current = false;
+    setView(next);
+  }
+
+  function confirmLeave(proceed: () => void) {
+    if (operation.current) return;
+    if (dirty.current) setLeave({ proceed });
+    else proceed();
+  }
+
+  const reload = useMemo(() => async (refresh = false) => {
+    if (!repository) return;
+    setLoading(true);
+    try {
+      const envelope = await (refresh && repository.refresh ? repository.refresh() : repository.load());
+      if (!alive.current) return;
+      revision.current = envelope.document.revision;
+      publishedRevision.current = envelope.document.publishedRevision;
+      dirty.current = false;
+      setSaved(stateFromEnvelope(envelope));
+      setView("profile");
+    } catch (error) {
+      if (!alive.current) return;
+      const failure = memberLoadFailure(error);
+      if ("redirectTo" in failure) navigate(failure.redirectTo, { replace: true });
+      else notify(uiText("Could not load your CV."), localizeCvError(failure.message, language), {
+        variant: "error", id: "cv-load", action: { label: uiText("Try again"), onClick: () => void reload(true) },
+      });
+    } finally {
+      if (alive.current) setLoading(false);
+    }
+  }, [language, navigate, notify, repository, uiText]);
+  const initialLoad = useRef(reload);
+  useEffect(() => {
+    alive.current = true;
+    void initialLoad.current();
+    const unwatch = watchMemberSession(() => navigate(login, { replace: true }), undefined, boundUserId);
+    const warn = (event: BeforeUnloadEvent) => {
+      if (dirty.current || operation.current) { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      alive.current = false;
+      unwatch();
+      window.removeEventListener("beforeunload", warn);
+    };
+  }, [login, navigate]);
+
+  useLayoutEffect(() => {
+    setEditor?.({
+      busy: saving,
+      navigate: to => confirmLeave(() => navigate(to)),
+      signOut: () => confirmLeave(() => {
+        void signOutMember().then(() => navigate(login, { replace: true })).catch((error: unknown) => {
+          notify(uiText("Could not sign out."), localizeCvError((error as Error).message, language), { variant: "error" });
+        });
+      }),
+    });
+    return () => setEditor?.(null);
+  }, [language, login, navigate, notify, saving, setEditor, uiText]);
+
+  if (!saved) return <div className="mx-auto max-w-6xl space-y-3 p-6">
+    <h1 className="text-3xl font-medium">{uiText("Profile")}</h1>
+    {loading ? <p>{uiText("Loading profile")}</p> : <Button onClick={() => void reload(true)}>{uiText("Try again")}</Button>}
+  </div>;
   const { sharing, published, lastSection } = saved;
-  const cv = withMemberRole(saved.cv, account?.helixRole);
-  const hasPrivateChanges = !published || JSON.stringify({ cv, sharing }) !== JSON.stringify(published);
+  const cv = local ? withManagedHelixRole(saved.cv, account?.helixRole) : saved.cv;
+  const hasPrivateChanges = !published || revision.current !== publishedRevision.current;
+  const privateDraft = local ? !published || JSON.stringify(sharedCvData(cv, sharing)) !== JSON.stringify(published.cv)
+    || JSON.stringify(sharing) !== JSON.stringify(published.sharing) : hasPrivateChanges;
   const education = cv.education.find(entry => entry.institution.trim() && entry.degree.trim());
   function experienceSummary(key: ExperienceSection, empty: string) {
     const roles = cv.experience.filter(entry => experienceSection(entry) === key);
@@ -604,37 +689,58 @@ export default function MemberCvPrototype() {
     otherRoles: experienceSummary("otherRoles", "Add student society roles, board positions or volunteering."),
   };
 
-  function persist(next: Saved, afterSave?: () => void) {
+  async function persist(next: Saved, action: "save" | "publish" | "withdraw", afterSave?: () => void) {
+    if (operation.current) return;
+    operation.current = true;
+    setSaving(true);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(next));
-    } catch {
-      notify(uiText("Could not save CV"), uiText("Your input is still here. Try again to save your changes."), {
-        id: "cv-prototype-storage", variant: "error", action: { label: uiText("Try again"), onClick: () => persist(next, afterSave) },
+      if (repository) {
+        const result = await repository.mutate({
+          action, expectedRevision: revision.current,
+          ...(action === "withdraw" ? {} : { draft: { ...next.cv, cvRegistered: true }, sharing: next.sharing }),
+        });
+        if (!alive.current) return;
+        revision.current = result.document.revision;
+        publishedRevision.current = result.document.publishedRevision;
+        setSaved(stateFromEnvelope(result, next));
+      } else {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        setSaved(next);
+      }
+      dirty.current = false;
+      afterSave?.();
+    } catch (error) {
+      if (!alive.current) return;
+      const status = error instanceof CvRequestError ? error.status : null;
+      if (status === 401 || status === 403) {
+        const failure = memberLoadFailure(error);
+        if ("redirectTo" in failure) navigate(failure.redirectTo, { replace: true });
+        return;
+      }
+      notify(uiText("Could not save CV"), localizeCvError((error as Error).message, language), {
+        id: "cv-save", variant: "error",
+        action: status === 409
+          ? { label: uiText("Reload draft"), onClick: () => confirmLeave(() => void reload(true)) }
+          : undefined,
       });
-      return;
+    } finally {
+      operation.current = false;
+      if (alive.current) setSaving(false);
     }
-    setSaved(next);
-    afterSave?.();
-  }
-
-  function saveAndExit() {
-    persist(saved, () => {
-      setView("profile");
-      notify(uiText("Private draft saved"), uiText("You can continue from your profile."), { id: "cv-prototype-save" });
-    });
   }
 
   function openSection(section: Section, returnTo: "overview" | "review") {
     setSectionReturn(returnTo);
-    setView(section);
+    changeView(section);
   }
 
   function publish() {
     try {
-      const snapshot = { cv: validateDraft(cv, input => validateCvData(input, true)), sharing: { ...sharing } };
-      persist({ ...saved, cv: snapshot.cv, published: snapshot }, () => {
-        setView("published");
-        notify(uiText("Published to Talent Directory"), uiText("Sponsors with access can see this version."), { id: "cv-prototype-publication" });
+      const next = validateCvData(cv, true);
+      const snapshot = { cv: sharedCvData(next, sharing), sharing: { ...sharing } };
+      void persist({ ...saved!, cv: next, published: snapshot }, "publish", () => {
+        changeView("published");
+        notify(uiText("Published to Talent Directory"), uiText("Sponsors with access can see this version."), { id: "cv-publication" });
       });
     } catch (error) {
       notify(uiText("Check your CV"), localizeCvError((error as Error).message, language), { variant: "error" });
@@ -652,7 +758,7 @@ export default function MemberCvPrototype() {
   }
 
   function back(label: string, target: View) {
-    return <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => setView(target)}><IconArrowLeft aria-hidden="true" />{uiText(label)}</Button>;
+    return <Button variant="ghost" size="sm" className="-ml-2 w-fit" disabled={saving} onClick={() => confirmLeave(() => changeView(target))}><IconArrowLeft aria-hidden="true" />{uiText(label)}</Button>;
   }
 
   const section = view in sections ? view as Section : null;
@@ -660,19 +766,20 @@ export default function MemberCvPrototype() {
     {view === "profile" && <>
       {title("Profile", "Manage your profile, CV and sponsor visibility.")}
       <Card className="max-w-3xl shadow-none"><CardContent className="flex items-center gap-4">
-        <Avatar className="size-12"><AvatarFallback>AE</AvatarFallback></Avatar>
-        <div className="min-w-0 space-y-1"><p className="font-medium">{cv.fullName}</p><p className="text-sm text-muted-foreground">{cv.headline}</p></div>
+        <Avatar className="size-12"><AvatarFallback>{accountInitials(cv.fullName)}</AvatarFallback></Avatar>
+        <div className="min-w-0 space-y-1"><p className="font-medium">{cv.fullName}</p><p className="text-sm text-muted-foreground">{cv.experience.find(entry => entry.id === managedHelixRoleId)?.title || cv.headline}</p></div>
       </CardContent></Card>
       <section className="max-w-3xl space-y-3" aria-labelledby="cv-prototype-card-title">
         <h2 id="cv-prototype-card-title" className="text-lg font-medium">CV</h2>
         <Card className="shadow-none">
           <CardHeader><div className="flex flex-wrap items-center gap-3"><CardTitle>{uiText("CV for {name}", { name: cv.fullName })}</CardTitle>
-            <Badge variant="secondary">{uiText(hasPrivateChanges ? "Private draft" : "Published")}</Badge></div>
+            <Badge variant="secondary">{uiText(privateDraft ? "Private draft" : "Published")}</Badge></div>
             <CardDescription>{lastSection ? uiText("Last edited section: {section}", { section: uiText(sections[lastSection]) }) : uiText("Finish your CV when you're ready.")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button onClick={() => setView("overview")}>{uiText(hasPrivateChanges ? "Continue draft" : "Edit CV")}</Button>
-            {published && <Button variant="outline" onClick={() => setView("published")}>{uiText("View published version")}</Button>}
+            <Button onClick={() => changeView("overview")}>{uiText(privateDraft ? "Continue draft" : "Edit CV")}</Button>
+            {published && <Button variant="outline" onClick={() => changeView("published")}>{uiText("View published version")}</Button>}
+            <Button variant="ghost" asChild><Link to={local ? "?cv-prototype=0" : "?cv-editor=classic"}>{uiText("Advanced CV settings")}</Link></Button>
           </CardContent>
         </Card>
       </section>
@@ -680,7 +787,7 @@ export default function MemberCvPrototype() {
 
     {view === "overview" && <>
       {back("Profile", "profile")}
-      {title("Your CV", "Choose a section to edit. Saved changes stay private until you publish.", <Button variant="outline" onClick={saveAndExit}>{uiText("Save and exit")}</Button>)}
+      {title("Your CV", "Choose a section to edit. Saved changes stay private until you publish.", <Button variant="outline" onClick={() => changeView("profile")}>{uiText("Save and exit")}</Button>)}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
         <Card className="gap-0 py-0 shadow-none">
           <CardHeader className="border-b py-5"><CardTitle>{uiText("CV sections")}</CardTitle><CardDescription>{uiText("Open any section. Education is required to publish.")}</CardDescription></CardHeader>
@@ -715,9 +822,9 @@ export default function MemberCvPrototype() {
     {section && <>
       {back(sectionReturn === "review" ? "Review sponsor view" : "CV sections", sectionReturn)}
       {title(sections[section], section === "education" ? "Add or edit your degrees. You need at least one institution and degree to publish." : "Save this section to keep your changes in your private draft.")}
-      <SectionEditor key={section} section={section} initial={{ cv, sharing }} onCancel={() => setView(sectionReturn)} onSave={(nextCv, exit) => {
-        persist({ ...saved, cv: nextCv, lastSection: section }, () => {
-          setView(exit ? "profile" : sectionReturn);
+      <SectionEditor key={section} section={section} initial={{ cv, sharing }} saving={saving} onDirty={() => { dirty.current = true; }} onCancel={() => confirmLeave(() => changeView(sectionReturn))} onSave={(nextCv, exit) => {
+        void persist({ ...saved, cv: nextCv, lastSection: section }, "save", () => {
+          changeView(exit ? "profile" : sectionReturn);
           notify(uiText("Private draft saved"), uiText(exit ? "You can continue from your profile." : "Your changes are saved."), { id: "cv-prototype-save" });
         });
       }} />
@@ -729,9 +836,9 @@ export default function MemberCvPrototype() {
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
         <SponsorPreview key={String(sharing.cv)} cv={cv} sharing={sharing} />
         <div className="space-y-4">
-          <SharingOptions snapshot={saved} onChange={nextSharing => persist({ ...saved, sharing: nextSharing })} />
+          <SharingOptions snapshot={saved} disabled={saving} onChange={nextSharing => void persist({ ...saved, sharing: nextSharing }, "save")} />
           {education
-            ? <Button className="w-full" onClick={publish}>{uiText(published ? "Publish changes" : "Publish to Talent Directory")}</Button>
+            ? <Button className="w-full" disabled={saving} onClick={publish}>{uiText(published ? "Publish changes" : "Publish to Talent Directory")}</Button>
             : <Button className="w-full" onClick={() => openSection("education", "review")}>{uiText("Add education to publish")}</Button>}
         </div>
       </div>
@@ -742,8 +849,31 @@ export default function MemberCvPrototype() {
       {title("Published version", "This is the version sponsors with Talent Directory access can see.", <Badge variant="secondary">{uiText("Published")}</Badge>)}
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
         <SponsorPreview {...published} />
-        <SharingOptions snapshot={published} />
+        <div className="space-y-4">
+          <SharingOptions snapshot={published} />
+          <Button variant="outline" disabled={saving} onClick={() => void persist({ ...saved, published: null }, "withdraw", () => {
+            changeView("overview");
+            notify(uiText("CV hidden from Talent Directory"), uiText("Your private draft is up to date."));
+          })}>{uiText("Hide from Talent Directory")}</Button>
+        </div>
       </div>
     </>}
+    <Dialog open={leave !== null} onOpenChange={open => { if (!open) setLeave(null); }}>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>{uiText("Discard unsaved changes?")}</DialogTitle>
+          <DialogDescription>{uiText("Changes in this section are kept when you save it.")}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setLeave(null)}>{uiText("Keep editing")}</Button>
+          <Button variant="destructive" onClick={() => {
+            const proceed = leave?.proceed;
+            setLeave(null);
+            dirty.current = false;
+            proceed?.();
+          }}>{uiText("Discard changes")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }

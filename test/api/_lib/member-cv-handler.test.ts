@@ -17,7 +17,7 @@ function response() {
   const res = { setHeader: vi.fn((key: string, value: string) => { headers[key] = value; }), status: vi.fn((code: number) => { status = code; return res; }), json: vi.fn((value: unknown) => { body = value; return res; }), send: vi.fn((value: unknown) => { body = value; return res; }) };
   return { res: res as unknown as VercelResponse, result: () => ({ status, body, headers }) };
 }
-function fixture() {
+function fixture(helixRole?: string) {
   let state: StoredCv = { draft: emptyCv(), sharing: privateChoices, revision: 0, publishedRevision: null, publishedAt: null, publishedPath: null };
   let snapshot: CvData | null = null;
   const stored = new Map<string, Uint8Array>();
@@ -25,7 +25,7 @@ function fixture() {
   const candidates = new Map<string, "pending" | "current" | "retired" | "deleted">();
   let pathIndex = 0;
   const services: CvServices = {
-    authenticate: vi.fn(async (token) => { if (token !== "member-token") throw new MemberCvError(401, "Invalid session."); return { userId, googleSub: "google-sub", email: "ase@helixnmbu.no", name: "Åse Ødegård" }; }),
+    authenticate: vi.fn(async (token) => { if (token !== "member-token") throw new MemberCvError(401, "Invalid session."); return { userId, googleSub: "google-sub", email: "ase@helixnmbu.no", name: "Åse Ødegård", helixRole }; }),
     read: vi.fn(async (id) => { expect(id).toBe(userId); return structuredClone(state); }),
     commit: vi.fn(async (id, change) => {
       expect(id).toBe(userId);
@@ -86,6 +86,25 @@ describe("member CV handler", () => {
       expect(f.state().draft.translations).toEqual({ en: { summary: "Keep this translation" } });
       expect(result.body).toMatchObject({ identity: { name: "Åse Ødegård" }, document: { draft: { fullName: "Åse Ødegård" } } });
     }
+  });
+  it("preserves a managed role across saves and rebuilds its details before publishing", async () => {
+    const f = fixture("Engineering lead");
+    const role = { id: "helix-member-role", organization: "Forged organisation", title: "Forged title", startDate: "2000", endDate: "", description: "Built a fixture", section: "otherRoles" };
+    const saved = await f.request({
+      action: "save", expectedRevision: 0, sharing: privateChoices,
+      draft: { ...publishedData(), experience: [role], translations: { nb: { "experience:helix-member-role:title": "Forged translation" } } },
+    });
+    expect(saved.status).toBe(200);
+    const managed = { ...role, organization: "Helix NMBU", title: "Engineering lead", startDate: "", section: "helixRoles" };
+    expect(f.state().draft.experience).toEqual([managed]);
+    expect(f.state().draft.translations?.nb).toEqual({});
+    const result = await f.request({
+      action: "publish", expectedRevision: 1, sharing: privateChoices,
+      draft: publishedData(),
+    });
+    expect(result.status).toBe(200);
+    expect(f.snapshot()?.experience).toEqual([managed]);
+    expect(result.body).toMatchObject({ document: { published: { cv: { contactEmail: "", phone: "", experience: [managed] } } } });
   });
   it("returns the current member name when a legacy saved draft has an older name", async () => {
     const f = fixture();

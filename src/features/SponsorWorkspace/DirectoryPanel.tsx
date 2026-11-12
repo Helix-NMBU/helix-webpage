@@ -8,6 +8,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/componen
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
+import { cvExperienceGroups } from "../MemberCV/experience";
 import type { CvExperienceGroup } from "../MemberCV/types";
 import type { SponsorContext } from "./types";
 import type { PublishedCvProfile, SponsorCvResponse, SponsorDirectoryRequest, SponsorDirectoryResponse, SponsorProfileResponse } from "./directory-types";
@@ -30,9 +31,9 @@ export function ProfileContent({ profile, experienceGroups, uiText = englishText
   experienceGroups?: readonly CvExperienceGroup[];
   uiText?: ProfileText;
 }) {
-  const experienceSections = experienceGroups?.map(({ key, label, entryIds }) => ({
+  const experienceSections = (experienceGroups ?? cvExperienceGroups(profile.experience)).map(({ key, label, entryIds }) => ({
     key, label, entries: profile.experience.filter(entry => entryIds.includes(entry.id)),
-  })) ?? [{ key: "experience", label: "Experience", entries: profile.experience }];
+  }));
   function period(start: string, end: string) {
     const endLabel = end === "Present" ? uiText("Present") : end;
     if (!start && !endLabel) return null;

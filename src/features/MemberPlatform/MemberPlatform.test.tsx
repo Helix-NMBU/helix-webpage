@@ -24,7 +24,7 @@ vi.mock("../MemberCV/session", async (original) => ({
   watchMemberSession: () => () => undefined,
   signOutMember: session.signOut,
 }));
-vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
+vi.mock("../MemberCV/MemberCvSections", () => ({ default: function Editor() {
   const setEditor = useMemberNavigation()?.setEditor;
   useLayoutEffect(() => {
     setEditor?.({ busy: false, navigate: session.editorNavigate, signOut: session.editorSignOut });

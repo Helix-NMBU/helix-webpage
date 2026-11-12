@@ -1,4 +1,5 @@
 import { englishCopy, memberText, type StaticMemberCopyKey } from "./locale.js";
+import { managedHelixRoleId } from "./helix-role.js";
 import type { CvData, CvOutputLanguage, CvTranslations } from "./types.js";
 
 const rootFields = ["city", "headline", "summary", "fieldOfStudy", "references"] as const;
@@ -15,10 +16,13 @@ export function translationFields(data: CvData): Map<string, { value: string; li
   for (const field of rootFields) paths.set(field, { value: data[field] ?? "", limit: field === "summary" ? 8000 : field === "references" ? 2000 : 500 });
   for (const [section, fields] of Object.entries(rowFields)) {
     for (const row of data[section as keyof typeof rowFields]) {
-      for (const field of fields) paths.set(`${section}:${row.id}:${field}`, {
-        value: (row as Record<string, string>)[field] ?? "",
-        limit: field === "description" || field === "activities" ? 8000 : field === "season" ? 30 : ["grade", "employmentType", "locationType", "level"].includes(field) || section === "languages" || section === "links" ? 100 : 500,
-      });
+      for (const field of fields) {
+        if (section === "experience" && row.id === managedHelixRoleId && field !== "description") continue;
+        paths.set(`${section}:${row.id}:${field}`, {
+          value: (row as Record<string, string>)[field] ?? "",
+          limit: field === "description" || field === "activities" ? 8000 : field === "season" ? 30 : ["grade", "employmentType", "locationType", "level"].includes(field) || section === "languages" || section === "links" ? 100 : 500,
+        });
+      }
     }
   }
   data.skills.forEach((value, index) => paths.set(`skills:${index}`, { value, limit: 100 }));
@@ -59,7 +63,7 @@ export function localizedCv(data: CvData, language: CvOutputLanguage): CvData {
     const rows = result[section as keyof typeof rowFields];
     for (const row of rows) for (const field of fields) {
       const key = `${section}:${row.id}:${field}`;
-      if (translations[key]?.trim()) (row as Record<string, string>)[field] = translations[key];
+      if (allowed.has(key) && translations[key]?.trim()) (row as Record<string, string>)[field] = translations[key];
     }
   }
   result.skills = result.skills.map((value, index) => translations[`skills:${index}`]?.trim() || value);
@@ -83,7 +87,7 @@ export function changeCvLanguage(data: CvData, language: CvOutputLanguage): CvDa
 
 export function hasRegisteredCv(data: CvData): boolean {
   if (data.cvRegistered !== undefined) return data.cvRegistered;
-  return Boolean(data.headline.trim() || data.summary.trim() || data.references?.trim() || data.education.length || data.experience.length || data.projects.length || data.skills.length || data.languages.length || data.links.length);
+  return Boolean(data.headline.trim() || data.summary.trim() || data.references?.trim() || data.education.length || data.experience.some(entry => entry.id !== managedHelixRoleId || entry.description.trim()) || data.projects.length || data.skills.length || data.languages.length || data.links.length);
 }
 
 /** Build independent language drafts from an existing CV without changing the source. */

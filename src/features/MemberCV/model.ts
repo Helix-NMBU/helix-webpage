@@ -1,4 +1,5 @@
 import type { CvData, CvSharing } from "./types.js";
+import { managedHelixRoleId } from "./helix-role.js";
 import { validateTranslations } from "./translations.js";
 
 export function emptyCv(fullName = "", contactEmail = ""): CvData {
@@ -40,8 +41,8 @@ function url(value: unknown): string {
   return result;
 }
 
-function list<T>(value: unknown, key: string, parse: (item: Record<string, unknown>) => T): T[] {
-  if (!Array.isArray(value) || value.length > 30) throw new Error(`Invalid ${key}. Use at most 30 entries.`);
+function list<T>(value: unknown, key: string, parse: (item: Record<string, unknown>) => T, limit = 30): T[] {
+  if (!Array.isArray(value) || value.length > limit) throw new Error(`Invalid ${key}. Use at most 30 entries.`);
   const ids = new Set<string>();
   return value.map((item) => {
     const row = object(item);
@@ -65,11 +66,12 @@ export function validateCvData(value: unknown, forPublication = false): CvData {
       ...optionalText(e, "fieldOfStudy", "field of study"), ...optionalText(e, "grade", "grade", 100), ...optionalText(e, "activities", "activities", 8000),
     })),
     experience: list(row.experience, "experience", (e) => ({
+      ...(e.section === "workExperience" || e.section === "otherRoles" || e.section === "helixRoles" ? { section: e.section } : {}),
       id: String(e.id), organization: text(e.organization, "organization"), title: text(e.title, "title"), startDate: text(e.startDate, "start date", 30), endDate: text(e.endDate, "end date", 30), description: text(e.description, "experience description", 8000),
       ...optionalText(e, "employmentType", "employment type", 100), ...optionalText(e, "location", "location"), ...optionalText(e, "locationType", "location type", 100),
       ...optionalText(e, "department", "department"), ...optionalText(e, "season", "season", 30),
       ...(Object.prototype.hasOwnProperty.call(e, "url") ? { url: url(e.url) } : {}),
-    })),
+    }), Array.isArray(row.experience) && row.experience.some(entry => entry?.id === managedHelixRoleId) ? 31 : 30),
     projects: list(row.projects, "projects", (e) => ({
       id: String(e.id), name: text(e.name, "project name"), role: text(e.role, "role"), season: text(e.season, "season", 30), description: text(e.description, "project description", 8000), url: url(e.url),
       ...optionalText(e, "startDate", "start date", 30), ...optionalText(e, "endDate", "end date", 30),

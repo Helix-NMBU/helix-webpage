@@ -1,5 +1,6 @@
 export type CvEducation = { id: string; institution: string; degree: string; startDate: string; endDate: string; description: string; fieldOfStudy?: string; grade?: string; activities?: string };
-export type CvExperience = { id: string; organization: string; title: string; startDate: string; endDate: string; description: string; employmentType?: string; location?: string; locationType?: string; department?: string; season?: string; url?: string };
+export type CvExperienceCategory = "workExperience" | "helixRoles" | "otherRoles";
+export type CvExperience = { section?: CvExperienceCategory; id: string; organization: string; title: string; startDate: string; endDate: string; description: string; employmentType?: string; location?: string; locationType?: string; department?: string; season?: string; url?: string };
 export type CvExperienceGroup = { key: string; label: string; entryIds: readonly string[] };
 export type CvProject = { id: string; name: string; role: string; season: string; description: string; url: string; startDate?: string; endDate?: string };
 export type CvLanguage = { id: string; name: string; level: string };
@@ -17,7 +18,8 @@ export type CvData = {
   skills: string[]; languages: CvLanguage[]; links: CvLink[];
 };
 export type CvSharing = { cv: boolean; email: boolean; phone: boolean };
-export type CvRecord = { draft: CvData; sharing: CvSharing; revision: number; publishedRevision: number | null; publishedAt: string | null; cvVisible?: boolean };
+export type CvPublishedSnapshot = { cv: CvData; sharing: CvSharing };
+export type CvRecord = { published?: CvPublishedSnapshot; draft: CvData; sharing: CvSharing; revision: number; publishedRevision: number | null; publishedAt: string | null; cvVisible?: boolean };
 export type CvEnvelope = { document: CvRecord; identity: { email: string; name: string; helixRole?: string | null }; cleanupPending?: boolean };
 export type CvMutation = { action: "save" | "publish" | "withdraw" | "delete" | "preview"; draft?: CvData; sharing?: CvSharing; expectedRevision?: number; language?: CvOutputLanguage };
 export type PdfRenderer = (data: CvData, sharing: CvSharing, language?: CvOutputLanguage) => Promise<Uint8Array>;

@@ -61,6 +61,7 @@ import {
 import { createUnsavedConfirmation, type UnsavedAction } from "./confirmation";
 import { ExperienceEditor } from "./ExperienceEditor";
 import { moveProjectRoleToExperience } from "./experience";
+import { managedHelixRoleId } from "./helix-role";
 import { hasRegisteredCv } from "./translations";
 import { CvTranslationsProvider, FieldTranslations } from "./CvTranslations";
 import {
@@ -886,7 +887,7 @@ export default function MemberCV() {
       id: crypto.randomUUID(), organization, title: "", startDate: "", endDate: "", description: "",
     };
     setDraft((previous) => {
-      if (!previous || previous.experience.length >= 30) return previous;
+      if (!previous || previous.experience.filter(entry => entry.id !== managedHelixRoleId).length >= 30) return previous;
       const index = beforeId ? previous.experience.findIndex((entry) => entry.id === beforeId) : previous.experience.length;
       const insertAt = index < 0 ? previous.experience.length : index;
       return { ...previous, experience: [
@@ -1194,7 +1195,7 @@ export default function MemberCV() {
                         showHeading={false}
                       >
                         {key === "experience" ? (
-                          <ExperienceEditor rows={draft.experience} locale={locale} disabled={Boolean(busy) || ended}
+                          <ExperienceEditor rows={draft.experience.filter(row => row.id !== managedHelixRoleId)} locale={locale} disabled={Boolean(busy) || ended}
                             newEntryIds={newExperienceIds}
                             onChange={(id, field, value) => changeRowField("experience", id, field, value)}
                             onRemove={(id) => setDraft((previous) => previous ? {

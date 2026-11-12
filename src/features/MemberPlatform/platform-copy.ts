@@ -3,6 +3,16 @@ import { norwegianCopy } from "../MemberCV/locale";
 /** Norwegian Bokmål interface copy. Keys also supply the default English text. */
 export const platformNorwegian: Record<string, string> = {
   ...norwegianCopy,
+  "Advanced CV settings": "Avanserte CV-innstillinger",
+  "Discard unsaved changes?": "Forkaste ulagrede endringer?",
+  "Changes in this section are kept when you save it.": "Endringene i denne seksjonen beholdes når du lagrer.",
+  "Keep editing": "Fortsett å redigere",
+  "Discard changes": "Forkast endringer",
+  "Reload draft": "Last inn utkastet på nytt",
+  "Loading profile": "Laster profilen",
+  "Hide from Talent Directory": "Skjul fra talentoversikten",
+  "CV hidden from Talent Directory": "CV-en er skjult fra talentoversikten",
+  "Your private draft is up to date.": "Det private utkastet ditt er oppdatert.",
   "Actions for {entry}": "Handlinger for {entry}",
   "Add a job, internship or other work experience.": "Legg til en jobb, praksisplass eller annen arbeidserfaring.",
   "Add student society roles, board positions or volunteering.": "Legg til studentverv, styreverv eller frivillig arbeid.",

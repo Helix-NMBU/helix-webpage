@@ -1,4 +1,5 @@
-import type { CvData, CvExperience, CvProject } from "./types.js";
+import { managedHelixRoleId } from "./helix-role.js";
+import type { CvData, CvExperience, CvExperienceGroup, CvProject } from "./types.js";
 
 // Private edit provenance survives object spreads and autosave's structuredClone.
 // validateCvData omits it before requests or stored drafts are produced.
@@ -46,7 +47,7 @@ export function groupExperience(rows: CvExperience[]): { key: string; organizati
 export function moveProjectRoleToExperience(draft: CvData, projectId: string, newExperienceId: string): CvData {
   const sourceIndex = draft.projects.findIndex((project) => project.id === projectId);
   if (sourceIndex === -1) return draft;
-  if (draft.experience.length >= 30) throw new Error("Invalid experience. Use at most 30 entries.");
+  if (draft.experience.filter(entry => entry.id !== managedHelixRoleId).length >= 30) throw new Error("Invalid experience. Use at most 30 entries.");
   if (!newExperienceId.trim() || newExperienceId.length > 100 ||
       /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(newExperienceId) ||
       draft.experience.some((row) => row.id.trim() === newExperienceId.trim())) {
@@ -74,4 +75,21 @@ export function moveProjectRoleToExperience(draft: CvData, projectId: string, ne
     projects: draft.projects.filter((_, index) => index !== sourceIndex),
     experience: [...draft.experience, experience],
   };
+}
+
+export const experienceSections = { experience: "Experience", otherRoles: "Other roles and volunteering" } as const;
+
+export function experienceSection(entry: CvExperience): keyof typeof experienceSections {
+  if (entry.section) return entry.section === "otherRoles" ? "otherRoles" : "experience";
+  const isHelix = /^helix(?:\s+nmbu)?$/i.test(entry.organization.trim());
+  return !isHelix && /^volunteer(?:ing)?$/i.test(entry.employmentType ?? "") ? "otherRoles" : "experience";
+}
+
+export function cvExperienceGroups(experience: readonly CvExperience[]): CvExperienceGroup[] {
+  const keys = ["experience", "otherRoles"] as const;
+  return keys.map(key => ({
+    key,
+    label: experienceSections[key],
+    entryIds: experience.filter(entry => experienceSection(entry) === key).map(entry => entry.id),
+  }));
 }
