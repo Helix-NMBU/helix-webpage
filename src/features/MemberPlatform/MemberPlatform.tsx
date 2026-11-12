@@ -12,7 +12,6 @@ import {
 import { Button } from "@libs/components/ui/button";
 import { TooltipProvider } from "@libs/components/ui/tooltip";
 import CVBankLogin from "../CVBank/Login";
-import MemberCV from "../MemberCV/MemberCV";
 import {
   clearMemberLanding,
   ensureMemberLanding,
@@ -40,6 +39,7 @@ import "@fontsource-variable/geist";
 import "./member-platform.css";
 import "./member-theme.css";
 
+const MemberCV = lazy(() => import("../MemberCV/MemberCV"));
 const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
 const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
 const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
