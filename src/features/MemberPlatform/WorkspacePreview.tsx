@@ -36,7 +36,6 @@ import {
 import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
 import { platformText, useMemberLanguage, type PlatformLanguage } from "./MemberLanguage";
-import { isLocalMemberMode } from "./local-mode";
 import { useMemberFeatureAccess } from "./MemberFeatureAccess";
 import { GmailLogo } from "./GmailLogo";
 import { EmailSignatureSettings } from "./EmailSignatureSettings";
@@ -378,7 +377,7 @@ export function MemberSettingsPreview() {
           Your connected accounts and workspace access.
         </p>
       </div>
-      {import.meta.env.DEV && import.meta.env.MODE === "member-local" && isLocalMemberMode() && <CvLanguageSettings />}
+      <CvLanguageSettings />
       <Card id="app-connections" className="scroll-mt-8 shadow-none">
         <CardHeader>
           <CardTitle className="text-base">App connections</CardTitle>

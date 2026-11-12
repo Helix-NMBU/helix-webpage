@@ -53,7 +53,7 @@ For local internal-app development, start Vite with `VITE_MEMBER_PLATFORM=true n
 
 For local design testing with the isolated Alex Example account, use `npm run dev:member` and open http://127.0.0.1:5190/profile. This dedicated mode persists fictional CV data in that browser's local storage and never contacts live member APIs. It is unavailable in production builds, on LAN hosts or in ordinary development mode. A `demo` query parameter does not enable it. Keep verification details in documentation, without adding labels or banners to the product.
 
-In this mode, `/profile` opens the CV prototype. Set its language in **Settings → CV interface language**. To exercise the existing editor with local fixtures, open `/profile?cv-prototype=0`.
+The section-based CV editor at `/profile` uses the authenticated CV API in Internal and separate fictional data in local member mode. Set the interface language in **Settings → CV interface language**. **Advanced CV settings** opens the original editor for translations, projects, and references.
 
 Authenticated pages use the official shadcn `sidebar-07` block, installed with `npx shadcn@latest add sidebar-07`. Its collapsible sidebar, workspace header, account footer, breadcrumb header and mobile sheet use the block's standard components and layout. Helix labels and routes replace the sample data. Appearance in the account menu offers Light, Dark and System, saved locally under `helix-member-theme`. The default follows the system preference. Theme tokens apply only inside the member app, including portaled menus and dialogs; CV preview documents keep their paper styling. Editor navigation and sign-out use the existing autosave and unsaved-change confirmation.
 

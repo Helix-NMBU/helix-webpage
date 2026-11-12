@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import type { CvData, CvEnvelope, CvRecord, CvSharing } from "../../src/features/MemberCV/types.js";
-import { emptyCv, privateSharing } from "../../src/features/MemberCV/model.js";
+import type { CvData, CvEnvelope, CvPublishedSnapshot, CvRecord, CvSharing } from "../../src/features/MemberCV/types.js";
+import { emptyCv, privateSharing, sharedCvData } from "../../src/features/MemberCV/model.js";
 import { MemberCvError } from "./member-cv-error.js";
 import { assertFreshHelixGoogleAccount, assertLinkedHelixAccount } from "./helix-workspace.js";
 import { verifyGoogleIdToken, verifyNeonSession } from "./neon-session.js";
 import { createCvStorage, isOwnedPdfPath, type CvObjectStorage } from "./member-cv-storage.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
+import { withManagedHelixRole } from "../../src/features/MemberCV/helix-role.js";
 import { withMemberName } from "../../src/features/MemberCV/member-name.js";
 
 export { MemberCvError } from "./member-cv-error.js";
@@ -47,7 +48,8 @@ function database(): CvDatabase {
 
 export function envelope(document: StoredCv, identity: WorkspaceIdentity): CvEnvelope {
   const { publishedPath: _path, ...record } = document;
-  return { document: { ...record, draft: withMemberName(record.draft, identity.name), cvVisible: record.publishedRevision !== null && Boolean(document.publishedPath) }, identity: { email: identity.email, name: identity.name,
+  const published = record.published && { ...record.published, cv: sharedCvData(record.published.cv, record.published.sharing) };
+  return { document: { ...record, ...(published ? { published } : {}), draft: withManagedHelixRole(withMemberName(record.draft, identity.name), identity.helixRole), cvVisible: record.publishedRevision !== null && Boolean(document.publishedPath) }, identity: { email: identity.email, name: identity.name,
     ...(identity.helixRole !== undefined ? { helixRole: identity.helixRole } : {}),
   } };
 }
@@ -58,6 +60,7 @@ export function bearer(authorization: string | undefined): string {
 }
 function record(row: Record<string, unknown>): StoredCv {
   return {
+    ...(row.published ? { published: row.published as CvPublishedSnapshot } : {}),
     draft: row.draft as CvData,
     sharing: row.sharing as CvSharing,
     revision: Number(row.revision),
@@ -155,7 +158,11 @@ export function createCvServices(deps: {
     },
     async read(userId) {
       try {
-        const saved = await db.query("select draft, sharing, revision, published_revision, published_at, published_path from cv.documents where member_id = $1", [userId]);
+        const saved = await db.query(`select d.draft, d.sharing, d.revision, d.published_revision, d.published_at, d.published_path,
+          case when p.snapshot is not null then jsonb_build_object('cv', p.snapshot, 'sharing', p.sharing) end as published
+          from cv.documents d
+          left join cv.publications p on p.member_id = d.member_id and p.revision = d.published_revision
+          where d.member_id = $1`, [userId]);
         if (!saved.rows[0]) throw new MemberCvError(503, "Could not load your CV.");
         return record(saved.rows[0]);
       } catch (error) {

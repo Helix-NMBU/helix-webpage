@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sharedCvData, validateCvData, validateSharing, withoutCv, privateSharing } from "../../src/features/MemberCV/model.js";
 import type { CvMutation, PdfRenderer } from "../../src/features/MemberCV/types.js";
 import { bearer, envelope, MemberCvError, neonCvServices, type CvServices } from "./member-cv-service.js";
+import { managedHelixRoleId, withManagedHelixRole } from "../../src/features/MemberCV/helix-role.js";
 import { withMemberName } from "../../src/features/MemberCV/member-name.js";
 
 export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () => CvServices = neonCvServices) {
@@ -21,7 +22,7 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
       if (req.method === "GET") return respond(await services.read(identity.userId));
       const body = parseMutation(req.body);
       if (body.action === "preview") {
-        const draft = parseData(body.draft, false, identity.name);
+        const draft = parseData(body.draft, false, identity);
         const sharing = parseSharing(body.sharing);
         const bytes = await renderPdf(sharedCvData(draft, sharing), sharing, body.language ?? draft.cvLanguage ?? "en");
         res.setHeader("Content-Type", "application/pdf");
@@ -39,7 +40,14 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
         const saved = await services.commit(identity.userId, { action: "withdraw", expectedRevision });
         return respond(saved);
       }
-      const draft = parseData(body.draft, body.action === "publish", identity.name);
+      let draft = parseData(body.draft, body.action === "publish", identity);
+      if (identity.helixRole && !(body.draft?.experience.some(entry => entry.id === managedHelixRoleId))) {
+        const current = await services.read(identity.userId);
+        const existing = current.draft.experience.find(entry => entry.id === managedHelixRoleId);
+        if (existing) draft = parseData({
+          ...draft, experience: [existing, ...draft.experience.filter(entry => entry.id !== managedHelixRoleId)],
+        }, body.action === "publish", identity);
+      }
       const sharing = parseSharing(body.sharing);
       if (body.action === "save") return respond(await services.commit(identity.userId, { action: "save", expectedRevision, draft, sharing }));
       let path: string | null = null;
@@ -73,7 +81,7 @@ export function createMemberCvHandler(renderPdf: PdfRenderer, getServices: () =>
           throw error;
         }
       }
-      return respond(saved);
+      return respond({ ...saved, published: { cv: sharedCvData(draft, sharing), sharing } });
     } catch (error) {
       return res.status(error instanceof MemberCvError ? error.status : 503).json({ error: error instanceof MemberCvError ? error.message : "The member portal request failed. Your input has been kept. Try again." });
     }
@@ -86,10 +94,11 @@ function parseMutation(value: unknown): CvMutation {
   if (!["save", "publish", "withdraw", "delete", "preview"].includes(body.action) || JSON.stringify(value).length > 120000) throw new MemberCvError(400, "Invalid or oversized CV request.");
   return body;
 }
-function parseData(value: unknown, publication: boolean, name: string) {
+function parseData(value: unknown, publication: boolean, identity: { name: string; helixRole?: string | null }) {
   try {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid CV data.");
-    return withMemberName(validateCvData({ ...value, fullName: name }, publication), name);
+    const draft = validateCvData({ ...value, fullName: identity.name }, publication);
+    return validateCvData(withManagedHelixRole(withMemberName(draft, identity.name), identity.helixRole), publication);
   }
   catch (error) { throw new MemberCvError(400, error instanceof Error ? error.message : "Invalid CV data."); }
 }

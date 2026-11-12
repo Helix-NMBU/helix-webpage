@@ -107,7 +107,13 @@ export function createCvRepository(
       const key = memberCacheKey(tokenValue);
       const generation = memberCvCacheGeneration;
       const envelope = await (await callWithToken(tokenValue, mutation)).json() as CvEnvelope;
-      if (generation === memberCvCacheGeneration) memberCvCache.set(key, envelope);
+      if (generation === memberCvCacheGeneration) {
+        const previous = memberCvCache.get(key)?.document;
+        if (previous?.published && envelope.document && !envelope.document.published && previous.publishedRevision === envelope.document.publishedRevision) {
+          envelope.document.published = previous.published;
+        }
+        memberCvCache.set(key, envelope);
+      }
       return envelope;
     },
     preview: async (mutation) => {

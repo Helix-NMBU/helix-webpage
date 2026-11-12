@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { localizedCv } from "./translations";
 import { sharedCvData } from "./model";
-import { groupExperience } from "./experience";
+import { cvExperienceGroups, groupExperience } from "./experience";
 import { memberText, type MemberLocale, type StaticMemberCopyKey } from "./locale";
 import { employmentTypes, languageLevels, locationTypes, readableProfileDate } from "./profile-inputs";
 import type { CvData, CvExperienceGroup, CvSharing } from "./types";
@@ -33,9 +33,9 @@ export function CvTemplatePreview({ data, sharing, locale, experienceGroups }: {
     .map((value) => value === "Present" ? t("Present") : readableProfileDate(value ?? "")).join(" - ");
   const education = cv.education.filter(hasContent);
   const experience = cv.experience.filter(hasContent);
-  const experienceSections = experienceGroups?.map(({ key, label, entryIds }) => ({
-    key, label, groups: groupExperience(experience.filter(entry => entryIds.includes(entry.id))),
-  })) ?? [{ key: "experience", label: t("Experience"), groups: groupExperience(experience) }];
+  const experienceSections = (experienceGroups ?? cvExperienceGroups(experience)).map(({ key, label, entryIds }) => ({
+    key, label: locale === "nb" ? t(key === "otherRoles" ? "Other roles and volunteering" : "Experience") : label, groups: groupExperience(experience.filter(entry => entryIds.includes(entry.id))),
+  }));
   const projects = cv.projects.filter(hasContent);
   const languages = cv.languages.filter(hasContent);
   const links = cv.links.filter(hasContent);

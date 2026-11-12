@@ -155,6 +155,7 @@ export const englishCopy = {
   "Add at least one institution and degree before publishing.":
     "Add at least one institution and degree before publishing.",
   Experience: "Experience",
+  "Other roles and volunteering": "Other roles and volunteering",
   experience: "experience",
   "Employer or organisation": "Employer or organisation",
   Role: "Role",
@@ -408,6 +409,7 @@ export const norwegianCopy: Record<MemberCopyKey, string> = {
   "Add at least one institution and degree before publishing.":
     "Legg til minst ett studiested og en grad før du publiserer.",
   Experience: "Erfaring",
+  "Other roles and volunteering": "Andre verv og frivillig arbeid",
   experience: "erfaring",
   "Employer or organisation": "Arbeidsgiver eller organisasjon",
   Role: "Rolle",

@@ -43,9 +43,7 @@ import "./member-platform.css";
 import "./member-theme.css";
 
 const loadMemberCV = () => import("../MemberCV/MemberCV");
-const loadCvPrototype = import.meta.env.DEV && import.meta.env.MODE === "member-local"
-  ? () => import("../MemberCV/MemberCvPrototype")
-  : null;
+const loadCvSections = () => import("../MemberCV/MemberCvSections");
 const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
 const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
 const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
@@ -61,10 +59,11 @@ const ProjectManagement = lazy(() => import("../ProjectManagement/ProjectManagem
 const TaskDetailPage = lazy(() => import("../ProjectManagement/TaskDetail"));
 
 function MemberProfileRoute() {
-  const { search } = useLocation();
-  const showPrototype = loadCvPrototype && isLocalMemberMode() && new URLSearchParams(search).get("cv-prototype") !== "0";
-  const load = showPrototype ? loadCvPrototype : loadMemberCV;
-  return <DeferredPage key={showPrototype ? "prototype" : "profile"} load={load} fallback={<ProfileContentSkeleton />} />;
+  const { hash, search } = useLocation();
+  const query = new URLSearchParams(search);
+  const classic = query.get("cv-editor") === "classic" || hash.startsWith("#mcv-")
+    || (isLocalMemberMode() && query.get("cv-prototype") === "0");
+  return <DeferredPage key={classic ? "classic" : "sections"} load={classic ? loadMemberCV : loadCvSections} fallback={<ProfileContentSkeleton />} />;
 }
 
 export function MemberAccess({ children }: { children?: ReactNode }) {
@@ -151,7 +150,7 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   );
   return (
     <MemberAccountProvider account={landing.account ?? null}>
-      {loadCvPrototype && isLocalMemberMode() ? <MemberLanguageProvider>{memberWorkspace}</MemberLanguageProvider> : memberWorkspace}
+      <MemberLanguageProvider>{memberWorkspace}</MemberLanguageProvider>
     </MemberAccountProvider>
   );
 }
