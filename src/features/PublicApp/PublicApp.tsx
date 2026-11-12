@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { DeferredPage } from "@libs/components/DeferredPage";
 import { PageLoader } from "@libs/components/PageLoader";
 import Footer from "@libs/components/footer";
 import { Navbar } from "@libs/components/navbar/Navbar";
@@ -18,7 +19,7 @@ import RecruitmentEntry from "../Recruitment/RecruitmentEntry";
 import SponsorsPage from "../Sponsors/SponsorPage";
 import Members from "../Team/Team";
 
-const MemberCV = lazy(() => import("../MemberCV/MemberCV"));
+const loadMemberCV = () => import("../MemberCV/MemberCV");
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -42,24 +43,22 @@ function PublicAppContent() {
         />
       )}
       {!hideNavbar(pathname) && <Navbar />}
-      <Suspense fallback={<ProfileContentSkeleton />}>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/sponsorpage" element={<SponsorsPage />} />
-          <Route path="/garage" element={<Garage />} />
-          <Route path="/members" element={<Members />} />
-          <Route path="/apply" element={<ApplyPage />} />
-          <Route path="/apply/form" element={<ApplicationFormPage />} />
-          <Route path="/recruitment/*" element={<RecruitmentEntry />} />
-          <Route path="/recruiting/*" element={<RecruitmentEntry />} />
-          <Route path="/cv-bank" element={<Navigate to="/member/login" replace />} />
-          <Route path="/cv-bank/login" element={<Navigate to="/member/login" replace />} />
-          <Route path="/cv-bank/profile" element={<Navigate to="/member/profile" replace />} />
-          <Route path="/member/login" element={<CVBankLogin />} />
-          <Route path="/member/profile" element={<MemberCV />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/sponsorpage" element={<SponsorsPage />} />
+        <Route path="/garage" element={<Garage />} />
+        <Route path="/members" element={<Members />} />
+        <Route path="/apply" element={<ApplyPage />} />
+        <Route path="/apply/form" element={<ApplicationFormPage />} />
+        <Route path="/recruitment/*" element={<RecruitmentEntry />} />
+        <Route path="/recruiting/*" element={<RecruitmentEntry />} />
+        <Route path="/cv-bank" element={<Navigate to="/member/login" replace />} />
+        <Route path="/cv-bank/login" element={<Navigate to="/member/login" replace />} />
+        <Route path="/cv-bank/profile" element={<Navigate to="/member/profile" replace />} />
+        <Route path="/member/login" element={<CVBankLogin />} />
+        <Route path="/member/profile" element={<DeferredPage load={loadMemberCV} fallback={<ProfileContentSkeleton />} />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
       {!hideFooter(pathname) && <Footer />}
     </>
   );
