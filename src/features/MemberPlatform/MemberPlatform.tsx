@@ -25,6 +25,8 @@ import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
 import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
+import { MemberLanguageProvider } from "./MemberLanguage";
+import { isLocalMemberMode } from "./local-mode";
 import { MemberFeatureAccessProvider, RequireMemberFeature } from "./MemberFeatureAccess";
 import { clearGmailSessionCache } from "./gmail-session-cache";
 import { RecruitmentAccess, RecruitmentAccessProvider } from "./RecruitmentAccess";
@@ -41,6 +43,9 @@ import "./member-platform.css";
 import "./member-theme.css";
 
 const loadMemberCV = () => import("../MemberCV/MemberCV");
+const loadCvPrototype = import.meta.env.DEV && import.meta.env.MODE === "member-local"
+  ? () => import("../MemberCV/MemberCvPrototype")
+  : null;
 const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
 const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
 const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
@@ -54,6 +59,13 @@ const DepartmentProjectsPage = lazy(() => import("../Workspace/DepartmentViews")
 const DepartmentTasksPage = lazy(() => import("../Workspace/DepartmentViews").then(module => ({ default: module.DepartmentTasksPage })));
 const ProjectManagement = lazy(() => import("../ProjectManagement/ProjectManagement"));
 const TaskDetailPage = lazy(() => import("../ProjectManagement/TaskDetail"));
+
+function MemberProfileRoute() {
+  const { search } = useLocation();
+  const showPrototype = loadCvPrototype && isLocalMemberMode() && new URLSearchParams(search).get("cv-prototype") !== "0";
+  const load = showPrototype ? loadCvPrototype : loadMemberCV;
+  return <DeferredPage key={showPrototype ? "prototype" : "profile"} load={load} fallback={<ProfileContentSkeleton />} />;
+}
 
 export function MemberAccess({ children }: { children?: ReactNode }) {
   const location = useLocation();
@@ -128,15 +140,18 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
         </Button>
       </main>
     );
+  const memberWorkspace = (
+    <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
+      <MemberFeatureAccessProvider key={landing.userId} userId={landing.userId}>
+        <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>
+          <WorkspaceProvider key={landing.userId}><FinanceAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</FinanceAccessProvider></WorkspaceProvider>
+        </RecruitmentAccessProvider>
+      </MemberFeatureAccessProvider>
+    </MemberNotificationsProvider>
+  );
   return (
     <MemberAccountProvider account={landing.account ?? null}>
-      <MemberNotificationsProvider key={landing.userId} renderToaster={false}>
-        <MemberFeatureAccessProvider key={landing.userId} userId={landing.userId}>
-          <RecruitmentAccessProvider key={landing.userId} userId={landing.userId ?? ""}>
-            <WorkspaceProvider key={landing.userId}><FinanceAccessProvider key={landing.userId} userId={landing.userId ?? ""}>{children ?? <Outlet />}</FinanceAccessProvider></WorkspaceProvider>
-          </RecruitmentAccessProvider>
-        </MemberFeatureAccessProvider>
-      </MemberNotificationsProvider>
+      {loadCvPrototype && isLocalMemberMode() ? <MemberLanguageProvider>{memberWorkspace}</MemberLanguageProvider> : memberWorkspace}
     </MemberAccountProvider>
   );
 }
@@ -172,7 +187,7 @@ export default function MemberPlatform() {
             <Route path="/" element={<MemberAccess />}>
               <Route element={<MemberShell />}>
                 <Route index element={<WorkspaceHomePreview />} />
-                <Route path="profile" element={<DeferredPage load={loadMemberCV} fallback={<ProfileContentSkeleton />} />} />
+                <Route path="profile" element={<MemberProfileRoute />} />
                 <Route path="notifications" element={<MemberNotificationsPage />} />
                 <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
                 <Route path="sponsor-pipeline" element={<SponsorPipeline />} />

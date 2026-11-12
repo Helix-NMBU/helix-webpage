@@ -185,6 +185,9 @@ describe('local API HTTP adapter', () => {
     expect((await request(member.port, '/api/partner')).status).toBe(503);
     expect((await request(member.port, '/api/auth/get-session')).status).toBe(503);
     expect((await request(member.port, '/api/projects')).status).toBe(503);
+    const font = await request(member.port, '/api/_lib/fonts/HelixCV-Light.ttf?import&url&inline');
+    expect(font.status).toBe(200);
+    expect((await request(member.port, '/api/_lib/fonts/README.md')).status).toBe(503);
     expect(loader).not.toHaveBeenCalled();
   });
 });

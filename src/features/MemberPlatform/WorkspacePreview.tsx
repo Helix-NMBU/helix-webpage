@@ -3,6 +3,7 @@ import { IconArrowUp, IconCheck } from "@tabler/icons-react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
 import { Button } from "@libs/components/ui/button";
+import { Label } from "@libs/components/ui/label";
 import {
   Card,
   CardContent,
@@ -34,6 +35,8 @@ import {
 } from "@libs/components/ui/table";
 import { previewPage, previewTeams } from "./workspace-preview-data";
 import { useMemberAccount } from "./MemberAccountContext";
+import { platformText, useMemberLanguage, type PlatformLanguage } from "./MemberLanguage";
+import { isLocalMemberMode } from "./local-mode";
 import { useMemberFeatureAccess } from "./MemberFeatureAccess";
 import { GmailLogo } from "./GmailLogo";
 import { EmailSignatureSettings } from "./EmailSignatureSettings";
@@ -284,6 +287,28 @@ export function TeamWorkspacePreview() {
   );
 }
 
+function CvLanguageSettings() {
+  const { language, setLanguage, t } = useMemberLanguage();
+  const notify = useNotify();
+  return (
+    <Card className="shadow-none">
+      <CardHeader>
+        <CardTitle className="text-base">{t("CV interface language")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Label className="sr-only" htmlFor="cv-interface-language">{t("CV interface language")}</Label>
+        <Select value={language} onValueChange={(next: PlatformLanguage) => {
+          setLanguage(next);
+          notify(platformText(next, "Language updated"), platformText(next, "Your language preference is saved in this browser."), { id: "platform-language", href: null });
+        }}>
+          <SelectTrigger id="cv-interface-language" className="w-full sm:w-64"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="en">English</SelectItem><SelectItem value="nb">Norsk bokmål</SelectItem></SelectContent>
+        </Select>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function MemberSettingsPreview() {
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -353,6 +378,7 @@ export function MemberSettingsPreview() {
           Your connected accounts and workspace access.
         </p>
       </div>
+      {import.meta.env.DEV && import.meta.env.MODE === "member-local" && isLocalMemberMode() && <CvLanguageSettings />}
       <Card id="app-connections" className="scroll-mt-8 shadow-none">
         <CardHeader>
           <CardTitle className="text-base">App connections</CardTitle>

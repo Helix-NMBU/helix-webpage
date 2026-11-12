@@ -8,7 +8,7 @@ import { cn } from "@libs/lib/utils";
 export type SearchableOption = { value: string; label: string; keywords?: string[]; detail?: string };
 
 // shadcn's Popover + Command combobox composition, shared by profile selectors.
-export function SearchableSelect({ id, label, value, options, onChange, placeholder, searchPlaceholder, disabled, triggerText, className }: {
+export function SearchableSelect({ id, label, value, options, onChange, placeholder, searchPlaceholder, emptyLabel = "No results found.", disabled, triggerText, className }: {
   id?: string;
   label: string;
   value: string;
@@ -16,6 +16,7 @@ export function SearchableSelect({ id, label, value, options, onChange, placehol
   onChange: (value: string) => void;
   placeholder: string;
   searchPlaceholder: string;
+  emptyLabel?: string;
   disabled?: boolean;
   triggerText?: string;
   className?: string;
@@ -36,7 +37,7 @@ export function SearchableSelect({ id, label, value, options, onChange, placehol
       <Command label={label}>
         <CommandInput placeholder={searchPlaceholder} aria-label={searchPlaceholder} />
         <CommandList className="max-h-64 overscroll-contain">
-          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandEmpty>{emptyLabel}</CommandEmpty>
           <CommandGroup>
             {options.map((option) => <CommandItem key={option.value} value={option.value || "__not_set__"}
               keywords={[option.label, ...(option.keywords ?? []), option.detail ?? ""]}

@@ -8,34 +8,50 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/componen
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
+import type { CvExperienceGroup } from "../MemberCV/types";
 import type { SponsorContext } from "./types";
 import type { PublishedCvProfile, SponsorCvResponse, SponsorDirectoryRequest, SponsorDirectoryResponse, SponsorProfileResponse } from "./directory-types";
 
 const emptyFilters = { q: "", programme: "", year: "", department: "", skill: "" };
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : "Could not load Talent Directory. Please try again.";
 
-function ContactLinks({ contactEmail, phone }: { contactEmail?: string; phone?: string }) {
+type ProfileText = (label: string) => string;
+const englishText: ProfileText = label => label;
+
+function ContactLinks({ contactEmail, phone, uiText = englishText }: { contactEmail?: string; phone?: string; uiText?: ProfileText }) {
   return <div className="flex flex-wrap gap-2">
-    {contactEmail && <Button variant="outline" size="sm" asChild><a href={`mailto:${encodeURIComponent(contactEmail)}`}>Email member</a></Button>}
-    {phone && <Button variant="outline" size="sm" asChild><a href={`tel:${encodeURIComponent(phone)}`}>Call member</a></Button>}
+    {contactEmail && <Button variant="outline" size="sm" asChild><a href={`mailto:${encodeURIComponent(contactEmail)}`}>{uiText("Email member")}</a></Button>}
+    {phone && <Button variant="outline" size="sm" asChild><a href={`tel:${encodeURIComponent(phone)}`}>{uiText("Call member")}</a></Button>}
   </div>;
 }
 
-function ProfileContent({ profile }: { profile: PublishedCvProfile }) {
+export function ProfileContent({ profile, experienceGroups, uiText = englishText }: {
+  profile: PublishedCvProfile;
+  experienceGroups?: readonly CvExperienceGroup[];
+  uiText?: ProfileText;
+}) {
+  const experienceSections = experienceGroups?.map(({ key, label, entryIds }) => ({
+    key, label, entries: profile.experience.filter(entry => entryIds.includes(entry.id)),
+  })) ?? [{ key: "experience", label: "Experience", entries: profile.experience }];
+  function period(start: string, end: string) {
+    const endLabel = end === "Present" ? uiText("Present") : end;
+    if (!start && !endLabel) return null;
+    return <p className="text-muted-foreground">{start && endLabel ? `${start} ${uiText("to")} ${endLabel}` : start || endLabel}</p>;
+  }
   return <div className="space-y-6">
     <div className="space-y-2">
       {profile.headline && <p className="font-medium">{profile.headline}</p>}
       {profile.city && <p className="text-sm text-muted-foreground">{profile.city}</p>}
       {profile.summary && <p className="whitespace-pre-wrap text-sm leading-relaxed">{profile.summary}</p>}
-      <ContactLinks contactEmail={profile.contactEmail} phone={profile.phone} />
+      <ContactLinks contactEmail={profile.contactEmail} phone={profile.phone} uiText={uiText} />
     </div>
-    {profile.education.length > 0 && <section className="space-y-3"><h3 className="font-semibold">Education</h3>{profile.education.map((entry) => <div key={entry.id} className="space-y-1 text-sm"><p className="font-medium">{entry.degree}, {entry.institution}</p><p className="text-muted-foreground">{entry.startDate} to {entry.endDate}</p>{entry.description && <p className="whitespace-pre-wrap">{entry.description}</p>}</div>)}</section>}
-    {profile.experience.length > 0 && <section className="space-y-3"><h3 className="font-semibold">Experience</h3>{profile.experience.map((entry) => <div key={entry.id} className="space-y-1 text-sm"><p className="font-medium">{entry.title}, {entry.organization}</p><p className="text-muted-foreground">{entry.startDate} to {entry.endDate}</p>{entry.department && <p>{entry.department}</p>}{entry.description && <p className="whitespace-pre-wrap">{entry.description}</p>}</div>)}</section>}
-    {profile.projects.length > 0 && <section className="space-y-3"><h3 className="font-semibold">Projects</h3>{profile.projects.map((entry) => <div key={entry.id} className="space-y-1 text-sm"><p className="font-medium">{entry.name}{entry.role ? `, ${entry.role}` : ""}</p>{entry.season && <p className="text-muted-foreground">{entry.season}</p>}{entry.description && <p className="whitespace-pre-wrap">{entry.description}</p>}{entry.url && <a className="underline underline-offset-4" href={entry.url} target="_blank" rel="noopener noreferrer">Project website</a>}</div>)}</section>}
-    {profile.skills.length > 0 && <section className="space-y-2"><h3 className="font-semibold">Skills</h3><div className="flex flex-wrap gap-2">{profile.skills.map((skill, index) => <Badge variant="secondary" key={`${skill}-${index}`}>{skill}</Badge>)}</div></section>}
-    {profile.languages.length > 0 && <section className="space-y-2"><h3 className="font-semibold">Languages</h3><ul className="space-y-1 text-sm">{profile.languages.map((entry) => <li key={entry.id}>{entry.name}{entry.level ? `, ${entry.level}` : ""}</li>)}</ul></section>}
-    {profile.links.some((entry) => entry.url) && <section className="space-y-2"><h3 className="font-semibold">Links</h3><ul className="space-y-1 text-sm">{profile.links.filter((entry) => entry.url).map((entry) => <li key={entry.id}><a className="break-all underline underline-offset-4" href={entry.url} target="_blank" rel="noopener noreferrer">{entry.label || entry.url}</a></li>)}</ul></section>}
-    {profile.references && <section className="space-y-2"><h3 className="font-semibold">References</h3><p className="whitespace-pre-wrap text-sm">{profile.references}</p></section>}
+    {profile.education.length > 0 && <section className="space-y-3"><h3 className="font-semibold">{uiText("Education")}</h3>{profile.education.map((entry) => <div key={entry.id} className="space-y-1 text-sm"><p className="font-medium">{entry.degree}, {entry.institution}</p>{period(entry.startDate, entry.endDate)}{entry.description && <p className="whitespace-pre-wrap">{entry.description}</p>}</div>)}</section>}
+    {experienceSections.filter(section => section.entries.length).map(({ key, label, entries }) => <section key={key} className="space-y-3"><h3 className="font-semibold">{uiText(label)}</h3>{entries.map((entry) => <div key={entry.id} className="space-y-1 text-sm"><p className="font-medium">{entry.title}, {entry.organization}</p>{period(entry.startDate, entry.endDate)}{entry.department && <p>{entry.department}</p>}{entry.description && <p className="whitespace-pre-wrap">{entry.description}</p>}</div>)}</section>)}
+    {profile.projects.length > 0 && <section className="space-y-3"><h3 className="font-semibold">{uiText("Projects")}</h3>{profile.projects.map((entry) => <div key={entry.id} className="space-y-1 text-sm"><p className="font-medium">{entry.name}{entry.role ? `, ${entry.role}` : ""}</p>{entry.season && <p className="text-muted-foreground">{entry.season}</p>}{entry.description && <p className="whitespace-pre-wrap">{entry.description}</p>}{entry.url && <a className="underline underline-offset-4" href={entry.url} target="_blank" rel="noopener noreferrer">{uiText("Project website")}</a>}</div>)}</section>}
+    {profile.skills.length > 0 && <section className="space-y-2"><h3 className="font-semibold">{uiText("Skills")}</h3><div className="flex flex-wrap gap-2">{profile.skills.map((skill, index) => <Badge variant="secondary" key={`${skill}-${index}`}>{skill}</Badge>)}</div></section>}
+    {profile.languages.length > 0 && <section className="space-y-2"><h3 className="font-semibold">{uiText("Languages")}</h3><ul className="space-y-1 text-sm">{profile.languages.map((entry) => <li key={entry.id}>{entry.name}{entry.level ? `, ${entry.level}` : ""}</li>)}</ul></section>}
+    {profile.links.some((entry) => entry.url) && <section className="space-y-2"><h3 className="font-semibold">{uiText("Links")}</h3><ul className="space-y-1 text-sm">{profile.links.filter((entry) => entry.url).map((entry) => <li key={entry.id}><a className="break-all underline underline-offset-4" href={entry.url} target="_blank" rel="noopener noreferrer">{entry.label || entry.url}</a></li>)}</ul></section>}
+    {profile.references && <section className="space-y-2"><h3 className="font-semibold">{uiText("References")}</h3><p className="whitespace-pre-wrap text-sm">{profile.references}</p></section>}
   </div>;
 }
 
