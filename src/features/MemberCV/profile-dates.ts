@@ -18,9 +18,52 @@ export function composeProfileDate(year: string, month: string, day = "") {
 
 export type ProfileDateValidation = "valid" | "partial" | "month" | "day" | "year";
 
+/** One editing field; keep the stored ISO format and older date precision. */
+export function profileDateInputValue(value: string) {
+  const { year, month, day, legacy } = profileDateParts(value);
+  if (legacy || !value || year.length !== 4) return value;
+  if (!month && !day && year.length === 4) return year;
+  if (month && !day && year.length === 4) return `${month}/${year}`;
+  return `${day}/${month}/${year}`;
+}
+
+export function profileDateFromInput(value: string) {
+  if (!value) return "";
+  const full = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+  if (full) return composeProfileDate(full[3], full[2].padStart(2, "0"), full[1].padStart(2, "0"));
+  // Preserve in-progress typing verbatim; validation prevents saving it.
+  return value;
+}
+
+/** Format completed input only when its day and month have one valid interpretation. */
+export function formatProfileDateInput(value: string): string {
+  const compact = /^(\d{2,4})(\d{4})$/.exec(value);
+  if (!compact) return profileDateInputValue(profileDateFromInput(value));
+
+  const [, dayAndMonth, year] = compact;
+  const candidates = [1, 2].flatMap(dayLength => {
+    const day = dayAndMonth.slice(0, dayLength);
+    const month = dayAndMonth.slice(dayLength);
+    if (month.length < 1 || month.length > 2) return [];
+    const date = composeProfileDate(year, month.padStart(2, "0"), day.padStart(2, "0"));
+    return profileDateValidation(date) === "valid" ? [date] : [];
+  });
+  return candidates.length === 1 ? profileDateInputValue(candidates[0]) : value;
+}
+
 /** Free-text legacy values are valid. Numeric partial input must not be autosaved. */
 export function profileDateValidation(value: string): ProfileDateValidation {
   if (!value) return "valid";
+  if (value.includes("/")) {
+    if (/^\d{2}\/\d{4}$/.test(value)) {
+      const [month, year] = value.split("/");
+      return profileDateValidation(`${year}-${month}`);
+    }
+    const parsed = profileDateFromInput(value);
+    if (parsed !== value) return profileDateValidation(parsed);
+    if (/^[\d/]+$/.test(value) && !/^\d{4}\/\d{4}$/.test(value)) return "partial";
+  }
+  if (/^\d{5,}$/.test(value)) return "partial";
   const { year, month, day, legacy } = profileDateParts(value);
   if (legacy) return "valid";
   if (month.length === 2 && (Number(month) < 1 || Number(month) > 12)) return "month";

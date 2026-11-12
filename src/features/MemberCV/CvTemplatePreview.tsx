@@ -4,7 +4,7 @@ import { sharedCvData } from "./model";
 import { groupExperience } from "./experience";
 import { memberText, type MemberLocale, type StaticMemberCopyKey } from "./locale";
 import { employmentTypes, languageLevels, locationTypes, readableProfileDate } from "./profile-inputs";
-import type { CvData, CvSharing } from "./types";
+import type { CvData, CvExperienceGroup, CvSharing } from "./types";
 
 function hasContent(row: { id: string }) {
   return Object.entries(row).some(([key, value]) => key !== "id" && !key.startsWith("__") && typeof value === "string" && value.trim());
@@ -23,7 +23,7 @@ function SafeLink({ value, label }: { value: string; label?: string }) {
 }
 
 /** The document preview uses authored content and the same contact redaction as PDF export. */
-export function CvTemplatePreview({ data, sharing, locale }: { data: CvData; sharing: CvSharing; locale: MemberLocale }) {
+export function CvTemplatePreview({ data, sharing, locale, experienceGroups }: { data: CvData; sharing: CvSharing; locale: MemberLocale; experienceGroups?: readonly CvExperienceGroup[] }) {
   const id = useId();
   const cv = localizedCv(sharedCvData(data, sharing), locale);
   const t = (key: StaticMemberCopyKey) => memberText(locale, key);
@@ -32,7 +32,10 @@ export function CvTemplatePreview({ data, sharing, locale }: { data: CvData; sha
   const period = (start?: string, end?: string) => [start, end].filter(Boolean)
     .map((value) => value === "Present" ? t("Present") : readableProfileDate(value ?? "")).join(" - ");
   const education = cv.education.filter(hasContent);
-  const experience = groupExperience(cv.experience.filter(hasContent));
+  const experience = cv.experience.filter(hasContent);
+  const experienceSections = experienceGroups?.map(({ key, label, entryIds }) => ({
+    key, label, groups: groupExperience(experience.filter(entry => entryIds.includes(entry.id))),
+  })) ?? [{ key: "experience", label: t("Experience"), groups: groupExperience(experience) }];
   const projects = cv.projects.filter(hasContent);
   const languages = cv.languages.filter(hasContent);
   const links = cv.links.filter(hasContent);
@@ -66,9 +69,9 @@ export function CvTemplatePreview({ data, sharing, locale }: { data: CvData; sha
           {row.description && <p>{row.description}</p>}
         </div>)}
       </section>}
-      {experience.length > 0 && <section className="mcv-template-section mcv-template-experience" aria-labelledby={`${id}-experience`}>
-        <h2 id={`${id}-experience`}>{t("Experience")}</h2>
-        {experience.map((group) => <div className="mcv-template-organization" key={group.key}>
+      {experienceSections.filter(section => section.groups.length).map(({ key, label, groups }) => <section key={key} className="mcv-template-section mcv-template-experience" aria-labelledby={`${id}-${key}`}>
+        <h2 id={`${id}-${key}`}>{label}</h2>
+        {groups.map((group) => <div className="mcv-template-organization" key={group.key}>
           {group.organization && group.roles.length > 1 && <h3 className="mcv-template-organization-heading">{group.organization}</h3>}
           <ol className="mcv-template-roles" data-connected={group.roles.length > 1} role="list">
             {group.roles.map((row) => <li className="mcv-template-role" key={row.id}>
@@ -84,7 +87,7 @@ export function CvTemplatePreview({ data, sharing, locale }: { data: CvData; sha
             </li>)}
           </ol>
         </div>)}
-      </section>}
+      </section>)}
       {projects.length > 0 && <section className="mcv-template-section" aria-labelledby={`${id}-projects`}>
         <h2 id={`${id}-projects`}>{t("Projects")}</h2>
         {projects.map((row) => <div className="mcv-template-project" key={row.id}>

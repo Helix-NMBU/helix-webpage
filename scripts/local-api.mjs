@@ -20,6 +20,14 @@ const handlers = new Map([
   ['/api/contact', '/api/contact.ts'],
 ]);
 
+const cvPreviewFonts = new Set([
+  '/api/_lib/fonts/HelixCV-Light.ttf',
+  '/api/_lib/fonts/HelixCV-Medium.ttf',
+  '/api/_lib/fonts/HelixCV-Bold.ttf',
+  '/api/_lib/fonts/NotoSans-Regular.ttf',
+  '/api/_lib/fonts/NotoSans-Bold.ttf',
+]);
+
 class RequestError extends Error {
   constructor(status, message) {
     super(message);
@@ -158,6 +166,8 @@ export function localApiPlugin() {
       server.middlewares.use(async (req, res, next) => {
         const path = req.url?.split('?')[0] ?? '';
         if (path !== '/api' && !path.startsWith('/api/')) return next();
+        // Vite serves these public CV assets without invoking an API or loading credentials.
+        if (memberLocal && cvPreviewFonts.has(path) && (req.method === 'GET' || req.method === 'HEAD') && localRequest(req)) return next();
         adaptResponse(res);
         res.setHeader('Cache-Control', 'no-store');
         if (!localRequest(req)) return res.status(403).json({ error: 'Local API access only.' });

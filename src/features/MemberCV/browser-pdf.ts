@@ -1,8 +1,9 @@
-import light from "../../../api/_lib/fonts/HelixCV-Light.ttf?url";
-import medium from "../../../api/_lib/fonts/HelixCV-Medium.ttf?url";
-import bold from "../../../api/_lib/fonts/HelixCV-Bold.ttf?url";
-import fallback from "../../../api/_lib/fonts/NotoSans-Regular.ttf?url";
-import fallbackBold from "../../../api/_lib/fonts/NotoSans-Bold.ttf?url";
+// Inline the development-only fonts so Vite can drop them from production output.
+import light from "../../../api/_lib/fonts/HelixCV-Light.ttf?url&inline";
+import medium from "../../../api/_lib/fonts/HelixCV-Medium.ttf?url&inline";
+import bold from "../../../api/_lib/fonts/HelixCV-Bold.ttf?url&inline";
+import fallback from "../../../api/_lib/fonts/NotoSans-Regular.ttf?url&inline";
+import fallbackBold from "../../../api/_lib/fonts/NotoSans-Bold.ttf?url&inline";
 import type { CvData, CvOutputLanguage, CvSharing } from "./types";
 
 let fonts: Promise<Uint8Array[]> | undefined;

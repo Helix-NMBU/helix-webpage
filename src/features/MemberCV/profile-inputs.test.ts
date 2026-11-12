@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatProfileDateInput, profileDateFromInput, profileDateInputValue } from "./profile-dates";
 import {
   composeProfileDate,
   currentPeriod,
@@ -11,6 +12,34 @@ import {
 } from "./profile-inputs";
 
 describe("member period input compatibility", () => {
+  it.each([
+    ["882023", "08/08/2023"],
+    ["08082023", "08/08/2023"],
+    ["1382023", "13/08/2023"],
+    ["8/8/2023", "08/08/2023"],
+    ["1112023", "1112023"],
+    ["29022023", "29022023"],
+    ["09/2023", "09/2023"],
+  ])("formats completed input %s as %s only when unambiguous", (value, expected) => {
+    expect(formatProfileDateInput(value)).toBe(expected);
+  });
+
+  it("edits dates in one DD/MM/YYYY field while saving ISO dates", () => {
+    expect(profileDateInputValue("2024-09-01")).toBe("01/09/2024");
+    expect(profileDateFromInput("01/09/2024")).toBe("2024-09-01");
+    expect(profileDateFromInput("1/9/2024")).toBe("2024-09-01");
+    expect(profileDateInputValue("2023-02-29")).toBe("29/02/2023");
+    expect(profileDateValidation(profileDateFromInput("29/02/2023"))).toBe("day");
+    expect(profileDateValidation(profileDateFromInput("29/02/2024"))).toBe("valid");
+    for (const value of ["1", "01/", "01/0", "01/09/202", "01092024"]) {
+      expect(profileDateInputValue(profileDateFromInput(value))).toBe(value);
+      expect(profileDateValidation(profileDateFromInput(value))).toBe("partial");
+    }
+    expect(profileDateInputValue("2024-09")).toBe("09/2024");
+    expect(profileDateInputValue("2024")).toBe("2024");
+    expect(profileDateInputValue("Spring 2024")).toBe("Spring 2024");
+    expect(profileDateFromInput("")).toBe("");
+  });
   it.each([
     ["2024", "2024", "", ""],
     ["2024-09", "2024", "09", ""],

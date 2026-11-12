@@ -8,6 +8,17 @@ export const phoneCountries = getCountries().map((country) => ({
   keywords: [country],
 })).sort((a, b) => a.label.localeCompare(b.label, "en"));
 
+const norwegianCountryNames = new Intl.DisplayNames(["nb"], { type: "region" });
+const norwegianPhoneCountries = phoneCountries.map(option => ({
+  ...option,
+  label: norwegianCountryNames.of(option.value) ?? option.label,
+  keywords: [...option.keywords, option.label],
+})).sort((a, b) => a.label.localeCompare(b.label, "nb"));
+
+export function profilePhoneCountries(language: "en" | "nb") {
+  return language === "nb" ? norwegianPhoneCountries : phoneCountries;
+}
+
 export type ProfilePhone = { country: CountryCode; national: string; changed: boolean };
 
 function countryForPhone(phone: PhoneNumber): CountryCode | undefined {
