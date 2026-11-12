@@ -17,3 +17,5 @@ Use the two integrated changes, a clean baseline build, and a browser network tr
 ## Integrated verification
 
 Verified `924f264`. The [delivery record](../delivery.md) has the base and candidate measurements, browser results, checks, and the limit on signed-in production timings.
+
+Reverified on `cb16b32` after the CV load recovery fix. The browser measurements and 1,808 passing tests were reproduced, with 8 tests skipped and 3 deployment guard tests passing.

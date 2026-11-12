@@ -18,3 +18,5 @@ Inspect the build manifest and compare the cold-load JavaScript needed by each b
 ## Integrated verification
 
 Integrated as `924f264` from worker commit `e1c000f`. The production build comparison loaded 421,704 vs. 289,951 gzip bytes on cold Internal Home. Chrome verified deferred features, login and callback paths, and chunk-load recovery. All 138 focused tests passed on the integration branch.
+
+Independent review caught a blank page on a failed CV import. At `cb16b32`, both CV routes showed a shared notification and recovered on reload in Chrome. The three independent reviewers confirmed the repair.

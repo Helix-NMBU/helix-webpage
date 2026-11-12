@@ -46,3 +46,13 @@ In one matched production-build fixture run, the Home heading appeared at 139 ms
 The candidate browser checks confirmed all three page reads, direct Pipeline denial, access revocation, and notification retry. Dedicated Vite member mode confirmed the agreements-only fixture and denied direct Pipeline access. The host checks confirmed one verifier exchange on direct and legacy CV callbacks and verified the public page, partner OTP request, and recovery after a failed entry chunk.
 
 `npm test` passed with 1,808 tests, 8 skipped, and 3 deployment guard tests. `npm run lint`, `npm run typecheck`, `npm run typecheck:api`, `npm run typecheck:api:runtime`, and `npm run build` passed. The build produced 9,999,704 static bytes within the 10 MB guard and counted 11 source functions.
+
+## Independent review and recovery
+
+The full, Standards, and Spec reviewers inspected `3cf4a25...3ebe970` and identified one P2 failure path. A rejected deferred CV import escaped Suspense and cleared the application. Chrome reproduced the blank page by aborting the CV chunk.
+
+The coordinator integrated `cb16b32`, which shares import recovery across the app entries and both CV routes. Chrome blocked the CV chunk on Internal `/profile` and public `/member/profile`, observed the shared notification, then restored the chunk and recovered by reloading. Host-entry recovery also passed. All three reviewers rechecked `cb16b32` and found the issue resolved, with no new actionable findings. The frontend review checked dynamic import boundaries, the loader effect, and use of the existing notification and loading components.
+
+The final browser rerun retained 289,951 gzip bytes, 8 startup API calls, and zero sidebar sponsor-data reads on Home and across the two route changes. The full test suite, lint, all typechecks, and production build passed again. The build with the fixture auth URL produced 9,999,858 static bytes and 11 source functions. A second build with an empty auth URL passed the static size guard. Linear reopened HELIX-73 and HELIX-74 for the repair, then both returned to Done after verification.
+
+The verified code is `cb16b32`. The next delivery step is the GitHub PR against `main` and its required `verify` check.
