@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createProjectServices } from "../../../api/_lib/project-management-service.js";
+import { createMemberAccessServices } from "../../../api/_lib/member-access-service.js";
 import { createDealServices } from "../../../api/_lib/partner-deals-service.js";
 const id=(n:number)=>`80000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const people=['manager','finance','marketing','outsider'].map((name,i)=>({userId:id(i+1),googleSub:name,email:`${name}@helixnmbu.no`,name}));
@@ -35,8 +36,36 @@ beforeAll(async()=>{
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
  insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','"S27"','Current season','${id(1)}');`);
+ await db.exec(read("058_partner_deal_space_access"));
 },60000);
 afterAll(async()=>db.close());
+it("reports the same sponsor permissions as the protected pages for each member", async () => {
+  await db.query("insert into identity.member_roles(member_id, role_key) values ($1, 'financials')", [id(2)]);
+  try {
+    const cases = [
+      { pipeline: true, agreements: true, financeReviews: false },
+      { pipeline: false, agreements: true, financeReviews: true },
+      { pipeline: false, agreements: true, financeReviews: false },
+      { pipeline: false, agreements: false, financeReviews: false },
+    ];
+    for (const [index, expected] of cases.entries()) {
+      const access = createMemberAccessServices({ db, authenticate: auth(index) });
+      expect((await access.self("test")).sponsorPages).toEqual(expected);
+      const deals = dealService(index);
+      const pipeline = deals.load("test", "pipeline");
+      if (expected.pipeline) await expect(pipeline).resolves.toMatchObject({ canManage: true });
+      else await expect(pipeline).rejects.toMatchObject({ status: 403 });
+      const agreements = deals.load("test", "shared");
+      if (expected.agreements) await expect(agreements).resolves.toMatchObject({ canManage: expected.pipeline });
+      else await expect(agreements).rejects.toMatchObject({ status: 403 });
+      const reviews = deals.financeReviewQueue("test");
+      if (expected.financeReviews) await expect(reviews).resolves.toEqual([]);
+      else await expect(reviews).rejects.toMatchObject({ status: 403 });
+    }
+  } finally {
+    await db.query("delete from identity.member_roles where member_id = $1 and role_key = 'financials'", [id(2)]);
+  }
+});
 it('allows only a requested narrow Finance review and retries the deal after linking',async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(2)]);
  await setupDeal(80,'ReviewCo',[20]);

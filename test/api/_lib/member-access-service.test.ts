@@ -15,6 +15,12 @@ beforeAll(async () => {
   pg = new PGlite();
   await pg.exec("create schema identity; create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text);");
   await pg.exec("create schema project_management; create table project_management.access(member_id uuid primary key,active boolean default true); create schema partner_deals; create table partner_deals.space_access(member_id uuid primary key,pipeline boolean not null,agreements boolean not null);");
+  await pg.exec(`
+    create function partner_deals.capabilities(uuid, text, text) returns table (pipeline boolean, shared boolean)
+      language sql as $$ select false, false $$;
+    create function partner_deals.finance_reviewer(uuid, text, text) returns boolean
+      language sql as $$ select false $$;
+  `);
   await pg.query("insert into identity.members values ($1, 'henrik-google', 'henrik.engdal@helixnmbu.no', 'Henrik Engdal')", [adminId]);
   await pg.exec(readFileSync(new URL("../../../db/migrations/009_platform_access_and_managed_positions.sql", import.meta.url), "utf8"));
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
@@ -45,6 +51,7 @@ describe("member role and feature access", () => {
     await db.query("insert into identity.member_roles (member_id, role_key) values ($1, 'team_member')", [memberId]);
     await expect(services.self("member")).resolves.toMatchObject({
       email: "member@example.test", departmentId: "electrical", roles: [{ key: "team_member", label: "Team Member" }], features: ["team.electrical"],
+      sponsorPages: { pipeline: false, agreements: false, financeReviews: false },
     });
   });
 

@@ -3,12 +3,12 @@ import { createCvServices, type CvDatabase, type WorkspaceIdentity } from "./mem
 import { MemberCvError } from "./member-cv-error.js";
 import { withVerifyFullSsl } from "./pg-ssl.js";
 
-import { WORKSPACE_SPACES, type WorkspaceSpace } from "../../src/features/Workspace/access.js";
+import { WORKSPACE_SPACES, type SponsorPageAccess, type WorkspaceSpace } from "../../src/features/Workspace/access.js";
 import { parseMemberChange } from "./workspace-service.js";
 
 export type AccessRole = { key: string; label: string };
 export interface MemberAccessServices {
-  self(token: string): Promise<{ memberId: string; email: string; name: string; departmentId: string | null; roles: AccessRole[]; features: string[] }>;
+  self(token: string): Promise<{ memberId: string; email: string; name: string; departmentId: string | null; roles: AccessRole[]; features: string[]; sponsorPages: SponsorPageAccess }>;
   members(token: string): Promise<{ departments: { id: string; name: string }[]; roles: AccessRole[]; members: { id: string; email: string; name: string; departmentId: string | null; roleKeys: string[]; spaceKeys: WorkspaceSpace[] }[] }>;
   saveWorkspace(token: string, body: unknown): Promise<{ saved: true }>;
   save(token: string, memberId: string, departmentId: string | null, roleKeys: string[]): Promise<{ saved: true }>;
@@ -29,13 +29,21 @@ export function createMemberAccessServices(deps: { db: CvDatabase; authenticate:
   return {
     async self(token) {
       const { identity, memberId } = await identityAndId(token);
-      const { rows } = await db.query<{ department_id: string | null; roles: AccessRole[]; features: string[] }>(`select md.department_key as department_id,
+      const { rows } = await db.query<{ department_id: string | null; roles: AccessRole[]; features: string[]; sponsor_pages: SponsorPageAccess }>(`select md.department_key as department_id,
         coalesce((select jsonb_agg(jsonb_build_object('key', r.role_key, 'label', r.label) order by r.sort_order) from identity.member_roles mr join identity.platform_roles r using (role_key) where mr.member_id = m.id), '[]'::jsonb) as roles,
-        coalesce((select array_agg(f.feature_key order by pf.sort_order) from identity.member_features(m.id) f join identity.platform_features pf on pf.feature_key = f.feature_key), array[]::text[]) as features
-        from identity.members m left join identity.member_departments md on md.member_id = m.id where m.id = $1::uuid`, [memberId]);
+        coalesce((select array_agg(f.feature_key order by pf.sort_order) from identity.member_features(m.id) f join identity.platform_features pf on pf.feature_key = f.feature_key), array[]::text[]) as features,
+        jsonb_build_object(
+          'pipeline', coalesce(sponsor.pipeline, false),
+          'agreements', coalesce(sponsor.shared, false),
+          'financeReviews', coalesce(partner_deals.finance_reviewer(m.id, $2, $3), false)
+        ) as sponsor_pages
+        from identity.members m
+        left join identity.member_departments md on md.member_id = m.id
+        left join lateral partner_deals.capabilities(m.id, $2, $3) sponsor on true
+        where m.id = $1::uuid`, [memberId, identity.googleSub, identity.email]);
       const row = rows[0];
       if (!row) throw new MemberCvError(404, "Member not found.");
-      return { memberId, email: identity.email, name: identity.name, departmentId: row.department_id, roles: row.roles, features: row.features };
+      return { memberId, email: identity.email, name: identity.name, departmentId: row.department_id, roles: row.roles, features: row.features, sponsorPages: row.sponsor_pages };
     },
     async members(token) {
       const { memberId } = await identityAndId(token);

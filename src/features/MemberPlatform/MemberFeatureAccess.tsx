@@ -5,6 +5,8 @@ import { RecruitmentPageSkeleton, TeamPageSkeleton } from "./LoadingSkeletons";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "./local-mode";
 import { useNotify } from "./MemberNotifications";
+import { MEMBER_ACCESS_CHANGED, localMemberHasPartnerSpace } from "./member-access-api";
+import type { SponsorPageAccess } from "../Workspace/access";
 
 export type PlatformRoleKey = "project_manager" | "department_lead" | "team_member" | "platform_administrator" | "financials";
 export type PlatformRole = { key: PlatformRoleKey; label: string };
@@ -15,6 +17,7 @@ export type MemberFeatureState = {
   departmentId: string | null;
   roles: PlatformRole[];
   features: string[];
+  sponsorPages: SponsorPageAccess;
 };
 
 type FeatureStatus = "loading" | "ready" | "unavailable";
@@ -29,7 +32,7 @@ const FeatureContext = createContext<FeatureContextValue>({
   authUserId: null, status: "loading", member: null, canAccess: () => false, reload: () => undefined,
 });
 
-const LOCAL_MEMBER: MemberFeatureState = {
+const LOCAL_MEMBER: Omit<MemberFeatureState, "sponsorPages"> = {
   memberId: "local-member",
   email: localMemberAccount.email,
   name: localMemberAccount.name,
@@ -44,53 +47,96 @@ const LOCAL_MEMBER: MemberFeatureState = {
   ],
 };
 
+async function readMemberAccess(userId: string | null): Promise<MemberFeatureState> {
+  if (isLocalMemberMode() && localMemberSignedIn()) {
+    return {
+      ...LOCAL_MEMBER,
+      sponsorPages: {
+        pipeline: localMemberHasPartnerSpace("pipeline"),
+        agreements: localMemberHasPartnerSpace("partner-agreements"),
+        financeReviews: false,
+      },
+    };
+  }
+
+  const token = await memberSessionToken({ current: userId });
+  const response = await fetch("/api/member-access?action=self", {
+    cache: "no-store",
+    credentials: "include",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = await response.json().catch(() => null) as (MemberFeatureState & { error?: unknown }) | null;
+  if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error : "Could not load your feature access.");
+  if (!body || !Array.isArray(body.roles) || !Array.isArray(body.features)) throw new Error("The access response was incomplete.");
+  return {
+    ...body,
+    sponsorPages: {
+      pipeline: body.sponsorPages?.pipeline === true,
+      agreements: body.sponsorPages?.agreements === true,
+      financeReviews: body.sponsorPages?.financeReviews === true,
+    },
+  };
+}
+
 export function MemberFeatureAccessProvider({ userId, children }: { userId: string | null; children: ReactNode }) {
-  const [member, setMember] = useState<MemberFeatureState | null>(null);
-  const [status, setStatus] = useState<FeatureStatus>("loading");
-  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ userId: string | null; member: MemberFeatureState | null } | null>(null);
   const notify = useNotify();
-  const owner = useRef<string | null>(userId);
-  owner.current = userId;
-  const request = useRef<Promise<MemberFeatureState> | null>(null);
-  const reload = useCallback(() => { request.current = null; setAttempt((value) => value + 1); }, []);
+  const request = useRef<{ userId: string | null; pending: Promise<MemberFeatureState> } | null>(null);
+  const refreshRef = useRef<() => void>(() => undefined);
+  const reload = useCallback(() => refreshRef.current(), []);
 
   useEffect(() => {
     let active = true;
-    setStatus("loading");
-    if (isLocalMemberMode() && localMemberSignedIn()) {
-      setMember(LOCAL_MEMBER);
-      setStatus("ready");
-      return () => { active = false; };
-    }
-    request.current ??= (async () => {
-        const token = await memberSessionToken(owner);
-        const response = await fetch("/api/member-access?action=self", {
-          cache: "no-store",
-          credentials: "include",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const body = await response.json().catch(() => null) as MemberFeatureState | { error?: unknown } | null;
-        if (!response.ok) throw new Error(body && "error" in body && typeof body.error === "string" ? body.error : "Could not load your feature access.");
-        if (!body || !Array.isArray((body as MemberFeatureState).roles) || !Array.isArray((body as MemberFeatureState).features)) throw new Error("The access response was incomplete.");
-        return body as MemberFeatureState;
-    })();
-    void request.current.then(body => {
-      if (!active) return;
-      setMember(body);
-      setStatus("ready");
-    }).catch(() => {
-        if (!active) return;
-        setMember(null);
-        setStatus("unavailable");
+    let refreshing = false;
+    let changedDuringRefresh = false;
+    setResult(previous => previous?.userId === userId ? previous : null);
+
+    const refresh = () => {
+      if (refreshing) return;
+      refreshing = true;
+      if (!request.current || request.current.userId !== userId) {
+        request.current = { userId, pending: readMemberAccess(userId) };
+      }
+      const current = request.current;
+      void current.pending.then(member => {
+        if (active && !changedDuringRefresh) setResult({ userId, member });
+      }).catch(() => {
+        if (!active || changedDuringRefresh) return;
+        setResult({ userId, member: null });
         notify("Could not load platform access", "Please try again.", {
           id: "member-feature-access", variant: "error", href: null,
           action: { label: "Try again", onClick: reload },
         });
-    });
-    return () => { active = false; };
-  }, [notify, reload, userId, attempt]);
+      }).finally(() => {
+        if (request.current === current) request.current = null;
+        refreshing = false;
+        if (active && changedDuringRefresh) {
+          changedDuringRefresh = false;
+          refresh();
+        }
+      });
+    };
 
+    const onAccessChange = () => {
+      // A save may finish after the current request read the old grants.
+      if (refreshing) changedDuringRefresh = true;
+      else refresh();
+    };
+    refreshRef.current = refresh;
+    window.addEventListener("focus", refresh);
+    window.addEventListener(MEMBER_ACCESS_CHANGED, onAccessChange);
+    refresh();
+    return () => {
+      active = false;
+      refreshRef.current = () => undefined;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(MEMBER_ACCESS_CHANGED, onAccessChange);
+    };
+  }, [notify, reload, userId]);
 
+  const current = result?.userId === userId ? result : null;
+  const member = current?.member ?? null;
+  const status: FeatureStatus = current ? (member ? "ready" : "unavailable") : "loading";
   const canAccess = useCallback((feature: string) => member?.features.includes(feature) ?? false, [member?.features]);
   const value = useMemo(() => ({ authUserId: userId, status, member, canAccess, reload }), [userId, status, member, canAccess, reload]);
   return <FeatureContext.Provider value={value}>{children}</FeatureContext.Provider>;

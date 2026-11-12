@@ -29,7 +29,10 @@ beforeAll(async () => {
   await db.exec("create schema partner_deals; create table partner_deals.member_grants(member_id uuid not null,capability text not null,active boolean not null default true,primary key(member_id,capability));");
   await db.query("insert into partner_deals.member_grants values($1,'marketing',true)", [id(3)]);
   await db.exec(readFileSync(new URL("../db/migrations/058_partner_deal_space_access.sql", import.meta.url), "utf8"));
-
+  await db.exec(`
+    create function partner_deals.finance_reviewer(uuid, text, text) returns boolean
+      language sql as $$ select false $$;
+  `);
 }, 60000);
 afterAll(async () => { await db?.close(); });
 describe("department and space access", () => {

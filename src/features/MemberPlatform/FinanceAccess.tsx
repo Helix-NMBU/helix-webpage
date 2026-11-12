@@ -1,4 +1,4 @@
-import { LOCAL_ACCESS_CHANGED } from "./member-access-api";
+import { MEMBER_ACCESS_CHANGED } from "./member-access-api";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -171,8 +171,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   useEffect(() => {
     const onFocus = () => revalidate();
     window.addEventListener("focus", onFocus);
-    window.addEventListener(LOCAL_ACCESS_CHANGED, onFocus);
-    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener(LOCAL_ACCESS_CHANGED, onFocus); };
+    window.addEventListener(MEMBER_ACCESS_CHANGED, onFocus);
+    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener(MEMBER_ACCESS_CHANGED, onFocus); };
   }, [revalidate]);
   const bankSnapshot = useCallback(() => api.bankSnapshot(), [api]);
   const mutate = useCallback(async (body: Record<string, unknown>) => {

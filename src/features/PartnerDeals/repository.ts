@@ -29,14 +29,6 @@ const localRepository:PipelineRepository={
 };
 export function pipelineRepository():PipelineRepository{return isLocalMemberMode()?localRepository:createPipelineRepository();}
 
-/** Check the shared view directly; only an authorized response exposes its navigation. */
-export async function canViewAgreements(): Promise<boolean> {
- if (isLocalMemberMode()) return localMemberHasPartnerSpace("partner-agreements");
- const token=await memberSessionToken({current:null});
- const response=await fetch("/api/partner-deals?view=shared",{cache:"no-store",headers:{Authorization:`Bearer ${token}`}});
- return response.ok;
-}
-
 export type FinanceReviewCandidate = {id:string;revision:number;reference:string;status:string;amountOre:string;expectedDate:string|null};
 export type FinanceReview = {id:string;manualFunding?:boolean;partner:string;season:string;amountOre:string;candidates:FinanceReviewCandidate[];linkedFunding:(Omit<FinanceReviewCandidate,"expectedDate"> & {matchesAgreement?:boolean;canUnlink?:boolean})|null};
 export interface FinanceReviewRepository { load():Promise<FinanceReview[]>; resolve(id:string, resolution:"link"|"unlink"|"separate"|"verified", fundingId?:string, expectedRevision?:number, snapshot?:FinanceReviewCandidate[]):Promise<void> }
@@ -50,8 +42,4 @@ export function financeReviewRepository():FinanceReviewRepository {
   return result;
  }
  return {load:async()=>await request() as FinanceReview[],resolve:async(reviewId,resolution,fundingId,expectedRevision,snapshot)=>{await request({action:"resolveFinanceReview",reviewId,resolution,fundingId,expectedRevision,snapshot,confirmed:true});}};
-}
-export async function canViewFinanceReviews():Promise<boolean> {
- if(isLocalMemberMode())return false;
- try { await financeReviewRepository().load(); return true; } catch { return false; }
 }

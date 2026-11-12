@@ -8,6 +8,8 @@ export const WORKSPACE_SPACES = [
   { key: "partner-agreements", label: "Partner agreements" },
 ] as const;
 export type WorkspaceSpace = typeof WORKSPACE_SPACES[number]["key"];
+export type SponsorPageAccess = { pipeline: boolean; agreements: boolean; financeReviews: boolean };
+
 export interface WorkspaceAccessChange {
   memberId: string;
   expectedRevision: number;

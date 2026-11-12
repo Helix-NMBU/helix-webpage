@@ -23,7 +23,7 @@ const departmentOptions: AccessDepartment[] = [
   { id: "logistics", name: "Logistics" },
 ];
 const LOCAL_SPACE_ACCESS_KEY = "helix-member-local-space-access-v1";
-export const LOCAL_ACCESS_CHANGED = "helix-member-local-access-changed";
+export const MEMBER_ACCESS_CHANGED = "helix-member-access-changed";
 function savedLocalSpaces(): Record<string, WorkspaceSpace[]> {
   if (!isLocalMemberMode() || !localMemberSignedIn()) return {};
   try {
@@ -102,6 +102,7 @@ export async function saveAccessAssignment(owner: { current: string | null }, in
         ? { ...member, departmentId: input.departmentId, roleKeys: input.roleKeys }
         : member),
     };
+    window.dispatchEvent(new Event(MEMBER_ACCESS_CHANGED));
     return;
   }
   const token = await getToken(owner);
@@ -112,6 +113,7 @@ export async function saveAccessAssignment(owner: { current: string | null }, in
   });
   const body = await response.json().catch(() => null) as { error?: string } | null;
   if (!response.ok) throw new Error(body?.error || "Could not save member access.");
+  window.dispatchEvent(new Event(MEMBER_ACCESS_CHANGED));
 }
 
 export async function saveWorkspaceAccess(owner: { current: string | null }, input: WorkspaceAccessChange): Promise<void> {
@@ -125,7 +127,7 @@ export async function saveWorkspaceAccess(owner: { current: string | null }, inp
     await repository.saveMember({ action: "save_member", id: member.id, expectedRevision: input.expectedRevision, name: member.name, helixRole: member.helixRole, departments: input.departments });
     localDirectory = { ...directory, members: directory.members.map(item => item.id === input.memberId ? { ...item, spaceKeys: input.spaceKeys } : item) };
     try { localStorage.setItem(LOCAL_SPACE_ACCESS_KEY, JSON.stringify({ ...savedLocalSpaces(), [input.memberId]: input.spaceKeys })); } catch { /* Keep the grant in memory when storage is unavailable. */ }
-    window.dispatchEvent(new Event(LOCAL_ACCESS_CHANGED));
+    window.dispatchEvent(new Event(MEMBER_ACCESS_CHANGED));
     return;
   }
   const token = await getToken(owner);
@@ -136,4 +138,5 @@ export async function saveWorkspaceAccess(owner: { current: string | null }, inp
   });
   const body = await response.json().catch(() => null) as { error?: string } | null;
   if (!response.ok) throw new Error(body?.error || "Could not save member access.");
+  window.dispatchEvent(new Event(MEMBER_ACCESS_CHANGED));
 }

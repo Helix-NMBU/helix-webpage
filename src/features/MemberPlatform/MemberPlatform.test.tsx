@@ -135,6 +135,52 @@ describe("internal member platform", () => {
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/member-login?__module=workspace")).toHaveLength(2);
   });
 
+  it("uses member access for sponsor links and fetches records only on the sponsor route", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    const request = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input) === "/api/member-access?action=self") {
+        return Response.json({ ...selfAccess, sponsorPages: { pipeline: true, agreements: true, financeReviews: true } });
+      }
+      if (String(input) === "/api/partner-deals?view=pipeline") {
+        return Response.json({ deals: [], organizations: [], seasons: [], canManage: true });
+      }
+      return request(input, init);
+    });
+
+    const sponsorDataRequests = () => vi.mocked(fetch).mock.calls
+      .map(([url]) => String(url))
+      .filter(url => /^\/api\/partner-deals\?view=(pipeline|shared|financeReviews)$/.test(url));
+
+    await open("/");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Toggle Business & Marketing pages"]')?.click();
+      container.querySelector<HTMLButtonElement>('[aria-label="Toggle Finance pages"]')?.click();
+    });
+    for (const href of ["/sponsor-pipeline", "/partner-deals", "/finance/sponsor-reviews"]) {
+      expect(container.querySelector(`a[href="${href}"]`)).not.toBeNull();
+    }
+    await act(async () => router.navigate("/notifications"));
+    await act(async () => router.navigate("/"));
+    expect(sponsorDataRequests()).toEqual([]);
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/member-access?action=self")).toHaveLength(1);
+
+    await act(async () => router.navigate("/sponsor-pipeline"));
+    await vi.waitFor(() => expect(sponsorDataRequests()).toEqual(["/api/partner-deals?view=pipeline"]));
+  });
+
+  it("keeps the funding review link behind Finance access", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    financialsAllowed = false;
+    const request = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => String(input) === "/api/member-access?action=self"
+      ? Response.json({ ...selfAccess, sponsorPages: { pipeline: false, agreements: false, financeReviews: true } })
+      : request(input, init));
+    await open("/");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Toggle Finance pages"]')?.click());
+    expect(container.querySelector('a[href="/finance/sponsor-reviews"]')).toBeNull();
+  });
+
   it("lets a granted platform administrator edit access from an icon in Members", async () => {
     session.landing.mockResolvedValue(signedIn);
     workspaceDirectory.members = [{ id: "other", name: "Other Member", helixRole: null, role: "Member", joinedAt: null, lastSeenAt: null, revision: 1 }];
@@ -278,7 +324,7 @@ describe("internal member platform", () => {
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
 
-  it("preloads once at login and retains data and access across navigation and focus", async () => {
+  it("retains preloaded recruiting data while refreshing member access on focus", async () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     recruitment.list.mockResolvedValue([{ id: "app", created_at: "2026-10-26", season: "S27", full_name: "Applicant One", email: "one@example.test", position_title: "Engineer", study_program: "Robotics" }]);
@@ -288,10 +334,12 @@ describe("internal member platform", () => {
     await act(async () => router.navigate("/recruiting"));
     await vi.waitFor(() => expect(container.textContent).toContain("Applicant One"));
     await act(async () => router.navigate("/profile"));
+    const selfRequests = () => vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/member-access?action=self");
+    expect(selfRequests()).toHaveLength(1);
     await act(async () => window.dispatchEvent(new Event("focus")));
     await act(async () => router.navigate("/recruiting"));
     expect(container.textContent).toContain("Applicant One");
-    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).startsWith("/api/member-access?action=self"))).toHaveLength(1);
+    expect(selfRequests()).toHaveLength(2);
     expect(recruitment.session).toHaveBeenCalledOnce();
     expect(recruitment.list).toHaveBeenCalledOnce();
     expect(recruitment.positions).toHaveBeenCalledOnce();
