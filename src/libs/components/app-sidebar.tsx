@@ -1,4 +1,3 @@
-import { LOCAL_ACCESS_CHANGED } from "@/features/MemberPlatform/member-access-api";
 import * as React from "react";
 import {
   IconBell,
@@ -33,7 +32,6 @@ import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAcces
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 import { financeRoutes } from "@/features/Finance/routes";
-import { canViewAgreements, canViewFinanceReviews, pipelineRepository } from "@/features/PartnerDeals/repository";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -56,25 +54,12 @@ export function AppSidebar({
   const workspace = workspaceSession?.data;
   const notify = useNotify();
   const [savingOrder, setSavingOrder] = React.useState(false);
-  const [pipelineAllowed, setPipelineAllowed] = React.useState(false);
-  const [agreementsAllowed, setAgreementsAllowed] = React.useState(false);
-  const [financeReviewsAllowed, setFinanceReviewsAllowed] = React.useState(false);
-  React.useEffect(() => {
-    let active = true; let version = 0;
-    const check = () => {
-      const request = ++version;
-      void canViewFinanceReviews().then(allowed => { if (active && request === version) setFinanceReviewsAllowed(allowed); }).catch(() => { if (active && request === version) setFinanceReviewsAllowed(false); });
-      void canViewAgreements().then(allowed => { if (active && request === version) setAgreementsAllowed(allowed); }).catch(() => { if (active && request === version) setAgreementsAllowed(false); });
-      void pipelineRepository().load().then(result => { if (active && request === version) setPipelineAllowed(result.canManage); }).catch(() => { if (active && request === version) setPipelineAllowed(false); });
-    };
-    check(); window.addEventListener("focus", check); window.addEventListener(LOCAL_ACCESS_CHANGED, check);
-    return () => { active = false; window.removeEventListener("focus", check); window.removeEventListener(LOCAL_ACCESS_CHANGED, check); };
-  }, [location.pathname]);
+  const sponsorPages = featureAccess.member?.sponsorPages;
   const businessPath = departmentPath("Business & Marketing");
   const businessDepartment = workspace?.departments?.find(department => departmentPath(department.name) === businessPath);
   const businessItems = [
-    ...(pipelineAllowed ? [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] : []),
-    ...(agreementsAllowed ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconContract }] : []),
+    ...(sponsorPages?.pipeline ? [{ title: "Pipeline", url: "/sponsor-pipeline", icon: IconLayoutKanban }] : []),
+    ...(sponsorPages?.agreements ? [{ title: "Partner agreements", url: "/partner-deals", icon: IconContract }] : []),
   ];
   const businessActive = businessItems.some(item => item.url === location.pathname);
   const managementPath = departmentPath("Management");
@@ -91,7 +76,7 @@ export function AppSidebar({
   const financeItems = finance.access === "allowed" ? [
     { title: "Financial overview", url: "/finance" },
     { title: "Budgets", url: "/finance/budgets" },
-    ...(financeReviewsAllowed ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
+    ...(sponsorPages?.financeReviews ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
     ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
   ] : [];
   const financeActive = financeItems.some(item => item.url === location.pathname);

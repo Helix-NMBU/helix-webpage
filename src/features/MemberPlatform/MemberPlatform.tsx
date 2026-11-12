@@ -1,5 +1,5 @@
 import { lazy, useCallback, useEffect, useState, type ReactNode } from "react";
-import { WorkspaceShellSkeleton } from "./LoadingSkeletons";
+import { ProfileContentSkeleton, WorkspaceShellSkeleton } from "./LoadingSkeletons";
 import {
   Navigate,
   Outlet,
@@ -9,10 +9,10 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
+import { DeferredPage } from "@libs/components/DeferredPage";
 import { Button } from "@libs/components/ui/button";
 import { TooltipProvider } from "@libs/components/ui/tooltip";
 import CVBankLogin from "../CVBank/Login";
-import MemberCV from "../MemberCV/MemberCV";
 import {
   clearMemberLanding,
   ensureMemberLanding,
@@ -40,6 +40,7 @@ import "@fontsource-variable/geist";
 import "./member-platform.css";
 import "./member-theme.css";
 
+const loadMemberCV = () => import("../MemberCV/MemberCV");
 const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
 const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
 const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
@@ -171,7 +172,7 @@ export default function MemberPlatform() {
             <Route path="/" element={<MemberAccess />}>
               <Route element={<MemberShell />}>
                 <Route index element={<WorkspaceHomePreview />} />
-                <Route path="profile" element={<MemberCV />} />
+                <Route path="profile" element={<DeferredPage load={loadMemberCV} fallback={<ProfileContentSkeleton />} />} />
                 <Route path="notifications" element={<MemberNotificationsPage />} />
                 <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
                 <Route path="sponsor-pipeline" element={<SponsorPipeline />} />
