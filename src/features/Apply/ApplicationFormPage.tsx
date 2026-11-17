@@ -1,5 +1,5 @@
-import { IconCheck, IconX } from "@tabler/icons-react";
-import { useEffect, useRef, useState } from "react";
+import { IconCheck } from "@tabler/icons-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { useGSAP } from "@gsap/react";
@@ -38,7 +38,8 @@ const OTHER_PROGRAM = "Not listed / other";
 const STUDY_YEARS = ["1st year", "2nd year", "3rd year", "4th year", "5th year"];
 
 const MAX_MOTIVATION_CHARS = 250;
-const MAX_CV_BYTES = 500 * 1024; // 500 KB
+const MAX_CV_BYTES = 500 * 1024;
+const CvUpload = lazy(() => import("./CvUpload"));
 
 const STEPS = [
   { key: "position", title: "Position", question: "Which position are you applying for?" },
@@ -662,16 +663,19 @@ export default function ApplicationFormPage() {
                       <>
                         <p style={questionStyle}>{currentStep.question}</p>
                         <p style={hintStyle}>PDF, max 500 KB.</p>
-                        <FileDropField
-                          accept="application/pdf"
-                          hint="PDF, max 500 KB"
-                          file={cvFile}
-                          error={errors.cv}
-                          onSelect={(file) => {
-                            setCvFile(file);
-                            setErrors((prev) => { const n = { ...prev }; delete n.cv; return n; });
-                          }}
-                        />
+                        <Suspense fallback={null}>
+                          <CvUpload
+                            maxSize={MAX_CV_BYTES}
+                            file={cvFile}
+                            invalid={!!errors.cv}
+                            onReject={(error) => setErrors((prev) => ({ ...prev, cv: error }))}
+                            onSelect={(file) => {
+                              setCvFile(file);
+                              setErrors((prev) => { const next = { ...prev }; delete next.cv; return next; });
+                            }}
+                          />
+                        </Suspense>
+                        {errors.cv && <p id="application-cv-error" style={errorTextStyle} role="alert">{errors.cv}</p>}
                       </>
                     )}
 
@@ -794,129 +798,6 @@ export default function ApplicationFormPage() {
             </motion.form>
         </AnimatePresence>
       </div>
-    </div>
-  );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-function FileDropField({
-  hint,
-  accept,
-  file,
-  error,
-  onSelect,
-}: {
-  hint: string;
-  accept: string;
-  file: File | null;
-  error?: string;
-  onSelect: (file: File | null) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const borderColor = error ? "#dc2626" : dragging || file ? "#002EC4" : "rgba(3,9,74,0.25)";
-
-  return (
-    <div>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          const dropped = e.dataTransfer.files?.[0];
-          if (dropped) onSelect(dropped);
-        }}
-        style={{
-          border: `1.5px dashed ${borderColor}`,
-          borderRadius: "8px",
-          backgroundColor: dragging ? "rgba(0,46,196,0.04)" : "rgba(3,9,74,0.02)",
-          padding: "32px 16px",
-          textAlign: "center",
-          cursor: "pointer",
-          transition: "all 0.18s ease",
-          outline: "none",
-        }}
-        onFocus={(e) => (e.currentTarget.style.borderColor = "#002EC4")}
-        onBlur={(e) => (e.currentTarget.style.borderColor = borderColor)}
-      >
-        {file ? (
-          <div className="flex items-center justify-center gap-3">
-            <span
-              style={{
-                fontSize: "14px",
-                color: "#03094A",
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                maxWidth: "280px",
-              }}
-            >
-              {file.name}
-            </span>
-            <span style={{ fontSize: "12px", color: "rgba(3,9,74,0.4)", flexShrink: 0 }}>
-              {formatBytes(file.size)}
-            </span>
-            <button
-              type="button"
-              aria-label="Remove file"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(null);
-                if (inputRef.current) inputRef.current.value = "";
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "22px",
-                height: "22px",
-                flexShrink: 0,
-                borderRadius: "50%",
-                border: "1.5px solid rgba(3,9,74,0.25)",
-                background: "none",
-                cursor: "pointer",
-                color: "#03094A",
-              }}
-            >
-              <IconX width={9} height={9} stroke={3.6} aria-hidden="true" />
-            </button>
-          </div>
-        ) : (
-          <>
-            <p style={{ fontSize: "14px", color: "#03094A", fontWeight: 500, marginBottom: "2px" }}>
-              Click or drop a file here
-            </p>
-            <p style={{ fontSize: "12px", color: "rgba(3,9,74,0.4)" }}>{hint}</p>
-          </>
-        )}
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const picked = e.target.files?.[0];
-            if (picked) onSelect(picked);
-          }}
-        />
-      </div>
-      {error && <p style={errorTextStyle}>{error}</p>}
     </div>
   );
 }

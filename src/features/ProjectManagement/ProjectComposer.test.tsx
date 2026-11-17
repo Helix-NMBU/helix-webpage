@@ -91,7 +91,7 @@ describe("project creation composer", () => {
   });
   it("supports keyboard calendar navigation, bounded target dates and clearing optional dates",async()=>{
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-10-15T12:00:00Z"));
+    vi.setSystemTime(new Date("2026-10-30T12:00:00Z"));
     await open();await date("Start date");
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Target date"]')!.click());
     const previous=document.querySelector<HTMLButtonElement>(`[role="grid"] [aria-label="${formatDate(osloDate())}"]`)!;
@@ -99,9 +99,17 @@ describe("project creation composer", () => {
     expect(previous.disabled).toBe(true);
     const focused=document.querySelector<HTMLButtonElement>('[role="grid"] button[tabindex="0"]')!;
     const next=addDays(focused.dataset.day!,1);
-    await act(async()=>focused.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true})));
+    await act(async()=>{
+      focused.focus();
+      focused.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));
+    });
     expect((document.activeElement as HTMLElement).dataset.day).toBe(next);
+    expect(document.querySelector('[role="grid"]')?.getAttribute("aria-label")).toBe("November 2026");
     await act(async()=>document.querySelector<HTMLButtonElement>(`[data-day="${next}"]`)!.click());
+    await settleFocus();
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Target date"]')!.click());
+    await act(async()=>document.querySelector<HTMLButtonElement>(`[data-day="${next}"]`)!.click());
+    expect(document.querySelector('[aria-label="Target date"]')?.getAttribute("aria-expanded")).toBe("false");
     await settleFocus();
     await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Target date"]')!.click());
     await click("Clear date");expect(document.querySelector<HTMLButtonElement>('[aria-label="Target date"]')?.textContent).toBe("Target date");

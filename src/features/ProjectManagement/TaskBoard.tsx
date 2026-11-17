@@ -1,9 +1,10 @@
 import { useId, useState } from "react";
-import { useTaskBoardDrag } from "./useTaskBoardDrag";
+import { useTaskBoardMove } from "./useTaskBoardMove";
 import { BlockedTaskDropDialog } from "./BlockedTaskDropDialog";
 import { Link } from "react-router-dom";
 import { IconCube, IconDiamonds, IconUserPlus } from "@tabler/icons-react";
 import { Card, CardContent } from "@libs/components/ui/card";
+import { BoardTransfer, BoardTransferCard, BoardTransferColumn } from "@libs/components/ui/board-transfer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { AssigneeAvatars, AssigneePicker } from "./TaskAssignees";
 import { canManageTask } from "./permissions";
@@ -20,6 +21,7 @@ import { osloDate } from "./model";
 import {
   STATUS_LABELS,
   TASK_STATUSES,
+  TASK_WORKFLOW_STATUSES,
   type ProjectWorkspace,
   type ProjectMutation,
   type Task,
@@ -87,7 +89,13 @@ export function TaskBoard({
   onSaveProperties?: SaveTaskProperties;
 }) {
   const records = tasks.filter((task) => task.kind === kind);
-  const drag = useTaskBoardDrag(records, workspace, busy, onStatusChange);
+  const tasksById = new Map(records.map(task => [task.id, task]));
+  const movement = useTaskBoardMove(tasksById, workspace, busy, onStatusChange);
+  const statuses = TASK_STATUSES.filter(
+    (status) => status !== "cancelled" || records.some((task) => task.status === status),
+  );
+  const groups = statuses.map(status => [status, records.filter(task => task.status === status)] as const);
+  const lists = Object.fromEntries(groups.map(([status, group]) => [status, group.map(task => task.id)]));
   const instructionsId = useId();
   const projects = new Map(
     workspace.projects.map((project) => [project.id, project]),
@@ -103,34 +111,39 @@ export function TaskBoard({
   return (
     <>
       <p id={instructionsId} className="sr-only">
-        {`Drag ${noun}s between columns or use the status menu. Moving to Blocked requires a reason.`}
+        {`Drag ${noun}s between columns or use the status menu. Moving to Blocked requires a reason.`} To move a focused card, press Space, then Left or Right, then Space again.
       </p>
-      <div
-        ref={drag.boardRef}
+      <BoardTransfer
+        lists={lists}
+        canMove={(id) => {
+          const task = tasksById.get(id);
+          return !!task && movement.canMove(task);
+        }}
+        accepts={(column) => TASK_WORKFLOW_STATUSES.some(status => status === column)}
+        columnLabel={(column) => {
+          const status = statuses.find(value => value === column);
+          return status ? STATUS_LABELS[status] : column;
+        }}
+        onMove={(id, column) => {
+          const task = tasksById.get(id);
+          const status = TASK_WORKFLOW_STATUSES.find(value => value === column);
+          if (task && status) movement.move(task, status);
+        }}
         data-task-board
-        onDragOver={drag.boardOver}
-        onDragLeave={drag.boardLeave}
         aria-describedby={instructionsId}
-        aria-busy={busy || drag.pending}
+        aria-busy={busy || movement.pending}
         role="region"
         aria-label={kind === "milestone" ? "Milestone board" : "Task board"}
         tabIndex={0}
         className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto overscroll-x-contain pb-3"
       >
-        {TASK_STATUSES.filter(
-          (status) =>
-            status !== "cancelled" ||
-            records.some((task) => task.status === status),
-        ).map((status) => {
-          const group = records.filter((task) => task.status === status);
+        {groups.map(([status, group]) => {
           return (
-            <section
+            <BoardTransferColumn
               key={status}
+              value={status}
               aria-label={`${STATUS_LABELS[status]} column`}
-              onDragOver={(event) => drag.enter(event, status)}
-              onDragLeave={(event) => drag.leave(event, status)}
-              onDrop={(event) => drag.drop(event, status)}
-              className={`flex w-[22rem] flex-none flex-col rounded-xl p-2 transition-colors ${drag.over === status ? "bg-accent ring-2 ring-inset ring-primary" : "bg-muted/60 dark:bg-black/20"}`}
+              className="flex w-[22rem] flex-none flex-col rounded-xl bg-muted/60 p-2 transition-colors dark:bg-black/20 data-over:bg-accent data-over:ring-2 data-over:ring-inset data-over:ring-primary dark:data-over:bg-accent"
             >
               <h3 className="flex shrink-0 items-center gap-2 px-2 py-3 text-sm font-medium">
                 <TaskStatusIcon status={status} />
@@ -160,13 +173,13 @@ export function TaskBoard({
                   const overdue =
                     !closed && task.deadline && task.deadline < today;
                   return (
-                    <Card
+                    <BoardTransferCard
                       key={task.id}
-                      draggable={drag.canDrag(task)}
-                      onDragStart={(event) => drag.start(event, task)}
-                      onDragEnd={drag.end}
-                      onClickCapture={drag.preventDragClick}
-                      className={`relative min-h-32 shrink-0 gap-0 py-2.5 transition-colors bg-card hover:border-muted-foreground/40 dark:bg-card dark:ring-foreground/5 dark:hover:ring-foreground/35 ${drag.canDrag(task) ? "cursor-grab active:cursor-grabbing" : ""} ${drag.draggingId === task.id ? "opacity-50" : ""}`}
+                      value={task.id}
+                      movable={movement.canMove(task)}
+                      render={<Card />}
+                      data-slot="card"
+                      className="relative min-h-32 shrink-0 gap-0 bg-card py-2.5 transition-colors hover:border-muted-foreground/40 dark:bg-card dark:ring-foreground/5 dark:hover:ring-foreground/35 data-movable:touch-pan-y data-movable:cursor-grab data-movable:active:cursor-grabbing data-dragging:opacity-50 focus-visible:outline-2 focus-visible:outline-ring"
                       role="article"
                       aria-label={task.title}
                     >
@@ -176,14 +189,15 @@ export function TaskBoard({
                             <TaskStatusControl
                               task={task}
                               workspace={workspace}
-                              busy={busy || drag.locked}
+                              busy={busy || movement.locked}
                               onSave={onStatusChange}
                             />
                           </div>
                           <button
                             type="button"
                             title={task.title}
-                            className="min-w-0 flex-1 text-left text-sm font-medium leading-5 after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                            data-board-drag-handle
+                            className="touch-pan-y min-w-0 flex-1 text-left text-sm font-medium leading-5 after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
                             onClick={() => onOpen(task)}
                           >
                             <span className="line-clamp-2 [overflow-wrap:anywhere]">
@@ -192,17 +206,17 @@ export function TaskBoard({
                           </button>
                           {show("assignee") && (
                             <span className="relative z-10 shrink-0">
-                              <BoardAssignees task={task} workspace={workspace} busy={busy || drag.locked} onSave={onSaveAssignees} onOpen={onOpen} />
+                              <BoardAssignees task={task} workspace={workspace} busy={busy || movement.locked} onSave={onSaveAssignees} onOpen={onOpen} />
                             </span>
                           )}
                         </div>
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                           {show("priority") && (
                             <span className="relative z-10 inline-flex shrink-0 items-center">
-                              {onSaveProperties && canManageTask(task, workspace) ? <MilestonePriorityControl task={task} busy={busy || drag.locked} onSave={onSaveProperties} compact /> : <PriorityIndicator priority={task.priority} />}
+                              {onSaveProperties && canManageTask(task, workspace) ? <MilestonePriorityControl task={task} busy={busy || movement.locked} onSave={onSaveProperties} compact /> : <PriorityIndicator priority={task.priority} />}
                             </span>
                           )}
-                          {show("deadline") && <span className={`relative z-10 ${overdue ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}>{onSaveProperties && canManageTask(task, workspace) ? <MilestoneDateControl task={task} busy={busy || drag.locked} onSave={onSaveProperties} pill /> : <span className="inline-flex h-6 items-center rounded-full border px-2">{task.deadline ? <TargetDate deadline={task.deadline} /> : "No target date"}</span>}</span>}
+                          {show("deadline") && <span className={`relative z-10 ${overdue ? "text-[oklch(0.577_0.245_27.325)] dark:text-[#D18A8A]" : "text-muted-foreground"}`}>{onSaveProperties && canManageTask(task, workspace) ? <MilestoneDateControl task={task} busy={busy || movement.locked} onSave={onSaveProperties} pill /> : <span className="inline-flex h-6 items-center rounded-full border px-2">{task.deadline ? <TargetDate deadline={task.deadline} /> : "No target date"}</span>}</span>}
                           {kind === "task" && show("project") && project && <Link draggable={false} to={`/projects/${project.id}`} title={project.name} aria-label={`Open project ${project.name}`} className="relative z-10 inline-flex h-6 min-w-0 max-w-44 items-center gap-1.5 rounded-full border px-2 hover:bg-accent"><IconCube aria-hidden="true" className="size-3.5 shrink-0 text-primary" /><span className="truncate">{project.name}</span></Link>}
                           {kind === "task" && show("milestone") && milestone && project && <MilestonePill milestone={milestone} projectId={project.id} />}
                           {kind === "milestone" && (
@@ -232,7 +246,7 @@ export function TaskBoard({
                         </div>
                         <p className="text-xs text-muted-foreground"><time dateTime={task.createdAt}>Created {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Europe/Oslo" }).format(new Date(task.createdAt))}</time></p>
                       </CardContent>
-                    </Card>
+                    </BoardTransferCard>
                   );
                 })}
                 {!group.length && (
@@ -241,17 +255,17 @@ export function TaskBoard({
                   </p>
                 )}
               </div>
-            </section>
+            </BoardTransferColumn>
           );
         })}
-      </div>
-      {drag.blockedTask && (
+      </BoardTransfer>
+      {movement.blockedTask && (
         <BlockedTaskDropDialog
-          key={`${drag.blockedTask.id}-${drag.blockedTask.revision}`}
-          task={drag.blockedTask}
-          busy={busy || drag.pending}
-          onClose={drag.closeBlocked}
-          onSave={drag.saveBlocked}
+          key={`${movement.blockedTask.id}-${movement.blockedTask.revision}`}
+          task={movement.blockedTask}
+          busy={busy || movement.pending}
+          onClose={movement.closeBlocked}
+          onSave={movement.saveBlocked}
         />
       )}
     </>
