@@ -6,6 +6,12 @@
 - Use icons only when they help navigation, convey useful status, or identify an icon-only control. Avoid decorative icons in headings and text buttons.
 - Keep local test accounts and data restricted to the dedicated development mode on loopback. Production must continue to require real authentication and authorization.
 
+## Reuse UI behavior
+
+- Before adding or changing an interaction, look for an existing Helix implementation in `src/libs/components/ui` and related features. Reuse suitable shared shadcn components and Radix behavior first.
+- When a shared control does not cover the interaction, use `node_modules/@ui-sdk/react/docs/llms.txt` to find the SDK's components and behaviors before writing custom keyboard navigation, focus, selection, dismissal, or drag and drop. Reuse the smallest component or behavior that fits. For custom composition, use the component authoring guidance in `node_modules/@ui-sdk/core/skills/ui-sdk/SKILL.md`.
+- Use Helix components and theme tokens for presentation. Keep workflow rules and persistence in the feature. Verify the affected keyboard and pointer flows, including focus and dismissal where applicable.
+
 ## Local validation and delivery
 
 - Validate changes locally using an untracked `.env` or `.env.local` file. Hosted staging is no longer part of the delivery workflow.

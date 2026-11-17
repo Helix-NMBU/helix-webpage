@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { boardAssignmentMutation, boardPropertyMutation, TaskBoard } from "./TaskBoard";
+import { dragBoardCard } from "@libs/components/ui/board-transfer.test-support";
 import { initialLocalWorkspace } from "./local-repository";
 import type { ProjectWorkspace } from "./types";
 const notify = vi.hoisted(() => vi.fn());
@@ -146,26 +147,10 @@ describe("shared task board", () => {
     await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[data-slot="popover-content"] button')].find(button => button.textContent === "Save leads")!.click());
     expect(onSaveAssignees).toHaveBeenCalledWith(milestone, [data.members[0].id]);
   });
-  async function dragEvent(
-    target: Element,
-    type: string,
-    transfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() },
-  ) {
-    const event = new Event(type, { bubbles: true, cancelable: true });
-    Object.defineProperty(event, "dataTransfer", { value: transfer });
-    await act(async () => target.dispatchEvent(event));
-    return event;
-  }
   async function dropTask(title: string, status: string) {
-    const card = container.querySelector(
-      `[role="article"][aria-label="${title}"]`,
-    )!;
+    const card = container.querySelector(`[role="article"][aria-label="${title}"]`)!;
     const target = container.querySelector(`[aria-label="${status} column"]`)!;
-    const transfer = { effectAllowed: "", dropEffect: "", setData: vi.fn() };
-    await dragEvent(card, "dragstart", transfer);
-    await dragEvent(target, "dragover", transfer);
-    await dragEvent(target, "drop", transfer);
-    await dragEvent(card, "dragend", transfer);
+    await dragBoardCard(card, target);
   }
   async function fillReason(value: string) {
     const field = document.querySelector<HTMLTextAreaElement>(
@@ -195,8 +180,8 @@ describe("shared task board", () => {
     expect(
       container
         .querySelector(`[role="article"][aria-label="${task.title}"]`)
-        ?.getAttribute("draggable"),
-    ).toBe("true");
+        ?.hasAttribute("data-movable"),
+    ).toBe(true);
     await dropTask(task.title, "In progress");
     expect(onSave).toHaveBeenCalledWith(task, "in_progress", "");
     expect(onOpen).not.toHaveBeenCalled();
@@ -266,10 +251,11 @@ describe("shared task board", () => {
       (task) => task.kind === "task" && task.status === "done",
     )!.status = "cancelled";
     await render(data);
-    await dragEvent(
-      container.querySelector('[aria-label="Done column"]')!,
-      "drop",
-    );
+    await act(async () => {
+      container.querySelector('[aria-label="Done column"]')!.dispatchEvent(
+        new Event("drop", { bubbles: true, cancelable: true }),
+      );
+    });
     await dropTask(task.title, "Todo");
     await dropTask(task.title, "Cancelled");
     expect(onSave).not.toHaveBeenCalled();
@@ -318,8 +304,8 @@ describe("shared task board", () => {
     expect(
       container
         .querySelector(`[role="article"][aria-label="${task.title}"]`)
-        ?.getAttribute("draggable"),
-    ).toBe("false");
+        ?.hasAttribute("data-movable"),
+    ).toBe(false);
     await dropTask(task.title, "Backlog");
     expect(onSave).not.toHaveBeenCalled();
     data.canManage = true;

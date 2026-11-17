@@ -497,6 +497,7 @@ describe("project management interface", () => {
     const next = addDays(goal.deadline!, 1);
     expect(document.activeElement?.getAttribute("aria-label")).toBe(formatDate(next));
     await act(async () => (document.activeElement as HTMLButtonElement).click());
+    expect(mutate).not.toHaveBeenCalled();
     await click("Save date");
     expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "update_milestone", changes: { deadline: next } }));
   });

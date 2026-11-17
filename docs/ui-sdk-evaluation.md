@@ -1,0 +1,17 @@
+# Vercel UI SDK in Helix
+
+Reviewed on 17 November 2026.
+
+Vercel UI SDK lets us build reusable interaction logic underneath our React components. The TypeScript core provides behaviors such as keyboard focus, popup positioning and dismissal, and selection. A component definition brings its state, actions, and named parts together. The React adapter renders those parts, and app code supplies the styles. For example, a picker can combine popup, list navigation, and selection while using Helix's existing visual design. [Upstream repository](https://github.com/vercel-labs/ui) · [Behavior composition](https://ui-sdk.dev/docs/core/compose-behaviors) · [Styling](https://ui-sdk.dev/docs/core/kernel/style-a-component)
+
+Helix already separates some behavior from presentation. The shared shadcn wrappers use Radix Vega, and the searchable select combines a Radix popover with cmdk. UI SDK works at a finer level by letting us combine individual behaviors when there is no suitable shared control. Its parts expose their own attributes for styling. For example, Helix's searchable select sizes its content with `--radix-popover-trigger-width`, so a direct swap would need styling work as well as checking focus and filtering. [UI preset](ui-preset.md) · [shadcn configuration](../components.json) · [SearchableSelect](../src/libs/components/ui/searchable-select.tsx#L24) · [UI SDK styling](https://ui-sdk.dev/docs/core/kernel/style-a-component)
+
+## Adoption in Helix
+
+- The project and milestone date pickers share the SDK Calendar inside the existing shadcn popover. The calendar handles keyboard navigation, focus and date bounds. The project picker applies the selected date immediately. The milestone picker keeps a draft until **Save date**. [Shared calendar](../src/features/ProjectManagement/ProjectCalendar.tsx) · [Calendar behavior](https://ui-sdk.dev/docs/react/components/calendar#accessibility)
+- The task board and sponsor pipeline share `createTransfer` for pointer and keyboard moves between columns. Each feature owns permissions, saving and confirmation. A move to Blocked still needs a reason, and a move to Won still needs confirmation. [Board transfer](../src/libs/components/ui/board-transfer.tsx) · [Drag and drop docs](https://ui-sdk.dev/docs/core/behaviors/drag-and-drop#moving-between-lists)
+- The public application loads the SDK file input at the CV step. The field accepts a single PDF up to 500 KB. [CV upload](../src/features/Apply/CvUpload.tsx) · [File Input docs](https://ui-sdk.dev/docs/react/components/file-input)
+
+The project uses existing Helix controls first, then checks the SDK catalog for custom interactions. Both SDK dependencies are pinned to `0.1.0-beta.6`, the version on npm's default release tag at adoption. The React adapter requires React 19 and lists `@types/react >=19.2.10` as an optional peer. [Repository guidance](../AGENTS.md) · [Helix dependencies](../package.json) · [Beta announcement](https://ui-sdk.dev/docs/core/changelog/introducing-ui-sdk)
+
+Vercel's coding-agent skill helps author components. The runtime bridge is a separate opt-in feature that lets agents inspect components and call actions. Vercel's reported speed gains compare its bridge with browser tools on one settings task. Its UI SDK example took about as long as the other libraries when operated with the same browser tools. [Agent docs and benchmark](https://ui-sdk.dev/docs/agents)

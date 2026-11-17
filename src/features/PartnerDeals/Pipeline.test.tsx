@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPlatform/MemberNotifications";
+import { dragBoardCard } from "@libs/components/ui/board-transfer.test-support";
 import { SponsorPipeline } from "./Pipeline";
 import { PipelineError, createPipelineRepository } from "./repository";
 import type { Deal, PipelineData } from "./types";
@@ -55,20 +56,32 @@ describe("Pipeline",()=>{
  });
  it("moves a dragged card to a different column",async()=>{
   await render();
-  const card=container.querySelector<HTMLElement>('[draggable="true"]')!;
-  const target=container.querySelector<HTMLElement>('[aria-label="Contacted"]')!;
-  const transfer={effectAllowed:"",dropEffect:"",setData:vi.fn()};
-  const drag=async(element:HTMLElement,type:string)=>{const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(event,"dataTransfer",{value:transfer});await act(async()=>element.dispatchEvent(event));};
-  await drag(card,"dragstart");await drag(target,"dragover");await drag(target,"drop");
+  const card=container.querySelector('[role="article"][aria-label="Engine deal"]')!;
+  await dragBoardCard(card,container.querySelector('[aria-label="Contacted"]')!);
   expect(save).toHaveBeenCalledWith(expect.objectContaining({id:"one",stage:"contacted"}));
  });
  it("asks for confirmation when a card is dragged to Won",async()=>{
   await render();
-  const card=container.querySelector<HTMLElement>('[draggable="true"]')!;
-  const target=container.querySelector<HTMLElement>('[aria-label="Won"]')!;
-  const transfer={effectAllowed:"",dropEffect:"",setData:vi.fn()};
-  for(const [element,type] of [[card,"dragstart"],[target,"dragover"],[target,"drop"]] as const){const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(event,"dataTransfer",{value:transfer});await act(async()=>element.dispatchEvent(event));}
+  const card=container.querySelector('[role="article"][aria-label="Engine deal"]')!;
+  await dragBoardCard(card,container.querySelector('[aria-label="Won"]')!);
   expect(document.body.textContent).toContain("Confirm deal as won");expect(confirmWon).not.toHaveBeenCalled();expect(save).not.toHaveBeenCalled();
+ });
+ it("moves a focused card with the keyboard and keeps it in place until drop", async () => {
+  await render();
+  const card = container.querySelector<HTMLElement>('[role="article"][aria-label="Engine deal"]')!;
+  const press = async (key: string) => act(async () => card.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })));
+  await act(async () => card.focus());
+  await press(" ");
+  await press("ArrowRight");
+  expect(container.querySelector('[aria-label="Contacted"]')?.hasAttribute("data-over")).toBe(true);
+  expect(save).not.toHaveBeenCalled();
+  await press("Escape");
+  expect(container.querySelector('[aria-label="Contacted"]')?.hasAttribute("data-over")).toBe(false);
+  await press(" ");
+  await press("ArrowRight");
+  await press(" ");
+  expect(save).toHaveBeenCalledOnce();
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: "one", stage: "contacted" }));
  });
  it("shows six stages and moves a deal without generating a won transition",async()=>{await render();for(const name of ["Lead","Contacted","In discussion","Proposal sent","Won","Lost"])expect(container.querySelector(`[aria-label="${name}"]`)).not.toBeNull();await select("lost");expect(save).toHaveBeenCalledWith(expect.objectContaining({id:"one",expectedRevision:3,stage:"lost"}));expect(save.mock.calls[0][0].contributions[0].id).toBe("contribution-1");expect(save.mock.calls[0][0].deliverables[0].id).toBe("deliverable-1");expect(confirmWon).not.toHaveBeenCalled();});
  it("reviews and explicitly confirms Won, preserving the card when the handoff fails",async()=>{confirmWon.mockRejectedValueOnce(new PipelineError("Try again",503));await render();await select("won");expect(save).not.toHaveBeenCalled();expect(document.body.textContent).toContain("Confirm deal as won");expect(document.body.textContent).toContain("Logo on the car");expect(document.body.textContent).toContain("Owner: Morgan");expect(document.body.textContent).toContain("Due: 2027-02-03");expect(document.body.textContent).toContain("Invoice date: 2026-11-01");expect(confirmWon).not.toHaveBeenCalled();await act(async()=>button("Confirm won").click());expect(confirmWon).toHaveBeenCalledWith("one",3);expect(document.body.textContent).toContain("Could not confirm deal");expect(document.body.textContent).toContain("Engine deal");expect(document.querySelector('[role="dialog"]')).not.toBeNull();});
