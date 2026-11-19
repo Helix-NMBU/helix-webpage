@@ -41,5 +41,9 @@ Specification cases: V-04, V-08.
 
 ## Status
 
-Approved, published in Linear. First eligible work once approved and Deliver is requested. Record real verification and review evidence before closure.
+Closed on the feature branch on 19 November 2026 after coordinator integration and acceptance checks. Main release and full-feature review/PR CI remain separate.
 
+
+## Integrated completion evidence
+
+Worker commit `56415c57534dc3823e242c5a90df2fa98a206ea8`, integration commit `dada27b`. Coordinator inspected the full patch, ran seven relevant files with 104 passing tests including six real PostgreSQL retirement cases, and passed all three typechecks on the integrated code. Worker lint and source function guard11/11 passed. Historical exceptions/optional requests/commitments/payment/voids are preserved; no active threshold enforcement/setting reads remain. Log: `/private/tmp/helix-pba04-integrated-tests.log`. Tracker HELIX-77 is Done; this is not release on main.
