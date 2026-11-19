@@ -76,8 +76,13 @@ async function seasonWithBudget() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
   await sql(`insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true)`);
   await grant(headId, "head_of_finance");
-  await call("head", { action: "createBudget", requestId: requestId() });
-  await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+  // Retained request fulfillment uses genuine historical season approval.
+  // Active season-level create/approve APIs are retired by project budgets.
+  await sql(`insert into finance.budgets (
+    season_id, public_ref, status, approved_by_member_id, approved_on,
+    created_by_member_id, updated_by_member_id
+  ) select id, 'B-S27', 'approved', $1::uuid, '2026-10-01', $1::uuid, $1::uuid
+    from finance.seasons where code='S27'`, [headId]);
   await sql(
     `insert into finance.budget_items (
       budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,

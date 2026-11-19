@@ -1064,7 +1064,7 @@ describe("finance access API", () => {
     expect(await tableCount("documents")).toBe(MAX_PURCHASE_FILES);
   });
 
-  it("ignores historical threshold settings while preserving budget warnings, outbox, and idempotent replay", async () => {
+  it("ignores historical threshold settings while keeping budget previews advisory and registration replay stable", async () => {
     await seedPrivateRows();
     await grant(memberId, "finance");
     await grant(adminId, "head_of_finance");
@@ -1089,6 +1089,12 @@ describe("finance access API", () => {
       ],
       uploadIds: [uploadId],
     };
+    const checked = await call({ token: "member", body: { action: "checkPurchase", requestId: crypto.randomUUID(), purchase } });
+    expect(checked.status).toBe(200);
+    const advisoryWarnings = (checked.body as { warnings: { message: string }[] }).warnings;
+    expect(advisoryWarnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
+    expect(advisoryWarnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
+    expect(advisoryWarnings.some((row) => /approval threshold/i.test(row.message))).toBe(false);
     const versionBefore = await viewVersion();
     const rid = crypto.randomUUID();
     const saved = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
@@ -1096,9 +1102,9 @@ describe("finance access API", () => {
     expect(await viewVersion()).toBe(versionBefore + 1);
 
     const warnings = (saved.body as { warnings?: { message: string }[] }).warnings ?? [];
-    expect(warnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
-    expect(warnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
-    expect(warnings.some((row) => /approval threshold/i.test(row.message))).toBe(false);
+    // This isolated legacy fixture predates070 tracking. Only SQL-generated
+    // warnings may be stored; read-snapshot budget warnings stay in the preview.
+    expect(warnings).toEqual([]);
 
     const exceptions = await sql<{ kind: string; facts: Record<string, string> }>(
       "select kind, facts from finance.exception_reviews",
@@ -1135,8 +1141,7 @@ describe("finance access API", () => {
       [memberId, rid],
     );
     const storedWarnings = stored.rows[0]?.response?.warnings ?? [];
-    expect(storedWarnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
-    expect(storedWarnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
+    expect(storedWarnings).toEqual(warnings);
   });
 
   it("keeps register_purchase advisory lock, item key-share locks, and post-budget quota count in migration 014", () => {

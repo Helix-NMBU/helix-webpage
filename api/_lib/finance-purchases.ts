@@ -452,7 +452,9 @@ export async function performPurchaseMutation(
     }
     const payload = serializePurchaseBody(validated.purchase, {
       registrationYear: registrationYear(),
-      warnings: validated.warnings,
+      // Read-snapshot plan warnings belong to checkPurchase/checkProjectPurchase.
+      // Registration SQL derives discrepancy warnings from the locked approval.
+      warnings: [],
     });
     const registered = await call(db, project ? "select finance.register_project_purchase($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb) as result"
       : "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [

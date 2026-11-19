@@ -440,6 +440,152 @@ describe.skipIf(!url)(
       },
     );
 
+    it("uses locked v2 authority for generic Finance registration when promotion wins", async () => {
+      let budget = await approved();
+      const v1 = budget.approvedVersionId!,
+        entryId = budget.approvedVersion!.entries[0].entryId;
+      const earlier = await change(
+        "departmentLead",
+        await registration(budget, "70"),
+      );
+      budget = await services.projectBudget("lead", budget.id);
+      budget = await write(budget, "lead", "requestProjectBudgetChanges", {
+        reason: "Larger generic purchase quote",
+      });
+      budget = await write(budget, "lead", "saveProjectBudgetEntry", {
+        entry: { ...entry, entryId, plannedNok: "300" },
+      });
+      budget = await write(budget, "lead", "submitProjectBudget");
+      budget = await write(budget, "departmentLead", "approveDepartmentBudget");
+      const v2 = budget.pendingVersionId!,
+        authorized = await change("finance", {
+          action: "authorizeUpload",
+          fileName: "generic-invoice.pdf",
+          contentType: "application/pdf",
+          byteSize: 8,
+        });
+      await putMemoryPdf(storage, authorized.stagingKey!);
+      await change("finance", {
+        action: "finalizeUpload",
+        uploadId: authorized.id,
+      });
+      const purchase: PurchaseInput = {
+        buyerName: "Finance buyer",
+        supplierName: "Supplier",
+        paymentMethod: "team_account",
+        purchaseDate: osloToday(),
+        justification: "Material for the frame",
+        documentKind: "receipt",
+        uploadIds: [authorized.id!],
+        lines: [
+          {
+            systemId: f.system,
+            budgetItemId: entryId,
+            description: "Generic frame order",
+            quantity: "3",
+            amountNok: "60",
+          },
+        ],
+      };
+      const body = {
+        action: "registerPurchase",
+        requestId: randomUUID(),
+        purchase,
+      };
+      const advisory = await change("finance", {
+        action: "checkPurchase",
+        purchase,
+      });
+      expect(advisory.warnings).toContainEqual({
+        message:
+          "Line totals exceed the plan for one budget item by 30.00 NOK.",
+      });
+      const before = await documentSnapshot([earlier.id!]),
+        client = await pool.connect(),
+        held = service(database(client));
+      let savedId: string;
+      try {
+        await client.query("begin");
+        await change(
+          "head",
+          {
+            action: "approveProjectBudget",
+            projectBudgetId: budget.id,
+            expectedRevision: budget.revision,
+          },
+          held,
+        );
+        const pending = outcome(services.mutate("finance", body));
+        await blockedBy(client, "finance.register_purchase(");
+        await client.query("commit");
+        const saved = await pending;
+        expect(saved, JSON.stringify(failures)).toHaveProperty("value");
+        if (!("value" in saved)) throw saved.error;
+        savedId = saved.value.id!;
+        expect(saved.value.warnings).toEqual([]);
+      } finally {
+        await client.query("rollback");
+        client.release();
+      }
+      expect(
+        (
+          await db.query(
+            "select approved_version_id,budget_authority,budget_item_id from finance.purchase_lines where purchase_id=$1::uuid",
+            [savedId!],
+          )
+        ).rows,
+      ).toEqual([
+        {
+          approved_version_id: v2,
+          budget_authority: "project_approved",
+          budget_item_id: entryId,
+        },
+      ]);
+      expect(
+        (
+          await db.query(
+            "select approved_version_id from finance.purchase_lines where purchase_id=$1::uuid",
+            [earlier.id],
+          )
+        ).rows,
+      ).toEqual([{ approved_version_id: v1 }]);
+      expect(
+        (
+          await db.query(
+            "select kind from finance.exception_reviews where purchase_id=$1::uuid",
+            [savedId!],
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (await services.projectBudget("lead", budget.id)).approvedVersion!
+          .entries[0],
+      ).toMatchObject({ actualNok: "130.00", plannedNok: "300.00" });
+      expect(await documentSnapshot([earlier.id!])).toEqual(before);
+      const invoices = await documentSnapshot([earlier.id!, savedId!]);
+      expect(invoices).toHaveLength(2);
+      const replay = await services.mutate("finance", body);
+      expect(replay.id).toBe(savedId!);
+      expect(replay.warnings).toEqual([]);
+      expect(await documentSnapshot([earlier.id!, savedId!])).toEqual(invoices);
+      expect(
+        (
+          await db.query<{ response: { warnings: unknown[] } }>(
+            "select response from finance.idempotency_keys where member_id=$1::uuid and request_id=$2::uuid",
+            [f.finance, body.requestId],
+          )
+        ).rows[0].response.warnings,
+      ).toEqual([]);
+      expect(
+        (
+          await db.query(
+            "select count(*)::int as count,sum(amount_ore)::text as actual from finance.allocations where budget_item_id=$1::uuid",
+            [entryId],
+          )
+        ).rows,
+      ).toEqual([{ count: 2, actual: "13000" }]);
+    });
+
     it.each(["completion", "void"] as const)(
       "never leaves completion after linked void when %s wins the header lock",
       async (first) => {
