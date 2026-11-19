@@ -19,10 +19,10 @@ The current remote base has 11 API functions. The original working tree's two ex
 
 | Ticket | Tracker | State | Worker/worktree/branch | Evidence |
 | --- | --- | --- | --- | --- |
-| PBA-01 | HELIX-76 | running | `/root/pba_01_contracts`; `/Users/henrik.noteless/.codex/worktrees/pba-01-contracts/helix-webpage`; `codex/pba-01-contracts`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | No worker commit yet. |
-| PBA-02 | HELIX-78 | blocked | unassigned | Needs integrated PBA-01. |
+| PBA-01 | HELIX-76 | closed on feature branch | `/root/pba_01_contracts`; `/Users/henrik.noteless/.codex/worktrees/pba-01-contracts/helix-webpage`; `codex/pba-01-contracts`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `5d9e052a733f039166be4a96882b388ccc6fdac2`; integrated `1cadc34`; 17 integrated foundation tests incl3 PG; all3 typechecks; Done in Linear. |
+| PBA-02 | HELIX-78 | ready | pending new isolated assignment | PBA-01 integrated/verified at `1cadc34`. |
 | PBA-03 | HELIX-79 | blocked | unassigned | Needs integrated PBA-02. |
-| PBA-04 | HELIX-77 | closed on feature branch | `/root/pba_04_threshold`; `/private/tmp/helix-pba-04-threshold`; `codex/pba-04-threshold`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `56415c57534dc3823e242c5a90df2fa98a206ea8`; integrated `dada27b`; 104 integrated tests including6 real PG; all3 typechecks; verified Done in Linear. |
+| PBA-04 | HELIX-77 | reopened, repair running | `/root/pba_04_threshold`; `/private/tmp/helix-pba-04-threshold`; `codex/pba-04-threshold`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `56415c57534dc3823e242c5a90df2fa98a206ea8`; integrated `dada27b`; 104 integrated tests including6 real PG; all3 typechecks; initial104 passed; later combined teardown error reopened; repair `/root/pba_04_threshold`, `/private/tmp/helix-pba-04-repair`, `codex/pba-04-cleanup`, base `1cadc34`. |
 | PBA-05 | HELIX-80 | blocked | unassigned | Needs integrated PBA-02. |
 | PBA-06 | HELIX-81 | blocked | unassigned | Needs integrated PBA-05. |
 | PBA-07 | HELIX-82 | blocked | unassigned | Needs integrated PBA-03. |
@@ -38,11 +38,13 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 - Docker has no running daemon. Installed PostgreSQL17 for tests and started an isolated temporary cluster at `/private/tmp/helix-pba-postgres.J3mOMS/data`, bound only to 127.0.0.1:55475. Test URL is `postgresql://postgres@127.0.0.1:55475/postgres`; use unique disposable test databases. No production data is present; no login background service was enabled. Server path pointer: `/private/tmp/helix-pba-postgres-path`.
 - Drive destination/service identity/narrow OAuth scope/reader ACL and real entry-to-project mapping remain release inputs. No live DB or Drive writes are authorized merely for validation. Local fixtures and isolated databases are permitted.
 - Baseline npm run build passed, 9.00 MB static output and 11 source functions. Generated Vercel function compilation has not yet been checked. Log: `/private/tmp/helix-pba-baseline-build.log`.
-- Independent review has not started. No feature PR exists yet. PBA-04 is verified/closed on the feature branch; the parent stays open.
+- Independent full-feature review has not started. No PR exists. PBA-01 is verified/closed; PBA-04 is reopened for a test teardown repair after a later combined run. The parent stays open.
 
 ## Next action
 
-Approved documentation scaffold committed as `93d2e4774a381e55dc01621a5407f5a2bd4efa93`; clean npm ci completed. PBA-01 and PBA-04 are assigned in distinct verified branches/worktrees and marked In Progress in Linear. The managed second-worktree call stalled and was reconciled without a created checkout; Git worktree creation was used for that worker. Continue collecting contract/worker evidence, establish baseline and isolated PostgreSQL17, then integrate completed roots serially. Record worker refs/base commits and verify each slice after serial integration. The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver; merging and deployment remain unauthorized.
+PBA-01 is integrated and verified. Dispatch PBA-02 from the current verified integration commit in a new isolated branch/worktree. PBA-04 repair is separately running on `codex/pba-04-cleanup` from `1cadc34`; integrate its focused cleanup fix and require a clean combined test result before closing HELIX-77 again. PBA-03/PBA-05 remain blocked until PBA-02 is integrated/verified.
+
+The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver. Merging and deployment remain unauthorized. Local Vercel compilation passed and both source/generated function counts were 11/11; final compilation must bind to the final feature commit and avoid worker dependency-install overlap.
 
 ## PBA-04 integration, 19 November 2026
 
@@ -51,3 +53,13 @@ Inspected worker patch before serial cherry-pick `56415c57534dc3823e242c5a90df2f
 ## Read-only integration preflight
 
 Agent `/root/integration_scout` inspected the clean baseline, not the completed feature. Key downstream seams: scoped registration needs both service dispatch and SQL `begin_purchase_mutation`/`reserve_upload_final_candidate` authority; unbudgeted-before-first-approval needs TS validation, SQL registration and absent ledger handling; legacy anchor EM/earmark constraints remain; raw reads in finance-summary, finance-budgets, finance-funding-read, request choices and season-financials gating must consume effective facts. Restricted funding must not disappear when priority derives P0. Drive transfer must use finalized immutable bytes; documents.storage_key remains required. Budget outbox events need actual composers/recipient rechecks. Project-delete failures need an actionable financial-history message. Align promotion and registration lock order, including legacy requests/multi-project purchases. Scope helper must use an existing header's department rather than a caller override. These are implementation seams, not scope changes or final independent review evidence.
+
+## Local generated-function baseline
+
+Vercel CLI65.2.0 completed a local build against the verified existing Helix NMBU/helix-webpage context on feature code through PBA-04. No deploy command was run. Log: `/private/tmp/helix-pba-vercel-baseline-build.log`. Its npm ci temporarily replaced the shared dependency directory while PBA-01 was checking; worker paused rather than use an npx fallback. Compiler finished, locked tool versions were rechecked, and the affected worker checks are being rerun. The compiler's only generated tracked change was pruning45 lines of optional peer lock metadata; that own generated lockfile change was restored. Avoid compiler/install overlap with worker checks; use a separate compiler dependency checkout for the final function build.
+
+## PBA-01 integration, 19 November 2026
+
+Reviewed actual foundation schema/helper/contracts/fixtures and integrated `5d9e052a733f039166be4a96882b388ccc6fdac2` as `1cadc34`. Isolated integrated foundation run passed17/17, including3 real PostgreSQL cases; all3 typechecks passed. Actual066/bootstrap065 preservation includes imported historical-paid/null-requester invoice, unbudgeted actual, stable IDs, authoritative department, canonical Electrical/Electronics and partial adoption totals. No central financial gate was widened. HELIX-76 closed with evidence. Log `/private/tmp/helix-pba01-foundation-only.log`.
+
+Combined PBA01/04 assertions passed23/23 but emitted2 uncaught57P01 errors from forced database teardown in the policy test. HELIX-77 reopened; worker04 is repairing actual client-end waits in a reusable test pool helper, not suppressing errors. This does not invalidate the clean foundation acceptance; the combined run must pass after repair. Log `/private/tmp/helix-pba01-integrated-tests.log`.

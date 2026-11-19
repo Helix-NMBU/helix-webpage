@@ -41,5 +41,9 @@ Specification cases: V-01, V-08.
 
 ## Status
 
-Approved, published in Linear. First eligible work once approved and Deliver is requested. Record real verification and review evidence before closure.
+Closed on the feature branch on19 November2026 after integration/coordinator acceptance. No production release is implied.
 
+
+## Integrated evidence
+
+Worker `5d9e052a733f039166be4a96882b388ccc6fdac2`; integration `1cadc34`. All17 integrated foundation tests passed, including3 real PostgreSQL,12 PGlite and2 dedicated-local-mode gates. All3 typechecks passed; worker lint/source guard11/11 passed. Reviewed schema, scoped identity/department authority, canonical system mapping, immutable version/effective-plan behavior and legacy/imported/unbudgeted identity retention. Log `/private/tmp/helix-pba01-foundation-only.log`. CI wiring is added; actual PR CI/full-feature review remains outstanding. HELIX-76 is Done.
