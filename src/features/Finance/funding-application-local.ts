@@ -208,7 +208,7 @@ function refresh(app: FundingApplicationDetail) {
       canonicalNokOre(entry.plannedNok) >=
         canonicalNokOre(proposal.desiredEntry.plannedNok) &&
       (["systemId", "description", "category", "ordinaryPriority", "reuseStatus", "status",
-        "expectedPurchaseDate", "ownerMemberId", "ownerEmail", "note"] as const).every(
+        "expectedPurchaseDate", "ownerMemberId", "ownerEmail", "note", "earmarkId"] as const).every(
         key => (entry[key] || null) === (proposal.desiredEntry[key] || null),
       )
         ? "approved"

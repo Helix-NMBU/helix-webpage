@@ -78,7 +78,8 @@ const PROPOSALS = `select jsonb_build_object('id',proposal.id,'applicationId',pr
    and entry.expected_purchase_date is not distinct from nullif(proposal.desired_entry->>'expectedPurchaseDate','')::date
    and entry.owner_member_id is not distinct from nullif(proposal.desired_entry->>'ownerMemberId','')::uuid
    and entry.owner_email is not distinct from nullif(proposal.desired_entry->>'ownerEmail','')
-   and entry.note is not distinct from nullif(proposal.desired_entry->>'note','')) then 'approved' else 'awaiting_budget_approval' end,
+   and entry.note is not distinct from nullif(proposal.desired_entry->>'note','')
+   and entry.earmark_id is not distinct from nullif(proposal.desired_entry->>'earmarkId','')::uuid) then 'approved' else 'awaiting_budget_approval' end,
  'mandatory',exists(select 1 from finance.budget_obligations obligation where obligation.application_id=app.id and obligation.entry_id=proposal.entry_id and obligation.released_at is null and app.awarded_at is not null),
  'createdByMemberId',proposal.created_by_member_id,'createdAt',proposal.created_at) as value
  from finance.funding_budget_proposals proposal join finance.funding_applications app on app.id=proposal.application_id join partner_deals.deals deal on deal.id=app.deal_id`;

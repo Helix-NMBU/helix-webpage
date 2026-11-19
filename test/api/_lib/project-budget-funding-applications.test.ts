@@ -98,6 +98,9 @@ describe("explicit funding awards and stable P0 obligations", () => {
   });
   it("labels a proposal approved only when the genuine approval retains its amount and contents", async () => {
     await db.query("update finance.budget_items set planned_ore=500000 where id=$1::uuid", [f.entry]);
+    const fundId = randomUUID(), partId = randomUUID();
+    await db.query("insert into finance.funding(id,season_id,public_ref,source_name,owner_name,funding_type,amount_ore,status,created_by_member_id,updated_by_member_id) values($1::uuid,$2::uuid,'F-S27-001','Restricted grant','Head','grant',1000000,'secured',$3::uuid,$3::uuid)", [fundId, f.season, f.head]);
+    await db.query("insert into finance.funding_parts(id,funding_id,public_ref,purpose,amount_ore,created_by_member_id,updated_by_member_id) values($1::uuid,$2::uuid,'FE-001','Steel',1000000,$3::uuid,$3::uuid)", [partId, fundId, f.head]);
     let budget = await approved(), app = await application();
     app = await appWrite(app, "proposeFundingBudgetEntry", { projectBudgetId: budget.id, expectedBudgetRevision: budget.revision,
       entry: { ...entry, entryId: f.entry, plannedNok: "8000" } });
@@ -108,10 +111,11 @@ describe("explicit funding awards and stable P0 obligations", () => {
     await mutate("lead", { action: "adoptFundingProposal", applicationId: app.id, expectedRevision: app.revision,
       projectBudgetId: budget.id, expectedBudgetRevision: budget.revision, proposalId: proposal.id });
     budget = await finance.projectBudget("lead", budget.id);
-    for (const [amount, description, expected] of [["6000", "Steel", "awaiting_budget_approval"],
-      ["8000", "Different purchase", "awaiting_budget_approval"], ["8000", "Steel", "approved"]] as const) {
+    for (const [amount, description, earmarkId, expected] of [["6000", "Steel", null, "awaiting_budget_approval"],
+      ["8000", "Different purchase", null, "awaiting_budget_approval"], ["8000", "Steel", partId, "awaiting_budget_approval"],
+      ["8000", "Steel", null, "approved"]] as const) {
       if (budget.approvedVersionId && !budget.pendingVersionId) budget = await write("lead", budget, "requestProjectBudgetChanges", { reason: "Align proposed purchase" });
-      budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: amount, description } });
+      budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: amount, description, earmarkId } });
       budget = await approve(budget);
       expect((await finance.fundingApplication("head", app.id)).proposals[0].approvalStatus).toBe(expected);
       expect((await finance.projectFundingProposals("lead", budget.id)).proposals[0].approvalStatus).toBe(expected);

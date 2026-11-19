@@ -149,8 +149,10 @@ describe("funding applications and stable budget obligations", () => {
     await repository.mutate({ action: "adoptFundingProposal", requestId: crypto.randomUUID(), applicationId: app.id,
       expectedRevision: proposal.applicationRevision, projectBudgetId: budget.id, expectedBudgetRevision: current.revision, proposalId: proposal.id });
     current = await budgets.detail(budget.id);
-    for (const [amount, description, expected] of [["1200", original.description, "awaiting_budget_approval"],
-      ["1400", "A different purchase", "awaiting_budget_approval"], ["1400", original.description, "approved"]] as const) {
+    for (const [amount, description, earmarkId, expected] of [["1200", original.description, null, "awaiting_budget_approval"],
+      ["1400", "A different purchase", null, "awaiting_budget_approval"],
+      ["1400", original.description, "a1111111-1111-4111-8111-111111111111", "awaiting_budget_approval"],
+      ["1400", original.description, null, "approved"]] as const) {
       fundingRole("project_lead");
       if (!current.pendingVersionId) {
         await budgets.mutate({ action: "requestProjectBudgetChanges", requestId: crypto.randomUUID(), projectBudgetId: budget.id,
@@ -158,7 +160,7 @@ describe("funding applications and stable budget obligations", () => {
         current = await budgets.detail(budget.id);
       }
       await budgets.mutate({ action: "saveProjectBudgetEntry", requestId: crypto.randomUUID(), projectBudgetId: budget.id,
-        expectedRevision: current.revision, entry: { ...original, plannedNok: amount, description } });
+        expectedRevision: current.revision, entry: { ...original, plannedNok: amount, description, earmarkId } });
       current = await budgets.detail(budget.id);
       for (const [role, action] of [["project_lead", "submitProjectBudget"], ["department_lead", "approveDepartmentBudget"], ["head_of_finance", "approveProjectBudget"]] as const) {
         fundingRole(role);
