@@ -44,6 +44,7 @@ import "./member-theme.css";
 
 const loadMemberCV = () => import("../MemberCV/MemberCV");
 const loadCvSections = () => import("../MemberCV/MemberCvSections");
+const FundingApplications = lazy(() => import("../Finance/FundingApplications"));
 const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
 const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
 const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
@@ -191,6 +192,7 @@ export default function MemberPlatform() {
                 <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
                 <Route path="sponsor-pipeline" element={<SponsorPipeline />} />
                 <Route path="partner-deals" element={<WonDeals />} />
+                <Route path="finance/funding-applications" element={<FundingApplications />} />
                 <Route path="finance/sponsor-reviews" element={<FinanceReviews />} />
                 <Route path="finance" element={<FinanceEntry page="overview" />} />
                 <Route path={financeRoutes.purchases} element={<FinanceEntry page="purchases" />} />

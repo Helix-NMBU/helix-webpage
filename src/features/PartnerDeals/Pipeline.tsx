@@ -1,3 +1,4 @@
+import { FundingApplicationCard } from "./FundingApplicationCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IconFileDescription, IconCheckbox, IconMessage, IconClock } from "@tabler/icons-react";
@@ -108,6 +109,7 @@ export function SponsorPipeline({repository}:{repository?:PipelineRepository}) {
              className="gap-0 rounded-xl border-border/80 py-0 shadow-none data-movable:touch-pan-y data-movable:cursor-grab data-movable:active:cursor-grabbing data-dragging:opacity-50 focus-visible:outline-2 focus-visible:outline-ring"
            >
              <CardContent className="grid gap-3 p-3.5"><div><button type="button" data-board-drag-handle className="text-left text-sm font-medium hover:underline" onClick={()=>deal.stage==="won"?navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`):setEditor(deal)}>{deal.title}</button>{deal.cancelledAt&&<p className="mt-1 text-xs text-muted-foreground">Cancelled</p>}<InlineDealFields deal={deal} data={data} members={members} busy={busy} onSave={save} onWonEdit={()=>notify("Review agreement changes","Changes to a won deal need review.",{variant:"warning",href:null,action:{label:"Open agreement",onClick:()=>navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`)}})} onInvalid={message=>notify("Check deal details",message,{variant:"error",href:null})}/>{deal.financeReviews?.length ? <p className="mt-1 text-xs text-muted-foreground">Finance review: {deal.financeReviews.some(r=>r.status==="stale")?"Needs review":deal.financeReviews.some(r=>r.status==="pending")?"Pending":"Resolved"}</p> : null}</div>
+ {data.canManage && <FundingApplicationCard deal={deal} seasons={data.seasons} onChanged={refresh} />}
  {data.canReviewFunding && deal.contributions.map(contribution => {
   const receipt = contribution.sponsorReceipt;
   if (!receipt || !contribution.amountOre || !contribution.seasonCode) return null;

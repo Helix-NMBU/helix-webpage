@@ -1,3 +1,4 @@
+import { assertLocalFundingEntry } from "./funding-application-local";
 import { planLocalProjectBudgetImport } from "./project-budget-import-model";
 import { canonicalDepartment } from "../ProjectManagement/departments";
 import {
@@ -371,6 +372,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
             ).preview.errors.length
           )
             fail("Correct the CSV before importing.", 400);
+          for (const entry of preview.entries) assertLocalFundingEntry(entry.entryId, entry);
           candidate.entries = structuredClone(preview.entries);
           candidate.totalNok = total(candidate.entries);
           budget.pendingTotalNok = candidate.totalNok;
@@ -395,6 +397,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
             if (!entry) fail("This entry is no longer available.", 404);
             if (entry.priority === "P0")
               fail("A mandatory P0 purchase cannot be removed.", 409);
+            assertLocalFundingEntry(entry.entryId, { ...entry, removed: true });
             entry.removed = true;
           } else {
             const input = change.entry,
@@ -426,6 +429,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
               )
             )
               fail("This entry is no longer available.", 404);
+            if (input.entryId) assertLocalFundingEntry(input.entryId, input);
             const previousEntry = candidate.entries.find(
               (entry) => entry.entryId === input.entryId,
             );
@@ -489,6 +493,8 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
             fail(
               "Head of Finance can approve only department-approved budgets.",
             );
+          for (const entry of candidate.entries) assertLocalFundingEntry(entry.entryId, entry);
+          for (const entry of budget.approvedVersion?.entries ?? []) if (!candidate.entries.some(item => item.entryId === entry.entryId)) assertLocalFundingEntry(entry.entryId, { ...entry, removed: true });
           candidate.status = "approved";
           candidate.approvedBy = scope.memberId;
           candidate.approvedAt = new Date().toISOString();

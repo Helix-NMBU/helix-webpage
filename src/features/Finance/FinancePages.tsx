@@ -73,6 +73,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           </Button>
         ))}
       </nav>}
+      {session.profiles?.includes("head_of_finance") && <Button asChild variant="outline"><Link to="/finance/funding-applications">Funding applications</Link></Button>}
       {page === "overview" && session.capabilities?.draftBudgetItems ? <BankSnapshotEditor /> : null}
       {page === "budgets" ? (
         <>

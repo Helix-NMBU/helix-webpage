@@ -1,3 +1,4 @@
+import { FundingBudgetProposals } from "./FundingBudgetProposals";
 import { ProjectBudgetComparison } from "./ProjectBudgetComparison";
 import { ProjectBudgetImport } from "./ProjectBudgetImport";
 import { ProjectBudgetPurchases } from "./ProjectBudgetPurchases";
@@ -575,6 +576,7 @@ export function ProjectBudgetsPanel({
   >(null);
   const [stage, setStage] = useState("all");
   const [importOpen, setImportOpen] = useState(false);
+  const [proposalDirty, setProposalDirty] = useState(false);
   const [versionView, setVersionView] = useState("proposed");
   const [purchaseDirty, setPurchaseDirty] = useState(false);
   const [purchaseScopeId, setPurchaseScopeId] = useState("");
@@ -587,7 +589,7 @@ export function ProjectBudgetsPanel({
     dirty = useRef(false),
     version = useRef<number | null>(null);
   dirty.current =
-    entry !== null || createOpen || reasonAction !== null || importOpen || purchaseDirty;
+    entry !== null || createOpen || reasonAction !== null || importOpen || purchaseDirty || proposalDirty;
   const dialogOpener = useRef<HTMLButtonElement | null>(null);
   const focusFallback = useRef<HTMLButtonElement | null>(null);
   const pendingFocus = useRef(false);
@@ -609,10 +611,11 @@ export function ProjectBudgetsPanel({
       !createOpen &&
       !reasonAction &&
       !importOpen &&
+      !proposalDirty &&
       pendingFocus.current
     )
       restoreFocus();
-  }, [busy, entry, createOpen, reasonAction, importOpen, restoreFocus]);
+  }, [busy, entry, createOpen, reasonAction, importOpen, proposalDirty, restoreFocus]);
   const clearPrivate = useCallback(() => {
     authorizationEpoch.current++;
     generation.current++;
@@ -626,6 +629,7 @@ export function ProjectBudgetsPanel({
     setReasonAction(null);
     setCreateOpen(false);
     setImportOpen(false);
+    setProposalDirty(false);
     selected.current = null;
     setDenied(true);
   }, []);
@@ -716,6 +720,7 @@ export function ProjectBudgetsPanel({
     setReasonAction(null);
     setCreateOpen(false);
     setImportOpen(false);
+    setProposalDirty(false);
     setVersionView("proposed");
     dirty.current = false;
     selected.current = null;
@@ -1271,6 +1276,7 @@ export function ProjectBudgetsPanel({
           <p className="text-right font-medium">
             Total {money(displayed.totalNok)}
           </p>
+          <FundingBudgetProposals budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />
           {detail.capabilities.canRegisterPurchase && (
             <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onDirtyChange={setPurchaseDirty} />
           )}
