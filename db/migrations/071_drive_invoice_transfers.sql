@@ -61,15 +61,27 @@ end; $$;
 
 create function finance.lock_invoice_actor(actor uuid,google_sub text,email text,document uuid)
 returns void language plpgsql volatile security invoker set search_path=pg_catalog as $$
-declare scope jsonb; project uuid;
+declare project uuid; scoped_project uuid; headers uuid[]; current_headers uuid[]; header uuid;
 begin
- -- Header locks precede identity/grant locks, as in registration and promotion.
- for project in select distinct e.project_id from finance.documents d join finance.purchase_lines l on l.purchase_id=d.purchase_id
-   join finance.allocations a on a.line_id=l.id join finance.effective_budget_entries e on e.id=a.budget_item_id where d.id=document and e.project_id is not null
-   union select p.project_id from finance.documents d join finance.purchases p on p.id=d.purchase_id where d.id=document and p.project_id is not null order by 1 loop
-   perform pg_advisory_xact_lock(hashtextextended('project-budget:'||project::text,0));
-   perform 1 from finance.project_budgets where project_id=project for update;
-   perform 1 from project_management.projects where id=project for share;
+ select p.project_id into scoped_project from finance.documents d join finance.purchases p on p.id=d.purchase_id where d.id=document;
+ -- A headerless scoped purchase has exactly one project. Serialize its first header creation before taking any header lock.
+ if scoped_project is not null and not exists(select 1 from finance.project_budgets h where h.project_id=scoped_project) then
+   perform pg_advisory_xact_lock(hashtextextended('project-budget:'||scoped_project::text,0));
+ end if;
+ select coalesce(array_agg(h.id order by h.id),'{}'::uuid[]) into headers from finance.project_budgets h
+ where h.project_id=scoped_project or h.id in(select e.project_budget_id from finance.documents d
+   join finance.purchase_lines l on l.purchase_id=d.purchase_id join finance.allocations a on a.line_id=l.id
+   join finance.project_budget_entries e on e.budget_item_id=a.budget_item_id where d.id=document);
+ -- All multi-project writers use HEADER UUID order, which is independent of project UUID order.
+ foreach header in array headers loop perform 1 from finance.project_budgets h where h.id=header for update; end loop;
+ select coalesce(array_agg(h.id order by h.id),'{}'::uuid[]) into current_headers from finance.project_budgets h
+ where h.project_id=scoped_project or h.id in(select e.project_budget_id from finance.documents d
+   join finance.purchase_lines l on l.purchase_id=d.purchase_id join finance.allocations a on a.line_id=l.id
+   join finance.project_budget_entries e on e.budget_item_id=a.budget_item_id where d.id=document);
+ if current_headers is distinct from headers then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001'; end if;
+ for project in select h.project_id from finance.project_budgets h where h.id=any(headers)
+   union select scoped_project where scoped_project is not null order by 1 loop
+   perform 1 from project_management.projects p where p.id=project for share;
  end loop;
  perform 1 from identity.members m join neon_auth."user" u on u.id=m.auth_user_id
    join neon_auth.account a on a."userId"=u.id and a."providerId"='google' and a."accountId"=m.google_sub where m.id=actor for share of m,u,a;

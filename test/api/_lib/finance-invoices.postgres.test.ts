@@ -833,4 +833,172 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
       );
     }
   });
+  it("shares header-ID lock order with an independent mixed-project void when project IDs sort oppositely", async () => {
+    const projectA = "10000000-0000-4000-8000-000000000001",
+      projectB = "20000000-0000-4000-8000-000000000002",
+      headerA = "f0000000-0000-4000-8000-000000000001",
+      headerB = "01000000-0000-4000-8000-000000000002";
+    const services = service(),
+      items: string[] = [];
+    for (const [projectId, headerId] of [
+      [projectA, headerA],
+      [projectB, headerB],
+    ]) {
+      const version = randomUUID();
+      await db.query(
+        "insert into project_management.projects values($1::uuid,'S27','Reversed invoice order',array[$2::uuid],array['Mechanical & Production'],1)",
+        [projectId, f.lead],
+      );
+      await db.exec(
+        `begin;insert into finance.project_budgets(id,season_id,project_id,responsible_department_id,created_by_member_id,updated_by_member_id) values('${headerId}','${f.season}','${projectId}','${f.department}','${f.lead}','${f.lead}');insert into finance.project_budget_versions(id,project_budget_id,version_number,created_by_member_id) values('${version}','${headerId}',1,'${f.lead}');update finance.project_budgets set pending_version_id='${version}' where id='${headerId}';commit;`,
+      );
+      let detail = await services.projectBudget("lead", headerId);
+      await services.mutate("lead", {
+        action: "saveProjectBudgetEntry",
+        projectBudgetId: headerId,
+        expectedRevision: detail.revision,
+        requestId: randomUUID(),
+        entry: {
+          systemId: f.system,
+          description: "Mixed invoice materials",
+          category: "material",
+          plannedNok: "100.00",
+          ordinaryPriority: "P2",
+          reuseStatus: "new",
+          status: "planned",
+        },
+      });
+      detail = await services.projectBudget("lead", headerId);
+      for (const [role, action] of [
+        ["lead", "submitProjectBudget"],
+        ["departmentLead", "approveDepartmentBudget"],
+        ["head", "approveProjectBudget"],
+      ] as const) {
+        await services.mutate(role, {
+          action,
+          projectBudgetId: headerId,
+          expectedRevision: detail.revision,
+          requestId: randomUUID(),
+        });
+        detail = await services.projectBudget("lead", headerId);
+      }
+      items.push(detail.approvedVersion!.entries[0].budgetItemId!);
+    }
+    expect(projectA < projectB && headerA > headerB).toBe(true);
+    const authorization = await services.mutate("finance", {
+      action: "authorizeUpload",
+      requestId: randomUUID(),
+      fileName: "invoice.pdf",
+      contentType: "application/pdf",
+      byteSize: 8,
+    });
+    storage.objects.set(
+      authorization.stagingKey!,
+      new TextEncoder().encode("%PDF-1.4"),
+    );
+    await services.mutate("finance", {
+      action: "finalizeUpload",
+      requestId: randomUUID(),
+      uploadId: authorization.id,
+    });
+    const saved = await services.mutate("finance", {
+      action: "registerPurchase",
+      requestId: randomUUID(),
+      purchase: {
+        buyerName: "Buyer",
+        supplierName: "Supplier",
+        paymentMethod: "team_account",
+        purchaseDate: osloToday(),
+        justification: "Both project materials",
+        documentKind: "receipt",
+        uploadIds: [authorization.id!],
+        lines: items.map((budgetItemId) => ({
+          systemId: f.system,
+          budgetItemId,
+          description: "Material",
+          quantity: "1",
+          amountNok: "10.00",
+        })),
+      },
+    });
+    const document = (
+      await db.query<{ id: string }>(
+        "select id::text from finance.documents where purchase_id=$1::uuid",
+        [saved.id],
+      )
+    ).rows[0].id;
+    const writer = await pool.connect(),
+      invoice = await pool.connect();
+    let outcome: Promise<{ error?: unknown; result?: unknown }> | undefined;
+    try {
+      await writer.query("begin");
+      await writer.query("set local lock_timeout='4s'");
+      await writer.query(
+        "select id from finance.project_budgets where id=$1::uuid for update",
+        [headerB],
+      );
+      await invoice.query("set statement_timeout='5s'");
+      const writerPid = (await writer.query("select pg_backend_pid() pid"))
+          .rows[0].pid,
+        invoicePid = (await invoice.query("select pg_backend_pid() pid"))
+          .rows[0].pid;
+      outcome = invoice
+        .query(
+          "select finance.claim_invoice_transfer($1::uuid,$2,$3,$4::uuid,null,'sharedDrive1','invoiceFolder1',$5::uuid,false,null)",
+          [
+            finance.userId,
+            finance.googleSub,
+            finance.email,
+            document,
+            randomUUID(),
+          ],
+        )
+        .then(
+          (result) => ({ result }),
+          (error) => ({ error }),
+        );
+      const deadline = Date.now() + 3000;
+      let blocked = false;
+      while (Date.now() < deadline) {
+        const blockers = (
+          await db.query<{ pids: number[] }>(
+            "select pg_blocking_pids($1::integer) pids",
+            [invoicePid],
+          )
+        ).rows[0].pids;
+        if (blockers.includes(writerPid)) {
+          blocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      expect(
+        blocked,
+        "invoice claim must overlap and wait for the canonical first header",
+      ).toBe(true);
+      // The old project-order loop already held headerA here and deadlocked with this real070 void.
+      await writer.query(
+        "select finance.void_registered_purchase($1::uuid,$2::uuid,$3,$4::uuid,'Returned mixed order',0)",
+        [finance.userId, randomUUID(), "a".repeat(64), saved.id],
+      );
+      await writer.query("commit");
+      const finished = await outcome;
+      expect(finished.error).toBeUndefined();
+      expect((await job(document)).status).toBe("transferring");
+      expect(
+        (
+          await db.query<{ status: string }>(
+            "select status from finance.purchases where id=$1::uuid",
+            [saved.id],
+          )
+        ).rows[0].status,
+      ).toBe("voided");
+    } finally {
+      await writer.query("rollback");
+      await outcome;
+      await invoice.query("reset statement_timeout");
+      writer.release();
+      invoice.release();
+    }
+  });
 });
