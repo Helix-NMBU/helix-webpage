@@ -215,6 +215,23 @@ export function ProjectBudgetImport({
       }
     }
   }
+  function previewValue(
+    field: string,
+    value: string | null,
+    row: ProjectBudgetImportPreview["rows"][number],
+  ): string {
+    if (!value) return "None";
+    if (field === "planned_nok") return projectBudgetMoney(value);
+    if (field === "system_id") {
+      const system = systems.find(
+        (item) => item.id === value || item.code === value,
+      );
+      return system
+        ? `${system.name} (${system.code})`
+        : `${row.systemName} (${row.systemCode})`;
+    }
+    return value;
+  }
   return (
     <Dialog
       open
@@ -373,7 +390,7 @@ export function ProjectBudgetImport({
                                 <div key={field}>
                                   {FIELD_LABELS[field] ??
                                     field.replace(/_/g, " ")}
-                                  : {value || "None"}
+                                  : {previewValue(field, value, row)}
                                 </div>
                               ))
                           : "None"}

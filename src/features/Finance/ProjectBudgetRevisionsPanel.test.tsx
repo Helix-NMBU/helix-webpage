@@ -319,4 +319,24 @@ describe("reviewing revisions and CSV changes", () => {
     expect((await repo.detail(id)).pendingTotalNok).toBe("0.00");
     expect((await repo.detail(id)).approvedTotalNok).toBe("10000.00");
   });
+  it("renders preview system names and exact NOK values for both versions", async () => {
+    await render();
+    await click("Import CSV");
+    await textarea(
+      "project-budget-csv",
+      `system_id;description;planned_nok\n${systemId};Frame tubes;999999999999999.99`,
+    );
+    await click("Preview import");
+    const preview = document.querySelector(
+      '[aria-label="Project budget import preview"]',
+    );
+    expect(preview?.textContent).toContain(
+      "System: Mechanical & Production (SYS-2)",
+    );
+    expect(preview?.textContent).not.toContain(systemId);
+    expect(preview?.textContent).toContain("Planned amount: NOK 10,000.00");
+    expect(preview?.textContent).toContain(
+      "Planned amount: NOK 999,999,999,999,999.99",
+    );
+  });
 });
