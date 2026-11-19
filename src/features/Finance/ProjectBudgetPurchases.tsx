@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
@@ -56,12 +56,14 @@ function PurchaseForm({
   onSaved,
   onClose,
   onLockChange,
+  onAccessLost,
 }: {
   context: ProjectPurchaseContext;
   repository: ProjectPurchaseRepository;
   onSaved: () => Promise<void>;
   onClose: () => void;
   onLockChange: (locked: boolean) => void;
+  onAccessLost: () => void;
 }) {
   const notify = useNotify();
   const [purchase, setPurchase] = useState<PurchaseInput>(() => ({
@@ -183,7 +185,14 @@ function PurchaseForm({
         error && typeof error === "object" && "status" in error
           ? Number(error.status)
           : null;
-      if (status && [400, 403, 404, 409, 429].includes(status)) {
+      if (status === 401 || status === 403) {
+        // Stop every continuation before unmounting the private form and files.
+        active.current = false;
+        submitted.current = null;
+        saving.current = false;
+        onLockChange(false);
+        onAccessLost();
+      } else if (status && [400, 404, 409, 429].includes(status)) {
         submitted.current = null;
         setLocked(false);
       }
@@ -528,6 +537,7 @@ export function ProjectBudgetPurchases({
   onChanged,
   repository: provided,
   onDirtyChange,
+  onAccessLost,
 }: {
   budget?: ProjectBudgetDetail;
   projectId?: string;
@@ -535,6 +545,8 @@ export function ProjectBudgetPurchases({
   onChanged: () => Promise<void>;
   repository?: ProjectPurchaseRepository;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Discard the enclosing cached budget when its purchase authority is revoked. */
+  onAccessLost?: () => void;
 }) {
   const repository = useMemo(
     () => provided ?? createProjectPurchaseRepository(),
@@ -542,6 +554,11 @@ export function ProjectBudgetPurchases({
   );
   const notify = useNotify();
   const [context, setContext] = useState<ProjectPurchaseContext | null>(null);
+  const [accessLost, setAccessLost] = useState(false);
+  const [reload, setReload] = useState(0);
+  const accessFallback = useRef<HTMLButtonElement | null>(null);
+  const accessLostCallback = useRef(onAccessLost);
+  accessLostCallback.current = onAccessLost;
   const [open, setOpen] = useState(false);
   const [purchaseLocked, setPurchaseLocked] = useState(false);
   const [target, setTarget] = useState<ProjectBudgetEntry | null>(null);
@@ -562,8 +579,29 @@ export function ProjectBudgetPurchases({
     Parameters<ProjectPurchaseRepository["complete"]>[0] | null
   >(null);
   const [completionLocked, setCompletionLocked] = useState(false);
+  const clearPrivateAccess = useCallback(() => {
+    generation.current++;
+    loading.current++;
+    completionSaving.current = false;
+    completionWrite.current = null;
+    setContext(null);
+    setOpen(false);
+    setTarget(null);
+    setReason("");
+    setBusy(false);
+    setPurchaseLocked(false);
+    setCompletionLocked(false);
+    setAccessLost(true);
+    accessLostCallback.current?.();
+  }, []);
+  useEffect(() => {
+    if (accessLost) accessFallback.current?.focus();
+  }, [accessLost]);
   useEffect(() => {
     generation.current++;
+    setAccessLost(false);
+    setBusy(false);
+    completionSaving.current = false;
     setContext(null);
     setOpen(false);
     setTarget(null);
@@ -571,19 +609,13 @@ export function ProjectBudgetPurchases({
     setPurchaseLocked(false);
     setCompletionLocked(false);
     completionWrite.current = null;
-    const stop = repository.watchSession?.(() => {
-      generation.current++;
-      loading.current++;
-      setContext(null);
-      setOpen(false);
-      setTarget(null);
-    });
+    const stop = repository.watchSession?.(clearPrivateAccess);
     return () => {
       generation.current++;
       loading.current++;
       stop?.();
     };
-  }, [id, department, repository]);
+  }, [id, department, repository, clearPrivateAccess]);
   useEffect(() => {
     const current = ++loading.current;
     if (!id || !department) return;
@@ -591,7 +623,10 @@ export function ProjectBudgetPurchases({
       .load({ projectId: id, responsibleDepartmentId: department })
       .then(
         (result) => {
-          if (current === loading.current) setContext(result);
+          if (current === loading.current) {
+            setContext(result);
+            setAccessLost(false);
+          }
         },
         (error) => {
           if (current !== loading.current) return;
@@ -600,10 +635,7 @@ export function ProjectBudgetPurchases({
               ? Number(error.status)
               : null;
           if (status === 401 || status === 403) {
-            generation.current++;
-            setContext(null);
-            setOpen(false);
-            setTarget(null);
+            clearPrivateAccess();
           }
           notify("Could not load purchase entries", message(error), {
             variant: "error",
@@ -614,7 +646,7 @@ export function ProjectBudgetPurchases({
     return () => {
       loading.current++;
     };
-  }, [id, department, budget?.revision, repository, notify]);
+  }, [id, department, budget?.revision, repository, notify, reload, clearPrivateAccess]);
   async function completion(event: FormEvent) {
     event.preventDefault();
     if (!target || !budget || completionSaving.current) return;
@@ -652,7 +684,9 @@ export function ProjectBudgetPurchases({
         error && typeof error === "object" && "status" in error
           ? Number(error.status)
           : null;
-      if (status && [400, 403, 404, 409, 429].includes(status)) {
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+      } else if (status && [400, 404, 409, 429].includes(status)) {
         completionWrite.current = null;
         setCompletionLocked(false);
       }
@@ -661,11 +695,17 @@ export function ProjectBudgetPurchases({
         href: null,
       });
     } finally {
-      completionSaving.current = false;
-      if (current === generation.current) setBusy(false);
+      if (current === generation.current) {
+        completionSaving.current = false;
+        setBusy(false);
+      }
     }
   }
-  if (!context) return null;
+  if (!context) return accessLost ? (
+    <Button ref={accessFallback} variant="outline" onClick={() => setReload((value) => value + 1)}>
+      Refresh purchase access
+    </Button>
+  ) : null;
   return (
     <div className="space-y-4 border-t pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -721,7 +761,7 @@ export function ProjectBudgetPurchases({
         <DialogContent
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            purchaseOpener.current?.focus();
+            (purchaseOpener.current?.isConnected ? purchaseOpener.current : accessFallback.current)?.focus();
           }}
           onEscapeKeyDown={(event) => {
             if (purchaseLocked) event.preventDefault();
@@ -746,6 +786,7 @@ export function ProjectBudgetPurchases({
               onSaved={onChanged}
               onClose={() => setOpen(false)}
               onLockChange={setPurchaseLocked}
+              onAccessLost={clearPrivateAccess}
             />
           )}
         </DialogContent>
@@ -761,7 +802,9 @@ export function ProjectBudgetPurchases({
             event.preventDefault();
             (completionOpener.current?.isConnected
               ? completionOpener.current
-              : purchaseOpener.current
+              : purchaseOpener.current?.isConnected
+                ? purchaseOpener.current
+                : accessFallback.current
             )?.focus();
           }}
           onEscapeKeyDown={(event) => {

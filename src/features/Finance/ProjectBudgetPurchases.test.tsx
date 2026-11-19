@@ -21,6 +21,8 @@ let root: Root,
   context: ProjectPurchaseContext,
   budget: ProjectBudgetDetail;
 const onChanged = vi.fn();
+const onAccessLost = vi.fn();
+const onDirtyChange = vi.fn();
 let endSession: (() => void) | undefined;
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -71,6 +73,8 @@ async function render(
         responsibleDepartmentId={context.scope.responsibleDepartmentId!}
         repository={repository}
         onChanged={onChanged}
+        onAccessLost={onAccessLost}
+        onDirtyChange={onDirtyChange}
       />,
     ),
   );
@@ -90,6 +94,8 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   notify.mockReset();
   onChanged.mockReset();
+  onAccessLost.mockReset();
+  onDirtyChange.mockReset();
   endSession = undefined;
   const scope = projectBudgetDevelopmentFixture("department_lead")!.scopes[0];
   context = {
@@ -172,6 +178,129 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("project purchase controls", () => {
+  it.each([401, 403].flatMap(status => ["upload", "check", "register"].map(phase => ({ status, phase }))))(
+    "clears private registration state on $phase denial $status and restores a usable focus target",
+    async ({ status, phase }) => {
+      const denied = Object.assign(new Error("Purchase access revoked"), { status });
+      repository.upload = vi.fn(async () => {
+        if (phase === "upload") throw denied;
+        return crypto.randomUUID();
+      });
+      repository.mutate = vi.fn(async change => {
+        if ((phase === "check" && change.action === "checkProjectPurchase") ||
+          (phase === "register" && change.action === "registerProjectPurchase")) throw denied;
+        return saved;
+      });
+      await render();
+      await click("Register a purchase");
+      await act(async () => {
+        input("project-purchase-supplier", "Private supplier");
+        const files = document.getElementById("project-purchase-files") as HTMLInputElement;
+        Object.defineProperty(files, "files", { value: [new File(["invoice"], "private-invoice.pdf", { type: "application/pdf" })] });
+        files.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await submitTwice();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(container.textContent).not.toContain("Frame tubes");
+      expect(document.body.textContent).not.toContain("private-invoice.pdf");
+      expect(onAccessLost).toHaveBeenCalledOnce();
+      expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+      expect(onChanged).not.toHaveBeenCalled();
+      const fallback = button("Refresh purchase access");
+      await vi.waitFor(() => expect(document.activeElement).toBe(fallback));
+      repository.upload = vi.fn(async () => crypto.randomUUID());
+      repository.mutate = vi.fn(async () => saved);
+      await click("Refresh purchase access");
+      await click("Register a purchase");
+      expect((document.getElementById("project-purchase-supplier") as HTMLInputElement).value).toBe("");
+      expect(document.body.textContent).not.toContain("private-invoice.pdf");
+      expect(button("Register purchase").disabled).toBe(false);
+    },
+  );
+  it.each([401, 403])("clears completion context, reason and uncertain lock on mutation denial %s", async status => {
+    repository.complete = vi.fn(async () => { throw Object.assign(new Error("Completion access revoked"), { status }); });
+    await render();
+    await click("Mark complete");
+    await act(async () => input("project-purchase-completion-reason", "Private delivery details"));
+    await submitTwice();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).not.toContain("Frame tubes");
+    expect(onAccessLost).toHaveBeenCalledOnce();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(onChanged).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(document.activeElement).toBe(button("Refresh purchase access")));
+    repository.complete = vi.fn(async () => ({ ...saved, revision: 11 }));
+    await click("Refresh purchase access");
+    await click("Mark complete");
+    expect((document.getElementById("project-purchase-completion-reason") as HTMLTextAreaElement).value).toBe("");
+    await act(async () => input("project-purchase-completion-reason", "Delivered"));
+    await submitTwice();
+    expect(repository.complete).toHaveBeenCalledOnce();
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+  it("invalidates an overlapping private context response when a registration mutation denies access", async () => {
+    const stale = deferred<ProjectPurchaseContext>();
+    await render();
+    await click("Register a purchase");
+    repository.load = vi.fn(async () => stale.promise);
+    await render({ ...budget, revision: 11 });
+    repository.mutate = vi.fn(async change => {
+      if (change.action === "registerProjectPurchase") throw Object.assign(new Error("Revoked"), { status: 403 });
+      return saved;
+    });
+    await submitTwice();
+    await act(async () => stale.resolve(context));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).not.toContain("Frame tubes");
+    expect(container.textContent).not.toContain("Register a purchase");
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(onAccessLost).toHaveBeenCalledOnce();
+  });
+  it.each(["upload", "completion"])("ignores a late %s success after authority clearing", async phase => {
+    const upload = deferred<string>();
+    const complete = deferred<{ ok: true; id: string; publicRef: string; viewVersion: number; warnings: never[]; errors: never[]; revision: number }>();
+    repository.upload = vi.fn(async () => upload.promise);
+    repository.complete = vi.fn(async () => complete.promise);
+    await render();
+    await click(phase === "upload" ? "Register a purchase" : "Mark complete");
+    await act(async () => {
+      if (phase === "upload") {
+        const files = document.getElementById("project-purchase-files") as HTMLInputElement;
+        Object.defineProperty(files, "files", { value: [new File(["invoice"], "private.pdf", { type: "application/pdf" })] });
+        files.dispatchEvent(new Event("change", { bubbles: true }));
+      } else input("project-purchase-completion-reason", "Delivery details");
+    });
+    await submitTwice();
+    await act(async () => endSession?.());
+    await act(async () => {
+      upload.resolve(crypto.randomUUID());
+      complete.resolve({ ...saved, revision: 11 });
+    });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(repository.mutate).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalledWith("Entry updated", expect.anything(), expect.anything());
+    expect(notify).not.toHaveBeenCalledWith("Purchase registered", expect.anything(), expect.anything());
+    expect(onAccessLost).toHaveBeenCalledOnce();
+  });
+  it.each([400, 409, null])("retains recoverable registration and completion input on %s errors", async status => {
+    const error = Object.assign(new Error("Try again"), status ? { status } : {});
+    repository.mutate = vi.fn(async () => { throw error; });
+    repository.complete = vi.fn(async () => { throw error; });
+    await render();
+    await click("Register a purchase");
+    await act(async () => input("project-purchase-supplier", "Retained supplier"));
+    await submitTwice();
+    expect((document.getElementById("project-purchase-supplier") as HTMLInputElement).value).toBe("Retained supplier");
+    expect(onAccessLost).not.toHaveBeenCalled();
+    await click("Cancel");
+    await click("Mark complete");
+    await act(async () => input("project-purchase-completion-reason", "Retained reason"));
+    await submitTwice();
+    expect((document.getElementById("project-purchase-completion-reason") as HTMLTextAreaElement).value).toBe("Retained reason");
+    expect(onAccessLost).not.toHaveBeenCalled();
+  });
+
   it("exposes incurred-cost registration without a budget header and restores Radix opener focus", async () => {
     await render(null);
     const opener = button("Register a purchase");
