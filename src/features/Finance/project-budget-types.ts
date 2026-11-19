@@ -1,3 +1,4 @@
+import type { BudgetImportPreview } from "./types.js";
 /** Project budget contracts. Authoritative money is integer ore in SQL and decimal NOK on the wire. */
 export const PROJECT_BUDGET_STAGES = ["draft", "department_pending", "finance_pending", "approved"] as const;
 export type ProjectBudgetStage = typeof PROJECT_BUDGET_STAGES[number];
@@ -103,6 +104,7 @@ export interface ProjectBudgetDetail extends ProjectBudgetSummary {
   approvedVersion: ProjectBudgetVersion | null;
   pendingVersion: ProjectBudgetVersion | null;
   decisions: ProjectBudgetDecision[];
+  historyVersions?: ProjectBudgetVersion[];
 }
 export interface ProjectBudgetDecision {
   id: string;
@@ -134,13 +136,20 @@ export type ProjectBudgetMutation =
   | (ProjectBudgetWrite & { action: "removeProjectBudgetEntry"; entryId: string })
   | (ProjectBudgetWrite & { action: "submitProjectBudget" | "approveDepartmentBudget" | "approveProjectBudget" })
   | (ProjectBudgetWrite & { action: "returnProjectBudget" | "withdrawProjectBudget" | "requestProjectBudgetChanges"; reason: string })
+  | (ProjectBudgetWrite & { action: "previewProjectBudgetImport" | "importProjectBudgetEntries"; csv: string; previewToken?: string })
+  | (ProjectBudgetWrite & { action: "adoptProjectBudgetEntries"; entries: { budgetItemId: string; ordinaryPriority?: OrdinaryBudgetPriority }[] })
   | (ProjectBudgetWrite & { action: "setProjectBudgetCompletion"; entryId: string; complete: boolean; reason?: string });
+export interface ProjectBudgetImportPreview extends BudgetImportPreview {
+  projectBudgetId: string;
+  candidateRevision: number;
+}
 export interface ProjectBudgetMutationResult {
   ok: true;
   id: string;
   revision: number;
   viewVersion: number;
   replayed?: boolean;
+  importPreview?: ProjectBudgetImportPreview;
   warnings: { message: string }[];
   errors: { field: string; message: string }[];
 }
