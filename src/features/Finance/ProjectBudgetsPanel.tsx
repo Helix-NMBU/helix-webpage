@@ -1305,8 +1305,44 @@ export function ProjectBudgetsPanel({
           )}
         </section>
       )}
-  dirty.current =
-    entry !== null || createOpen || reasonAction !== null || importOpen || purchaseDirty;
+      {importOpen && detail && (
+        <ProjectBudgetImport
+          budget={detail}
+          repository={repository}
+          systems={systems}
+          restoreFocus={restoreFocus}
+          onClose={() => setImportOpen(false)}
+          onRefresh={() => load(true)}
+          onAccessEnded={clearPrivate}
+          onImported={async () => {
+            setImportOpen(false);
+            dirty.current = false;
+            setVersionView("proposed");
+            await load(true);
+          }}
+        />
+      )}
+      {incurredScope && (
+        <section aria-label="Project purchases" className="space-y-4 rounded-xl border p-4 sm:p-6">
+          <div className="max-w-sm space-y-2">
+            <Label htmlFor="incurred-purchase-project">Project</Label>
+            <Select value={incurredScope.projectId} disabled={purchaseDirty} onValueChange={setPurchaseScopeId}>
+              <SelectTrigger id="incurred-purchase-project"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {incurredScopes.map(scope => (
+                  <SelectItem key={scope.projectId} value={scope.projectId}>{scope.projectName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ProjectBudgetPurchases
+            projectId={incurredScope.projectId}
+            responsibleDepartmentId={incurredScope.responsibleDepartmentId!}
+            onChanged={() => load(true)}
+            onDirtyChange={setPurchaseDirty}
+          />
+        </section>
+      )}
       {createOpen && (
         <CreateBudget
           scopes={authorScopes}
