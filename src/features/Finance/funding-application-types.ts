@@ -48,8 +48,8 @@ export interface FundingApplicationQueue { viewVersion: number; applications: Fu
 export interface FundingApplicationBudgetContext {
   viewVersion: number;
   applicationId: string;
-  budgets: { id: string; projectId: string; projectName: string; responsibleDepartmentName: string; revision: number; approvedVersionId: string | null }[];
-  entries: { entryId: string; projectBudgetId: string; projectName: string; description: string; plannedNok: string; ordinaryPriority: OrdinaryBudgetPriority; effectivePriority: string; approved: boolean }[];
+  budgets: { id: string; projectId: string; projectName: string; responsibleDepartmentName: string; revision: number; approvedVersionId: string | null; systemIds: string[] }[];
+  entries: { entryId: string; projectBudgetId: string; projectName: string; description: string; plannedNok: string; ordinaryPriority: OrdinaryBudgetPriority; effectivePriority: string; approved: boolean; entry: ProjectBudgetEntryInput }[];
   systems: ProjectBudgetSystemChoice[];
 }
 interface ApplicationWrite { requestId: string; applicationId: string; expectedRevision: number }
