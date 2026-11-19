@@ -102,11 +102,12 @@ export function createFinanceApi(owner: { current: string | null }) {
     bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),
     capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
     version: () => local() ? Promise.resolve({ viewVersion: localBankVersion } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
-    recovery: (deliveryAfter?: string, uploadAfter?: string) => {
+    recovery: (deliveryAfter?: string, uploadAfter?: string, invoiceAfter?: string) => {
       if (local()) return localMemberHasFinancials() ? Promise.resolve({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null } satisfies FinanceRecoveryView) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
       const params = new URLSearchParams();
       if (deliveryAfter) params.set("deliveryAfter", deliveryAfter);
       if (uploadAfter) params.set("uploadAfter", uploadAfter);
+      if (invoiceAfter) params.set("invoiceAfter", invoiceAfter);
       const suffix = params.toString();
       return request<FinanceRecoveryView>(suffix ? `recovery&${suffix}` : "recovery");
     },

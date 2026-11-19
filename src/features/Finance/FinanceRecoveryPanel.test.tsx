@@ -99,14 +99,14 @@ it("navigates delivery and upload pages independently", async () => {
     await act(async () => [...container.querySelectorAll("button")].find((button) => button.textContent === label)!.click());
   };
   await click("Next deliveries");
-  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", undefined);
+  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", undefined, undefined);
   expect(container.textContent).toContain("delivery-second");
   expect(container.textContent).toContain("upload-first");
   await click("Next uploads");
-  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", "upload-cursor");
+  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", "upload-cursor", undefined);
   expect(container.textContent).toContain("upload-second");
   await click("Previous deliveries");
-  expect(mocks.recovery).toHaveBeenLastCalledWith(undefined, "upload-cursor");
+  expect(mocks.recovery).toHaveBeenLastCalledWith(undefined, "upload-cursor", undefined);
   expect(container.textContent).toContain("delivery-first");
   expect(container.textContent).toContain("upload-second");
 });
@@ -120,4 +120,30 @@ it("drops a late recovery page after access is revoked", async () => {
   await act(async () => root.render(<FinanceRecoveryPanel />));
   await act(async () => resolvePage({ deliveries: [{ id: "private-late" }], uploads: [], deliveryNextCursor: null, uploadNextCursor: null }));
   expect(container.textContent).not.toContain("private-late");
+});
+
+it("pages and retries invoice transfers without changing the other recovery cursors", async () => {
+  mocks.recovery.mockImplementation(async (deliveryAfter?: string, uploadAfter?: string, invoiceAfter?: string) => ({
+    deliveries: [], uploads: [], deliveryNextCursor: deliveryAfter ? null : "delivery-cursor", uploadNextCursor: uploadAfter ? null : "upload-cursor",
+    invoiceTransfers: [{ documentId: invoiceAfter ? "document-second" : "document-first", purchaseId: "purchase", purchaseRef: "PUR-001", originalName: "Invoice.pdf", backend: "google_drive", transferStatus: "needs_attention", viewerUrl: null, transferRevision: 4, canRetry: true, attempts: 2, updatedAt: "2026-11-20", safeError: "Storage needs attention" }],
+    invoiceNextCursor: invoiceAfter ? null : "invoice-cursor",
+  }));
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  const click = async (label: string) => { await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === label)!.click()); };
+  expect(container.textContent).toContain("Needs attention"); expect(container.textContent).not.toContain("Open invoice");
+  await click("Next deliveries"); await click("Next invoices");
+  expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", undefined, "invoice-cursor");
+  await click("Retry invoice transfer");
+  expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "retryInvoiceTransfer", documentId: "document-second", expectedRevision: 4, requestId: expect.any(String) }));
+  await click("Previous invoices"); expect(mocks.recovery).toHaveBeenLastCalledWith("delivery-cursor", undefined, undefined);
+});
+
+it("does not revive old recovery actions after changing invoice pages", async () => {
+  mocks.recovery.mockResolvedValue({ deliveries: [{ id: "outbox", eventType: "request.submitted", recipient: "Head", status: "uncertain", safeError: null, attemptCount: 1, updatedAt: "2026-11-20", providerMessageId: null }], uploads: [], invoiceTransfers: [], invoiceNextCursor: "invoice-next" });
+  mocks.mutate.mockRejectedValueOnce(new Error("Response lost"));
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Recorded as not sent")!.click());
+  const retry = mocks.notify.mock.calls.find(call => call[0] === "Could not update recovery")![2].action.onClick;
+  await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Next invoices")!.click());
+  await act(async () => retry()); expect(mocks.mutate).toHaveBeenCalledOnce();
 });

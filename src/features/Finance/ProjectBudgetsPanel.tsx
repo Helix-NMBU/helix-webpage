@@ -1,3 +1,4 @@
+import { InvoiceEvidence } from "./InvoiceEvidence";
 import { FundingBudgetProposals } from "./FundingBudgetProposals";
 import { ProjectBudgetComparison } from "./ProjectBudgetComparison";
 import { ProjectBudgetImport } from "./ProjectBudgetImport";
@@ -1228,6 +1229,15 @@ export function ProjectBudgetsPanel({
                 <TableRow key={item.entryId}>
                   <TableCell className="max-w-sm whitespace-normal">
                     {item.description}
+                    {item.invoices?.length ? (
+                      <ul className="mt-2 space-y-2">
+                        {item.invoices.map(invoice => (
+                          <li key={`${invoice.purchaseId}-${invoice.documentId}`}>
+                            <InvoiceEvidence invoice={invoice} onChanged={() => load(true)} onAccessEnded={clearPrivate} />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     {workspace?.systems?.find(

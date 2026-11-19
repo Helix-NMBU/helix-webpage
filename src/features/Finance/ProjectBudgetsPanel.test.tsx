@@ -200,6 +200,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("project budget controls", () => {
+  it("shows provider-aware invoice evidence to a read-only project budget viewer", async () => {
+    const detail = await repo.detail(id);
+    detail.capabilities = { ...detail.capabilities, canDraft: false, canRegisterPurchase: false, canReviewDepartment: false, canApproveFinance: false };
+    detail.pendingVersion!.entries[0].invoices = [
+      { documentId: "drive-invoice", purchaseId: "purchase-one", purchaseRef: "PUR-1", originalName: "Confirmed invoice.pdf", backend: "google_drive", transferStatus: "stored", viewerUrl: null, canRetry: false },
+      { documentId: "pending-invoice", purchaseId: "purchase-two", purchaseRef: "PUR-2", originalName: "Pending invoice.pdf", backend: "google_drive", transferStatus: "pending", viewerUrl: null, transferRevision: 1, canRetry: false },
+    ];
+    vi.spyOn(repo, "detail").mockResolvedValue(detail);
+    await render();
+    expect(container.textContent).toContain("Confirmed invoice.pdf");
+    expect(container.textContent).toContain("Pending invoice.pdf");
+    expect(container.textContent).toContain("Stored in Drive");
+    expect(container.textContent).toContain("Transfer pending");
+    expect(button("Open invoice")).toBeTruthy();
+    expect(container.textContent).not.toContain("Retry invoice transfer");
+    expect(container.textContent).not.toContain("Register a purchase");
+  });
   it("runs the immutable two-step approval flow with role-appropriate controls", async () => {
     await render();
     expect(container.textContent).toContain("Draft");

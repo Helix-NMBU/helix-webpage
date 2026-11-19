@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { InvoiceEvidence } from "./InvoiceEvidence";
+import type { InvoiceEvidenceActions } from "./invoice-repository";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
@@ -89,23 +91,24 @@ export function PurchaseRegister({
     }
   }
 
-  async function download(documentId: string, name: string) {
-    try {
-      const saved = await onMutate({ action: "downloadDocument", requestId: crypto.randomUUID(), documentId });
-      if (!saved.downloadUrl) throw new Error("The file download was not prepared.");
-      const link = document.createElement("a");
-      link.href = saved.downloadUrl;
-      link.download = name;
-      link.rel = "noopener";
-      link.click();
-    } catch (error) {
-      notify("Could not download the file", error instanceof Error ? error.message : "Please try again.", {
-        id: "purchase-download",
-        variant: "error",
-        action: { label: "Try again", onClick: () => { void download(documentId, name); } },
-      });
-    }
-  }
+  const invoiceActions = useMemo<InvoiceEvidenceActions>(
+    () => ({
+      open: (documentId) =>
+        onMutate({
+          action: "downloadDocument",
+          requestId: crypto.randomUUID(),
+          documentId,
+        }),
+      retry: (documentId, expectedRevision, requestId) =>
+        onMutate({
+          action: "retryInvoiceTransfer",
+          documentId,
+          expectedRevision,
+          requestId,
+        }),
+    }),
+    [onMutate],
+  );
 
   return (
     <section className="space-y-3">
@@ -160,8 +163,17 @@ export function PurchaseRegister({
                 <ul className="space-y-1">
                   {row.documents.map((doc) => (
                     <li key={doc.id} className="flex flex-wrap items-center gap-2">
-                      <span>{doc.originalName} · {doc.kind}{doc.documentNumber ? ` · ${doc.documentNumber}` : ""}</span>
-                      <Button type="button" size="sm" variant="outline" onClick={() => void download(doc.id, doc.originalName)}>Download</Button>
+                      <span>{doc.kind}{doc.documentNumber ? ` · ${doc.documentNumber}` : ""}</span>
+                      <InvoiceEvidence
+                        invoice={{
+                          documentId: doc.id, purchaseId: row.id, purchaseRef: row.publicRef,
+                          originalName: doc.originalName, backend: doc.backend ?? "private_storage",
+                          transferStatus: doc.transferStatus ?? "stored", transferRevision: doc.transferRevision,
+                          canRetry: doc.canRetry, viewerUrl: doc.viewerUrl ?? null,
+                        }}
+                        actions={invoiceActions}
+                        onChanged={onChanged}
+                      />
                     </li>
                   ))}
                 </ul>
