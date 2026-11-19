@@ -630,9 +630,14 @@ export function ProjectBudgetsPanel({
     setCreateOpen(false);
     setImportOpen(false);
     setProposalDirty(false);
+    setPurchaseDirty(false);
+    dirty.current = false;
     selected.current = null;
     setDenied(true);
   }, []);
+  useEffect(() => {
+    if (denied) focusFallback.current?.focus();
+  }, [denied]);
   const load = useCallback(
     async (force = false) => {
       if (saving.current || currentScope.current !== scopeIdentity) return;
@@ -1341,7 +1346,7 @@ export function ProjectBudgetsPanel({
           </p>
           <FundingBudgetProposals budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />
           {detail.capabilities.canRegisterPurchase && (
-            <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onDirtyChange={setPurchaseDirty} />
+            <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onDirtyChange={setPurchaseDirty} onAccessLost={clearPrivate} />
           )}
           {detail.decisions.length > 0 && (
             <div className="space-y-2 border-t pt-4">
@@ -1409,6 +1414,7 @@ export function ProjectBudgetsPanel({
             responsibleDepartmentId={incurredScope.responsibleDepartmentId!}
             onChanged={() => load(true)}
             onDirtyChange={setPurchaseDirty}
+            onAccessLost={clearPrivate}
           />
         </section>
       )}
