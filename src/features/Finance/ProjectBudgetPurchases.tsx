@@ -1,3 +1,4 @@
+import { invoiceEvidenceMessage } from "./InvoiceEvidence";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
@@ -174,8 +175,8 @@ function PurchaseForm({
       if (!active.current) return;
       notify(
         "Purchase registered",
-        `${saved.publicRef ?? "Purchase"} saved.${saved.warnings.length ? " " + saved.warnings.map((w) => w.message).join(" ") : ""}`,
-        { variant: saved.warnings.length ? "warning" : "success", href: null },
+        `${saved.publicRef ?? "Purchase"} saved.${saved.invoiceEvidence ? " " + invoiceEvidenceMessage(saved.invoiceEvidence) : ""}${saved.warnings.length ? " " + saved.warnings.map((w) => w.message).join(" ") : ""}`,
+        { variant: saved.warnings.length || saved.invoiceEvidence?.needsAttention ? "warning" : "success", href: null },
       );
       onClose();
       await onSaved();
