@@ -501,6 +501,17 @@ export async function invoiceSummary(
   identity: WorkspaceIdentity,
   purchaseId: string,
 ): Promise<InvoiceEvidenceSummary> {
+  const allowed = (
+    await db.query<{ allowed: boolean; count: string }>(
+      `select bool_and(finance.invoice_document_access($1::uuid,$2,$3,d.id,true)) allowed,count(*)::text from finance.documents d where d.purchase_id=$4::uuid`,
+      [...actor(identity), purchaseId],
+    )
+  ).rows[0];
+  if (!allowed?.allowed || allowed.count === "0")
+    throw new FinanceError(
+      403,
+      "Purchase invoice access is no longer available.",
+    );
   const summary = { pending: 0, transferring: 0, stored: 0, needsAttention: 0 };
   const rows = (
     await db.query<{ status: string; count: string }>(

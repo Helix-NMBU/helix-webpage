@@ -759,4 +759,78 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
     expect((await job(documents[0])).status).toBe("needs_attention");
     expect(fake.drive.begin).not.toHaveBeenCalled();
   });
+  it("automatically transfers a generic Financials registration under the actual current capability function", async () => {
+    await db.query(
+      "insert into identity.member_roles values($1::uuid,'financials')",
+      [f.outsider],
+    );
+    try {
+      const flags = (
+        await db.query<{
+          flags: {
+            registerActual: boolean;
+            filesAndRefunds: boolean;
+            profiles: string[];
+          };
+        }>("select finance.capability_flags($1::uuid) flags", [f.outsider])
+      ).rows[0].flags;
+      expect(flags).toMatchObject({
+        registerActual: true,
+        filesAndRefunds: true,
+        profiles: expect.arrayContaining(["finance"]),
+      });
+      const fake = driveFixture(),
+        services = service(fake.drive, 30000),
+        authorization = await services.mutate("outsider", {
+          action: "authorizeUpload",
+          fileName: "invoice.pdf",
+          contentType: "application/pdf",
+          byteSize: 8,
+          requestId: randomUUID(),
+        });
+      storage.objects.set(
+        authorization.stagingKey!,
+        new TextEncoder().encode("%PDF-1.4"),
+      );
+      await services.mutate("outsider", {
+        action: "finalizeUpload",
+        uploadId: authorization.id,
+        requestId: randomUUID(),
+      });
+      const saved = await services.mutate("outsider", {
+        action: "registerPurchase",
+        requestId: randomUUID(),
+        purchase: {
+          buyerName: "Buyer",
+          supplierName: "Supplier",
+          paymentMethod: "team_account",
+          purchaseDate: osloToday(),
+          justification: "Incurred materials",
+          documentKind: "receipt",
+          uploadIds: [authorization.id!],
+          lines: [
+            {
+              systemId: f.system,
+              budgetItemId: f.entry,
+              description: "Steel",
+              quantity: "1",
+              amountNok: "10.00",
+            },
+          ],
+        },
+      });
+      expect(saved.invoiceEvidence).toEqual({
+        pending: 0,
+        transferring: 0,
+        stored: 1,
+        needsAttention: 0,
+      });
+      expect(fake.drive.generateId).toHaveBeenCalledTimes(1);
+    } finally {
+      await db.query(
+        "delete from identity.member_roles where member_id=$1::uuid and role_key='financials'",
+        [f.outsider],
+      );
+    }
+  });
 });
