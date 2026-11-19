@@ -10,7 +10,7 @@ import { useNotify } from "../MemberPlatform/MemberNotifications";
 import type { ExceptionKind, FinanceMutation, FinanceMutationResult, FinancePurchaseSummary } from "./types";
 
 const EXCEPTION_LABELS: Record<ExceptionKind, string> = {
-  missing_approval: "Missing approval",
+  missing_approval: "Historical missing approval",
   overrun: "Approved amount exceeded",
   line_mismatch: "Approval line mismatch",
   dated_before_approval: "Dated before approval",

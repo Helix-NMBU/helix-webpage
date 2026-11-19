@@ -3,7 +3,6 @@ import type { CvDatabase } from "./member-cv-service.js";
 import { formatOre } from "./finance-money.js";
 import {
   FINANCE_SIGN_IN_LINE,
-  approvalSubjectPrefix,
   budgetStatusLabel,
   readDbBoolean,
   deliveryTextHasPrivateMaterial,
@@ -124,7 +123,7 @@ type LineRow = {
 };
 type DocumentNameRow = { original_name: string };
 type InvoiceRow = { due_date: string | null; paid: boolean };
-type ExceptionRow = { kind: string; threshold_ore: string | null };
+type ExceptionRow = { kind: string };
 
 function fromAddress(env: NodeJS.ProcessEnv): string {
   return `Helix NMBU <${env.CONTACT_FROM_EMAIL || "no-reply@helixnmbu.no"}>`;
@@ -254,22 +253,15 @@ async function composeRegistration(db: CvDatabase, purchaseId: string): Promise<
     [purchaseId],
   )).rows[0];
   const exceptions = (await db.query<ExceptionRow>(
-    `select kind, facts ->> 'thresholdOre' as threshold_ore
+    `select kind
      from finance.exception_reviews
      where purchase_id = $1::uuid
      order by created_at, id`,
     [purchaseId],
   )).rows;
-  const setting = (await db.query<{ threshold_ore: string | null }>(
-    "select setting_value #>> '{}' as threshold_ore from finance.settings where setting_key = 'approval_threshold_ore'",
-  )).rows[0];
-  const registrationThreshold = exceptions.find((row) => row.kind === "missing_approval" && /^[0-9]+$/.test(row.threshold_ore ?? ""))?.threshold_ore;
-  const thresholdOre = registrationThreshold ?? (setting?.threshold_ore && /^[0-9]+$/.test(setting.threshold_ore) ? setting.threshold_ore : null);
   const totalOre = BigInt(purchase.total_ore);
-  const aboveLimit = thresholdOre !== null && totalOre > BigInt(thresholdOre);
-  const thresholdNok = thresholdOre ? formatOre(BigInt(thresholdOre)) : "";
   const unpaidInvoice = purchase.payment_method === "invoice" && purchase.status === "registered" && readDbBoolean(invoice?.paid) !== true;
-  const prefixes = [invoiceSubjectPrefix(unpaidInvoice), approvalSubjectPrefix(aboveLimit, thresholdNok)].filter(Boolean);
+  const prefixes = [invoiceSubjectPrefix(unpaidInvoice)].filter(Boolean);
   const subject = `${prefixes.join(" ")} Purchase ${purchase.public_ref} registered`.trim();
   const lineText = lines.map((line) => {
     const status = budgetStatusLabel({
@@ -282,9 +274,8 @@ async function composeRegistration(db: CvDatabase, purchaseId: string): Promise<
   const warnings: string[] = [];
   if (lines.some((line) => line.unbudgeted)) warnings.push("At least one line is not in the budget.");
   if (lineText.some((line) => line.includes("budget over_budget"))) warnings.push("At least one line is over the current budget.");
-  if (aboveLimit) warnings.push(`This purchase is above the approval limit of NOK ${thresholdNok}.`);
   for (const exception of exceptions) {
-    if (exception.kind === "missing_approval" && !aboveLimit) warnings.push("Registered without a prior approval.");
+    if (exception.kind === "missing_approval") warnings.push("Historical record: registered without the prior approval required at that time.");
     if (exception.kind === "overrun") warnings.push("A linked approval was exceeded.");
     if (exception.kind === "line_mismatch") warnings.push("A line does not match its approval.");
     if (exception.kind === "dated_before_approval") warnings.push("The purchase date is before the approval date.");

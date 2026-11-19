@@ -16,7 +16,7 @@ import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
 import { loadFundingRecords } from "./finance-funding-read.js";
 import { attachCommitmentSummaries, loadFundingScenarios, loadOverview } from "./finance-summary.js";
-import { formatOre, osloToday } from "./finance-money.js";
+import { osloToday } from "./finance-money.js";
 import { isFundingAction } from "../../src/features/Finance/funding.js";
 import { isRequestAction } from "../../src/features/Finance/requests.js";
 import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
@@ -40,7 +40,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const UNAVAILABLE = "The finance service is temporarily unavailable. Please try again.";
 
 type FlagsRow = FinanceCapabilitySet & { profiles: FinanceProfile[] };
-type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: string | null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
+type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
 
 export interface FinanceServices {
   bankSnapshot(token: string): Promise<BankSnapshot | null>;
@@ -126,11 +126,10 @@ export function createFinanceServices(deps: {
   async function context(token: string): Promise<Context> {
     const memberId = await memberIdFor(token);
     // One statement, so the flags and the version come from the same snapshot.
-    const [row] = await rows<{ flags: FlagsRow; version: string | number; season_code: string | null; threshold_ore: string | null }>(
+    const [row] = await rows<{ flags: FlagsRow; version: string | number; season_code: string | null }>(
       `select finance.capability_flags($1::uuid) as flags,
               v.version,
-              (select setting_value #>> '{}' from finance.settings where setting_key = 'current_season') as season_code,
-              (select setting_value::text from finance.settings where setting_key = 'approval_threshold_ore') as threshold_ore
+              (select setting_value #>> '{}' from finance.settings where setting_key = 'current_season') as season_code
        from finance.view_versions v
        where v.singleton`,
       [memberId],
@@ -139,17 +138,12 @@ export function createFinanceServices(deps: {
     const viewVersion = Number(row?.version);
     if (!flags || !Array.isArray(flags.profiles) || !Number.isSafeInteger(viewVersion)) throw new FinanceError(503, UNAVAILABLE);
     if (!flags.publicBudgets) throw new FinanceError(403, "Financials access is required.");
-    let approvalThresholdNok: string | null = null;
-    if (row.threshold_ore != null) {
-      if (!/^[0-9]+$/.test(row.threshold_ore)) throw new FinanceError(503, UNAVAILABLE);
-      approvalThresholdNok = formatOre(BigInt(row.threshold_ore));
-    }
     const { profiles: _ignored, ...capabilities } = flags;
     return {
       memberId,
       viewVersion,
       seasonCode: row.season_code,
-      approvalThresholdNok,
+      approvalThresholdNok: null,
       capabilities,
       profiles: flags.profiles.filter(isFinanceProfile),
     };

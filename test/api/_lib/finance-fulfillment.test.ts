@@ -209,6 +209,7 @@ beforeAll(async () => {
     "016_finance_fulfillment.sql",
     "018_finance_unpaid_voids_reviews.sql",
     "021_finance_final_candidate_ledger.sql",
+    "067_finance_retire_purchase_threshold.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
@@ -386,10 +387,10 @@ describe("FIN-07 A03 idempotency and view_versions", () => {
   });
 });
 
-describe("FIN-07 A04 immutable exception facts and threshold", () => {
-  it("stores dated_before_approval and uses strict threshold without tolerance", async () => {
+describe("FIN-07 A04 immutable exception facts after threshold retirement", () => {
+  it("stores dated_before_approval but never creates amount-based missing approval", async () => {
     await seasonWithBudget();
-    await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+    await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
     const { recordId, lineId } = await approveRequest();
     await sql("update finance.request_decisions set decided_at = '2026-10-20T12:00:00Z' where revision_id = (select approved_revision_id from finance.requests where id = $1::uuid)", [recordId]);
     expect((await registerLinked(recordId, lineId!, "100.00", "2026-10-19")).status).toBe(200);
@@ -428,7 +429,7 @@ describe("FIN-07 A04 immutable exception facts and threshold", () => {
     });
     expect(over.status).toBe(200);
     const missing = await sql<{ kind: string }>("select kind from finance.exception_reviews where kind = 'missing_approval'");
-    expect(missing.length).toBe(1);
+    expect(missing).toEqual([]);
   });
 
   it("uses Oslo calendar for dated_before_approval near midnight (session UTC)", async () => {

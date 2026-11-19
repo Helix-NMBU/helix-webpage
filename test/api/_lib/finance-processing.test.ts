@@ -79,6 +79,10 @@ async function grant(member: string, profile: string) {
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, $3, true, 'Test profile')", [operatorId, member, profile]);
 }
 
+async function historicalMissingApproval(purchaseId: string) {
+  await sql("select finance.record_purchase_exception($1::uuid, 'missing_approval', $2::jsonb)", [purchaseId, JSON.stringify({ totalOre: "600000", thresholdOre: "500000" })]);
+}
+
 async function version() {
   const rows = await sql<{ version: string }>("select version::text as version from finance.view_versions");
   return rows[0]?.version ?? "0";
@@ -110,7 +114,7 @@ async function seasonWithBudget() {
      values ('purchase:2026', 2026, 1, $1::uuid)`,
     [operatorId],
   );
-  await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+  await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
 }
 
 async function authorizeUpload(name = "receipt.pdf") {
@@ -181,6 +185,7 @@ beforeAll(async () => {
     "018_finance_unpaid_voids_reviews.sql",
     "020_finance_processing_guards.sql",
     "021_finance_final_candidate_ledger.sql",
+    "067_finance_retire_purchase_threshold.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
@@ -756,6 +761,8 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     }, "6000.00");
     expect(saved.status).toBe(200);
     const purchaseId = saved.body.id ?? "";
+    // A retained historical exception can still be reviewed after policy retirement.
+    await historicalMissingApproval(purchaseId);
     const review = (await sql<{ id: string; facts: { totalOre?: string }; kind: string }>(
       "select id, facts, kind from finance.exception_reviews where purchase_id = $1::uuid",
       [purchaseId],
@@ -813,6 +820,7 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     await seasonWithBudget();
     const saved = await registerPurchase({}, "6000.00");
     const purchaseId = saved.body.id ?? "";
+    await historicalMissingApproval(purchaseId);
     const reviewId = (await sql<{ id: string }>("select id from finance.exception_reviews where purchase_id = $1::uuid", [purchaseId]))[0]?.id;
     expect((await call("finance", { action: "voidPurchase", requestId: requestId(), purchaseId, reason: "Wrong item", expectedRevision: 0 })).status).toBe(200);
     const before = await version();
@@ -842,6 +850,7 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
       documentNumber: "INV-1001",
       invoiceDueDate: "2026-11-01",
     }, "6000.00");
+    await historicalMissingApproval(saved.body.id ?? "");
     const reviewId = (await sql<{ id: string }>(
       "select id from finance.exception_reviews where purchase_id = $1::uuid",
       [saved.body.id],

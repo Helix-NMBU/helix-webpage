@@ -26,7 +26,6 @@ type PurchaseExportRow = {
   invoice_due_date: string | null;
   invoice_paid: boolean | null;
   outlay_paid: boolean | null;
-  registration_threshold_ore: string | null;
 };
 
 type LineExportRow = {
@@ -83,14 +82,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
             coalesce(sum(l.amount_ore), 0)::text as total_ore,
             i.due_date::text as invoice_due_date,
             i.paid as invoice_paid,
-            o.paid as outlay_paid,
-            (
-              select e.facts ->> 'thresholdOre'
-              from finance.exception_reviews e
-              where e.purchase_id = p.id and e.kind = 'missing_approval'
-              order by e.created_at, e.id
-              limit 1
-            ) as registration_threshold_ore
+            o.paid as outlay_paid
      from finance.purchases p
      join finance.seasons s on s.id = p.season_id
      left join finance.purchase_lines l on l.purchase_id = p.id
@@ -139,17 +131,8 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      order by d.public_ref`,
     [seasonCode],
   )).rows;
-  const setting = (await db.query<{ threshold_ore: string | null }>(
-    "select setting_value #>> '{}' as threshold_ore from finance.settings where setting_key = 'approval_threshold_ore'",
-  )).rows[0];
-  const currentThreshold = setting?.threshold_ore && /^[0-9]+$/.test(setting.threshold_ore) ? setting.threshold_ore : null;
   const rows: FinanceExportRow[] = [];
   for (const purchase of purchases) {
-    const basis = purchase.registration_threshold_ore && /^[0-9]+$/.test(purchase.registration_threshold_ore)
-      ? "at_registration"
-      : "current_setting";
-    const threshold = basis === "at_registration" ? purchase.registration_threshold_ore : currentThreshold;
-    const above = threshold !== null && BigInt(purchase.total_ore) > BigInt(threshold);
     const summary = emptyExportRow();
     summary.row_kind = "purchase";
     summary.purchase_ref = purchase.public_ref;
@@ -162,8 +145,6 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
     summary.invoice_due_date = purchase.invoice_due_date ?? "";
     summary.invoice_state = stateLabel(readDbBoolean(purchase.invoice_paid), "paid", "unpaid");
     summary.outlay_state = stateLabel(readDbBoolean(purchase.outlay_paid), "reimbursed", "unreimbursed");
-    summary.above_limit = above ? "yes" : "no";
-    summary.above_limit_basis = threshold ? basis : "";
     summary.purchase_status = purchase.status;
     summary.voided_on = purchase.voided_on ?? "";
     summary.line_amount_nok = money(purchase.total_ore);

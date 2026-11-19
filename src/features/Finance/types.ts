@@ -49,7 +49,8 @@ export type FinanceCapabilitiesResponse = {
   profiles: FinanceProfile[];
   capabilities: FinanceCapabilitySet;
   seasonCode: string | null;
-  approvalThresholdNok: string | null;
+  /** Retained as null for clients predating retirement of the amount-based policy. */
+  approvalThresholdNok: null;
   today: string;
 };
 

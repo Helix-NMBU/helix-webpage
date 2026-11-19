@@ -120,7 +120,7 @@ beforeAll(async () => {
     create role authenticated;
     create role anonymous;
   `);
-  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql", "021_finance_final_candidate_ledger.sql"]) {
+  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql", "021_finance_final_candidate_ledger.sql", "067_finance_retire_purchase_threshold.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -207,7 +207,7 @@ afterAll(async () => { await pg.close(); });
 
 async function seedSeason() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-  await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+  await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'finance', true, 'Test profile')", [operatorId, financeId]);
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test profile')", [operatorId, headId]);
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'business', true, 'Test profile')", [operatorId, businessId]);
@@ -539,13 +539,14 @@ describe("FIN-10-A01 outbox delivery", () => {
       "requester.user@example.test",
     ]);
     const registration = sent.find((message) => message.subject.includes("2026-0042"));
-    expect(registration?.subject.startsWith("[Unpaid invoice] [Above approval limit NOK 5000.00]")).toBe(true);
+    expect(registration?.subject).toBe("[Unpaid invoice] Purchase 2026-0042 registered");
     expect(registration?.text).toContain("2026-0042");
     expect(registration?.text).toContain("quantity");
     expect(registration?.text).toContain("NOK");
     expect(registration?.text).toContain("unbudgeted");
     expect(registration?.text).toContain("over_budget");
-    expect(registration?.text).toContain("approval limit");
+    expect(registration?.text).not.toContain("approval limit");
+    expect(registration?.text).toContain("Historical record:");
     expect(registration?.text).toContain(FINANCE_SIGN_IN_LINE);
     expect(registration?.html).toContain(FINANCE_PURCHASES_PATH);
     for (const message of sent) privateMaterial(`${message.subject}\n${message.text}\n${message.html}`);
@@ -774,7 +775,8 @@ describe("FIN-10-A03 and FIN-10-A04 export", () => {
     expect(csv).toContain("current");
     expect(csv).toContain("unpaid");
     expect(csv).toContain("unreimbursed");
-    expect(csv).toContain("at_registration");
+    expect(csv).not.toContain("above_limit");
+    expect(csv).not.toContain("at_registration");
     expect(csv).not.toContain("http");
     expect(csv).not.toContain("memory://");
     const replay = await call({ token: "finance", body: { action: "exportPurchases", requestId } });

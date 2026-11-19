@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   FINANCE_PURCHASES_PATH,
   FINANCE_SIGN_IN_LINE,
-  approvalSubjectPrefix,
   budgetStatusLabel,
   csvCell,
   deliveryTextHasPrivateMaterial,
@@ -45,11 +44,10 @@ describe("finance export text", () => {
     expect(budgetStatusLabel({ unbudgeted: false, actualOre: 0n, effectivePlanOre: 0n })).toBe("within");
   });
 
-  it("builds sign-in subjects from the configured threshold", () => {
+  it("builds invoice subjects and the sign-in route without approval-limit columns", () => {
     expect(invoiceSubjectPrefix(true)).toBe("[Unpaid invoice]");
     expect(invoiceSubjectPrefix(false)).toBe("");
-    expect(approvalSubjectPrefix(true, "5000.00")).toBe("[Above approval limit NOK 5000.00]");
-    expect(approvalSubjectPrefix(false, "5000.00")).toBe("");
+    expect(renderFinanceCsv([])).not.toContain("above_limit");
     expect(FINANCE_SIGN_IN_LINE).toContain(FINANCE_PURCHASES_PATH);
     expect(FINANCE_SIGN_IN_LINE).toContain("Sign in");
   });

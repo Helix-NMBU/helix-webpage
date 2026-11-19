@@ -35,7 +35,8 @@ export type PurchaseCaller = {
   memberId: string;
   viewVersion: number;
   seasonCode: string | null;
-  approvalThresholdNok: string | null;
+  /** Ignored compatibility metadata from callers predating policy retirement. */
+  approvalThresholdNok?: string | null;
   capabilities: FinanceCapabilitySet;
 };
 
@@ -168,7 +169,6 @@ function parsePurchase(body: Record<string, unknown>): PurchaseInput {
 
 async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promise<{
   choices: BudgetChoices;
-  thresholdOre: bigint | null;
   itemActualOre: (itemId: string) => Promise<bigint>;
   itemPlannedOre: (itemId: string) => Promise<bigint>;
 }> {
@@ -191,14 +191,8 @@ async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promis
     capabilities: caller.capabilities,
   }, { status: "approved", approvedOn: null, budgetId: row.budget_id, revision: 0 });
   const choices = hierarchy.choices ?? { systems: [], items: [] };
-  let threshold: bigint | null = null;
-  if (caller.approvalThresholdNok) {
-    const [whole, fraction = "00"] = caller.approvalThresholdNok.split(".");
-    threshold = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
-  }
   return {
     choices,
-    thresholdOre: threshold,
     async itemActualOre(itemId: string) {
       const result = await db.query<{ actual: string }>("select finance.item_registered_actual_ore($1::uuid)::text as actual", [itemId]);
       return BigInt(result.rows[0]?.actual ?? "0");
@@ -222,15 +216,12 @@ async function validatePurchase(db: CvDatabase, caller: PurchaseCaller, purchase
   const context = await validationContext(db, caller);
   const related = await validatePurchaseRelationships(normalized.purchase, {
     today: osloToday(),
-    thresholdOre: context.thresholdOre,
     choices: context.choices,
     itemActualOre: context.itemActualOre,
     itemPlannedOre: context.itemPlannedOre,
   });
   if (related.errors.length) throw invalid(related.errors);
-  const totalOre = normalized.purchase.lines.reduce((sum, line) => sum + line.amountOre, 0n);
-  const missingApproval = context.thresholdOre !== null && totalOre > context.thresholdOre;
-  return { purchase: normalized.purchase, warnings: related.warnings, thresholdOre: context.thresholdOre, missingApproval };
+  return { purchase: normalized.purchase, warnings: related.warnings };
 }
 
 async function verifyPurchaseEvidence(
@@ -436,8 +427,6 @@ export async function performPurchaseMutation(
     }
     const payload = serializePurchaseBody(validated.purchase, {
       registrationYear: registrationYear(),
-      thresholdOre: validated.thresholdOre,
-      missingApproval: validated.missingApproval,
       warnings: validated.warnings,
     });
     const registered = await call(db, "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [

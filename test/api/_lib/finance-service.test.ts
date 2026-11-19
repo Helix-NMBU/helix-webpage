@@ -117,6 +117,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/021_finance_final_candidate_ledger.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8"));
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
@@ -243,9 +244,9 @@ describe("finance schema privacy", () => {
     expect(flags.rows[0]?.flags.financing).toBe(false);
   });
 
-  it("stores season, threshold, and a monotonic reference start without issuing a reference", async () => {
+  it("stores season and a monotonic reference start while retiring amount-based approval configuration", async () => {
     await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-    await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+    await expect(sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId])).rejects.toThrow(/retired/i);
     const started = await sql<{ calendar_year: number; next_value: string; issued: boolean }>(
       "select calendar_year, next_value::text, issued from finance.configure_annual_reference_start($1::uuid, 2026, 42)",
       [operatorId],
@@ -592,8 +593,8 @@ describe("finance access API", () => {
       lines: [{ systemId, budgetItemId: itemId, unbudgeted: false, description: "Tube", quantity: "1", amountOre: "90000" }],
       uploadIds: [uploadId],
       registrationYear: 2026,
-      thresholdOre: "500000",
-      missingApproval: false,
+      thresholdOre: "obsolete",
+      missingApproval: "obsolete",
       warnings: [],
     };
     const hash = "a".repeat(64);
@@ -604,6 +605,36 @@ describe("finance access API", () => {
       [memberId, crypto.randomUUID(), hash, JSON.stringify(body)],
     );
     expect(result.rows[0]?.result).toMatchObject({ ok: true });
+  });
+
+  it.each(["5000.00", "5000.01", "8000.00"])("registers NOK %s without prior approval despite a stale threshold setting", async (amountNok) => {
+    await seedPrivateRows();
+    await sql("update finance.settings set setting_value = $1::jsonb where setting_key = 'approval_threshold_ore'", [JSON.stringify("obsolete")]);
+    expect((await services.capabilities("member")).approvalThresholdNok).toBeNull();
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const saved = await call({ token: "member", body: {
+      action: "registerPurchase", requestId: crypto.randomUUID(),
+      purchase: {
+        buyerName: "Buyer Example", supplierName: "Supplier Example", paymentMethod: "team_account",
+        purchaseDate: "2026-10-01", justification: "Workshop material for frame", documentKind: "receipt",
+        lines: [{ systemId, budgetItemId: itemId, description: "Frame material", quantity: "1", amountNok }],
+        uploadIds: [await authorizeAndFinalizeUpload(8)],
+      },
+    } });
+    expect(saved.status).toBe(200);
+    expect(JSON.stringify(saved.body)).not.toMatch(/approval threshold|approval limit|prior approval/i);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews where kind = 'missing_approval'")).rows[0]?.count).toBe("0");
+  });
+
+  it("marks existing configuration retired without changing its historical value", async () => {
+    await seedPrivateRows();
+    await pg.exec(readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8"));
+    const setting = (await sql<{ value: string; description: string }>("select setting_value::text as value, description from finance.settings where setting_key = 'approval_threshold_ore'")).rows[0];
+    expect(setting?.value).toBe("500000");
+    expect(setting?.description).toMatch(/retired/i);
+    await expect(sql("select finance.configure_approval_threshold($1::uuid, 1)", [operatorId])).rejects.toThrow(/retired/i);
+    expect((await services.capabilities("member")).approvalThresholdNok).toBeNull();
   });
 
   it("registers a purchase with uploads, returns the member its public reference, and replays idempotently", async () => {
@@ -1033,7 +1064,7 @@ describe("finance access API", () => {
     expect(await tableCount("documents")).toBe(MAX_PURCHASE_FILES);
   });
 
-  it("records missing-approval exception, warnings, and finance outbox with single view bump and idempotent replay", async () => {
+  it("ignores historical threshold settings while preserving budget warnings, outbox, and idempotent replay", async () => {
     await seedPrivateRows();
     await grant(memberId, "finance");
     await grant(adminId, "head_of_finance");
@@ -1067,17 +1098,14 @@ describe("finance access API", () => {
     const warnings = (saved.body as { warnings?: { message: string }[] }).warnings ?? [];
     expect(warnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
     expect(warnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
-    expect(warnings.some((row) => /approval threshold/i.test(row.message))).toBe(true);
+    expect(warnings.some((row) => /approval threshold/i.test(row.message))).toBe(false);
 
     const exceptions = await sql<{ kind: string; facts: Record<string, string> }>(
       "select kind, facts from finance.exception_reviews",
     );
-    expect(exceptions.rows).toHaveLength(1);
-    expect(exceptions.rows[0]).toMatchObject({
-      kind: "missing_approval",
-      facts: { totalOre: "650000", thresholdOre: "500000" },
-    });
-    expect(exceptions.rows[0]?.facts.publicRef).toMatch(/^2026-/);
+    expect(exceptions.rows).toEqual([]);
+    const publicRef = (await sql<{ public_ref: string }>("select public_ref from finance.purchases where id = $1::uuid", [(saved.body as { id: string }).id])).rows[0]?.public_ref;
+    expect(publicRef).toMatch(/^2026-/);
 
     const outbox = await sql<{ event_type: string; payload: Record<string, string> }>(
       "select event_type, payload from finance.outbox order by recipient_member_id::text",
@@ -1086,7 +1114,7 @@ describe("finance access API", () => {
     for (const row of outbox.rows) {
       expect(row.event_type).toBe("purchase_registered");
       expect(row.payload).toMatchObject({
-        publicRef: exceptions.rows[0]?.facts.publicRef,
+        publicRef,
         supplierName: "Supplier Example",
         totalOre: "650000",
       });
@@ -1099,7 +1127,7 @@ describe("finance access API", () => {
     expect(replay.status).toBe(200);
     expect(replay.body).toMatchObject(saved.body as Record<string, unknown>);
     expect(await viewVersion()).toBe(versionBefore + 1);
-    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews")).rows[0]?.count).toBe("1");
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews")).rows[0]?.count).toBe("0");
     expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox")).rows[0]?.count).toBe(String(outbox.rows.length));
 
     const stored = await sql<{ response: { warnings: { message: string }[] } }>(
@@ -1345,7 +1373,7 @@ async function authorizeAndFinalizeUpload(byteSize: number) {
 
 async function seedPrivateRows() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-  await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+  await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
   const season = await sql<{ id: string }>("select id from finance.seasons");
   const seasonId = season.rows[0]?.id;
   await sql("insert into finance.systems (department_key, code, name) values ('mechanical-production', 'SYS-FR', 'Frame')");

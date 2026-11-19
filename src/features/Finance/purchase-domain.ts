@@ -1,4 +1,4 @@
-import { exceedsApprovalThreshold, formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money.js";
+import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money.js";
 import type { FinanceFieldError, FinanceWarning, PaymentMethod, PurchaseInput, PurchaseLineInput } from "./types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -43,7 +43,6 @@ export type NormalizedPurchase = {
 
 export type PurchaseValidationContext = {
   today: string;
-  thresholdOre: bigint | null;
   choices: {
     systems: { id: string; active: boolean; unbudgetedItemId: string | null }[];
     items: { id: string; systemId: string; status: string }[];
@@ -214,7 +213,6 @@ export async function validatePurchaseRelationships(
   const systems = new Map(context.choices.systems.map((row) => [row.id, row]));
   const items = new Map(context.choices.items.map((row) => [row.id, row]));
   const pendingByItem = new Map<string, bigint>();
-  let totalOre = 0n;
   purchase.lines.forEach((line, index) => {
     const system = systems.get(line.systemId);
     if (!system || !system.active) {
@@ -241,7 +239,6 @@ export async function validatePurchaseRelationships(
     } else if (line.unbudgeted) {
       warnings.push({ message: `Line ${index + 1} will use the system's unallocated item when saved.` });
     }
-    totalOre += line.amountOre;
   });
   for (const [itemId, pendingOre] of pendingByItem) {
     const actual = await context.itemActualOre(itemId);
@@ -253,9 +250,6 @@ export async function validatePurchaseRelationships(
       warnings.push({ message: `Line totals exceed the plan for one budget item by ${formatOre(after - planned)} NOK.` });
     }
   }
-  if (context.thresholdOre !== null && exceedsApprovalThreshold(totalOre, context.thresholdOre)) {
-    warnings.push({ message: `Total ${formatOre(totalOre)} NOK exceeds the ${formatOre(context.thresholdOre)} NOK approval threshold without prior approval.` });
-  }
   return { errors, warnings };
 }
 
@@ -263,7 +257,7 @@ export function registrationYear(now = new Date()): number {
   return Number(osloToday(now).slice(0, 4));
 }
 
-/** Stable idempotency subject for registerPurchase: normalized purchase fields only (no warnings, threshold, or registration year). */
+/** Stable idempotency subject for registerPurchase: normalized purchase fields only (no warnings or registration year). */
 export function registerPurchaseIdempotencySubject(purchase: NormalizedPurchase) {
   return {
     buyerName: purchase.buyerName,
@@ -294,7 +288,7 @@ export function registerPurchaseIdempotencySubject(purchase: NormalizedPurchase)
 
 export function serializePurchaseBody(
   purchase: NormalizedPurchase,
-  options: { registrationYear: number; thresholdOre: bigint | null; missingApproval: boolean; warnings: FinanceWarning[] },
+  options: { registrationYear: number; warnings: FinanceWarning[] },
 ) {
   return {
     buyerName: purchase.buyerName,
@@ -321,8 +315,6 @@ export function serializePurchaseBody(
     })),
     uploadIds: purchase.uploadIds,
     registrationYear: options.registrationYear,
-    thresholdOre: options.thresholdOre?.toString() ?? "0",
-    missingApproval: options.missingApproval,
     warnings: options.warnings,
   };
 }
