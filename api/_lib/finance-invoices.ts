@@ -25,17 +25,23 @@ async function viewVersion(db: CvDatabase) {
   );
 }
 const actor = (i: WorkspaceIdentity) => [i.userId, i.googleSub, i.email];
-export async function invoiceTransfersAvailable(
+/** A partially deployed database must never create a private-only new invoice. */
+export async function requireInvoiceTransferSchema(
   db: CvDatabase,
-): Promise<boolean> {
-  return (
-    (
-      await db.query<{ available: boolean }>(
-        "select to_regprocedure('finance.claim_invoice_transfer(uuid,text,text,uuid,integer,text,text,uuid,boolean,uuid)') is not null as available",
-      )
-    ).rows[0]?.available === true
-  );
+): Promise<void> {
+  const ready = (
+    await db.query<{ available: boolean }>(`select
+ to_regprocedure('finance.claim_invoice_transfer(uuid,text,text,uuid,integer,text,text,uuid,boolean,uuid)') is not null
+ and (select count(*)=2 from pg_trigger where tgrelid='finance.documents'::regclass
+   and tgname in ('documents_verified_transfer','documents_enqueue_transfer') and tgenabled<>'D') as available`)
+  ).rows[0]?.available;
+  if (ready !== true)
+    throw new FinanceError(
+      503,
+      "Invoice storage setup is incomplete. Ask Finance to finish setup before registering a purchase.",
+    );
 }
+
 function error(e: unknown): never {
   if (e instanceof FinanceError) throw e;
   const code = (e as { code?: string })?.code;
@@ -58,6 +64,7 @@ async function access(
   documentId: unknown,
   retry = false,
 ) {
+  await requireInvoiceTransferSchema(db);
   if (typeof documentId !== "string" || !UUID.test(documentId))
     throw new FinanceError(400, "Choose a valid invoice.");
   const allowed = (
@@ -80,6 +87,7 @@ type EvidenceRow = {
   revision: number | null;
   drive_viewer_url: string | null;
   can_retry: boolean;
+  retry_ready: boolean;
   entry_id?: string;
   attempts?: number;
   updated_at?: string;
@@ -101,18 +109,20 @@ function reference(row: EvidenceRow): ProjectBudgetInvoiceReference {
       row.storage_backend === "google_drive" && row.status === "stored"
         ? row.drive_viewer_url
         : null,
-    canRetry: row.can_retry && row.status === "needs_attention",
+    canRetry: row.can_retry && row.retry_ready,
   };
 }
 const fields = `d.id::text document_id,d.purchase_id::text,p.public_ref purchase_ref,d.original_name,d.storage_backend,t.status,t.revision,d.drive_viewer_url,
- finance.invoice_document_access($1::uuid,$2,$3,d.id,true) can_retry`;
+ finance.invoice_document_access($1::uuid,$2,$3,d.id,true) can_retry,
+ (t.status in ('pending','needs_attention') or (t.status='transferring' and t.lease_until<=clock_timestamp())) retry_ready`;
 export async function loadBudgetEntryInvoiceReferences(
   db: CvDatabase,
   identity: WorkspaceIdentity,
   entryIds: readonly string[],
 ): Promise<Map<string, ProjectBudgetInvoiceReference[]>> {
   const result = new Map<string, ProjectBudgetInvoiceReference[]>();
-  if (!entryIds.length || !(await invoiceTransfersAvailable(db))) return result;
+  await requireInvoiceTransferSchema(db);
+  if (!entryIds.length) return result;
   const rows = (
     await db.query<EvidenceRow>(
       `select distinct a.budget_item_id::text entry_id,${fields}
@@ -135,8 +145,8 @@ export async function loadPurchaseInvoiceReferences(
   purchaseIds: string[],
 ): Promise<Map<string, ProjectBudgetInvoiceReference>> {
   const result = new Map<string, ProjectBudgetInvoiceReference>();
-  if (!purchaseIds.length || !(await invoiceTransfersAvailable(db)))
-    return result;
+  await requireInvoiceTransferSchema(db);
+  if (!purchaseIds.length) return result;
   for (const row of (
     await db.query<EvidenceRow>(
       `select ${fields} from finance.documents d join finance.purchases p on p.id=d.purchase_id
@@ -155,8 +165,7 @@ export async function loadInvoiceRecovery(
   invoiceTransfers: FinanceInvoiceRecoveryRow[];
   invoiceNextCursor: string | null;
 }> {
-  if (!(await invoiceTransfersAvailable(db)))
-    return { invoiceTransfers: [], invoiceNextCursor: null };
+  await requireInvoiceTransferSchema(db);
   if (after && !UUID.test(after))
     throw new FinanceError(400, "Choose a valid invoice page.");
   const rows = (
@@ -169,15 +178,13 @@ export async function loadInvoiceRecovery(
     )
   ).rows;
   return {
-    invoiceTransfers: rows
-      .slice(0, 50)
-      .map((row) => ({
-        ...reference(row),
-        transferRevision: Number(row.revision),
-        attempts: Number(row.attempts),
-        updatedAt: row.updated_at!,
-        safeError: row.last_error ?? null,
-      })),
+    invoiceTransfers: rows.slice(0, 50).map((row) => ({
+      ...reference(row),
+      transferRevision: Number(row.revision),
+      attempts: Number(row.attempts),
+      updatedAt: row.updated_at!,
+      safeError: row.last_error ?? null,
+    })),
     invoiceNextCursor: rows.length > 50 ? rows[49].document_id : null,
   };
 }
@@ -516,6 +523,7 @@ export async function dispatchPurchaseInvoices(
   purchaseId: string,
   deps: InvoiceDispatcher,
 ): Promise<InvoiceEvidenceSummary> {
+  await requireInvoiceTransferSchema(db);
   if (!UUID.test(purchaseId))
     throw new FinanceError(400, "Choose a valid purchase.");
   const all = (

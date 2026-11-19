@@ -1,5 +1,5 @@
 import { createFinanceDrive, type FinanceDrive } from "./finance-drive.js";
-import { dispatchPurchaseInvoices, invoiceTransfersAvailable, loadInvoiceRecovery, loadPurchaseInvoiceReferences, mutateInvoice } from "./finance-invoices.js";
+import { dispatchPurchaseInvoices, loadInvoiceRecovery, loadPurchaseInvoiceReferences, mutateInvoice } from "./finance-invoices.js";
 import { isProjectPurchaseMutation, loadProjectPurchaseContext, mutateProjectPurchase, setProjectBudgetCompletion } from "./finance-project-purchases.js";
 import type { ProjectPurchaseContext } from "../../src/features/Finance/project-purchase-types.js";
 import { isFundingApplicationMutation, loadFundingApplications, loadFundingApplication, loadFundingApplicationBudgetContext, loadProjectFundingProposals, mutateFundingApplication } from "./finance-funding-applications.js";
@@ -87,7 +87,7 @@ export function createFinanceServices(deps: {
   const financeStorage = deps.financeStorage === undefined ? null : deps.financeStorage;
   const invoiceDispatcher = { storage: financeStorage, drive: deps.financeDrive ?? null, budgetMs: deps.invoiceBudgetMs };
   async function dispatchInvoices(identity: WorkspaceIdentity, result: FinanceMutationResult) {
-    if (!result.id || !await invoiceTransfersAvailable(db)) return result;
+    if (!result.id) return result;
     try { return {...result, invoiceEvidence: await dispatchPurchaseInvoices(db, identity, result.id, invoiceDispatcher)}; }
     catch { return {...result, warnings: [...result.warnings, {message: "The purchase is saved. Invoice transfers need Finance attention; check Recovery."}]}; }
   }
@@ -333,7 +333,7 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
-      if (["downloadDocument", "retryInvoiceTransfer", "continueInvoiceTransfers"].includes(String(body.action)) && await invoiceTransfersAvailable(db)) return mutateInvoice(db, await deps.authenticate(token), body, invoiceDispatcher);
+      if (["downloadDocument", "retryInvoiceTransfer", "continueInvoiceTransfers"].includes(String(body.action))) return mutateInvoice(db, await deps.authenticate(token), body, invoiceDispatcher);
       if (body.action === "setProjectBudgetCompletion") return setProjectBudgetCompletion(db, await deps.authenticate(token), body);
       if (isProjectPurchaseMutation(body.action)) {
         const identity = await deps.authenticate(token);

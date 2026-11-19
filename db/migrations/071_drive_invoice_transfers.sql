@@ -40,7 +40,7 @@ create function finance.invoice_document_scope(document uuid) returns jsonb lang
  select case when p.project_id is not null then jsonb_build_object('projectId',p.project_id,'departmentId',p.responsible_department_id)
  else (select case when count(*)>0 and count(distinct e.project_id)=1 and bool_and(e.project_id is not null)
    then jsonb_build_object('projectId',min(e.project_id::text),'departmentId',min(h.responsible_department_id::text)) end
-   from finance.purchase_lines l join finance.allocations a on a.line_id=l.id
+   from finance.purchase_lines l left join finance.allocations a on a.line_id=l.id
    left join finance.effective_budget_entries e on e.id=a.budget_item_id
    left join finance.project_budgets h on h.id=e.project_budget_id where l.purchase_id=p.id) end
  from finance.documents d join finance.purchases p on p.id=d.purchase_id where d.id=document

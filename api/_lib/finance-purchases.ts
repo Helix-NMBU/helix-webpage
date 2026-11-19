@@ -1,3 +1,4 @@
+import { requireInvoiceTransferSchema } from "./finance-invoices.js";
 import { projectBudgetError } from "./finance-project-budget-foundation.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
@@ -437,6 +438,7 @@ export async function performPurchaseMutation(
     const normalized = normalizePurchaseInput(parsePurchase(body));
     if (normalized.errors.length) throw invalid(normalized.errors);
     if (!normalized.purchase) throw invalid([{ field: "purchase", message: "Enter a valid purchase." }]);
+    await requireInvoiceTransferSchema(db);
     const purchaseHash = hashRegisterPurchaseIdempotency(normalized.purchase);
     const hash = project ? payloadHash({ projectId: project.projectId, departmentId: project.departmentId, purchaseHash }) : purchaseHash;
     const replayed = await replay(requestId, hash);
