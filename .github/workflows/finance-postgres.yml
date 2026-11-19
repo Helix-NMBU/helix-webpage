@@ -1,0 +1,43 @@
+name: Finance PostgreSQL concurrency
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finance-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: finance-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm install --global npm@11.17.0
+      - run: npm ci
+      - name: Verify real Finance transactions and project budget migrations
+        env:
+          FINANCE_TEST_POSTGRES_URL: postgresql://postgres:finance-ci-only@127.0.0.1:5432/postgres
+        run: >-
+          npx vitest run
+          test/api/_lib/finance-concurrency.postgres.test.ts
+          test/api/_lib/finance-threshold-retirement.postgres.test.ts
+          test/api/_lib/project-budget
+          --maxWorkers=2
