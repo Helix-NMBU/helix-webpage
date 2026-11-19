@@ -9,6 +9,7 @@ import { normalizePurchaseInput, serializePurchaseBody } from "../../../src/feat
 import { osloToday } from "../../../src/features/Finance/money.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
 import { createPostgresTestPool } from "./postgres-test-pool.js";
+import { seedHistoricalApprovedSeasonBudget } from "./finance-legacy-budget-fixture.js";
 
 const testUrl = process.env.FINANCE_TEST_POSTGRES_URL;
 const operator = "11111111-1111-4111-8111-111111111111";
@@ -83,8 +84,7 @@ describe.skipIf(!testUrl)("Retired amount-based purchase approval on PostgreSQL"
     await pool.query("select finance.configure_current_season($1::uuid, 'S27', 'Test season', '2026-08-01', '2027-07-31')", [operator]);
     await pool.query("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test')", [operator, head]);
     systemId = (await pool.query("insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true) returning id")).rows[0].id;
-    await services.mutate("head", { action: "createBudget", requestId: randomUUID() });
-    await services.mutate("head", { action: "approveBudget", requestId: randomUUID(), expectedRevision: 0 });
+    await seedHistoricalApprovedSeasonBudget(db, head);
     itemId = (await pool.query(`insert into finance.budget_items
       (budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected, created_by_member_id, updated_by_member_id)
       select b.id, $1::uuid, 'BI-S27-010', 'Tube stock', 'material', 50000000, 'P2', 'new', 'planned', false, $2::uuid, $2::uuid
