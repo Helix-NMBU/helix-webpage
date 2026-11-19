@@ -1273,6 +1273,69 @@ export function ProjectBudgetsPanel({
               ))}
             </TableBody>
           </Table>
+          {canEdit &&
+            candidate &&
+            candidate.entries.some((item) => item.removed) && (
+              <section
+                aria-label="Removed entries"
+                className="space-y-3 border-t pt-4"
+              >
+                <h4 className="font-medium">Removed entries</h4>
+                <p className="text-sm text-muted-foreground">
+                  These entries retain their purchase history. Restore an entry
+                  to correct it and include it in the proposed budget again.
+                </p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Description</TableHead>
+                      <TableHead>System</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead className="text-right">
+                        Retained plan
+                      </TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {candidate.entries
+                      .filter((item) => item.removed)
+                      .map((item) => (
+                        <TableRow key={item.entryId}>
+                          <TableCell className="max-w-sm whitespace-normal">
+                            {item.description}
+                          </TableCell>
+                          <TableCell>
+                            {workspace?.systems?.find(
+                              (system) => system.id === item.systemId,
+                            )?.name ?? "System"}
+                          </TableCell>
+                          <TableCell>{item.priority}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">
+                            {money(item.plannedNok)}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={busy}
+                              aria-label={`Restore ${item.description}`}
+                              onClick={(event) => {
+                                dialogOpener.current = event.currentTarget;
+                                setEntry({ ...item, removed: false });
+                              }}
+                            >
+                              Restore entry
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
           <p className="text-right font-medium">
             Total {money(displayed.totalNok)}
           </p>

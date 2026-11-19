@@ -3,6 +3,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectBudgetsPanel } from "./ProjectBudgetsPanel";
+import {
+  createLocalFundingApplicationRepository,
+  ensureLocalFundingFixtures,
+} from "./funding-application-local";
+import { readLocalPartnerState } from "../PartnerDeals/local-fixture";
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
 import type { ProjectBudgetRepository } from "./project-budget-repository";
 const notify = vi.hoisted(() => vi.fn());
@@ -60,6 +65,99 @@ async function submit() {
     requestId: crypto.randomUUID(),
   });
 }
+async function removedBeforeAward() {
+  await submit();
+  role("department_lead");
+  let budget = await repo.detail(id);
+  await repo.mutate({
+    action: "approveDepartmentBudget",
+    projectBudgetId: id,
+    expectedRevision: budget.revision,
+    requestId: crypto.randomUUID(),
+  });
+  role("head_of_finance");
+  budget = await repo.detail(id);
+  await repo.mutate({
+    action: "approveProjectBudget",
+    projectBudgetId: id,
+    expectedRevision: budget.revision,
+    requestId: crypto.randomUUID(),
+  });
+  role("project_lead");
+  budget = await repo.detail(id);
+  await repo.mutate({
+    action: "requestProjectBudgetChanges",
+    projectBudgetId: id,
+    expectedRevision: budget.revision,
+    requestId: crypto.randomUUID(),
+    reason: "Revise the purchase plan",
+  });
+  budget = await repo.detail(id);
+  const retained = budget.pendingVersion!.entries[0];
+  await repo.mutate({
+    action: "removeProjectBudgetEntry",
+    projectBudgetId: id,
+    expectedRevision: budget.revision,
+    requestId: crypto.randomUUID(),
+    entryId: retained.entryId,
+  });
+  const stored = JSON.parse(
+    localStorage.getItem("helix-project-budgets-local-v1")!,
+  );
+  const record = stored.budgets.find((item: { id: string }) => item.id === id);
+  for (const version of [record.approvedVersion, record.pendingVersion]) {
+    version.entries[0].actualNok = "300.25";
+    version.entries[0].invoices = [
+      {
+        documentId: "retained-invoice",
+        purchaseId: "retained-purchase",
+        purchaseRef: "PUR-001",
+        originalName: "Invoice.pdf",
+        backend: "private_storage",
+        transferStatus: "stored",
+        viewerUrl: null,
+      },
+    ];
+  }
+  localStorage.setItem(
+    "helix-project-budgets-local-v1",
+    JSON.stringify(stored),
+  );
+  window.history.replaceState({}, "", "/?fundingRole=marketing");
+  ensureLocalFundingFixtures();
+  const funding = createLocalFundingApplicationRepository(),
+    deal = readLocalPartnerState().deals[0];
+  let result = await funding.mutate({
+    action: "saveFundingApplication",
+    requestId: crypto.randomUUID(),
+    dealId: deal.id,
+    dealExpectedRevision: deal.revision,
+    expectedRevision: 0,
+    seasonId: "s27",
+    purchaseConditions: "Purchase the required frame tubes",
+  });
+  role("head_of_finance");
+  budget = await repo.detail(id);
+  result = await funding.mutate({
+    action: "linkFundingApplicationEntry",
+    requestId: crypto.randomUUID(),
+    applicationId: result.id,
+    expectedRevision: result.revision,
+    entryId: retained.entryId,
+    expectedBudgetRevision: budget.revision,
+  });
+  await funding.mutate({
+    action: "recordFundingAward",
+    requestId: crypto.randomUUID(),
+    applicationId: result.id,
+    expectedRevision: result.revision,
+    awardDate: "2026-11-19",
+    awardReference: "Award after removal",
+  });
+  role("project_lead");
+  return retained;
+}
+
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
@@ -464,4 +562,83 @@ describe("project budget controls", () => {
     expect(nextLoad).toHaveBeenCalledTimes(nextCount);
     expect(container.textContent).toContain("Budget access required");
   });
+  it("restores a removed-before-award entry with its stable identity and purchase evidence", async () => {
+    const retained = await removedBeforeAward();
+    const mutate = vi.spyOn(repo, "mutate");
+    await render();
+    const removed = container.querySelector('[aria-label="Removed entries"]');
+    expect(removed?.textContent).toContain("Frame tubes");
+    expect(removed?.textContent).toContain("P0");
+    await click("Restore entry");
+    expect(
+      (document.getElementById("budget-entry-description") as HTMLInputElement)
+        .value,
+    ).toBe("Frame tubes");
+    await act(async () => input("budget-entry-amount", "10100.00"));
+    await click("Save entry");
+    expect(mutate.mock.calls[0][0]).toMatchObject({
+      action: "saveProjectBudgetEntry",
+      entry: {
+        entryId: retained.entryId,
+        removed: false,
+        plannedNok: "10100.00",
+      },
+    });
+    const restored = (await repo.detail(id)).pendingVersion!.entries;
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).toMatchObject({
+      entryId: retained.entryId,
+      budgetItemId: retained.budgetItemId,
+      publicRef: retained.publicRef,
+      removed: false,
+      priority: "P0",
+      actualNok: "300.25",
+      invoices: [{ documentId: "retained-invoice" }],
+    });
+    expect(
+      container.querySelector('[aria-label="Removed entries"]'),
+    ).toBeNull();
+    expect(container.textContent).toContain("NOK 10,100.00");
+    await vi.waitFor(() =>
+      expect(document.activeElement?.textContent).toBe("Refresh budgets"),
+    );
+  });
+  it.each(["stale", "protected"])(
+    "retains the restoration form after a %s save",
+    async (failure) => {
+      const retained = await removedBeforeAward();
+      if (failure === "stale")
+        vi.spyOn(repo, "mutate").mockRejectedValueOnce(
+          Object.assign(
+            new Error("The budget changed. Refresh before saving."),
+            { status: 409 },
+          ),
+        );
+      await render();
+      await click("Restore entry");
+      const amount = failure === "protected" ? "1.00" : "10100.00";
+      await act(async () => input("budget-entry-amount", amount));
+      await click("Save entry");
+      expect(
+        (document.getElementById("budget-entry-amount") as HTMLInputElement)
+          .value,
+      ).toBe(amount);
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect((await repo.detail(id)).pendingVersion!.entries[0].removed).toBe(
+        true,
+      );
+      expect(notify).toHaveBeenLastCalledWith(
+        "Could not save the budget",
+        expect.stringContaining("Your form is kept"),
+        expect.anything(),
+      );
+      await act(async () => input("budget-entry-amount", "10100.00"));
+      await click("Save entry");
+      expect((await repo.detail(id)).pendingVersion!.entries[0]).toMatchObject({
+        entryId: retained.entryId,
+        removed: false,
+        priority: "P0",
+      });
+    },
+  );
 });
