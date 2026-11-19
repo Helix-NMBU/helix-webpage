@@ -1,3 +1,4 @@
+import { loadBudgetEntryInvoiceReferences } from "./finance-invoices.js";
 import { createHash } from "node:crypto";
 import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
 import { FinanceError } from "./finance-error.js";
@@ -171,7 +172,10 @@ export async function loadProjectBudgetDetail(db: CvDatabase, identity: Workspac
       [identity.userId, identity.googleSub, identity.email, projectBudgetId],
     )).rows[0];
     if (!result) throw new FinanceError(404, "This project budget is no longer available.");
-    return { ...summary(result.header), approvedVersion: version(result.versions.find(v => v.id === result.header.approved_version_id) ?? null),
+    const evidence = await loadBudgetEntryInvoiceReferences(db, identity, result.versions.flatMap(v => v.entries.map(e => e.budget_item_id).filter((id): id is string => !!id)));
+    const detail = { ...summary(result.header), approvedVersion: version(result.versions.find(v => v.id === result.header.approved_version_id) ?? null),
       pendingVersion: version(result.versions.find(v => v.id === result.header.pending_version_id) ?? null), historyVersions: result.versions.filter(v => v.status === "approved").sort((a, b) => a.version_number - b.version_number).map(v => version(v)!), decisions: result.decisions };
+    for (const v of [detail.approvedVersion, detail.pendingVersion, ...detail.historyVersions]) for (const e of v?.entries ?? []) e.invoices = e.budgetItemId ? evidence.get(e.budgetItemId) ?? [] : [];
+    return detail;
   } catch (error) { throw projectBudgetError(error); }
 }

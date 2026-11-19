@@ -213,8 +213,10 @@ export function createLocalProjectPurchaseRepository(): ProjectPurchaseRepositor
               purchaseId: id,
               purchaseRef: publicRef,
               originalName: purchases.uploads[documentId].name,
-              backend: "private_storage" as const,
-              transferStatus: "pending" as const,
+              backend: "google_drive" as const,
+              transferStatus: "needs_attention" as const,
+              transferRevision: 0,
+              canRetry: true,
               viewerUrl: null,
             })),
           ];

@@ -1,3 +1,5 @@
+import { createFinanceDrive, type FinanceDrive } from "./finance-drive.js";
+import { dispatchPurchaseInvoices, invoiceTransfersAvailable, loadInvoiceRecovery, loadPurchaseInvoiceReferences, mutateInvoice } from "./finance-invoices.js";
 import { isProjectPurchaseMutation, loadProjectPurchaseContext, mutateProjectPurchase, setProjectBudgetCompletion } from "./finance-project-purchases.js";
 import type { ProjectPurchaseContext } from "../../src/features/Finance/project-purchase-types.js";
 import { isFundingApplicationMutation, loadFundingApplications, loadFundingApplication, loadFundingApplicationBudgetContext, loadProjectFundingProposals, mutateFundingApplication } from "./finance-funding-applications.js";
@@ -62,7 +64,7 @@ export interface FinanceServices {
   budgets(token: string, knownVersion?: number): Promise<PublicBudgets | FinanceUnchanged>;
   purchases(token: string, knownVersion?: number, requestRecordId?: string, unpaidOnly?: boolean): Promise<PurchasesView | FinanceUnchanged>;
   financing(token: string, knownVersion?: number): Promise<FinancingView | FinanceUnchanged>;
-  recovery(token: string, deliveryAfter?: string, uploadAfter?: string): Promise<FinanceRecoveryView>;
+  recovery(token: string, deliveryAfter?: string, uploadAfter?: string, invoiceAfter?: string): Promise<FinanceRecoveryView>;
   mutate(token: string, body: Record<string, unknown>): Promise<FinanceMutationResult>;
 }
 
@@ -70,6 +72,8 @@ export function createFinanceServices(deps: {
   db: CvDatabase;
   authenticate: (token: string) => Promise<WorkspaceIdentity>;
   financeStorage?: FinanceObjectStorage | null;
+  financeDrive?: FinanceDrive | null;
+  invoiceBudgetMs?: number;
   financeDelivery?: {
     send?: FinanceMailSender;
     env?: NodeJS.ProcessEnv;
@@ -81,6 +85,12 @@ export function createFinanceServices(deps: {
 }): FinanceServices {
   const { db } = deps;
   const financeStorage = deps.financeStorage === undefined ? null : deps.financeStorage;
+  const invoiceDispatcher = { storage: financeStorage, drive: deps.financeDrive ?? null, budgetMs: deps.invoiceBudgetMs };
+  async function dispatchInvoices(identity: WorkspaceIdentity, result: FinanceMutationResult) {
+    if (!result.id || !await invoiceTransfersAvailable(db)) return result;
+    try { return {...result, invoiceEvidence: await dispatchPurchaseInvoices(db, identity, result.id, invoiceDispatcher)}; }
+    catch { return {...result, warnings: [...result.warnings, {message: "The purchase is saved. Invoice transfers need Finance attention; check Recovery."}]}; }
+  }
   const deliveryEnv = deps.financeDelivery?.env ?? { WEBSITE_EMAIL_ENABLED: "false", HELIX_ENVIRONMENT: "local" };
   const deliverySend = deps.financeDelivery?.send ?? (async () => ({ outcome: "failed" as const, safeError: "delivery_disabled" as const }));
 
@@ -197,9 +207,9 @@ export function createFinanceServices(deps: {
       await context(token);
       return loadBankSnapshot(db);
     },
-    async recovery(token, deliveryAfter, uploadAfter) {
+    async recovery(token, deliveryAfter, uploadAfter, invoiceAfter) {
       const current = await context(token);
-      return loadFinanceRecovery(db, current, { deliveryAfter, uploadAfter });
+      return { ...await loadFinanceRecovery(db, current, { deliveryAfter, uploadAfter }), ...await loadInvoiceRecovery(db, await deps.authenticate(token), invoiceAfter) };
     },
     async capabilities(token) {
       const current = await context(token);
@@ -286,6 +296,8 @@ export function createFinanceServices(deps: {
       if (current.capabilities.purchaseRegister) {
         if (current.seasonCode) {
           const loaded = await loadPurchaseRegister(query, current.seasonCode, unpaidOnly);
+          const evidence = await loadPurchaseInvoiceReferences(db, await deps.authenticate(token), loaded.register.map(p => p.id));
+          for (const purchase of loaded.register) for (const document of purchase.documents) { const ref = evidence.get(document.id); if (ref) Object.assign(document, ref); }
           view.register = loaded.register;
           view.unpaidCount = loaded.unpaidCount;
         } else {
@@ -321,9 +333,12 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
+      if (["downloadDocument", "retryInvoiceTransfer", "continueInvoiceTransfers"].includes(String(body.action)) && await invoiceTransfersAvailable(db)) return mutateInvoice(db, await deps.authenticate(token), body, invoiceDispatcher);
       if (body.action === "setProjectBudgetCompletion") return setProjectBudgetCompletion(db, await deps.authenticate(token), body);
       if (isProjectPurchaseMutation(body.action)) {
-        const result = await mutateProjectPurchase(db, financeStorage, await deps.authenticate(token), body);
+        const identity = await deps.authenticate(token);
+        let result = await mutateProjectPurchase(db, financeStorage, identity, body);
+        if (body.action === "registerProjectPurchase") result = await dispatchInvoices(identity, result);
         if (body.action === "registerProjectPurchase") await dispatchEvent(result, "purchase_registered");
         return result;
       }
@@ -361,7 +376,8 @@ export function createFinanceServices(deps: {
         return result;
       }
       if (isPurchaseMutation(action)) {
-        const result = await performPurchaseMutation(db, financeStorage, current, body);
+        let result = await performPurchaseMutation(db, financeStorage, current, body);
+        if (action === "registerPurchase") result = await dispatchInvoices(await deps.authenticate(token), result);
         if (action === "registerPurchase") await dispatchEvent(result, "purchase_registered");
         return result;
       }
@@ -411,6 +427,7 @@ export function neonFinanceServices(): FinanceServices {
     db,
     authenticate: (token) => cv.authenticate(token),
     financeStorage,
+    financeDrive: createFinanceDrive(),
     financeDelivery: { send: createLiveFinanceSender(process.env), env: process.env },
   });
 }

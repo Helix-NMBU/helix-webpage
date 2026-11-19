@@ -56,3 +56,33 @@ The contract can fit behind existing finance operations and recovery entrypoints
 - Verify old private invoices remain accessible and pending evidence does not disappear from Finance recovery. Actual registration, invoice transfer and payment must remain separate observable states.
 
 The API supports the required mechanics. Availability of the organization's destination, identity, effective scope and reader permissions remains unverified. No live setup or approval is implied by this note.
+
+## Implemented transfer and release gates (PBA-06)
+
+New supporting files stay in owned Neon private storage during staging and finalization. Registration verifies their signatures, complete size and SHA-256 digest, then commits the actual purchase, allocations, documents and one durable transfer job per document in one transaction. Migration 071 does not backfill historical documents. Existing private documents continue through the authorized download path; new Drive evidence cannot fall back to a private download while its transfer is incomplete.
+
+Configure these server-only variables:
+
+- `FINANCE_GOOGLE_SERVICE_ACCOUNT_JSON`: a dedicated Google service-account JSON credential with `type=service_account`, `client_email` and PKCS#8 `private_key`. The adapter accepts the fixed Google OAuth token endpoint and does not accept an impersonated subject. Keep the credential out of client bundles, logs and fixtures.
+- `FINANCE_INVOICE_SHARED_DRIVE_ID`: the approved shared drive ID.
+- `FINANCE_INVOICE_FOLDER_ID`: the approved invoice folder within that drive. The service identity must have access to this folder and permission to add children. Intended invoice readers need their own Google access.
+
+The adapter requests only `https://www.googleapis.com/auth/drive.file`, uses its dedicated service identity, and never calls a permissions API. No Gmail token or delegated user identity is used. Missing/invalid credentials or destination configuration produce durable `needs_attention`; the actual expense remains saved. The destination may remain unresolved until configuration exists. Once bound to a job, its drive and folder stay fixed across retries and later configuration changes.
+
+After registration commits, the existing Finance POST entrypoint attempts pending jobs. It persists a generated file ID before starting any resumable upload, then persists session and acknowledged byte progress with a revision and expiring lease. Each provider request and source read is bounded, and the invocation yields remaining work as pending. Registration clients automatically invoke bounded continuation batches through the same entrypoint while signed in. No new route, cron or deployment function is added. If the client leaves before continuation completes, jobs and private source bytes remain durable; Finance Recovery can resume them. `needs_attention` jobs require an explicit authorized retry and are excluded from automatic retry loops.
+
+Interrupted, expired and uncertain requests reconcile the same file ID. A returned HTTP success or HTTP 409 alone is insufficient: confirmation checks file ID, shared drive, exact parent, MIME, byte size, document reference and digest. Where Drive omits its SHA-256 checksum, the adapter reads and hashes the bounded media response. Only confirmed evidence gets the canonical restricted Drive viewer link. App authorization is checked before returning a link; opening it still requires the viewer's Google permissions. Provider IDs, resumable URLs, storage keys and service credentials are not returned in app evidence/recovery DTOs or CSV exports. Current member/Google linkage and project/department or explicit Finance authority are rechecked for claims and every durable advancement. A lease interrupted by authority loss can expire for Finance recovery without claiming successful storage.
+
+Pending or voided evidence remains referenced by its registered upload and document. Cleanup must retain these private final bytes. Evidence state is independent of actual cost, purchase voiding and payment state. CSV exports retain stable app document IDs and include backend, transfer state and confirmed viewer URL; legacy private evidence never receives a fabricated Drive URL.
+
+### Authorized synthetic-file acceptance procedure
+
+The implementation and fault tests use synthetic local data and mocked provider responses. No real Drive write, effective folder access or intended-reader access has been verified as part of this implementation. Before release, obtain explicit authorization for the following service writes and record their results:
+
+1. Confirm the approved drive/folder, dedicated identity, narrow OAuth scope and inherited ACLs with the workspace owner. Grant only the folder/service access required by the approved setup. Do not enable domain-wide delegation or broad public/domain permissions.
+2. In the locally validated application with real member authentication, register a synthetic purchase with two clearly identifiable synthetic PDF/image files. Confirm the actual and both durable jobs commit, each file lands once under the configured folder, and each job becomes stored only after verification.
+3. Interrupt one resumable transfer, simulate a lost response and retry from Finance Recovery. Verify the same stored file ID is reconciled without duplicate purchase, allocation or invoice, and that a changed server configuration does not retarget an existing job.
+4. Test intended Finance, department and project readers through the app link and through Google Drive. Test an unrelated member and an account without Google folder permission. App authorization and Google ACLs must both enforce the intended access. Do not grant broad sharing to make a failed reader check pass.
+5. Remove configuration or deny provider access temporarily. Register an incurred purchase and confirm saved actuals plus honest attention state; restore the approved configuration and recover without another actual expense. Confirm historical private downloads and provider-aware exports still work, and that no tokens/session URLs appear in notifications, logs or exports.
+
+The named release gates remain the real drive/folder, dedicated credential, effective `drive.file` behavior, inherited ACLs and intended-reader checks. Local mocks establish protocol and recovery behavior, not those live service facts.

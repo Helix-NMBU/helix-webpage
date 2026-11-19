@@ -135,6 +135,7 @@ const ACTION_CAPABILITY: Record<FinanceAction, keyof FinanceCapabilitySet> = {
   closeRequest: "ownRequests",
   downloadDocument: "filesAndRefunds",
   retryInvoiceTransfer: "filesAndRefunds",
+  continueInvoiceTransfers: "filesAndRefunds",
   downloadExport: "purchaseRegister",
   exportPurchases: "purchaseRegister",
   retryOutbox: "purchaseRegister",

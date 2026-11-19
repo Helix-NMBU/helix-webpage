@@ -1,4 +1,5 @@
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
+import { continueRegisteredInvoices } from "./invoice-continuation";
 import { capabilitiesForProfiles } from "./access";
 import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money";
 import type {
@@ -95,7 +96,7 @@ export function createFinanceApi(owner: { current: string | null }) {
     });
     const body = await response.json().catch(() => ({})) as { error?: string; errors?: FinanceFieldError[] };
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not save the budget change.", response.status, body.errors ?? []);
-    return body as FinanceMutationResult;
+    return action.action === "registerPurchase" ? continueRegisteredInvoices(body as FinanceMutationResult, next => mutate(next)) : body as FinanceMutationResult;
   }
   return {
     bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),

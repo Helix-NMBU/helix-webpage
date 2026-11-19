@@ -69,7 +69,7 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
           if ((deliveryAfter !== undefined && typeof deliveryAfter !== "string") || (uploadAfter !== undefined && typeof uploadAfter !== "string")) {
             throw new FinanceError(400, "Invalid recovery page.");
           }
-          return res.status(200).json(await services.recovery(token, deliveryAfter, uploadAfter));
+          return res.status(200).json(await services.recovery(token, deliveryAfter, uploadAfter, typeof req.query.invoiceAfter === "string" ? req.query.invoiceAfter : undefined));
         }
         if (action === "overview") return res.status(200).json(await services.overview(token, version));
         if (action === "budgets") return res.status(200).json(await services.budgets(token, version));

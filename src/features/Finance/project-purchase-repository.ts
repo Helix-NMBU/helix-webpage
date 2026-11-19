@@ -1,3 +1,4 @@
+import { continueRegisteredInvoices } from "./invoice-continuation";
 import { memberSessionToken, watchMemberSession } from "../MemberCV/session";
 import {
   isLocalMemberMode,
@@ -55,8 +56,10 @@ export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
       );
     return body as T;
   }
-  const mutate = (change: ProjectPurchaseChange) =>
-    request<ProjectPurchaseResult>({}, change);
+  const mutate = async (change: ProjectPurchaseChange) => {
+    const result = await request<ProjectPurchaseResult>({}, change);
+    return change.action === "registerProjectPurchase" ? continueRegisteredInvoices(result, next => request({}, next)) : result;
+  };
   return {
     load: (binding) =>
       request({ action: "projectPurchaseContext", ...binding }),

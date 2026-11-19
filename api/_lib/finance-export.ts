@@ -1,3 +1,4 @@
+import { invoiceTransfersAvailable } from "./finance-invoices.js";
 import { createHash } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
 import { formatOre } from "./finance-money.js";
@@ -131,6 +132,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      order by d.public_ref`,
     [seasonCode],
   )).rows;
+  const evidence = await invoiceTransfersAvailable(db) ? (await db.query<{id:string;storage_backend:string;status:string|null;drive_viewer_url:string|null}>(`select d.id,d.storage_backend,t.status,d.drive_viewer_url from finance.documents d left join finance.invoice_transfers t on t.document_id=d.id join finance.purchases p on p.id=d.purchase_id join finance.seasons s on s.id=p.season_id where s.code=$1`, [seasonCode])).rows : [];
   const rows: FinanceExportRow[] = [];
   for (const purchase of purchases) {
     const summary = emptyExportRow();
@@ -187,6 +189,10 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
       record.content_sha256 = document.content_sha256;
       record.content_type = document.content_type;
       record.byte_size = document.byte_size;
+      const attachment = evidence.find(d => d.id === document.id);
+      record.document_backend = attachment?.storage_backend ?? "private_storage";
+      record.invoice_transfer_status = attachment?.storage_backend === "google_drive" ? attachment.status ?? "needs_attention" : "stored";
+      record.invoice_viewer_url = attachment?.status === "stored" ? attachment.drive_viewer_url ?? "" : "";
       rows.push(record);
     }
   }

@@ -77,10 +77,10 @@ export function verifyFileSignature(bytes: Uint8Array, fileName: string, content
   const text = String.fromCharCode(...header);
   if (text.startsWith("%PDF-")) return ext === "pdf" || mime === "application/pdf";
   if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return ext === "jpg" || ext === "jpeg" || mime === "image/jpeg";
-  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) return ext === "png" || mime === "image/png";
-  const brand = text.includes("ftypheic") || text.includes("ftypheif") || text.includes("ftypmif1");
+  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47 && header[4] === 0x0d && header[5] === 0x0a && header[6] === 0x1a && header[7] === 0x0a) return ext === "png" || mime === "image/png";
+  const brand = text.substring(4, 8) === "ftyp" && ["heic", "heif", "mif1", "heix", "hevc", "hevx"].includes(text.substring(8, 12));
   if (brand) return ext === "heic" || ext === "heif" || mime === "image/heic" || mime === "image/heif";
-  return allowedUpload(fileName, contentType);
+  return false;
 }
 
 function normalizeLine(raw: PurchaseLineInput, lineNumber: number, errors: FinanceFieldError[]): NormalizedPurchaseLine | null {

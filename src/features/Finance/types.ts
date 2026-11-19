@@ -610,6 +610,7 @@ export type FinanceMutation =
   | (MutationBase & { action: "decideRequest"; requestRecordId: string; revisionId: string; decision: RequestDecisionKind; reason: string; approvedOreByLine?: Record<string, string> })
   | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string; releasedNok: string })
   | (MutationBase & { action: "downloadDocument"; documentId: string })
+  | (MutationBase & { action: "continueInvoiceTransfers"; purchaseId: string })
   | (MutationBase & { action: "retryInvoiceTransfer"; documentId: string; expectedRevision: number })
   | (MutationBase & { action: "downloadExport"; exportId: string })
   | (MutationBase & { action: "exportPurchases" })

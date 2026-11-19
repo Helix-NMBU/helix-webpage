@@ -39,5 +39,6 @@ jobs:
           npx vitest run
           test/api/_lib/finance-concurrency.postgres.test.ts
           test/api/_lib/finance-threshold-retirement.postgres.test.ts
+          test/api/_lib/finance-invoices.postgres.test.ts
           test/api/_lib/project-budget
           --maxWorkers=1
