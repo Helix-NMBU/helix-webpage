@@ -11,7 +11,7 @@ PR: none. No matching existing feature PR, branch or active worktree was found b
 
 ## Reconciliation
 
-The approved parent, nine children and all comments were reconciled. All nine children were Backlog with no comments. The extensive unrelated original checkout remains intact. Only approved feature documents, its ADR and agreed glossary additions were copied into the new integration checkout. No application code has yet been changed.
+The approved parent, nine children and all comments were reconciled. All nine children were Backlog with no comments. The extensive unrelated original checkout remains intact. Only approved feature documents, its ADR and agreed glossary additions were copied into the new integration checkout. That was the setup snapshot; foundation and threshold changes are now integrated as recorded below.
 
 The current remote base has 11 API functions. The original working tree's two extra unrelated wrappers are not part of this feature. New operations must reuse existing entrypoints.
 
@@ -29,7 +29,7 @@ The current remote base has 11 API functions. The original working tree's two ex
 | PBA-08 | HELIX-83 | blocked | unassigned | Needs integrated PBA-06 and PBA-07. |
 | PBA-09 | HELIX-84 | blocked | unassigned | Needs integrated PBA-04 and PBA-08. |
 
-Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy, 068 approvals, 069 revisions/import, 070 purchases, 071 Drive evidence, 072 award obligations, 073 totals if needed. The original checkout has an unrelated untracked 065; do not copy or overwrite it. Workers may leave reserved numbers unused, but must coordinate new migrations and contracts.
+Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy, 068 approvals, 069 revisions/import, 070 purchases, 071 Drive evidence, 072 award obligations, 073 totals if needed. The actual remote base already includes tracked 065_finance_historical_purchases.sql; preserve it and load it in feature test bootstrap. The older original checkout's untracked copy must not replace it. Workers may leave reserved numbers unused, but must coordinate new migrations and contracts.
 
 ## Verification and infrastructure
 
@@ -37,7 +37,7 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 - Local Node v24.19.0 and npm 11.17.0 match required major/toolchain versions.
 - Docker has no running daemon. Installed PostgreSQL17 for tests and started an isolated temporary cluster at `/private/tmp/helix-pba-postgres.J3mOMS/data`, bound only to 127.0.0.1:55475. Test URL is `postgresql://postgres@127.0.0.1:55475/postgres`; use unique disposable test databases. No production data is present; no login background service was enabled. Server path pointer: `/private/tmp/helix-pba-postgres-path`.
 - Drive destination/service identity/narrow OAuth scope/reader ACL and real entry-to-project mapping remain release inputs. No live DB or Drive writes are authorized merely for validation. Local fixtures and isolated databases are permitted.
-- Baseline npm run build passed, 9.00 MB static output and 11 source functions. Generated Vercel function compilation has not yet been checked. Log: `/private/tmp/helix-pba-baseline-build.log`.
+- Baseline npm run build passed, 9.00 MB static output and 11 source functions. The later local compiler baseline passed 11 generated functions; final code compilation remains required. Log: `/private/tmp/helix-pba-baseline-build.log`.
 - Independent full-feature review has not started. No PR exists. PBA-01 and PBA-04 are integrated/verified/closed; PBA-02 is running. The parent stays open.
 
 ## Next action
@@ -71,3 +71,15 @@ Worker repair `0be66712a366a41514e1c2a3c23b4de2c310f7b5` was inspected and integ
 ## PBA-02 assignment
 
 Reused agent `/root/pba_01_contracts` with a NEW clean ticket-specific worktree `/private/tmp/helix-pba-02-approval`, branch `codex/pba-02-approval`, verified base `4cac50ffe33d32142e04c9ce3c8e631b11d53393`. Full backend, scoped API dispatch, project/department/Finance UI, local role fixtures and real decision tests are required. Migration068 reserved. Central app routing has one assigned writer at this frontier. Existing record/delivery coordinator ownership remains with root.
+
+## PBA-02 parallel sub-assignment
+
+Backend worker delegated the independent frontend portion within the same approved ticket to agent `/root/pba_01_contracts/approval_ui`. Its distinct worktree is `/private/tmp/helix-pba-02-ui`, branch `codex/pba-02-ui`, verified base `4cac50ffe33d32142e04c9ce3c8e631b11d53393`. It owns new UI/client repository and project/department/Finance entry points; backend worker owns SQL068, server, shared wire types and database tests. Local-only role query is `budgetRole=project_lead|department_lead|finance|head_of_finance`, gated on dedicated loopback mode and sign-in, with shared synthetic budget state across role changes. The backend worker will inspect/merge the UI commit on its own worker branch; only root updates the feature integration branch. HELIX-78 remains one ticket and requires combined acceptance before closure.
+
+## Next parallel frontier coordination
+
+After PBA-02 is integrated and verified, PBA-03 revisions/import and PBA-05 purchases/completion can proceed independently. Reserve mutation core/revision SQL069 to PBA-03. PBA-05 should add dedicated completion/purchase functions and a narrow dispatch seam in070 rather than replace a stale full copy of mutate_project_budget from068. Serialize shared service/type wiring during integration. Both must agree on header/request/ordered-entry/legacy-container lock order and cover promotion versus purchase using independent PostgreSQL connections. PBA-07 should add obligation guard functions/triggers without overwriting unrelated mutation changes. Every raw effective-read consumer identified in the preflight remains in PBA-08's coverage.
+
+## Isolated final compiler setup
+
+Created detached local compiler worktree `/private/tmp/helix-pba-compiler` at `21c43a5` with its own dependency install. Before the final Vercel build, fast-forward this disposable checkout to the reviewed feature commit and copy only ignored local Vercel project context. No deployment is authorized. Integration dependencies are no longer shared with compiler installs.
