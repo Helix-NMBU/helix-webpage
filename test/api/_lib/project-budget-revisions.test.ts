@@ -30,11 +30,12 @@ async function award(entryId: string) {
   await db.query("insert into finance.funding_applications(id,deal_id,season_id,purchase_conditions,awarded_at,awarded_by_member_id,award_date,award_reference,created_by_member_id) values($1::uuid,$2::uuid,$3::uuid,'Required material',clock_timestamp(),$4::uuid,'2026-11-19','Synthetic award',$4::uuid)", [applicationId, dealId, f.season, f.head]);
   await db.query("insert into finance.budget_obligations(application_id,entry_id,created_by_member_id) values($1::uuid,$2::uuid,$3::uuid)", [applicationId, entryId, f.head]);
 }
+// Allow cold PGlite startup and the full migration chain; assertion timeouts stay unchanged.
 beforeAll(async () => {
   pg = new PGlite(); db = { exec: sql => pg.exec(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
   await setupProjectBudgetBase(db); await seedProjectBudgetLegacy(db); await applyProjectBudgetMigrations(db);
   services = createFinanceServices({ db, authenticate: async token => projectBudgetIdentity(token as ProjectBudgetFixtureRole) });
-});
+}, 30_000);
 beforeEach(() => pg.exec("begin")); afterEach(() => pg.exec("rollback")); afterAll(() => pg.close());
 
 describe("approved project budget revisions and candidate-only imports", () => {

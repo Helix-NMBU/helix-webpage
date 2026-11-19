@@ -40,4 +40,4 @@ jobs:
           test/api/_lib/finance-concurrency.postgres.test.ts
           test/api/_lib/finance-threshold-retirement.postgres.test.ts
           test/api/_lib/project-budget
-          --maxWorkers=2
+          --maxWorkers=1

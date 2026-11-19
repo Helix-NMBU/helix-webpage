@@ -40,6 +40,7 @@ async function mapEntry(entryId: string = f.entry, systemId: string = f.system) 
   await db.query(`insert into finance.project_budget_version_entries(version_id,entry_id,system_id,description,category,planned_ore,ordinary_priority,reuse_status)
     values($1::uuid,$2::uuid,$3::uuid,'Proposed changed plan','material',2000000,'P3','new')`, [version, entryId, systemId]);
 }
+// Allow cold PGlite startup and the full migration chain; assertion timeouts stay unchanged.
 beforeAll(async () => {
   pg = new PGlite();
   db = { exec: sql => pg.exec(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
@@ -48,7 +49,7 @@ beforeAll(async () => {
   beforeMigration = await legacyIdentity();
   importedBeforeMigration = await importedIdentity();
   loaded = await applyProjectBudgetMigrations(db);
-});
+}, 30_000);
 beforeEach(async () => { await pg.exec("begin"); });
 afterEach(async () => { await pg.exec("rollback"); });
 afterAll(async () => { await pg.close(); });

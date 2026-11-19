@@ -24,12 +24,13 @@ async function write(role: ProjectBudgetFixtureRole, budget: ProjectBudgetDetail
   await mutate(role, { action, projectBudgetId: budget.id, expectedRevision: budget.revision, ...fields });
   return services.projectBudget(role, budget.id);
 }
+// Allow cold PGlite startup and the full migration chain; assertion timeouts stay unchanged.
 beforeAll(async () => {
   pg = new PGlite();
   db = { exec: sql => pg.exec(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
   await setupProjectBudgetBase(db); await seedProjectBudgetLegacy(db); await applyProjectBudgetMigrations(db);
   services = createFinanceServices({ db, authenticate: async token => projectBudgetIdentity(token as ProjectBudgetFixtureRole) });
-});
+}, 30_000);
 beforeEach(async () => { await pg.exec("begin"); });
 afterEach(async () => { await pg.exec("rollback"); });
 afterAll(async () => { await pg.close(); });
