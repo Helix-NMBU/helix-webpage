@@ -7,6 +7,7 @@ import { createPostgresTestPool } from "./postgres-test-pool.js";
 const url = process.env.FINANCE_TEST_POSTGRES_URL;
 const name = `helix_pba_approval_${process.pid}_${Date.now()}`;
 let admin: pg.Client, pool: pg.Pool, close: (() => Promise<void>) | undefined, db: ProjectBudgetTestDatabase, services: ReturnType<typeof createFinanceServices>;
+let rejectionDiagnostics: { action: string; code: string | null; constraint: string | null }[] | null = null;
 const entry = { systemId: f.system, description: "Frame tubes", category: "material", plannedNok: "6000.00", ordinaryPriority: "P1", reuseStatus: "new", status: "planned" };
 const mutate = (role: ProjectBudgetFixtureRole, body: Record<string, unknown>) => services.mutate(role, { requestId: randomUUID(), ...body });
 async function draft() {
@@ -23,7 +24,17 @@ describe.skipIf(!url)("project approval transactions on independent PostgreSQL c
     admin = new pg.Client({ connectionString: connection.toString() }); await admin.connect(); await admin.query(`create database ${name}`);
     connection.pathname = `/${name}`;
     const resource = createPostgresTestPool({ connectionString: connection.toString(), max: 6 }); pool = resource.pool; close = resource.close;
-    db = { exec: sql => pool.query(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pool.query(sql, params)).rows as T[] }) };
+    db = { exec: sql => pool.query(sql), query: async <T>(sql: string, params?: unknown[]) => {
+      try { return { rows: (await pool.query(sql, params)).rows as T[] }; }
+      catch (error) {
+        if (rejectionDiagnostics && sql.startsWith("select finance.mutate_project_budget")) {
+          const action = (JSON.parse(String(params?.[5] ?? "{}")) as { action?: string }).action ?? "unknown";
+          const failure = error as { code?: string; constraint?: string };
+          rejectionDiagnostics.push({ action, code: failure.code ?? null, constraint: failure.constraint ?? null });
+        }
+        throw error;
+      }
+    } };
     await setupProjectBudgetBase(db); await seedProjectBudgetLegacy(db); expect(await applyProjectBudgetMigrations(db)).toContain("068_project_budget_approval.sql");
     services = createFinanceServices({ db, authenticate: async token => projectBudgetIdentity(token as ProjectBudgetFixtureRole) });
   });
@@ -95,6 +106,7 @@ describe.skipIf(!url)("project approval transactions on independent PostgreSQL c
     const gate = await pool.connect();
     await gate.query("begin");
     await gate.query("select counter_key from finance.reference_counters where counter_key='budget_item:S28' for update");
+    rejectionDiagnostics = [];
     const pending = Promise.allSettled(budgets.map(budget => mutate("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision })));
     let waiting = 0;
     try {
@@ -103,8 +115,11 @@ describe.skipIf(!url)("project approval transactions on independent PostgreSQL c
         if (waiting < 2) await new Promise(resolve => setTimeout(resolve, 10));
       }
     } finally { await gate.query("commit"); gate.release(); }
+    const outcomes = await pending;
+    const safeDiagnostic = JSON.stringify(rejectionDiagnostics);
+    rejectionDiagnostics = null;
     expect(waiting).toBe(2);
-    expect((await pending).map(result => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(outcomes.map(result => result.status), safeDiagnostic).toEqual(["fulfilled", "fulfilled"]);
     for (const budget of budgets) expect((await services.projectBudget("head", budget.id)).approvedVersion).toMatchObject({ status: "approved" });
     expect((await db.query("select status,approved_by_member_id from finance.budgets where season_id=$1::uuid", [f.nextSeason])).rows).toEqual([{ status: "draft", approved_by_member_id: null }]);
   });
