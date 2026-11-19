@@ -1,3 +1,5 @@
+import type { FinanceInvoiceRecoveryRow, InvoiceEvidenceSummary } from "./invoice-types.js";
+import type { InvoiceStorageBackend, InvoiceTransferStatus } from "./project-budget-types.js";
 export const FINANCE_PROFILES = ["business", "finance", "head_of_finance"] as const;
 export type FinanceProfile = (typeof FINANCE_PROFILES)[number];
 
@@ -258,6 +260,11 @@ export type PurchaseRegisterDocument = {
   kind: DocumentKind;
   documentNumber: string | null;
   originalName: string;
+  backend?: InvoiceStorageBackend;
+  transferStatus?: InvoiceTransferStatus;
+  transferRevision?: number | null;
+  viewerUrl?: string | null;
+  canRetry?: boolean;
 };
 
 export type PurchaseExceptionReview = {
@@ -603,6 +610,7 @@ export type FinanceMutation =
   | (MutationBase & { action: "decideRequest"; requestRecordId: string; revisionId: string; decision: RequestDecisionKind; reason: string; approvedOreByLine?: Record<string, string> })
   | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string; releasedNok: string })
   | (MutationBase & { action: "downloadDocument"; documentId: string })
+  | (MutationBase & { action: "retryInvoiceTransfer"; documentId: string; expectedRevision: number })
   | (MutationBase & { action: "downloadExport"; exportId: string })
   | (MutationBase & { action: "exportPurchases" })
   | (MutationBase & { action: "retryOutbox"; outboxId?: string; reconciliation?: "sent" | "not_sent" | "still_unknown" })
@@ -661,12 +669,16 @@ export type FinanceMutationResult = {
   stagingKey?: string;
   expiresAt?: string;
   downloadUrl?: string;
+  viewerUrl?: string;
+  invoiceEvidence?: InvoiceEvidenceSummary;
   exportFile?: FinanceExportFile;
   recovery?: FinanceRecoverySummary;
   importPreview?: BudgetImportPreview;
 };
 
 export type FinanceRecoveryView = {
+  invoiceTransfers?: FinanceInvoiceRecoveryRow[];
+  invoiceNextCursor?: string | null;
   deliveries: { id: string; eventType: string; recipient: string | null; status: string; safeError: string | null; attemptCount: number; updatedAt: string; lastClaimedAt: string | null; providerMessageId: string | null }[];
   uploads: { id: string; owner: string | null; status: string; commitState: string; referenced: boolean; candidateCount: number; createdAt: string; expiresAt: string }[];
   deliveryNextCursor: string | null;

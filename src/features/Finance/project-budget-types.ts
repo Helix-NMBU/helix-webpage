@@ -70,6 +70,8 @@ export interface ProjectBudgetInvoiceReference {
   backend: InvoiceStorageBackend;
   transferStatus: InvoiceTransferStatus;
   viewerUrl: string | null;
+  transferRevision?: number | null;
+  canRetry?: boolean;
 }
 export interface ProjectBudgetVersion {
   id: string;
