@@ -20,10 +20,10 @@ The current remote base has 11 API functions. The original working tree's two ex
 | Ticket | Tracker | State | Worker/worktree/branch | Evidence |
 | --- | --- | --- | --- | --- |
 | PBA-01 | HELIX-76 | closed on feature branch | `/root/pba_01_contracts`; `/Users/henrik.noteless/.codex/worktrees/pba-01-contracts/helix-webpage`; `codex/pba-01-contracts`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `5d9e052a733f039166be4a96882b388ccc6fdac2`; integrated `1cadc34`; 17 integrated foundation tests incl3 PG; all3 typechecks; Done in Linear. |
-| PBA-02 | HELIX-78 | running | reused agent `/root/pba_01_contracts`; `/private/tmp/helix-pba-02-approval`; `codex/pba-02-approval`; base `4cac50ffe33d32142e04c9ce3c8e631b11d53393` | PBA-01 integrated and verified. Full draft/department/Head of Finance approval slice assigned. |
-| PBA-03 | HELIX-79 | blocked | unassigned | Needs integrated PBA-02. |
+| PBA-02 | HELIX-78 | closed on feature branch | reused agent `/root/pba_01_contracts`; `/private/tmp/helix-pba-02-approval`; `codex/pba-02-approval`; base `4cac50ffe33d32142e04c9ce3c8e631b11d53393` | Integrated through78e6c74;42 server +80 UI +15 follow-up cases; all3 typechecks/lint/source11; Done readback verified. |
+| PBA-03 | HELIX-79 | running | reused `/root/pba_01_contracts`; `/private/tmp/helix-pba-03-revisions`; `codex/pba-03-revisions`; base78e6c74 | Verified PBA-02 prerequisite; owns069 revision/import core and review UI. |
 | PBA-04 | HELIX-77 | closed on feature branch | `/root/pba_04_threshold`; original `/private/tmp/helix-pba-04-threshold`, repair `/private/tmp/helix-pba-04-repair`; branches `codex/pba-04-threshold` and `codex/pba-04-cleanup` | Policy `56415c5` -> `dada27b`; teardown `0be6671` -> `4cac50f`; 104 initial tests, then clean exact PostgreSQL CI selection 27/27; Done again. |
-| PBA-05 | HELIX-80 | blocked | unassigned | Needs integrated PBA-02. |
+| PBA-05 | HELIX-80 | running | reused `/root/pba_04_threshold`; `/private/tmp/helix-pba-05-purchases`; `codex/pba-05-purchases`; base78e6c74 | Verified PBA-02 prerequisite; owns070 purchase/completion routines and purchase UI. |
 | PBA-06 | HELIX-81 | blocked | unassigned | Needs integrated PBA-05. |
 | PBA-07 | HELIX-82 | blocked | unassigned | Needs integrated PBA-03. |
 | PBA-08 | HELIX-83 | blocked | unassigned | Needs integrated PBA-06 and PBA-07. |
@@ -38,11 +38,11 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 - Docker has no running daemon. Installed PostgreSQL17 for tests and started an isolated temporary cluster at `/private/tmp/helix-pba-postgres.J3mOMS/data`, bound only to 127.0.0.1:55475. Test URL is `postgresql://postgres@127.0.0.1:55475/postgres`; use unique disposable test databases. No production data is present; no login background service was enabled. Server path pointer: `/private/tmp/helix-pba-postgres-path`.
 - Drive destination/service identity/narrow OAuth scope/reader ACL and real entry-to-project mapping remain release inputs. No live DB or Drive writes are authorized merely for validation. Local fixtures and isolated databases are permitted.
 - Baseline npm run build passed, 9.00 MB static output and 11 source functions. The later local compiler baseline passed 11 generated functions; final code compilation remains required. Log: `/private/tmp/helix-pba-baseline-build.log`.
-- Independent full-feature review has not started. No PR exists. PBA-01 and PBA-04 are integrated/verified/closed; PBA-02 is running. The parent stays open.
+- Independent full-feature review has not started. No PR exists. PBA-01, PBA-02 and PBA-04 are integrated/verified/closed; PBA-03 and PBA-05 are running. The parent stays open.
 
 ## Next action
 
-PBA-02 is implementing the complete first approval journey on verified base `4cac50f`. Review its transaction/authorization/notification interfaces early, then integrate and verify the real service/UI flow before closing HELIX-78. PBA-03 and PBA-05 become eligible only after that integration. Worker04 is idle after the verified cleanup repair and can be reused in a new worktree for the purchase slice. No dependent implementation is underway.
+PBA-03 revisions/import and PBA-05 purchases/completion run in separate verified worktrees from78e6c74. Integrate/verify completed commits serially, then schedule PBA-07 after03 and PBA-06 after05. Keep completion SQL separate from the revision core and coordinate central service/UI edits. Whole-feature Finance-page browser coverage remains in PBA-09 using a dedicated local Finance fixture, without persistent member grant changes.
 
 The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver. Merging and deployment remain unauthorized. Both source and generated Vercel function counts passed11/11 on the root slices; final compilation must bind to the final feature commit and use isolated dependencies.
 
@@ -83,3 +83,11 @@ After PBA-02 is integrated and verified, PBA-03 revisions/import and PBA-05 purc
 ## Isolated final compiler setup
 
 Created detached local compiler worktree `/private/tmp/helix-pba-compiler` at `21c43a5` with its own dependency install. Before the final Vercel build, fast-forward this disposable checkout to the reviewed feature commit and copy only ignored local Vercel project context. No deployment is authorized. Integration dependencies are no longer shared with compiler installs.
+
+## PBA-02 acceptance and next frontier
+
+Reviewed/integrated a741ec4 ->cbd1182, cb0e35c ->365f736, e40ab65 ->cab1ca6, frontend d0c5cc3 ->d487f51 and5bfc82e ->78e6c74. Root server selection passed42/42 in6 files; UI selection80/80 in8 files; final mail/repository follow-up15/15. All3 typechecks, lint and source11 passed. Existing generated11 remains a prior baseline, not final approval-code compilation. Logs `/private/tmp/helix-pba02-integrated-{server,ui,followup}.log`. Worker combined selection110/110. HELIX-78 Done update/readback verified.
+
+Root fresh IAB journey at5292 covered explicit multi-department choice, Draft, entry8000.25, submission, department approval, ordinary Finance read-only and Head of Finance final approval/history. Root integrated port5293 verified save restores focus to Add entry; screenshot `/Users/henrik.noteless/.codex/visualizations/2026/11/19/01a1f507-0bd9-7353-8e02-363fe7cc5fa3/project-budget-draft.jpg`. Browser uses synthetic loopback fixtures; actual database authorization/races are separate evidence. CUA completion summaries issued. A child attempt to save local Alex's persistent Financials grant was rejected by automatic approval review as an unauthorized privilege change; it was not retried. Broad Finance page remains component-verified until PBA-09's dedicated fixture coverage.
+
+Created and verified clean03/05 worktrees above at fullbase78e6c74ddd9c0bbf4b62c15cfc024ca1f629d22f. Each uses the stable integration dependencies via node_modules symlink; do not reinstall them. Compiler dependencies are separate. PBA-03 owns core069 and panel revisions/diffs; PBA-05 owns070, new purchase/completion modules and narrow panel import only. Both use header -> verified authority/project -> candidate as needed -> ordered anchors -> legacy ledger -> reference/view locks. No dependent implementation started before02 acceptance.
