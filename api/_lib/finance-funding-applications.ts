@@ -70,7 +70,15 @@ const PROPOSALS = `select jsonb_build_object('id',proposal.id,'applicationId',pr
  'projectBudgetId',proposal.project_budget_id,'entryId',proposal.entry_id,'desiredEntry',proposal.desired_entry,'note',proposal.note,'adoptedVersionId',proposal.adopted_version_id,
  'approvalStatus',case when proposal.adopted_at is null then 'needs_project_lead' when exists(select 1 from finance.project_budgets h join finance.project_budget_versions approved on approved.id=h.approved_version_id
   join finance.project_budget_versions adopted on adopted.id=proposal.adopted_version_id join finance.project_budget_version_entries entry on entry.version_id=approved.id and entry.entry_id=proposal.entry_id
-  where h.id=proposal.project_budget_id and approved.version_number>=adopted.version_number and not entry.removed and entry.status<>'cancelled') then 'approved' else 'awaiting_budget_approval' end,
+  where h.id=proposal.project_budget_id and approved.version_number>=adopted.version_number and not entry.removed and entry.status<>'cancelled'
+   and entry.system_id=(proposal.desired_entry->>'systemId')::uuid and entry.description=proposal.desired_entry->>'description'
+   and entry.category=proposal.desired_entry->>'category' and entry.planned_ore>=(proposal.desired_entry->>'plannedOre')::bigint
+   and entry.ordinary_priority=proposal.desired_entry->>'ordinaryPriority' and entry.reuse_status=proposal.desired_entry->>'reuseStatus'
+   and entry.status=proposal.desired_entry->>'status'
+   and entry.expected_purchase_date is not distinct from nullif(proposal.desired_entry->>'expectedPurchaseDate','')::date
+   and entry.owner_member_id is not distinct from nullif(proposal.desired_entry->>'ownerMemberId','')::uuid
+   and entry.owner_email is not distinct from nullif(proposal.desired_entry->>'ownerEmail','')
+   and entry.note is not distinct from nullif(proposal.desired_entry->>'note','')) then 'approved' else 'awaiting_budget_approval' end,
  'mandatory',exists(select 1 from finance.budget_obligations obligation where obligation.application_id=app.id and obligation.entry_id=proposal.entry_id and obligation.released_at is null and app.awarded_at is not null),
  'createdByMemberId',proposal.created_by_member_id,'createdAt',proposal.created_at) as value
  from finance.funding_budget_proposals proposal join finance.funding_applications app on app.id=proposal.application_id join partner_deals.deals deal on deal.id=app.deal_id`;

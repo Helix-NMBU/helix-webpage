@@ -96,6 +96,27 @@ describe("explicit funding awards and stable P0 obligations", () => {
     expect((await finance.fundingApplication("head", app.id)).proposals[0]).toMatchObject({ approvalStatus: "approved", entryId: proposal.entryId });
     await expect(safe(() => db.query("delete from project_management.projects where id=$1::uuid", [f.project]))).rejects.toMatchObject({ code: "23514" });
   });
+  it("labels a proposal approved only when the genuine approval retains its amount and contents", async () => {
+    await db.query("update finance.budget_items set planned_ore=500000 where id=$1::uuid", [f.entry]);
+    let budget = await approved(), app = await application();
+    app = await appWrite(app, "proposeFundingBudgetEntry", { projectBudgetId: budget.id, expectedBudgetRevision: budget.revision,
+      entry: { ...entry, entryId: f.entry, plannedNok: "8000" } });
+    app = await award(app);
+    budget = await finance.projectBudget("lead", budget.id);
+    budget = await write("lead", budget, "requestProjectBudgetChanges", { reason: "Review the proposal" });
+    const proposal = (await finance.projectFundingProposals("lead", budget.id)).proposals[0];
+    await mutate("lead", { action: "adoptFundingProposal", applicationId: app.id, expectedRevision: app.revision,
+      projectBudgetId: budget.id, expectedBudgetRevision: budget.revision, proposalId: proposal.id });
+    budget = await finance.projectBudget("lead", budget.id);
+    for (const [amount, description, expected] of [["6000", "Steel", "awaiting_budget_approval"],
+      ["8000", "Different purchase", "awaiting_budget_approval"], ["8000", "Steel", "approved"]] as const) {
+      if (budget.approvedVersionId && !budget.pendingVersionId) budget = await write("lead", budget, "requestProjectBudgetChanges", { reason: "Align proposed purchase" });
+      budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: amount, description } });
+      budget = await approve(budget);
+      expect((await finance.fundingApplication("head", app.id)).proposals[0].approvalStatus).toBe(expected);
+      expect((await finance.projectFundingProposals("lead", budget.id)).proposals[0].approvalStatus).toBe(expected);
+    }
+  });
   it("retains proposal system departments before adoption without replacing the existing financial-history guard", async () => {
     await db.query("update project_management.projects set departments=array['Mechanical & Production','Electronics'] where id=$1::uuid", [f.project]);
     const budget = await approved(); let app = await application();

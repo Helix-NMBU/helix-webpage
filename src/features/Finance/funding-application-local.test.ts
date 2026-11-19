@@ -137,6 +137,37 @@ describe("funding applications and stable budget obligations", () => {
       "approved",
     );
   });
+  it("does not approve a proposal whose adopted amount or purchase was changed before review", async () => {
+    const { repository, budgets, app, budget } = await fundingFixture();
+    const original = budget.approvedVersion!.entries[0];
+    await repository.mutate({ action: "proposeFundingBudgetEntry", requestId: crypto.randomUUID(), applicationId: app.id,
+      expectedRevision: app.revision, projectBudgetId: budget.id, expectedBudgetRevision: budget.revision,
+      entry: { ...original, plannedNok: "1400" } });
+    fundingRole("project_lead");
+    let current = await budgets.detail(budget.id);
+    const proposal = (await repository.proposals(budget.id)).proposals[0];
+    await repository.mutate({ action: "adoptFundingProposal", requestId: crypto.randomUUID(), applicationId: app.id,
+      expectedRevision: proposal.applicationRevision, projectBudgetId: budget.id, expectedBudgetRevision: current.revision, proposalId: proposal.id });
+    current = await budgets.detail(budget.id);
+    for (const [amount, description, expected] of [["1200", original.description, "awaiting_budget_approval"],
+      ["1400", "A different purchase", "awaiting_budget_approval"], ["1400", original.description, "approved"]] as const) {
+      fundingRole("project_lead");
+      if (!current.pendingVersionId) {
+        await budgets.mutate({ action: "requestProjectBudgetChanges", requestId: crypto.randomUUID(), projectBudgetId: budget.id,
+          expectedRevision: current.revision, reason: "Align the proposed purchase" });
+        current = await budgets.detail(budget.id);
+      }
+      await budgets.mutate({ action: "saveProjectBudgetEntry", requestId: crypto.randomUUID(), projectBudgetId: budget.id,
+        expectedRevision: current.revision, entry: { ...original, plannedNok: amount, description } });
+      current = await budgets.detail(budget.id);
+      for (const [role, action] of [["project_lead", "submitProjectBudget"], ["department_lead", "approveDepartmentBudget"], ["head_of_finance", "approveProjectBudget"]] as const) {
+        fundingRole(role);
+        await budgets.mutate({ action, requestId: crypto.randomUUID(), projectBudgetId: budget.id, expectedRevision: current.revision });
+        current = await budgets.detail(budget.id);
+      }
+      expect((await repository.detail(app.id)).proposals[0].approvalStatus).toBe(expected);
+    }
+  });
   it("retains P0 for multiple awards until every obligation is released and protects edits", async () => {
     const { repository, budgets, app, budget, deal } = await fundingFixture(),
       entry = budget.approvedVersion!.entries[0];

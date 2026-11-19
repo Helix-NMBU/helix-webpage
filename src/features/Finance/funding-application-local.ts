@@ -206,7 +206,11 @@ function refresh(app: FundingApplicationDetail) {
     proposal.approvalStatus =
       entry &&
       canonicalNokOre(entry.plannedNok) >=
-        canonicalNokOre(proposal.desiredEntry.plannedNok)
+        canonicalNokOre(proposal.desiredEntry.plannedNok) &&
+      (["systemId", "description", "category", "ordinaryPriority", "reuseStatus", "status",
+        "expectedPurchaseDate", "ownerMemberId", "ownerEmail", "note"] as const).every(
+        key => (entry[key] || null) === (proposal.desiredEntry[key] || null),
+      )
         ? "approved"
         : proposal.adoptedVersionId
           ? "awaiting_budget_approval"
@@ -588,6 +592,7 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
               !["P1", "P2", "P3", "P4"].includes(entry.ordinaryPriority)
             )
               fail("Enter valid proposal details.", 400);
+            entry = { ...entry, plannedNok: formatOre(amount) };
           }
           if (
             !budget ||
