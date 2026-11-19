@@ -1,3 +1,5 @@
+import { ProjectBudgetComparison } from "./ProjectBudgetComparison";
+import { ProjectBudgetImport } from "./ProjectBudgetImport";
 import { canonicalDepartment } from "../ProjectManagement/departments";
 import {
   useCallback,
@@ -445,7 +447,10 @@ function ReasonDialog({
   onClose,
   restoreFocus,
 }: {
-  action: "returnProjectBudget" | "withdrawProjectBudget";
+  action:
+    | "returnProjectBudget"
+    | "withdrawProjectBudget"
+    | "requestProjectBudgetChanges";
   busy: boolean;
   onSubmit: (reason: string) => Promise<void>;
   onClose: () => void;
@@ -468,13 +473,16 @@ function ReasonDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {action === "returnProjectBudget"
-              ? "Return for correction"
-              : "Withdraw submission"}
+            {action === "requestProjectBudgetChanges"
+              ? "Request budget changes"
+              : action === "returnProjectBudget"
+                ? "Return for correction"
+                : "Withdraw submission"}
           </DialogTitle>
           <DialogDescription>
-            The budget will return to Draft and need both approvals after
-            resubmission.
+            {action === "requestProjectBudgetChanges"
+              ? "The project lead can revise the Draft proposal. An existing proposal is reused and its approvals reset. The approved version remains available for purchases."
+              : "The budget will return to Draft and need both approvals after resubmission."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -514,9 +522,11 @@ function ReasonDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={busy}>
-              {action === "returnProjectBudget"
-                ? "Return to Draft"
-                : "Withdraw to Draft"}
+              {action === "requestProjectBudgetChanges"
+                ? "Request changes"
+                : action === "returnProjectBudget"
+                  ? "Return to Draft"
+                  : "Withdraw to Draft"}
             </Button>
           </DialogFooter>
         </form>
@@ -557,9 +567,14 @@ export function ProjectBudgetsPanel({
   const [entry, setEntry] = useState<ProjectBudgetEntryInput | null>(null),
     [createOpen, setCreateOpen] = useState(false);
   const [reasonAction, setReasonAction] = useState<
-    "returnProjectBudget" | "withdrawProjectBudget" | null
+    | "returnProjectBudget"
+    | "withdrawProjectBudget"
+    | "requestProjectBudgetChanges"
+    | null
   >(null);
   const [stage, setStage] = useState("all");
+  const [importOpen, setImportOpen] = useState(false);
+  const [versionView, setVersionView] = useState("proposed");
   const notify = useNotify();
   const alive = useRef(false),
     generation = useRef(0),
@@ -568,7 +583,8 @@ export function ProjectBudgetsPanel({
     selected = useRef<string | null>(null),
     dirty = useRef(false),
     version = useRef<number | null>(null);
-  dirty.current = entry !== null || createOpen || reasonAction !== null;
+  dirty.current =
+    entry !== null || createOpen || reasonAction !== null || importOpen;
   const dialogOpener = useRef<HTMLButtonElement | null>(null);
   const focusFallback = useRef<HTMLButtonElement | null>(null);
   const pendingFocus = useRef(false);
@@ -584,9 +600,16 @@ export function ProjectBudgetsPanel({
     target?.focus();
   }, []);
   useEffect(() => {
-    if (!busy && !entry && !createOpen && !reasonAction && pendingFocus.current)
+    if (
+      !busy &&
+      !entry &&
+      !createOpen &&
+      !reasonAction &&
+      !importOpen &&
+      pendingFocus.current
+    )
       restoreFocus();
-  }, [busy, entry, createOpen, reasonAction, restoreFocus]);
+  }, [busy, entry, createOpen, reasonAction, importOpen, restoreFocus]);
   const clearPrivate = useCallback(() => {
     authorizationEpoch.current++;
     generation.current++;
@@ -599,6 +622,7 @@ export function ProjectBudgetsPanel({
     setEntry(null);
     setReasonAction(null);
     setCreateOpen(false);
+    setImportOpen(false);
     selected.current = null;
     setDenied(true);
   }, []);
@@ -623,6 +647,7 @@ export function ProjectBudgetsPanel({
           setDetail(null);
           setEntry(null);
           setReasonAction(null);
+          setImportOpen(false);
           dirty.current = false;
         }
         if (!selected.current && next.budgets.length === 1)
@@ -687,6 +712,8 @@ export function ProjectBudgetsPanel({
     setEntry(null);
     setReasonAction(null);
     setCreateOpen(false);
+    setImportOpen(false);
+    setVersionView("proposed");
     dirty.current = false;
     selected.current = null;
     version.current = null;
@@ -738,6 +765,8 @@ export function ProjectBudgetsPanel({
       setEntry(null);
       setCreateOpen(false);
       setReasonAction(null);
+      if (change.action === "requestProjectBudgetChanges")
+        setVersionView("proposed");
       dirty.current = false;
       notify("Budget saved", "The project budget has been updated.", {
         variant: "success",
@@ -797,10 +826,21 @@ export function ProjectBudgetsPanel({
       return;
     }
     selected.current = id;
+    setVersionView("proposed");
     await load(true);
   }
   const candidate = detail?.pendingVersion,
-    displayed = candidate ?? detail?.approvedVersion;
+    displayed =
+      versionView === "approved"
+        ? (detail?.approvedVersion ?? candidate)
+        : versionView.startsWith("history:")
+          ? (detail?.historyVersions?.find(
+              (version) => `history:${version.id}` === versionView,
+            ) ??
+            candidate ??
+            detail?.approvedVersion)
+          : (candidate ?? detail?.approvedVersion);
+  const viewingCandidate = Boolean(candidate && displayed?.id === candidate.id);
   const entries = displayed?.entries.filter((item) => !item.removed) ?? [];
   const authorScopes =
     workspace?.scopes.filter(
@@ -816,15 +856,19 @@ export function ProjectBudgetsPanel({
         stage === "all" || (budget.pendingStage ?? "approved") === stage,
     ) ?? [];
   const canEdit = Boolean(
-    detail?.capabilities.canDraft && candidate?.status === "draft",
+    detail?.capabilities.canDraft &&
+    candidate?.status === "draft" &&
+    viewingCandidate,
   );
   const canDepartmentApprove = Boolean(
     detail?.capabilities.canReviewDepartment &&
-    candidate?.status === "department_pending",
+    candidate?.status === "department_pending" &&
+    viewingCandidate,
   );
   const canFinanceApprove = Boolean(
     detail?.capabilities.canApproveFinance &&
-    candidate?.status === "finance_pending",
+    candidate?.status === "finance_pending" &&
+    viewingCandidate,
   );
   const systems =
     workspace?.systems?.filter((system) =>
@@ -1011,8 +1055,31 @@ export function ProjectBudgetsPanel({
               </Badge>
             </div>
             <div className="flex flex-wrap gap-2">
+              {detail.approvedVersion &&
+                detail.capabilities.canRequestChanges && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={(event) => {
+                      dialogOpener.current = event.currentTarget;
+                      setReasonAction("requestProjectBudgetChanges");
+                    }}
+                  >
+                    Request changes
+                  </Button>
+                )}
               {canEdit && (
                 <>
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={(event) => {
+                      dialogOpener.current = event.currentTarget;
+                      setImportOpen(true);
+                    }}
+                  >
+                    Import CSV
+                  </Button>
                   <Button
                     variant="outline"
                     disabled={busy || systems.length === 0}
@@ -1024,7 +1091,9 @@ export function ProjectBudgetsPanel({
                     Add entry
                   </Button>
                   <Button
-                    disabled={busy || entries.length === 0}
+                    disabled={
+                      busy || (entries.length === 0 && !detail.approvedVersion)
+                    }
                     onClick={() => void write("submitProjectBudget")}
                   >
                     Send to department lead
@@ -1075,6 +1144,55 @@ export function ProjectBudgetsPanel({
                 )}
             </div>
           </div>
+          {detail.approvedVersion && (
+            <div className="max-w-md space-y-2">
+              <Label htmlFor="project-budget-version">Budget version</Label>
+              <Select
+                value={
+                  viewingCandidate
+                    ? "proposed"
+                    : displayed.id === detail.approvedVersion.id
+                      ? "approved"
+                      : `history:${displayed.id}`
+                }
+                disabled={busy || dirty.current}
+                onValueChange={setVersionView}
+              >
+                <SelectTrigger id="project-budget-version" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="approved">
+                    Approved version {detail.approvedVersion.versionNumber}
+                  </SelectItem>
+                  {candidate && (
+                    <SelectItem value="proposed">
+                      Proposed version {candidate.versionNumber}
+                    </SelectItem>
+                  )}
+                  {detail.historyVersions
+                    ?.filter(
+                      (version) => version.id !== detail.approvedVersion?.id,
+                    )
+                    .map((version) => (
+                      <SelectItem
+                        key={version.id}
+                        value={`history:${version.id}`}
+                      >
+                        Earlier approved version {version.versionNumber}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {detail.approvedVersion && candidate && (
+            <ProjectBudgetComparison
+              approved={detail.approvedVersion}
+              proposed={candidate}
+              systems={workspace?.systems ?? []}
+            />
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -1148,6 +1266,7 @@ export function ProjectBudgetsPanel({
           <p className="text-right font-medium">
             Total {money(displayed.totalNok)}
           </p>
+          {/* PBA-05 integration: render ProjectBudgetPurchases here when detail.capabilities.canRegisterPurchase, regardless displayed version. It selects effective entries itself; onChanged calls load(true). */}
           {detail.decisions.length > 0 && (
             <div className="space-y-2 border-t pt-4">
               <h4 className="text-sm font-medium">Approval history</h4>
@@ -1162,6 +1281,10 @@ export function ProjectBudgetsPanel({
                         submitProjectBudget: "Sent to department lead",
                         approveDepartmentBudget: "Department approved",
                         approveProjectBudget: "Head of Finance approved",
+                        requestProjectBudgetChanges: "Budget changes requested",
+                        importProjectBudgetEntries:
+                          "Candidate entries imported",
+                        adoptProjectBudgetEntries: "Historical entries adopted",
                         returnProjectBudget: "Returned for correction",
                         withdrawProjectBudget: "Submission withdrawn",
                       } as Record<string, string>
@@ -1174,6 +1297,23 @@ export function ProjectBudgetsPanel({
             </div>
           )}
         </section>
+      )}
+      {importOpen && detail && (
+        <ProjectBudgetImport
+          budget={detail}
+          repository={repository}
+          systems={systems}
+          restoreFocus={restoreFocus}
+          onClose={() => setImportOpen(false)}
+          onRefresh={() => load(true)}
+          onAccessEnded={clearPrivate}
+          onImported={async () => {
+            setImportOpen(false);
+            dirty.current = false;
+            setVersionView("proposed");
+            await load(true);
+          }}
+        />
       )}
       {createOpen && (
         <CreateBudget

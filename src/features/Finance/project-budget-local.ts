@@ -1,3 +1,4 @@
+import { planLocalProjectBudgetImport } from "./project-budget-import-model";
 import { canonicalDepartment } from "../ProjectManagement/departments";
 import {
   isLocalMemberMode,
@@ -24,6 +25,15 @@ const KEY = "helix-project-budgets-local-v1";
 const PROJECT_KEY = "helix-member-local-projects-v1";
 type Role = "project_lead" | "department_lead" | "finance" | "head_of_finance";
 interface State {
+  previews?: Record<
+    string,
+    {
+      projectBudgetId: string;
+      revision: number;
+      csv: string;
+      entries: ProjectBudgetEntry[];
+    }
+  >;
   version: number;
   budgets: ProjectBudgetDetail[];
   requests: Record<
@@ -276,9 +286,101 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
         budget.capabilities = scope.capabilities;
         if (change.expectedRevision !== budget.revision)
           fail("The budget changed. Refresh it before saving again.", 409);
+        if (change.action === "requestProjectBudgetChanges") {
+          if (!scope.capabilities.canRequestChanges || !budget.approvedVersion)
+            fail("You cannot request changes to this budget.");
+          if (!change.reason.trim()) fail("Enter a reason.", 400);
+          if (!budget.pendingVersion) {
+            budget.pendingVersion = {
+              ...structuredClone(budget.approvedVersion),
+              id: crypto.randomUUID(),
+              versionNumber: budget.approvedVersion.versionNumber + 1,
+              revision: 0,
+            };
+            budget.pendingVersionId = budget.pendingVersion.id;
+            budget.pendingTotalNok = budget.pendingVersion.totalNok;
+          }
+        }
         const candidate = budget.pendingVersion;
         if (!candidate) fail("There is no pending budget version.", 409);
         if (
+          change.action === "previewProjectBudgetImport" ||
+          change.action === "importProjectBudgetEntries"
+        ) {
+          if (!scope.capabilities.canDraft || candidate.status !== "draft")
+            fail(
+              "Only an assigned project lead can import into a Draft candidate.",
+            );
+          if (change.action === "previewProjectBudgetImport") {
+            const systems = (view(state).systems ?? []).filter((system) =>
+              scope.departments.some(
+                (department) =>
+                  canonicalDepartment(department.name) ===
+                  canonicalDepartment(system.departmentName),
+              ),
+            );
+            const plan = planLocalProjectBudgetImport(
+              budget,
+              change.csv,
+              systems,
+              state.version,
+            );
+            state.previews ??= {};
+            state.previews[plan.preview.previewToken] = {
+              projectBudgetId: budget.id,
+              revision: budget.revision,
+              csv: change.csv,
+              entries: plan.entries,
+            };
+            const result: ProjectBudgetMutationResult = {
+              ok: true,
+              id: budget.id,
+              revision: budget.revision,
+              viewVersion: state.version,
+              warnings: [],
+              errors: [],
+              importPreview: plan.preview,
+            };
+            state.requests[requestKey] = { fingerprint, result };
+            localStorage.setItem(KEY, JSON.stringify(state));
+            return result;
+          }
+          const preview = state.previews?.[change.previewToken ?? ""];
+          if (
+            !preview ||
+            preview.projectBudgetId !== budget.id ||
+            preview.revision !== budget.revision ||
+            preview.csv !== change.csv
+          )
+            fail("The import preview changed. Preview this CSV again.", 409);
+          const systems = (view(state).systems ?? []).filter((system) =>
+            scope.departments.some(
+              (department) =>
+                canonicalDepartment(department.name) ===
+                canonicalDepartment(system.departmentName),
+            ),
+          );
+          if (
+            planLocalProjectBudgetImport(
+              budget,
+              change.csv,
+              systems,
+              state.version,
+            ).preview.errors.length
+          )
+            fail("Correct the CSV before importing.", 400);
+          candidate.entries = structuredClone(preview.entries);
+          candidate.totalNok = total(candidate.entries);
+          budget.pendingTotalNok = candidate.totalNok;
+          delete state.previews![change.previewToken!];
+        } else if (change.action === "requestProjectBudgetChanges") {
+          candidate.status = "draft";
+          candidate.submittedAt = null;
+          candidate.departmentApprovedBy = null;
+          candidate.departmentApprovedAt = null;
+          candidate.approvedBy = null;
+          candidate.approvedAt = null;
+        } else if (
           change.action === "saveProjectBudgetEntry" ||
           change.action === "removeProjectBudgetEntry"
         ) {
@@ -289,6 +391,8 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
               (item) => item.entryId === change.entryId,
             );
             if (!entry) fail("This entry is no longer available.", 404);
+            if (entry.priority === "P0")
+              fail("A mandatory P0 purchase cannot be removed.", 409);
             entry.removed = true;
           } else {
             const input = change.entry,
@@ -320,16 +424,23 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
               )
             )
               fail("This entry is no longer available.", 404);
+            const previousEntry = candidate.entries.find(
+              (entry) => entry.entryId === input.entryId,
+            );
             const entry: ProjectBudgetEntry = {
+              ...previousEntry,
               ...input,
               description: input.description.trim(),
               plannedNok: formatOre(amount),
               entryId: input.entryId ?? crypto.randomUUID(),
-              budgetItemId: null,
-              publicRef: null,
-              priority: input.ordinaryPriority,
-              actualNok: "0.00",
-              completion: "not_purchased",
+              budgetItemId: previousEntry?.budgetItemId ?? null,
+              publicRef: previousEntry?.publicRef ?? null,
+              priority:
+                previousEntry?.priority === "P0"
+                  ? "P0"
+                  : input.ordinaryPriority,
+              actualNok: previousEntry?.actualNok ?? "0.00",
+              completion: previousEntry?.completion ?? "not_purchased",
               removed: false,
             };
             candidate.entries = [
@@ -344,7 +455,10 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
         } else if (change.action === "submitProjectBudget") {
           if (!scope.capabilities.canDraft || candidate.status !== "draft")
             fail("Only the assigned project lead can submit this Draft.");
-          if (!candidate.entries.some((entry) => !entry.removed))
+          if (
+            !budget.approvedVersion &&
+            !candidate.entries.some((entry) => !entry.removed)
+          )
             fail("Add a budget entry before submitting.", 400);
           if (
             !scope.departments.find(
@@ -376,11 +490,35 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
           candidate.status = "approved";
           candidate.approvedBy = scope.memberId;
           candidate.approvedAt = new Date().toISOString();
-          candidate.entries = candidate.entries.map((entry, index) => ({
-            ...entry,
-            budgetItemId: entry.entryId,
-            publicRef: `BI-S27-${String(index + 1).padStart(3, "0")}`,
-          }));
+          candidate.entries = candidate.entries.map((entry, index) => {
+            const effective = budget.approvedVersion?.entries.find(
+              (item) => item.entryId === entry.entryId,
+            );
+            return {
+              ...entry,
+              actualNok: effective?.actualNok ?? entry.actualNok,
+              completion: effective?.completion ?? entry.completion,
+              invoices: effective?.invoices ?? entry.invoices,
+              budgetItemId: entry.removed ? entry.budgetItemId : entry.entryId,
+              publicRef:
+                entry.publicRef ??
+                (entry.removed
+                  ? null
+                  : budget.approvedVersion
+                    ? `BI-S27-${entry.entryId.slice(0, 8)}-${index + 1}`
+                    : `BI-S27-${String(index + 1).padStart(3, "0")}`),
+            };
+          });
+          if (
+            budget.approvedVersion &&
+            !(budget.historyVersions ?? []).some(
+              (version) => version.id === budget.approvedVersion!.id,
+            )
+          )
+            budget.historyVersions = [
+              ...(budget.historyVersions ?? []),
+              structuredClone(budget.approvedVersion),
+            ];
           budget.approvedVersion = structuredClone(candidate);
           budget.approvedVersionId = candidate.id;
           budget.approvedTotalNok = candidate.totalNok;
