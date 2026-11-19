@@ -88,7 +88,23 @@ describe.skipIf(!url)("project approval transactions on independent PostgreSQL c
       }
       return budget;
     }));
-    await Promise.all(budgets.map(budget => mutate("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision })));
+    // Hold the next-reference row so one approval has inserted its new ledger
+    // while the other attempts the same absent-ledger insert. This exercises
+    // both unique arbiters (season_id and public_ref), rather than lucky timing.
+    await db.query("insert into finance.reference_counters(counter_key,configured_next,updated_by_member_id) values('budget_item:S28',1,$1::uuid)", [f.head]);
+    const gate = await pool.connect();
+    await gate.query("begin");
+    await gate.query("select counter_key from finance.reference_counters where counter_key='budget_item:S28' for update");
+    const pending = Promise.allSettled(budgets.map(budget => mutate("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision })));
+    let waiting = 0;
+    try {
+      for (let attempt = 0; attempt < 100 && waiting < 2; attempt++) {
+        waiting = Number((await pool.query("select count(*) as count from pg_stat_activity where datname=current_database() and query like 'select finance.mutate_project_budget%' and wait_event_type='Lock'")).rows[0].count);
+        if (waiting < 2) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    } finally { await gate.query("commit"); gate.release(); }
+    expect(waiting).toBe(2);
+    expect((await pending).map(result => result.status)).toEqual(["fulfilled", "fulfilled"]);
     for (const budget of budgets) expect((await services.projectBudget("head", budget.id)).approvedVersion).toMatchObject({ status: "approved" });
     expect((await db.query("select status,approved_by_member_id from finance.budgets where season_id=$1::uuid", [f.nextSeason])).rows).toEqual([{ status: "draft", approved_by_member_id: null }]);
   });

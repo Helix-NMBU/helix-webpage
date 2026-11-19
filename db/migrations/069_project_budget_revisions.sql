@@ -227,8 +227,9 @@ begin
     select * into legacy from finance.budgets where season_id=h.season_id for update;
     if not found then
       insert into finance.budgets(season_id,public_ref,status,created_by_member_id,updated_by_member_id)
-        values(h.season_id,'B-'||season_row.code,'draft',actor,actor) on conflict(season_id) do nothing returning * into legacy;
+        values(h.season_id,'B-'||season_row.code,'draft',actor,actor) on conflict do nothing returning * into legacy;
       if not found then select * into legacy from finance.budgets where season_id=h.season_id for update; end if;
+      if legacy.id is null then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001'; end if;
     end if;
     perform 1 from finance.funding f where f.id in(select funding_id from finance.funding_parts where id in(select earmark_id from finance.project_budget_version_entries where version_id=v.id and not removed)) order by f.id for share;
     perform 1 from finance.funding_parts fp where fp.id in(select earmark_id from finance.project_budget_version_entries where version_id=v.id and not removed) order by fp.id for share;
