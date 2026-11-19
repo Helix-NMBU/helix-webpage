@@ -1,3 +1,4 @@
+import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
 import { capabilitiesForProfiles } from "./access";
 import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money";
 import type {
@@ -30,11 +31,12 @@ export class FinanceRequestError extends Error {
 }
 
 function localCapabilities(): FinanceCapabilitiesResponse {
+  const profiles = [localFinanceProfileSelection() ?? "finance"];
   return {
     memberId: "local-member",
     viewVersion: localBankVersion,
-    profiles: ["finance"],
-    capabilities: capabilitiesForProfiles(["finance"]),
+    profiles,
+    capabilities: capabilitiesForProfiles(profiles),
     seasonCode: "S27",
     approvalThresholdNok: null,
     today: osloToday(),

@@ -24,4 +24,5 @@ export function localMemberSignedIn(): boolean {
 }
 export function setLocalMemberSignedIn(signedIn: boolean): void {
   localStorage.setItem(SESSION_KEY, signedIn ? "signed-in" : "signed-out");
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("helix-member-local-session-changed"));
 }
