@@ -120,5 +120,10 @@
       "destination": "/tilt.webp",
       "permanent": true
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "codex/project-budget-approvals": false
+    }
+  }
 }

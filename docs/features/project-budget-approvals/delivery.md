@@ -99,3 +99,7 @@ Backend worker reused `/root/pba_01_contracts/approval_ui` in a new isolated wor
 ## Broader Finance regression follow-up
 
 At78e6c74/d492676, broader Finance tests passed301 cases and skipped12 environment-dependent cases but found one old freshness assertion expecting the historical season section expanded by default. HELIX-78 reopened while coordinator changed only the test interaction to open Season budget, retaining the original fresh-approval/cache assertions. Test-only commit71a1c62 passed the affected8/8 cases. Other301 passing results remain valid; the separately executed real PostgreSQL selection covers the12 environment-dependent cases. HELIX-78 Done again/readback verified. Logs `/private/tmp/helix-pba02-finance-regression.log` and `/private/tmp/helix-pba02-freshness-followup.log`. This does not change application code or the03/05 prerequisite contracts.
+
+## Feature branch automatic deployment boundary
+
+Before any authorized PR push, coordinator added exact-branch `git.deploymentEnabled["codex/project-budget-approvals"]=false` in vercel.json. This prevents the Git integration from automatically publishing a hosted preview of this feature; other branches keep Vercel's default behavior. The approved workflow verifies locally and ends with an unmerged PR. Official behavior checked19November2026: https://vercel.com/docs/project-configuration/git-configuration . No remote project setting or deployment was changed. Final local compiler and independent review must include this configuration.
