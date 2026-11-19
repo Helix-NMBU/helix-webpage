@@ -8,6 +8,7 @@ import type { PurchaseInput } from "../../../api/_lib/finance-types.js";
 import { normalizePurchaseInput, serializePurchaseBody } from "../../../src/features/Finance/purchase-domain.js";
 import { osloToday } from "../../../src/features/Finance/money.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
+import { createPostgresTestPool } from "./postgres-test-pool.js";
 
 const testUrl = process.env.FINANCE_TEST_POSTGRES_URL;
 const operator = "11111111-1111-4111-8111-111111111111";
@@ -18,6 +19,7 @@ const dbName = `finance_threshold_${randomUUID().replaceAll("-", "")}`;
 describe.skipIf(!testUrl)("Retired amount-based purchase approval on PostgreSQL", () => {
   let admin: pg.Client;
   let pool: pg.Pool;
+  let closePool: (() => Promise<void>) | undefined;
   let services: ReturnType<typeof createFinanceServices>;
   let systemId: string;
   let itemId: string;
@@ -54,7 +56,9 @@ describe.skipIf(!testUrl)("Retired amount-based purchase approval on PostgreSQL"
     await admin.connect();
     await admin.query(`create database ${dbName}`);
     url.pathname = `/${dbName}`;
-    pool = new pg.Pool({ connectionString: url.toString(), max: 4 });
+    const resource = createPostgresTestPool({ connectionString: url.toString(), max: 4 });
+    pool = resource.pool;
+    closePool = resource.close;
     await pool.query(`
       create schema identity;
       create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text not null);
@@ -90,10 +94,11 @@ describe.skipIf(!testUrl)("Retired amount-based purchase approval on PostgreSQL"
   }, 30000);
 
   afterAll(async () => {
-    await pool?.end();
-    if (admin) {
-      await admin.query(`drop database if exists ${dbName} with (force)`);
-      await admin.end();
+    try {
+      await closePool?.();
+      if (admin) await admin.query(`drop database if exists ${dbName}`);
+    } finally {
+      await admin?.end();
     }
   });
 

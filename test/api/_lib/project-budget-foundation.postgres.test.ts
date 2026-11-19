@@ -3,11 +3,13 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadProjectBudgetScope, previewProjectBudgetMapping } from "../../../api/_lib/finance-project-budget-foundation.js";
 import { applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity, seedProjectBudgetLegacy, setupProjectBudgetBase, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
+import { createPostgresTestPool } from "./postgres-test-pool.js";
 
 const url = process.env.FINANCE_TEST_POSTGRES_URL;
 const name = `helix_pba_foundation_${process.pid}_${Date.now()}`;
 let admin: pg.Client;
 let pool: pg.Pool;
+let closePool: (() => Promise<void>) | undefined;
 let db: ProjectBudgetTestDatabase;
 
 describe.skipIf(!url)("project budget foundation on independent PostgreSQL connections", () => {
@@ -20,15 +22,21 @@ describe.skipIf(!url)("project budget foundation on independent PostgreSQL conne
     await admin.connect();
     await admin.query(`create database ${name}`);
     connection.pathname = `/${name}`;
-    pool = new pg.Pool({ connectionString: connection.toString(), max: 6 });
+    const resource = createPostgresTestPool({ connectionString: connection.toString(), max: 6 });
+    pool = resource.pool;
+    closePool = resource.close;
     db = { exec: sql => pool.query(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pool.query(sql, params)).rows as T[] }) };
     await setupProjectBudgetBase(db);
     await seedProjectBudgetLegacy(db);
     expect(await applyProjectBudgetMigrations(db)).toContain("066_project_budget_foundation.sql");
   });
   afterAll(async () => {
-    await pool?.end();
-    if (admin) { await admin.query(`drop database if exists ${name}`); await admin.end(); }
+    try {
+      await closePool?.();
+      if (admin) await admin.query(`drop database if exists ${name}`);
+    } finally {
+      await admin?.end();
+    }
   });
   it("retains effective legacy facts and private evidence across the real additive migration", async () => {
     const result = await db.query<{ id: string; planned_ore: string; actual_ore: string; storage_backend: string }>(

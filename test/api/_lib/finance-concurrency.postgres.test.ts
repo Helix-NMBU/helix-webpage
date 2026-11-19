@@ -7,6 +7,7 @@ import type { CvDatabase, WorkspaceIdentity } from "../../../api/_lib/member-cv-
 import { osloToday } from "../../../src/features/Finance/money.js";
 import { thirdOsloDayFrom } from "../../../src/features/Finance/request-domain.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
+import { createPostgresTestPool } from "./postgres-test-pool.js";
 
 // Opt-in, loopback-only PostgreSQL. This suite creates and drops its own
 // randomly named database and never connects to a configured application DB.
@@ -19,6 +20,7 @@ const dbName = `finance_test_${randomUUID().replaceAll("-", "")}`;
 describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connections", () => {
   let admin: pg.Client;
   let pool: pg.Pool;
+  let closePool: (() => Promise<void>) | undefined;
   let services: ReturnType<typeof createFinanceServices>;
   let systemId: string;
   let itemId: string;
@@ -57,7 +59,9 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
     await admin.connect();
     await admin.query(`create database ${dbName}`);
     base.pathname = `/${dbName}`;
-    pool = new pg.Pool({ connectionString: base.toString(), max: 8 });
+    const resource = createPostgresTestPool({ connectionString: base.toString(), max: 8 });
+    pool = resource.pool;
+    closePool = resource.close;
     await pool.query(`
       create schema identity;
       create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text not null);
@@ -94,10 +98,11 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
   }, 30000);
 
   afterAll(async () => {
-    await pool?.end();
-    if (admin) {
-      await admin.query(`drop database if exists ${dbName} with (force)`);
-      await admin.end();
+    try {
+      await closePool?.();
+      if (admin) await admin.query(`drop database if exists ${dbName}`);
+    } finally {
+      await admin?.end();
     }
   });
 
