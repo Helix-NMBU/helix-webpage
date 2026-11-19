@@ -1,3 +1,4 @@
+import { seedHistoricalSeasonBudget } from "./finance-historical-fixture.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -94,8 +95,7 @@ async function seasonWithBudget() {
   await grant(headId, "head_of_finance");
   await grant(financeId, "finance");
   await grant(businessId, "business");
-  await call("head", { action: "createBudget", requestId: requestId() });
-  await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+  await seedHistoricalSeasonBudget(sql, headId);
   await sql(
     `insert into finance.budget_items (
       budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,

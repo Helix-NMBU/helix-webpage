@@ -1,3 +1,4 @@
+import { seedHistoricalSeasonBudget } from "./finance-historical-fixture.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as financeMoney from "../../../api/_lib/finance-money.js";
@@ -92,8 +93,7 @@ async function seasonWithBudget() {
   await sql(`insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true)`);
   await grant(headId, "head_of_finance");
   await grant(financeId, "finance");
-  await call("head", { action: "createBudget", requestId: requestId() });
-  await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+  await seedHistoricalSeasonBudget(sql, headId);
   await sql(
     `insert into finance.budget_items (
       budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,
@@ -352,14 +352,8 @@ describe("FIN-05 A02 decisions", () => {
   it("returns conflict when approving after a budget line was cancelled, without writing a decision", async () => {
     await seasonWithBudget();
     const { recordId, revisionId } = await draftAndSubmit();
-    const itemRevision = Number((await sql<{ revision: number }>("select revision from finance.budget_items where id = $1::uuid", [itemId]))[0]?.revision ?? 0);
-    expect((await call("head", {
-      action: "cancelItem",
-      requestId: requestId(),
-      expectedRevision: itemRevision,
-      itemId,
-      reason: "Line removed",
-    })).status).toBe(200);
+    // Represent retained historical cancellation; cancelItem is now retired.
+    await sql("update finance.budget_items set status='cancelled',revision=revision+1 where id=$1::uuid", [itemId]);
     const vBefore = await version();
     const cBefore = await counts();
     const decided = await call("head", {
