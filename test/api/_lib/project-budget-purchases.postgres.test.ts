@@ -757,6 +757,131 @@ describe.skipIf(!url)("project purchase transactions on PostgreSQL", () => {
       );
     }
   });
+  it("blocks generic registration behind Google unlink and refuses the expense after unlink commits", async () => {
+    const authorization = await change("finance", {
+      action: "authorizeUpload",
+      fileName: "generic.pdf",
+      contentType: "application/pdf",
+      byteSize: 8,
+    });
+    await putMemoryPdf(storage, authorization.stagingKey!);
+    await change("finance", {
+      action: "finalizeUpload",
+      uploadId: authorization.id,
+    });
+    const requestId = randomUUID(),
+      client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        'delete from neon_auth.account where "userId"=$1::uuid and "providerId"=\'google\'',
+        [f.finance],
+      );
+      const outcome = change("finance", {
+        action: "registerPurchase",
+        requestId,
+        purchase: purchase(authorization.id!, f.entry, "10"),
+      }).then(
+        (value) => ({ value }),
+        (error) => ({ error }),
+      );
+      await expect
+        .poll(async () =>
+          Number(
+            (
+              await pool.query(
+                "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%finance.register_purchase(%'",
+              )
+            ).rows[0].count,
+          ),
+        )
+        .toBeGreaterThan(0);
+      await client.query("commit");
+      expect(await outcome).toMatchObject({ error: { status: 403 } });
+      expect(
+        (
+          await db.query(
+            "select response from finance.idempotency_keys where member_id=$1::uuid and request_id=$2::uuid",
+            [f.finance, requestId],
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (
+          await db.query(
+            "select purchase_id from finance.uploads where id=$1::uuid",
+            [authorization.id],
+          )
+        ).rows,
+      ).toEqual([{ purchase_id: null }]);
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await db.query(
+        "insert into neon_auth.account values($1::uuid,$1::uuid,'google',$2)",
+        [f.finance, projectBudgetIdentity("finance").googleSub],
+      );
+    }
+  });
+  it("blocks generic void behind Finance access revocation and preserves the registered expense", async () => {
+    const budget = await approved(),
+      saved = await register(budget, "10"),
+      requestId = randomUUID(),
+      client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        "delete from identity.member_roles where member_id=$1::uuid and role_key='financials'",
+        [f.finance],
+      );
+      const outcome = change("finance", {
+        action: "voidPurchase",
+        requestId,
+        purchaseId: saved.id,
+        expectedRevision: 0,
+        reason: "Order cancelled",
+      }).then(
+        (value) => ({ value }),
+        (error) => ({ error }),
+      );
+      await expect
+        .poll(async () =>
+          Number(
+            (
+              await pool.query(
+                "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock' and query like '%finance.void_registered_purchase(%'",
+              )
+            ).rows[0].count,
+          ),
+        )
+        .toBeGreaterThan(0);
+      await client.query("commit");
+      expect(await outcome).toMatchObject({ error: { status: 403 } });
+      expect(
+        (
+          await db.query(
+            "select status,revision from finance.purchases where id=$1::uuid",
+            [saved.id],
+          )
+        ).rows,
+      ).toEqual([{ status: "registered", revision: 0 }]);
+      expect(
+        (
+          await db.query(
+            "select response from finance.idempotency_keys where member_id=$1::uuid and request_id=$2::uuid",
+            [f.finance, requestId],
+          )
+        ).rows,
+      ).toEqual([]);
+    } finally {
+      await client.query("rollback");
+      client.release();
+      await db.query(
+        "insert into identity.member_roles values($1::uuid,'financials') on conflict do nothing",
+        [f.finance],
+      );
+    }
+  });
   it("rechecks revoked Google linkage for upload, registration replay and completion", async () => {
     let budget = await approved();
     const saved = await register(budget);

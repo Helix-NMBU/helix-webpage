@@ -627,6 +627,28 @@ begin
 end;
 $$;
 
+-- Keep generic purchase writes subject to the same current-account guarantee.
+-- Called only after sorted project headers, before requests, anchors and ledger.
+create function finance.lock_verified_purchase_actor(actor uuid, required_capability text)
+returns void language plpgsql volatile security invoker set search_path=pg_catalog as $$
+declare current_member record;
+begin
+  select m.google_sub,m.email into current_member
+    from identity.members m join neon_auth."user" u on u.id=m.auth_user_id
+    join neon_auth.account a on a."userId"=u.id and a."providerId"='google' and a."accountId"=m.google_sub
+    where m.id=actor for share of m,u,a;
+  if not found then raise exception 'FINANCE|denied|A verified Helix member account is required.'; end if;
+  perform 1 from identity.member_roles where member_id=actor for share;
+  perform 1 from finance.member_grants where member_id=actor for share;
+  if not finance.project_budget_verified_member(actor,current_member.google_sub,current_member.email) then
+    raise exception 'FINANCE|denied|A verified Helix member account is required.';
+  end if;
+  if not coalesce((finance.capability_flags(actor)->>required_capability)::boolean,false) then
+    raise exception 'FINANCE|denied|Finance access is required.';
+  end if;
+end;
+$$;
+
 alter function finance.register_purchase(uuid,uuid,text,jsonb) rename to register_purchase_before_project_tracking;
 create function finance.register_purchase(actor uuid,request_id uuid,payload_hash text,body jsonb) returns jsonb
 language plpgsql volatile security invoker set search_path=pg_catalog as $$
@@ -640,6 +662,7 @@ begin
       union select rl.budget_item_id from finance.requests r join finance.request_lines rl on rl.revision_id=r.approved_revision_id where r.id=nullif(body->>'requestRecordId','')::uuid
     ) order by pb.id
   loop perform 1 from finance.project_budgets where id=h.id for update; end loop;
+  perform finance.lock_verified_purchase_actor(actor,'registerActual');
   if exists(select 1 from finance.purchase_lines l join finance.purchases p on p.id=l.purchase_id where p.requester_member_id=actor
     and p.id=(finance.replay_purchase_mutation(actor,$2,'registerPurchase',$3)->>'id')::uuid) then
     return finance.register_purchase_before_project_tracking(actor,$2,$3,$4);
@@ -663,6 +686,7 @@ begin
       join finance.request_lines rl on rl.revision_id=r.approved_revision_id where p.id=$4
   ) order by e.project_budget_id
   loop perform 1 from finance.project_budgets where id=h.project_budget_id for update; end loop;
+  perform finance.lock_verified_purchase_actor(actor,'paymentsVoidReview');
   replay:=finance.replay_purchase_mutation(actor,$2,'voidPurchase',$3);
   response:=finance.void_purchase_before_project_tracking(actor,$2,$3,$4,$5,$6);
   if replay is not null then return response; end if;
@@ -683,7 +707,7 @@ $$;
 -- Internal helpers are service-owned; no browser or public execution grants.
 do $$ declare f record; begin
  for f in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='finance' and p.proname in ('assert_project_financial_assignment','lock_project_purchase_scope','replay_project_purchase','create_project_upload_authorization',
+  where n.nspname='finance' and p.proname in ('assert_project_financial_assignment','lock_verified_purchase_actor','lock_project_purchase_scope','replay_project_purchase','create_project_upload_authorization',
   'reserve_project_upload_final_candidate','check_project_upload_access','complete_project_upload_finalize','track_project_purchase','register_project_purchase',
   'set_project_budget_completion','register_purchase','void_registered_purchase','register_purchase_before_project_tracking','void_purchase_before_project_tracking')
  loop execute format('revoke all on function %s from public',f.signature); end loop;
