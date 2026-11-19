@@ -184,7 +184,7 @@ export async function composeFinanceMail(
     const update = claimed.eventType === "project_budget.department_pending" ? "is waiting for department approval"
       : claimed.eventType === "project_budget.finance_pending" ? "is waiting for Head of Finance approval"
       : claimed.eventType === "project_budget.approved" ? "was approved" : "was returned for changes";
-    const body = paragraph([`The project budget for ${row.project_name} ${update}.`, "Sign in to review the project budget. This message does not include budget entries, amounts or file links."]);
+    const body = paragraph([`The project budget for ${row.project_name} ${update}.`, "Sign in to review the project budget."]);
     return { message: { from, to: person.email, subject: `Project budget ${update}`, ...body, idempotencyKey: claimed.providerIdempotencyKey } };
   }
   if (claimed.eventType === "request.submitted") {

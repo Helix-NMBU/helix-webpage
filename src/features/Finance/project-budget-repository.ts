@@ -11,15 +11,8 @@ import type {
 } from "./project-budget-types";
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
 
-export interface ProjectBudgetSystemChoice {
-  id: string;
-  code: string;
-  name: string;
-  departmentName: string;
-}
-export type ProjectBudgetWorkspaceView = ProjectBudgetWorkspace & {
-  systems?: ProjectBudgetSystemChoice[];
-};
+export type { ProjectBudgetSystemChoice } from "./project-budget-types";
+export type ProjectBudgetWorkspaceView = ProjectBudgetWorkspace;
 export interface ProjectBudgetFilters {
   projectId?: string;
   departmentId?: string;
