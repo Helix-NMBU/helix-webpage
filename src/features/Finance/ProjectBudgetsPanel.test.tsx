@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import * as invoiceComponents from "./InvoiceEvidence";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -293,6 +294,19 @@ describe("project budget controls", () => {
     expect(mutate.mock.calls[mutate.mock.calls.length - 1][0]).toMatchObject({
       expectedRevision: current.revision + 1,
     });
+  });
+  it("does not advance a dirty editor revision when background invoice evidence refreshes",async()=>{
+    let evidenceRefresh:(()=>Promise<void>)|undefined;
+    vi.spyOn(invoiceComponents,"InvoiceEvidence").mockImplementation(props=>{evidenceRefresh=props.onChanged;return null;});
+    const original=repo.detail;
+    vi.spyOn(repo,"detail").mockImplementation(async budgetId=>{const detail=await original(budgetId);detail.pendingVersion!.entries[0].invoices=[{documentId:"invoice",purchaseId:"purchase",purchaseRef:"2026-0001",originalName:"invoice.pdf",backend:"google_drive",transferStatus:"needs_attention",transferRevision:0,canRetry:true,viewerUrl:null}];return detail;});
+    const mutate=vi.spyOn(repo,"mutate");await render();await click("Edit");await act(async()=>input("budget-entry-description","Keep this unsaved invoice-era edit"));
+    const initial=await original(id);await repo.mutate({action:"saveProjectBudgetEntry",projectBudgetId:id,expectedRevision:initial.revision,requestId:crypto.randomUUID(),entry:{...initial.pendingVersion!.entries[0],plannedNok:"12000.00"}});
+    expect(evidenceRefresh).toBeTypeOf("function");await act(async()=>evidenceRefresh!());
+    expect((document.getElementById("budget-entry-description") as HTMLInputElement).value).toBe("Keep this unsaved invoice-era edit");
+    await click("Save entry");expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    const attempts=mutate.mock.calls.filter(call=>call[0].action==="saveProjectBudgetEntry");expect(attempts[attempts.length-1][0]).toMatchObject({expectedRevision:initial.revision});
+    expect((await original(id)).pendingVersion!.entries[0].description).toBe("Frame tubes");expect((await original(id)).pendingVersion!.entries[0].plannedNok).toBe("12000.00");
   });
   it("uses Radix dismissal and preserves a failed reason form until correction", async () => {
     await submit();

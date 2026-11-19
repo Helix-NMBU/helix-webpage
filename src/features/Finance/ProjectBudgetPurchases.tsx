@@ -536,6 +536,7 @@ export function ProjectBudgetPurchases({
   projectId,
   responsibleDepartmentId,
   onChanged,
+  onEvidenceChanged,
   repository: provided,
   onDirtyChange,
   onAccessLost,
@@ -544,6 +545,7 @@ export function ProjectBudgetPurchases({
   projectId?: string;
   responsibleDepartmentId?: string;
   onChanged: () => Promise<void>;
+  onEvidenceChanged?: () => Promise<void>;
   repository?: ProjectPurchaseRepository;
   onDirtyChange?: (dirty: boolean) => void;
   /** Discard the enclosing cached budget when its purchase authority is revoked. */
@@ -554,6 +556,8 @@ export function ProjectBudgetPurchases({
     [provided],
   );
   const notify = useNotify();
+  const invoiceChanged = useRef(onEvidenceChanged);
+  invoiceChanged.current = onEvidenceChanged;
   const [context, setContext] = useState<ProjectPurchaseContext | null>(null);
   const [accessLost, setAccessLost] = useState(false);
   const [reload, setReload] = useState(0);
@@ -610,13 +614,19 @@ export function ProjectBudgetPurchases({
     setPurchaseLocked(false);
     setCompletionLocked(false);
     completionWrite.current = null;
-    const stop = repository.watchSession?.(clearPrivateAccess);
+    const invoiceScope = generation.current;
+    const stop = repository.watchSession?.(clearPrivateAccess, result => {
+      if (generation.current !== invoiceScope) return;
+      void invoiceChanged.current?.().catch(() => { /* Parent refresh owns its recovery notification. */ });
+      const evidence = result.invoiceEvidence;
+      if (evidence && evidence.pending + evidence.transferring === 0) notify("Invoice evidence updated", evidence.needsAttention ? "Some invoice transfers need Finance attention. Open Recovery to continue." : "Invoice evidence is confirmed in Drive.", {variant:evidence.needsAttention ? "warning" : "success",href:null});
+    });
     return () => {
       generation.current++;
       loading.current++;
       stop?.();
     };
-  }, [id, department, repository, clearPrivateAccess]);
+  }, [id, department, notify, repository, clearPrivateAccess]);
   useEffect(() => {
     const current = ++loading.current;
     if (!id || !department) return;

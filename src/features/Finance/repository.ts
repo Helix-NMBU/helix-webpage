@@ -1,5 +1,6 @@
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
-import { continueRegisteredInvoices } from "./invoice-continuation";
+import { createLocalInvoiceEvidenceApi, localInvoiceRecovery } from "./invoice-local";
+import { createInvoiceContinuation } from "./invoice-continuation";
 import { capabilitiesForProfiles } from "./access";
 import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money";
 import type {
@@ -72,8 +73,15 @@ export function createFinanceApi(owner: { current: string | null }) {
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not load finance.", response.status, body.errors ?? []);
     return body as T;
   }
-  async function mutate(action: Record<string, unknown>): Promise<FinanceMutationResult> {
+  const continuation = createInvoiceContinuation(owner, (action, signal) => mutate(action, signal));
+  async function mutate(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
     if (local()) {
+      if (action.action === "retryInvoiceTransfer") {
+        const result = await createLocalInvoiceEvidenceApi().retry(String(action.documentId), Number(action.expectedRevision), String(action.requestId));
+        localBankVersion = Math.max(localBankVersion, result.viewVersion);
+        return {...result, viewVersion:localBankVersion};
+      }
+      if (action.action === "downloadDocument") return {ok:true,viewVersion:localBankVersion,warnings:[],errors:[],...await createLocalInvoiceEvidenceApi().open(String(action.documentId))};
       if (action.action !== "setBankSnapshot" || !localMemberHasFinancials()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
       if (action.expectedRevision !== (localBankSnapshot?.revision ?? 0)) throw new FinanceRequestError("The balance changed. Reload it before saving.", 409);
       let amount: bigint | null;
@@ -90,20 +98,24 @@ export function createFinanceApi(owner: { current: string | null }) {
     const token = await memberSessionToken(owner);
     const response = await fetch("/api/finance", {
       method: "POST",
+      signal,
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(action),
     });
     const body = await response.json().catch(() => ({})) as { error?: string; errors?: FinanceFieldError[] };
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not save the budget change.", response.status, body.errors ?? []);
-    return action.action === "registerPurchase" ? continueRegisteredInvoices(body as FinanceMutationResult, next => mutate(next)) : body as FinanceMutationResult;
+    const result = body as FinanceMutationResult;
+    if (action.action === "registerPurchase") continuation.start(result);
+    return result;
   }
   return {
+    watchInvoices: continuation.watch,
     bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),
     capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
     version: () => local() ? Promise.resolve({ viewVersion: localBankVersion } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
     recovery: (deliveryAfter?: string, uploadAfter?: string, invoiceAfter?: string) => {
-      if (local()) return localMemberHasFinancials() ? Promise.resolve({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null } satisfies FinanceRecoveryView) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
+      if (local()) return localMemberHasFinancials() ? Promise.resolve({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null, ...localInvoiceRecovery(invoiceAfter) } satisfies FinanceRecoveryView) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
       const params = new URLSearchParams();
       if (deliveryAfter) params.set("deliveryAfter", deliveryAfter);
       if (uploadAfter) params.set("uploadAfter", uploadAfter);

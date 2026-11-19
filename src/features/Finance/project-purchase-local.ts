@@ -1,3 +1,4 @@
+import type { LocalInvoiceFact } from "./invoice-local";
 import {
   isLocalMemberMode,
   localMemberSignedIn,
@@ -28,6 +29,7 @@ type State = {
   requests: Record<string, unknown>;
 };
 type LocalPurchases = {
+  evidence?: Record<string, LocalInvoiceFact>;
   uploads: Record<
     string,
     { projectId: string; name: string; purchaseId?: string }
@@ -237,7 +239,10 @@ export function createLocalProjectPurchaseRepository(): ProjectPurchaseRepositor
         warnings: checked.warnings,
         errors: [],
       };
+      purchases.evidence ??= {};
+      result.invoiceEvidence = {pending:0,transferring:0,stored:0,needsAttention:purchase.uploadIds.length};
       purchase.uploadIds.forEach((uploadId) => {
+        purchases.evidence![uploadId] = {documentId:uploadId,purchaseId:id,purchaseRef:publicRef,originalName:purchases.uploads[uploadId].name,projectId:change.projectId,backend:"google_drive",transferStatus:"needs_attention",transferRevision:0,canRetry:true,viewerUrl:null,attempts:0,updatedAt:new Date().toISOString(),safeError:"configuration_missing"};
         purchases.uploads[uploadId].purchaseId = id;
       });
       purchases.requests[key] = { fingerprint, result };

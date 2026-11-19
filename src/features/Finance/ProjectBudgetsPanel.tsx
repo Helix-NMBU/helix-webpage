@@ -1233,7 +1233,7 @@ export function ProjectBudgetsPanel({
                       <ul className="mt-2 space-y-2">
                         {item.invoices.map(invoice => (
                           <li key={`${invoice.purchaseId}-${invoice.documentId}`}>
-                            <InvoiceEvidence invoice={invoice} onChanged={() => load(true)} onAccessEnded={clearPrivate} />
+                            <InvoiceEvidence invoice={invoice} onChanged={() => load(false)} onAccessEnded={clearPrivate} />
                           </li>
                         ))}
                       </ul>
@@ -1356,7 +1356,7 @@ export function ProjectBudgetsPanel({
           </p>
           <FundingBudgetProposals budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />
           {detail.capabilities.canRegisterPurchase && (
-            <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onDirtyChange={setPurchaseDirty} onAccessLost={clearPrivate} />
+            <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onEvidenceChanged={() => load(false)} onDirtyChange={setPurchaseDirty} onAccessLost={clearPrivate} />
           )}
           {detail.decisions.length > 0 && (
             <div className="space-y-2 border-t pt-4">
@@ -1423,6 +1423,7 @@ export function ProjectBudgetsPanel({
             projectId={incurredScope.projectId}
             responsibleDepartmentId={incurredScope.responsibleDepartmentId!}
             onChanged={() => load(true)}
+            onEvidenceChanged={() => load(false)}
             onDirtyChange={setPurchaseDirty}
             onAccessLost={clearPrivate}
           />

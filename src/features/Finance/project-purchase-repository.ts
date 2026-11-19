@@ -1,4 +1,4 @@
-import { continueRegisteredInvoices } from "./invoice-continuation";
+import { createInvoiceContinuation } from "./invoice-continuation";
 import { memberSessionToken, watchMemberSession } from "../MemberCV/session";
 import {
   isLocalMemberMode,
@@ -25,7 +25,10 @@ export interface ProjectPurchaseRepository {
     >,
   ): Promise<ProjectBudgetMutationResult>;
   upload(binding: ProjectPurchaseBinding, file: File): Promise<string>;
-  watchSession?(onEnd: () => void): () => void;
+  watchSession?(
+    onEnd: () => void,
+    onInvoices?: (result: import("./types").FinanceMutationResult) => void,
+  ): () => void;
 }
 export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
   if (isLocalMemberMode() && localMemberSignedIn())
@@ -34,12 +37,14 @@ export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
   async function request<T>(
     parameters: Record<string, string>,
     change?: unknown,
+    signal?: AbortSignal,
   ): Promise<T> {
     const token = await memberSessionToken(owner);
     const response = await fetch(
       `/api/finance${change ? "" : `?${new URLSearchParams(parameters)}`}`,
       {
         method: change ? "POST" : "GET",
+        signal,
         cache: "no-store",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -56,9 +61,13 @@ export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
       );
     return body as T;
   }
+  const continuation = createInvoiceContinuation(owner, (change, signal) =>
+    request({}, change, signal),
+  );
   const mutate = async (change: ProjectPurchaseChange) => {
     const result = await request<ProjectPurchaseResult>({}, change);
-    return change.action === "registerProjectPurchase" ? continueRegisteredInvoices(result, next => request({}, next)) : result;
+    if (change.action === "registerProjectPurchase") continuation.start(result);
+    return result;
   };
   return {
     load: (binding) =>
@@ -89,6 +98,20 @@ export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
       });
       return authorized.id;
     },
-    watchSession: (onEnd) => watchMemberSession(onEnd, undefined, owner),
+    watchSession: (onEnd, onInvoices) => {
+      const end = () => {
+        continuation.stop();
+        onEnd();
+      };
+      const stop = watchMemberSession(end, undefined, owner);
+      const dispose = continuation.watch({
+        updated: (result) => onInvoices?.(result),
+        accessEnded: end,
+      });
+      return () => {
+        dispose();
+        stop();
+      };
+    },
   };
 }
