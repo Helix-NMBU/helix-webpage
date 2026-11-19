@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -132,6 +133,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
+  await bootstrapFinanceFeature(pg);
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   handler = createFinanceHandler(() => createFinanceServices({
     db,
@@ -146,8 +148,11 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.upload_final_candidates, finance.outbox_attempts, finance.export_objects,
       finance.allocations,
       finance.purchase_lines,
       finance.outlay_reimbursements,
@@ -175,6 +180,8 @@ async function resetFinance() {
       finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 }

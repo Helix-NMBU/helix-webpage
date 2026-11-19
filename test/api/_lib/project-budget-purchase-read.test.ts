@@ -57,6 +57,11 @@ describe("project purchase state projection", () => {
     };
     const db: CvDatabase = {
       query: async <T>(sql: string) => {
+        if (sql.includes("to_regprocedure('finance.claim_invoice_transfer")) return { rows: [{ available: true }] as T[] };
+        if (sql.includes("finance.documents")) {
+          expect(sql).toContain("finance.invoice_document_access($1::uuid,$2,$3,d.id,false)");
+          return { rows: [] as T[] };
+        }
         expect(sql).toContain("count(distinct purchase.id)");
         return { rows: [row] as T[] };
       },

@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import pg from "pg";
@@ -82,6 +83,7 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
       await pool.query(readFileSync(new URL(file, migrations), "utf8"));
     }
     const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pool.query(query, params)).rows as T[] }) };
+    await bootstrapFinanceFeature({ ...db, exec: (sql) => pool.query(sql) });
     services = createFinanceServices({ db, financeStorage: storage, authenticate: async (token) => identities[token] });
     await pool.query("select finance.configure_current_season($1::uuid, 'S27', 'Test season', '2026-01-01', '2027-12-31')", [operator]);
     await pool.query("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test')", [operator, head]);

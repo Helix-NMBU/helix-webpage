@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { seedHistoricalSeasonBudget } from "./finance-historical-fixture.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -189,6 +190,7 @@ beforeAll(async () => {
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -208,8 +210,11 @@ beforeEach(async () => {
   await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects,
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
       finance.documents, finance.upload_final_candidates, finance.uploads, finance.exception_reviews, finance.purchases,
       finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
@@ -218,6 +223,8 @@ beforeEach(async () => {
       finance.reference_counters, finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 });
@@ -352,7 +359,8 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     expect(full.some((row) => row.id === purchaseId && row.status === "voided" && row.publicRef === kept[0]?.ref)).toBe(true);
     expect(registerOf((await read("head", { unpaid: "1" })).body).some((row) => row.id === purchaseId)).toBe(false);
     const documentId = full.find((row) => row.id === purchaseId)?.documents[0]?.id;
-    expect((await call("finance", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(200);
+    // Newly registered evidence remains unavailable until Drive verification.
+    expect((await call("finance", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(409);
     expect((await call("member", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(403);
   });
 
@@ -721,9 +729,11 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
        from pg_proc p
        join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'finance'
-         and p.proname in ('void_registered_purchase', 'apply_purchase_settlement', 'review_purchase_exception')`,
+         and p.proname in ('void_registered_purchase', 'void_purchase_before_project_tracking', 'apply_purchase_settlement', 'review_purchase_exception')`,
     );
-    const voidSrc = sources.find((row) => row.proname === "void_registered_purchase")?.prosrc.toLowerCase() ?? "";
+    const voidSrc = sources.find((row) => row.proname === "void_purchase_before_project_tracking")?.prosrc.toLowerCase() ?? "";
+    const wrapper = sources.find((row) => row.proname === "void_registered_purchase")!.prosrc.toLowerCase();
+    expect(wrapper.indexOf("from finance.project_budgets where id=h.project_budget_id for update")).toBeLessThan(wrapper.indexOf("finance.void_purchase_before_project_tracking("));
     const requestLock = voidSrc.indexOf("from finance.requests where id = linked_request_id for update");
     const share = voidSrc.indexOf("for share of i");
     const budget = voidSrc.indexOf("perform finance.lock_current_budget()");

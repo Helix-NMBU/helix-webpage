@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import pg from "pg";
@@ -80,6 +81,7 @@ describe.skipIf(!testUrl)("Retired amount-based purchase approval on PostgreSQL"
     await pool.query("select finance.configure_approval_threshold($1::uuid, 500000)", [operator]);
     await pool.query(migration("067_finance_retire_purchase_threshold.sql"));
     const db: CvDatabase = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pool.query(sql, params)).rows as T[] }) };
+    await bootstrapFinanceFeature({ ...db, exec: (sql) => pool.query(sql) });
     services = createFinanceServices({ db, financeStorage: storage, authenticate: async token => identities[token] });
     await pool.query("select finance.configure_current_season($1::uuid, 'S27', 'Test season', '2026-08-01', '2027-07-31')", [operator]);
     await pool.query("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test')", [operator, head]);
@@ -127,7 +129,9 @@ describe.skipIf(!testUrl)("Retired amount-based purchase approval on PostgreSQL"
     const id = result.rows[0].result.id;
     expect((await pool.query("select id from finance.exception_reviews where purchase_id=$1::uuid", [id])).rows).toEqual([]);
     await pool.query("select finance.record_purchase_exception($1::uuid,'missing_approval',$2::jsonb)", [id, JSON.stringify({ totalOre: "800000", thresholdOre: "500000" })]);
-    await pool.query(migration("067_finance_retire_purchase_threshold.sql"));
+    // Later migrations wrap register_purchase; reapply only the retirement metadata prefix.
+    const retirement = migration("067_finance_retire_purchase_threshold.sql");
+    await pool.query(retirement.slice(0, retirement.indexOf("-- Ignore legacy payload")) + "commit;");
     const historical = await pool.query("select facts from finance.exception_reviews where purchase_id=$1::uuid", [id]);
     expect(historical.rows).toEqual([{ facts: { totalOre: "800000", thresholdOre: "500000" } }]);
   });

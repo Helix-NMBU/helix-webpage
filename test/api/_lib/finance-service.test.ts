@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -118,6 +119,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/021_finance_final_candidate_ledger.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8"));
+  await bootstrapFinanceFeature(pg);
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
@@ -137,8 +139,11 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects,
       finance.upload_final_candidates,
       finance.allocations,
       finance.purchase_lines,
@@ -167,6 +172,8 @@ async function resetFinance() {
       finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 }
@@ -629,7 +636,9 @@ describe("finance access API", () => {
 
   it("marks existing configuration retired without changing its historical value", async () => {
     await seedPrivateRows();
-    await pg.exec(readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8"));
+    // Reapply only retired-setting metadata; later migrations own registration.
+    const retirement = readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8");
+    await pg.exec(retirement.slice(0, retirement.indexOf("-- Ignore legacy payload")) + "commit;");
     const setting = (await sql<{ value: string; description: string }>("select setting_value::text as value, description from finance.settings where setting_key = 'approval_threshold_ore'")).rows[0];
     expect(setting?.value).toBe("500000");
     expect(setting?.description).toMatch(/retired/i);
@@ -1059,9 +1068,10 @@ describe("finance access API", () => {
       },
     });
     expect(saved.status).toBe(200);
-    expect(await viewVersion()).toBe(versionBeforeRegister + 1);
+    expect(await viewVersion()).toBe(versionBeforeRegister + 1 + MAX_PURCHASE_FILES * 2);
     expect(await tableCount("purchases")).toBe(purchasesBefore + 1);
     expect(await tableCount("documents")).toBe(MAX_PURCHASE_FILES);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.invoice_transfers where status='needs_attention' and last_error='configuration_missing'")).rows[0].count).toBe(String(MAX_PURCHASE_FILES));
   });
 
   it("ignores historical threshold settings while keeping budget previews advisory and registration replay stable", async () => {
@@ -1099,17 +1109,19 @@ describe("finance access API", () => {
     const rid = crypto.randomUUID();
     const saved = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     if (saved.status !== 200) throw new Error(JSON.stringify(saved.body));
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
 
     const warnings = (saved.body as { warnings?: { message: string }[] }).warnings ?? [];
-    // This isolated legacy fixture predates070 tracking. Only SQL-generated
-    // warnings may be stored; read-snapshot budget warnings stay in the preview.
-    expect(warnings).toEqual([]);
+    // Current tracking records discrepancies; the retired threshold adds none.
+    expect(warnings.map(row => row.message)).toEqual([
+      "Actual cost exceeds the approved plan. Finance review is required.",
+      "Unbudgeted actual cost recorded for Finance review.",
+    ]);
 
     const exceptions = await sql<{ kind: string; facts: Record<string, string> }>(
       "select kind, facts from finance.exception_reviews",
     );
-    expect(exceptions.rows).toEqual([]);
+    expect(exceptions.rows.map(row => row.kind).sort()).toEqual(["budget_overrun", "unbudgeted"]);
     const publicRef = (await sql<{ public_ref: string }>("select public_ref from finance.purchases where id = $1::uuid", [(saved.body as { id: string }).id])).rows[0]?.public_ref;
     expect(publicRef).toMatch(/^2026-/);
 
@@ -1132,8 +1144,8 @@ describe("finance access API", () => {
     const replay = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     expect(replay.status).toBe(200);
     expect(replay.body).toMatchObject(saved.body as Record<string, unknown>);
-    expect(await viewVersion()).toBe(versionBefore + 1);
-    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews")).rows[0]?.count).toBe("0");
+    expect(await viewVersion()).toBe(versionBefore + 3);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews")).rows[0]?.count).toBe("2");
     expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox")).rows[0]?.count).toBe(String(outbox.rows.length));
 
     const stored = await sql<{ response: { warnings: { message: string }[] } }>(
@@ -1194,7 +1206,7 @@ describe("finance access API", () => {
     const versionBefore = await viewVersion();
     expect((await call({ token: "member", body: { action: "registerPurchase", requestId: crypto.randomUUID(), purchase } })).status).toBe(200);
     expect(await tableCount("purchases")).toBe(20);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
     const uploadId2 = await authorizeAndFinalizeUpload(8);
     expect(
       (await call({
@@ -1207,7 +1219,7 @@ describe("finance access API", () => {
       })).status,
     ).toBe(429);
     expect(await tableCount("purchases")).toBe(20);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
   });
 
   it("replays a stored registerPurchase before validation when the budget is no longer approved", async () => {
@@ -1276,7 +1288,7 @@ describe("finance access API", () => {
     const purchasesAfter = await tableCount("purchases");
     const auditsAfter = await tableCount("audit_log");
     const outboxAfter = await tableCount("outbox");
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
     const replay = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     expect(replay.status).toBe(200);
     expect(replay.body).toMatchObject(saved.body as Record<string, unknown>);
@@ -1284,7 +1296,7 @@ describe("finance access API", () => {
     expect(await tableCount("audit_log")).toBe(auditsAfter);
     expect(await tableCount("outbox")).toBe(outboxAfter);
     expect(await tableCount("idempotency_keys")).toBe(1);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
   });
 
   it("rejects registerPurchase when the same requestId is reused with a different purchase payload", async () => {
@@ -1331,7 +1343,7 @@ describe("finance access API", () => {
       body: { error: "This request ID was already used for a different change." },
     });
     expect(await tableCount("purchases")).toBe(purchasesAfter);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
   });
 
   it("returns an unchanged view without skipping a financing denial", async () => {
@@ -1432,6 +1444,8 @@ describe("finance snapshot", () => {
       db: {
         query: async <T>(text: string) => {
           queries.push(text);
+          if (text.includes("to_regprocedure('finance.claim_invoice_transfer")) return { rows: [{ available: true }] as T[] };
+          if (text.includes("finance.documents")) return { rows: [] as T[] };
           if (text.includes("capability_flags") !== text.includes("finance.view_versions")) throw new Error("split snapshot");
           if (text.includes("finance.budget_items") && (text.includes("i.protected is not true") || text.includes("finance.purchase_lines pl"))) {
             return { rows: [] as T[] };
