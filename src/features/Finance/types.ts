@@ -673,5 +673,5 @@ export type FinanceRecoveryView = {
   uploadNextCursor: string | null;
 };
 
-export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget", "projectPurchaseContext"] as const;
+export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget", "projectPurchaseContext", "fundingApplications", "fundingApplication", "fundingApplicationBudgetContext", "projectFundingProposals"] as const;
 export type FinanceReadAction = (typeof FINANCE_READ_ACTIONS)[number];

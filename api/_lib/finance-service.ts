@@ -1,5 +1,7 @@
 import { isProjectPurchaseMutation, loadProjectPurchaseContext, mutateProjectPurchase, setProjectBudgetCompletion } from "./finance-project-purchases.js";
 import type { ProjectPurchaseContext } from "../../src/features/Finance/project-purchase-types.js";
+import { isFundingApplicationMutation, loadFundingApplications, loadFundingApplication, loadFundingApplicationBudgetContext, loadProjectFundingProposals, mutateFundingApplication } from "./finance-funding-applications.js";
+import type { FundingApplicationQueue, FundingApplicationDetail, FundingApplicationBudgetContext, ProjectFundingProposals } from "../../src/features/Finance/funding-application-types.js";
 import { isProjectBudgetMutation, loadProjectBudgetWorkspace, loadProjectBudgetDetail, mutateProjectBudget } from "./finance-project-budgets.js";
 import type { ProjectBudgetWorkspace, ProjectBudgetDetail } from "../../src/features/Finance/project-budget-types.js";
 import { loadBankSnapshot, setBankSnapshot } from "./finance-bank.js";
@@ -46,6 +48,10 @@ type FlagsRow = FinanceCapabilitySet & { profiles: FinanceProfile[] };
 type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
 
 export interface FinanceServices {
+  fundingApplications(token: string): Promise<FundingApplicationQueue>;
+  fundingApplication(token: string, applicationId: unknown): Promise<FundingApplicationDetail>;
+  fundingApplicationBudgetContext(token: string, applicationId: unknown): Promise<FundingApplicationBudgetContext>;
+  projectFundingProposals(token: string, projectBudgetId: unknown): Promise<ProjectFundingProposals>;
   projectBudgets(token: string, projectId?: string, departmentId?: string): Promise<ProjectBudgetWorkspace>;
   projectBudget(token: string, projectBudgetId: string): Promise<ProjectBudgetDetail>;
   projectPurchaseContext(token: string, projectId: string, responsibleDepartmentId?: string): Promise<ProjectPurchaseContext>;
@@ -174,6 +180,10 @@ export function createFinanceServices(deps: {
   }
 
   return {
+    async fundingApplications(token) { return loadFundingApplications(db, await deps.authenticate(token)); },
+    async fundingApplication(token, applicationId) { return loadFundingApplication(db, await deps.authenticate(token), applicationId); },
+    async fundingApplicationBudgetContext(token, applicationId) { return loadFundingApplicationBudgetContext(db, await deps.authenticate(token), applicationId); },
+    async projectFundingProposals(token, projectBudgetId) { return loadProjectFundingProposals(db, await deps.authenticate(token), projectBudgetId); },
     async projectBudgets(token, projectId, departmentId) {
       return loadProjectBudgetWorkspace(db, await deps.authenticate(token), projectId, departmentId);
     },
@@ -317,6 +327,7 @@ export function createFinanceServices(deps: {
         if (body.action === "registerProjectPurchase") await dispatchEvent(result, "purchase_registered");
         return result;
       }
+      if (isFundingApplicationMutation(body.action)) return { ...await mutateFundingApplication(db, await deps.authenticate(token), body), warnings: [], errors: [] };
       // Only explicitly scoped budget actions bypass the broad Financials context.
       if (isProjectBudgetMutation(body.action)) {
         const result = await mutateProjectBudget(db, await deps.authenticate(token), body);

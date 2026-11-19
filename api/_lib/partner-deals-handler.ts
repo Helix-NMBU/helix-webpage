@@ -9,6 +9,7 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
   try {
    const token = bearer(req.headers.authorization); const service = getServices();
    if (req.method === "GET") {
+    if (req.query.view === "fundingApplicationCard") return res.status(200).json(await service.fundingApplicationCard(token,req.query.dealId));
     if (req.query.view === "financeReviews") return res.status(200).json(await service.financeReviewQueue(token));
     if (req.query.view === "reviewNotifications") return res.status(200).json(await service.reviewNotifications(token));
     if (req.query.view === "taskDeal") return res.status(200).json(await service.taskDeal(token,req.query.taskId));
@@ -18,6 +19,7 @@ export function createDealHandler(getServices: () => DealServices = neonDealServ
    }
    if (Number(req.headers["content-length"] ?? 0) > 64000) throw new MemberCvError(413,"This request is too large.");
    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) throw new MemberCvError(400,"Check the deal details and try again.");
+   if (req.body.action === "saveFundingApplication") return res.status(200).json(await service.saveFundingApplication(token,req.body));
    if (req.body.action === "markReviewNotificationsRead") return res.status(200).json(await service.markReviewNotificationsRead(token,req.body.ids));
    if (req.body.action === "recordAgreementChange") return res.status(200).json(await service.recordAgreementChange(token,req.body.dealId,req.body.expectedRevision,req.body.kind,req.body.reason,req.body.terms,req.body.confirmed));
    if (req.body.action === "resolveAgreementChange") return res.status(200).json(await service.resolveAgreementChange(token,req.body.changeId,req.body.note,req.body.confirmed,req.body.manualConfirmed));

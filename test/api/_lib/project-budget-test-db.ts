@@ -39,6 +39,22 @@ export interface ProjectBudgetTestDatabase extends CvDatabase { exec(sql: string
 const migrationDirectory = new URL("../../../db/migrations/", import.meta.url);
 const read = (name: string) => readFileSync(new URL(name, migrationDirectory), "utf8");
 
+
+/** The minimal budget fixture uses the real verified pipeline permission functions. */
+export async function setupFundingPipelineFixture(db: ProjectBudgetTestDatabase) {
+  await db.exec(`alter table partner_deals.deals add column title text not null default 'Synthetic application',add column revision integer not null default 0,
+    add column primary_season_id uuid,add column stage text not null default 'proposal',add column negotiation_notes text not null default 'Private negotiation';
+    create table partner_deals.space_access(member_id uuid primary key references identity.members(id),pipeline boolean not null default false,agreements boolean not null default false);
+    create table partner_deals.member_grants(member_id uuid references identity.members(id),capability text,active boolean);
+  `);
+  const source = read("058_partner_deal_space_access.sql");
+  for (const name of ["capabilities", "lock_actor"]) {
+    const definition = source.match(new RegExp(`create or replace function partner_deals\\.${name}\\([\\s\\S]*?\\$\\$;`))?.[0];
+    if (!definition) throw new Error(`Missing verified pipeline function ${name}`);
+    await db.exec(definition);
+  }
+}
+
 /** Own synthetic identity/project schemas; this helper never targets a configured service. */
 export async function setupProjectBudgetBase(db: ProjectBudgetTestDatabase) {
   await db.exec(`
@@ -57,6 +73,7 @@ export async function setupProjectBudgetBase(db: ProjectBudgetTestDatabase) {
     create schema partner_deals;
     create table partner_deals.deals(id uuid primary key);
   `);
+  await setupFundingPipelineFixture(db);
   const canonical = read("016_fixed_departments.sql").match(/create or replace function project_management\.canonical_department[\s\S]*?\$\$;/)?.[0];
   if (!canonical) throw new Error("Canonical department migration function was not found.");
   await db.exec(canonical);

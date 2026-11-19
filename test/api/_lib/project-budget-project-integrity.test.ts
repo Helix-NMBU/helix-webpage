@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { createProjectServices } from "../../../api/_lib/project-management-service.js";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
-import { applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity as fixtureIdentity, type ProjectBudgetFixtureRole } from "./project-budget-test-db.js";
+import { applyProjectBudgetMigrations, setupFundingPipelineFixture, projectBudgetFixture as f, projectBudgetIdentity as fixtureIdentity, type ProjectBudgetFixtureRole } from "./project-budget-test-db.js";
 const read = (name: string) => readFileSync(new URL(`../../../db/migrations/${name}.sql`, import.meta.url), "utf8");
 let db: PGlite, projects: ReturnType<typeof createProjectServices>, finance: ReturnType<typeof createFinanceServices>, departmentId: string;
 const identity = (role: ProjectBudgetFixtureRole) => ({ ...fixtureIdentity(role), email: `${role.toLowerCase()}@helixnmbu.no` });
@@ -17,6 +17,7 @@ beforeAll(async () => {
   for (const filename of readdirSync(migrations).filter(name => /^0(1[1-9]|2[01])_finance_.*\.sql$/.test(name)).sort()) await db.exec(readFileSync(new URL(filename, migrations), "utf8"));
   await db.exec(read("024_financials_member_role")); await db.exec(read("065_finance_historical_purchases"));
   await db.exec("create schema partner_deals;create table partner_deals.deals(id uuid primary key);");
+  await setupFundingPipelineFixture(db);
   for (const role of ["lead", "departmentLead", "finance", "head", "outsider"] as const) {
     const actor = identity(role);
     await db.query('insert into neon_auth."user" values($1::uuid,$2,$3,true,false)', [actor.userId, role, actor.email]);
