@@ -157,5 +157,12 @@ describe("project authoring and sequential approval", () => {
     expect("message" in mail && mail.message.text).not.toContain("6000");
     await db.query("delete from project_management.department_members where member_id=$1::uuid", [f.departmentLead]);
     expect(await composeFinanceMail(db, {}, claimed)).toEqual({ safeError: "recipient_inactive" });
+    await db.query("insert into project_management.department_members values($1::uuid,$2::uuid,true)", [f.department, f.departmentLead]);
+    budget = await write("departmentLead", budget, "approveDepartmentBudget");
+    expect(await composeFinanceMail(db, {}, claimed)).toEqual({ safeError: "recipient_inactive" });
+    const finalReview = { ...claimed, eventType: "project_budget.finance_pending", recipientMemberId: f.head };
+    expect(await composeFinanceMail(db, {}, finalReview)).toMatchObject({ message: { to: projectBudgetIdentity("head").email } });
+    await db.query("update finance.member_grants set active=false,revoked_at=clock_timestamp(),revoked_by_member_id=$2::uuid where member_id=$1::uuid", [f.head, f.outsider]);
+    expect(await composeFinanceMail(db, {}, finalReview)).toEqual({ safeError: "recipient_inactive" });
   });
 });
