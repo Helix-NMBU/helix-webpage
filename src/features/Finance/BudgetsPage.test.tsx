@@ -30,6 +30,7 @@ vi.mock("../MemberPlatform/FinanceAccess", () => ({
   FinanceGate: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => notify }));
+vi.mock("./ProjectBudgetsPanel", () => ({ ProjectBudgetsPanel: () => <section aria-label="Project budget approvals" /> }));
 
 const memberCapabilities: FinanceCapabilitySet = {
   publicBudgets: true, publicEarmarks: true, registerActual: true, ownRequests: true,
@@ -182,11 +183,13 @@ describe("season budget page", () => {
     session.budgets = { ...budgets("absent"), departments: [], choices: { systems: [], items: [] } };
     await render("entry");
     expect(container.textContent).not.toContain("No budget is published yet");
+    await act(async () => { [...container.querySelectorAll("button")].find(button => button.textContent === "Season budget")?.click(); });
     expect(container.textContent).toContain("Create season budget");
     await act(async () => { [...container.querySelectorAll("button")].find((button) => button.textContent === "Create season budget")?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     expect(session.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "createBudget" }));
     session.budgets = { ...budgets("draft"), departments: [] };
     await render("entry");
+    await act(async () => { [...container.querySelectorAll("button")].find(button => button.textContent === "Season budget" && button.getAttribute("data-state") !== "open")?.click(); });
     await act(async () => { [...document.body.querySelectorAll("button")].find((button) => button.textContent === "Approve budget")?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     await act(async () => { [...document.body.querySelectorAll("button")].find((button) => button.textContent === "Approve")?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     expect(session.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "approveBudget", expectedRevision: 0 }));

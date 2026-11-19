@@ -1,3 +1,4 @@
+import { ProjectBudgetsPanel } from "../Finance/ProjectBudgetsPanel";
 import { departmentMemberIds } from "../ProjectManagement/permissions";
 import {
   useCallback,
@@ -214,7 +215,7 @@ export function DepartmentWorkspace({
   const saving = useRef(false);
   const [params, setParams] = useSearchParams();
   const selected = params.get("tab");
-  const tab = selected === "documents" || selected === "members" ? selected : "overview";
+  const tab = selected === "documents" || selected === "members" || selected === "budgets" ? selected : "overview";
   const notify = useNotify();
   const navigate = useNavigate();
   const DepartmentIcon = getDepartmentIcon(department.name);
@@ -349,7 +350,9 @@ export function DepartmentWorkspace({
           >
             Members
           </TabsTrigger>
+          <TabsTrigger value="budgets" className="rounded-full border bg-muted/40 px-4 py-2 data-[state=active]:bg-muted data-[state=active]:text-foreground">Budgets</TabsTrigger>
         </TabsList>
+        <TabsContent value="budgets" className="mt-7"><ProjectBudgetsPanel departmentId={department.id} title="Budget approvals" /></TabsContent>
         <TabsContent value="overview" className="mt-7">
           <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
             <div className="min-w-0 space-y-10">

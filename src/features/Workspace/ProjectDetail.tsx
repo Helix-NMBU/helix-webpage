@@ -1,3 +1,4 @@
+import { ProjectBudgetsPanel } from "../Finance/ProjectBudgetsPanel";
 import { canManageProject } from "../ProjectManagement/permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -133,7 +134,7 @@ export function ProjectDetail({
   const [params, setParams] = useSearchParams();
   const selectedTab = params.get("tab");
   const tab =
-    selectedTab === "overview" || selectedTab === "activity"
+    selectedTab === "overview" || selectedTab === "activity" || selectedTab === "budget"
       ? selectedTab
       : "tasks";
   const directorySession = useWorkspace();
@@ -391,6 +392,7 @@ export function ProjectDetail({
             ["overview", "Overview"],
             ["activity", "Activity"],
             ["tasks", "Tasks"],
+            ["budget", "Budget"],
           ].map(([value, label]) => (
             <TabsTrigger
               key={value}
@@ -428,6 +430,8 @@ export function ProjectDetail({
                   </div>
                   <button type="button" onClick={() => selectTab("activity")} className="w-full rounded-xl border px-4 py-5 text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View project activity</button>
                 </section>
+              ) : tab === "budget" ? (
+                <ProjectBudgetsPanel projectId={project.id} title="Budget" />
               ) : loading && !workspace ? (
                 tab === "activity" ? <ActivitySkeleton /> : <TaskListSkeleton label="Loading project tasks" board={params.get("view") === "board"} />
               ) : !workspace ? (

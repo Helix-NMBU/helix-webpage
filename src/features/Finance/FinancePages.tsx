@@ -1,3 +1,5 @@
+import { ProjectBudgetsPanel } from "./ProjectBudgetsPanel";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@libs/components/ui/collapsible";
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -72,7 +74,17 @@ function FinanceSection({ page }: { page: FinancePageId }) {
         ))}
       </nav>}
       {page === "overview" && session.capabilities?.draftBudgetItems ? <BankSnapshotEditor /> : null}
-      {page === "financing" ? <FinancingPage /> : !loaded ? (
+      {page === "budgets" ? (
+        <>
+          <ProjectBudgetsPanel title="Project budget approvals" />
+          <Collapsible className="space-y-4">
+            <CollapsibleTrigger asChild><Button variant="outline">Season budget</Button></CollapsibleTrigger>
+            <CollapsibleContent>
+              {budgetsReady ? <BudgetsBoard /> : !loaded ? <FinanceContentSkeleton page={page} /> : <p className="text-sm text-muted-foreground">No season budget is configured yet.</p>}
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      ) : page === "financing" ? <FinancingPage /> : !loaded ? (
         <FinanceContentSkeleton page={page} canRegister={Boolean(session.capabilities?.registerActual)} />
       ) : budgetsReady ? (
         <BudgetsBoard />
