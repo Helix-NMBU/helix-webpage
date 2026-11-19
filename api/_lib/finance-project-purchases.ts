@@ -226,7 +226,13 @@ export async function mutateProjectPurchase(
               checked.errors[0].message,
               checked.errors,
             );
-          return { purchase: normalized.purchase, warnings: checked.warnings };
+          // Preview warnings describe this read snapshot. Registration derives
+          // discrepancy warnings in SQL after locking the effective approval.
+          return {
+            purchase: normalized.purchase,
+            warnings:
+              body.action === "checkProjectPurchase" ? checked.warnings : [],
+          };
         },
       },
     );
