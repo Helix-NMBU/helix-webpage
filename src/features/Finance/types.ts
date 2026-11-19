@@ -40,7 +40,7 @@ export type PurchaseStatus = "registered" | "voided";
 export type DocumentKind = "receipt" | "invoice";
 export type RequestStatus = "draft" | "submitted" | "rejected" | "approved" | "closed" | "cancelled";
 export type RequestDecisionKind = "approved" | "rejected";
-export type ExceptionKind = "missing_approval" | "overrun" | "line_mismatch" | "dated_before_approval";
+export type ExceptionKind = "missing_approval" | "overrun" | "line_mismatch" | "dated_before_approval" | "budget_overrun" | "unbudgeted";
 export type OutboxStatus = "pending" | "sent" | "failed" | "uncertain";
 
 export type FinanceCapabilitiesResponse = {
@@ -673,5 +673,5 @@ export type FinanceRecoveryView = {
   uploadNextCursor: string | null;
 };
 
-export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget"] as const;
+export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget", "projectPurchaseContext"] as const;
 export type FinanceReadAction = (typeof FINANCE_READ_ACTIONS)[number];

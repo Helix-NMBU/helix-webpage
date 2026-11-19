@@ -31,6 +31,9 @@ vi.mock("../MemberPlatform/FinanceAccess", () => ({
 }));
 vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => notify }));
 
+// This suite covers the retained request/legacy form. Project purchase behavior
+// and authorization are covered separately by the project purchase suites.
+vi.mock("./ProjectPurchaseLauncher", () => ({ ProjectPurchaseLauncher: () => null }));
 import { PurchasesBoard } from "./PurchasesPage";
 
 describe("PurchasesPage", () => {
@@ -38,6 +41,7 @@ describe("PurchasesPage", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     notify.mockReset();
     session.capabilities = { registerActual: true, purchaseRegister: false } as FinanceCapabilitySet;
     session.purchases = { ownRequests: [], viewVersion: 1 };
@@ -115,7 +119,7 @@ describe("PurchasesPage", () => {
     await act(async () => {
       root.render(<PurchasesBoard />);
     });
-    expect(container.textContent).toContain("Register a purchase");
+    expect(container.textContent).toContain("Other purchases and optional approvals");
     expect(container.textContent).toContain("Line amount is the total in NOK");
     expect(container.textContent).not.toContain("Purchase register");
     expect(container.textContent).not.toContain("Finance tools");

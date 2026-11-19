@@ -1,5 +1,6 @@
 import { ProjectBudgetComparison } from "./ProjectBudgetComparison";
 import { ProjectBudgetImport } from "./ProjectBudgetImport";
+import { ProjectBudgetPurchases } from "./ProjectBudgetPurchases";
 import { canonicalDepartment } from "../ProjectManagement/departments";
 import {
   useCallback,
@@ -575,6 +576,8 @@ export function ProjectBudgetsPanel({
   const [stage, setStage] = useState("all");
   const [importOpen, setImportOpen] = useState(false);
   const [versionView, setVersionView] = useState("proposed");
+  const [purchaseDirty, setPurchaseDirty] = useState(false);
+  const [purchaseScopeId, setPurchaseScopeId] = useState("");
   const notify = useNotify();
   const alive = useRef(false),
     generation = useRef(0),
@@ -584,7 +587,7 @@ export function ProjectBudgetsPanel({
     dirty = useRef(false),
     version = useRef<number | null>(null);
   dirty.current =
-    entry !== null || createOpen || reasonAction !== null || importOpen;
+    entry !== null || createOpen || reasonAction !== null || importOpen || purchaseDirty;
   const dialogOpener = useRef<HTMLButtonElement | null>(null);
   const focusFallback = useRef<HTMLButtonElement | null>(null);
   const pendingFocus = useRef(false);
@@ -881,6 +884,8 @@ export function ProjectBudgetsPanel({
               canonicalDepartment(system.departmentName),
         ),
     ) ?? [];
+  const incurredScopes = workspace?.scopes.filter(scope => scope.capabilities.canRegisterPurchase && scope.responsibleDepartmentId && !workspace.budgets.some(header => header.projectId === scope.projectId)) ?? [];
+  const incurredScope = incurredScopes.find(scope => scope.projectId === purchaseScopeId) ?? incurredScopes[0];
   const write = (
     action:
       | "submitProjectBudget"
@@ -1266,7 +1271,9 @@ export function ProjectBudgetsPanel({
           <p className="text-right font-medium">
             Total {money(displayed.totalNok)}
           </p>
-          {/* PBA-05 integration: render ProjectBudgetPurchases here when detail.capabilities.canRegisterPurchase, regardless displayed version. It selects effective entries itself; onChanged calls load(true). */}
+          {detail.capabilities.canRegisterPurchase && (
+            <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onDirtyChange={setPurchaseDirty} />
+          )}
           {detail.decisions.length > 0 && (
             <div className="space-y-2 border-t pt-4">
               <h4 className="text-sm font-medium">Approval history</h4>
@@ -1298,23 +1305,8 @@ export function ProjectBudgetsPanel({
           )}
         </section>
       )}
-      {importOpen && detail && (
-        <ProjectBudgetImport
-          budget={detail}
-          repository={repository}
-          systems={systems}
-          restoreFocus={restoreFocus}
-          onClose={() => setImportOpen(false)}
-          onRefresh={() => load(true)}
-          onAccessEnded={clearPrivate}
-          onImported={async () => {
-            setImportOpen(false);
-            dirty.current = false;
-            setVersionView("proposed");
-            await load(true);
-          }}
-        />
-      )}
+  dirty.current =
+    entry !== null || createOpen || reasonAction !== null || importOpen || purchaseDirty;
       {createOpen && (
         <CreateBudget
           scopes={authorScopes}

@@ -114,7 +114,9 @@ function scopes(state: State): ProjectBudgetScope[] {
     const budget = state.budgets.find((item) => item.projectId === project.id);
     const responsible =
       budget?.responsibleDepartmentId ??
-      (departments.length === 1 ? departments[0].id : null);
+      (departments.length === 1 ? departments[0].id :
+        profile === "department_lead" ? departments.find(item => item.id === reviewerDepartment?.id)?.id ?? null :
+        finance ? departments[0]?.id ?? null : null);
     const author =
       profile === "project_lead" &&
       (project.leadIds ?? []).includes(data.viewerId);

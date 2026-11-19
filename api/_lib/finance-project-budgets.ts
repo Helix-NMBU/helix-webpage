@@ -140,13 +140,13 @@ type VersionRow = { id: string; version_number: number; revision: number; status
   department_approved_by: string | null; department_approved_at: string | null; approved_by: string | null; approved_at: string | null; entries: EntryRow[] };
 type EntryRow = { entry_id: string; budget_item_id: string | null; public_ref: string | null; system_id: string; description: string; category: string;
   planned_ore: string; ordinary_priority: ProjectBudgetEntry["ordinaryPriority"]; priority: ProjectBudgetEntry["priority"]; reuse_status: ProjectBudgetEntry["reuseStatus"];
-  expected_purchase_date: string | null; owner_member_id: string | null; owner_email: string | null; status: ProjectBudgetEntry["status"]; note: string | null; earmark_id: string | null; removed: boolean; actual_ore: string; complete: boolean };
+  expected_purchase_date: string | null; owner_member_id: string | null; owner_email: string | null; status: ProjectBudgetEntry["status"]; note: string | null; earmark_id: string | null; removed: boolean; actual_ore: string; purchase_count?: number; complete: boolean };
 function version(row: VersionRow | null): ProjectBudgetVersion | null {
   if (!row) return null;
   const entries = row.entries.map(e => ({ entryId: e.entry_id, budgetItemId: e.budget_item_id, publicRef: e.public_ref, systemId: e.system_id, description: e.description,
     category: e.category, plannedNok: formatOre(BigInt(e.planned_ore)), ordinaryPriority: e.ordinary_priority, priority: e.priority, reuseStatus: e.reuse_status,
     expectedPurchaseDate: e.expected_purchase_date, ownerMemberId: e.owner_member_id, ownerEmail: e.owner_email, status: e.status, note: e.note, earmarkId: e.earmark_id, removed: e.removed,
-    actualNok: formatOre(BigInt(e.actual_ore)), completion: e.complete ? "complete" as const : BigInt(e.actual_ore) > 0n ? "partial" as const : "not_purchased" as const }));
+    actualNok: formatOre(BigInt(e.actual_ore)), completion: e.complete ? "complete" as const : Number(e.purchase_count ?? 0) > 0 ? "partial" as const : "not_purchased" as const }));
   return { id: row.id, versionNumber: row.version_number, revision: row.revision, status: row.status, submittedAt: row.submitted_at,
     departmentApprovedBy: row.department_approved_by, departmentApprovedAt: row.department_approved_at, approvedBy: row.approved_by, approvedAt: row.approved_at,
     entries, totalNok: formatOre(row.entries.reduce((total, e) => total + (!e.removed && e.status !== "cancelled" ? BigInt(e.planned_ore) : 0n), 0n)) };
@@ -161,6 +161,7 @@ export async function loadProjectBudgetDetail(db: CvDatabase, identity: Workspac
            coalesce((select jsonb_agg(to_jsonb(erow) order by erow.entry_id) from (select ve.entry_id,ve.system_id,ve.description,ve.category,ve.planned_ore::text as planned_ore,ve.ordinary_priority,ve.reuse_status,ve.expected_purchase_date,ve.owner_member_id,ve.owner_email,ve.status,ve.note,ve.earmark_id,ve.removed,pe.budget_item_id,i.public_ref,
              case when exists(select 1 from finance.budget_obligations o join finance.funding_applications app on app.id=o.application_id where o.entry_id=pe.id and o.released_at is null and app.awarded_at is not null) then 'P0' else ve.ordinary_priority end as priority,
              coalesce((select sum(a.amount_ore) from finance.allocations a join finance.purchase_lines pl on pl.id=a.line_id join finance.purchases purchase on purchase.id=pl.purchase_id where a.budget_item_id=pe.id and purchase.status='registered'),0)::text as actual_ore,
+             (select count(distinct purchase.id)::integer from finance.allocations a join finance.purchase_lines pl on pl.id=a.line_id join finance.purchases purchase on purchase.id=pl.purchase_id where a.budget_item_id=pe.id and purchase.status='registered') as purchase_count,
              coalesce(pc.complete,false) as complete from finance.project_budget_version_entries ve join finance.project_budget_entries pe on pe.id=ve.entry_id
              left join finance.budget_items i on i.id=pe.budget_item_id left join finance.project_budget_completion pc on pc.entry_id=pe.id where ve.version_id=v.id) erow),'[]'::jsonb) as entries
            from finance.project_budget_versions v where v.project_budget_id=row.id) vrow),'[]'::jsonb) as versions,

@@ -1,3 +1,5 @@
+import { isProjectPurchaseMutation, loadProjectPurchaseContext, mutateProjectPurchase, setProjectBudgetCompletion } from "./finance-project-purchases.js";
+import type { ProjectPurchaseContext } from "../../src/features/Finance/project-purchase-types.js";
 import { isProjectBudgetMutation, loadProjectBudgetWorkspace, loadProjectBudgetDetail, mutateProjectBudget } from "./finance-project-budgets.js";
 import type { ProjectBudgetWorkspace, ProjectBudgetDetail } from "../../src/features/Finance/project-budget-types.js";
 import { loadBankSnapshot, setBankSnapshot } from "./finance-bank.js";
@@ -46,6 +48,7 @@ type Context = { memberId: string; viewVersion: number; seasonCode: string | nul
 export interface FinanceServices {
   projectBudgets(token: string, projectId?: string, departmentId?: string): Promise<ProjectBudgetWorkspace>;
   projectBudget(token: string, projectBudgetId: string): Promise<ProjectBudgetDetail>;
+  projectPurchaseContext(token: string, projectId: string, responsibleDepartmentId?: string): Promise<ProjectPurchaseContext>;
   bankSnapshot(token: string): Promise<BankSnapshot | null>;
   capabilities(token: string): Promise<FinanceCapabilitiesResponse>;
   version(token: string, knownVersion?: number): Promise<{ viewVersion: number; unchanged?: boolean }>;
@@ -177,6 +180,9 @@ export function createFinanceServices(deps: {
     async projectBudget(token, projectBudgetId) {
       return loadProjectBudgetDetail(db, await deps.authenticate(token), projectBudgetId);
     },
+    async projectPurchaseContext(token, projectId, departmentId) {
+      return loadProjectPurchaseContext(db, await deps.authenticate(token), projectId, departmentId);
+    },
     async bankSnapshot(token) {
       await context(token);
       return loadBankSnapshot(db);
@@ -305,6 +311,12 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
+      if (body.action === "setProjectBudgetCompletion") return setProjectBudgetCompletion(db, await deps.authenticate(token), body);
+      if (isProjectPurchaseMutation(body.action)) {
+        const result = await mutateProjectPurchase(db, financeStorage, await deps.authenticate(token), body);
+        if (body.action === "registerProjectPurchase") await dispatchEvent(result, "purchase_registered");
+        return result;
+      }
       // Only explicitly scoped budget actions bypass the broad Financials context.
       if (isProjectBudgetMutation(body.action)) {
         const result = await mutateProjectBudget(db, await deps.authenticate(token), body);

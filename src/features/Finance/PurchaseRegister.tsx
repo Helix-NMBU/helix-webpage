@@ -14,6 +14,8 @@ const EXCEPTION_LABELS: Record<ExceptionKind, string> = {
   overrun: "Approved amount exceeded",
   line_mismatch: "Approval line mismatch",
   dated_before_approval: "Dated before approval",
+  budget_overrun: "Approved budget exceeded",
+  unbudgeted: "Unbudgeted cost",
 };
 
 function useStableIds() {

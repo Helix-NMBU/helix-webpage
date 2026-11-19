@@ -298,6 +298,8 @@ async function composeRegistration(db: CvDatabase, purchaseId: string): Promise<
   for (const exception of exceptions) {
     if (exception.kind === "missing_approval") warnings.push("Historical record: registered without the prior approval required at that time.");
     if (exception.kind === "overrun") warnings.push("A linked approval was exceeded.");
+    if (exception.kind === "budget_overrun") warnings.push("Actual cost exceeds the approved budget plan.");
+    if (exception.kind === "unbudgeted") warnings.push("Unbudgeted cost needs Finance review.");
     if (exception.kind === "line_mismatch") warnings.push("A line does not match its approval.");
     if (exception.kind === "dated_before_approval") warnings.push("The purchase date is before the approval date.");
   }
