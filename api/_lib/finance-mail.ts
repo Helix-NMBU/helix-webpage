@@ -166,6 +166,27 @@ export async function composeFinanceMail(
   const person = await recipient(db, claimed.recipientMemberId);
   if (!person?.email) return { safeError: "recipient_email_missing" };
   const from = fromAddress(env);
+  if (claimed.eventType.startsWith("project_budget.")) {
+    if (typeof claimed.payload.versionId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(claimed.payload.versionId)) return { safeError: "compose_failed" };
+    const row = (await db.query<{ project_name: string; active: boolean }>(
+      `select p.name as project_name,finance.project_budget_verified_member(m.id,m.google_sub,m.email) and
+        case when $3='project_budget.department_pending' then h.pending_version_id=v.id and v.status='department_pending' and exists(select 1 from project_management.department_members dm where dm.department_id=h.responsible_department_id and dm.member_id=m.id and dm.is_lead)
+          when $3='project_budget.finance_pending' then h.pending_version_id=v.id and v.status='finance_pending' and coalesce((finance.capability_flags(m.id)->>'approveBudget')::boolean,false)
+          when $3 in ('project_budget.returned','project_budget.approved') then
+            (($3='project_budget.returned' and h.pending_version_id=v.id and v.status='draft') or ($3='project_budget.approved' and h.approved_version_id=v.id))
+            and (m.id=any(p.lead_ids) or exists(select 1 from project_management.department_members dm where dm.department_id=h.responsible_department_id and dm.member_id=m.id and dm.is_lead))
+          else false end as active
+       from finance.project_budgets h join project_management.projects p on p.id=h.project_id
+       join identity.members m on m.id=$2::uuid join finance.project_budget_versions v on v.id=$4::uuid and v.project_budget_id=h.id where h.id=$1::uuid`,
+      [claimed.entityId, claimed.recipientMemberId, claimed.eventType, claimed.payload.versionId],
+    )).rows[0];
+    if (!row?.active) return { safeError: "recipient_inactive" };
+    const update = claimed.eventType === "project_budget.department_pending" ? "is waiting for department approval"
+      : claimed.eventType === "project_budget.finance_pending" ? "is waiting for Head of Finance approval"
+      : claimed.eventType === "project_budget.approved" ? "was approved" : "was returned for changes";
+    const body = paragraph([`The project budget for ${row.project_name} ${update}.`, "Sign in to review the project budget. This message does not include budget entries, amounts or file links."]);
+    return { message: { from, to: person.email, subject: `Project budget ${update}`, ...body, idempotencyKey: claimed.providerIdempotencyKey } };
+  }
   if (claimed.eventType === "request.submitted") {
     if (!person.active_head) return { safeError: "recipient_inactive" };
     const request = await loadRequest(db, claimed.entityId);
@@ -210,7 +231,7 @@ async function loadDecision(db: CvDatabase, requestId: string, revisionId: strin
      from finance.requests r
      left join finance.request_decisions d on d.revision_id = $2::uuid
      where r.id = $1::uuid`,
-    [requestId, /^[0-9a-f-]{36}$/i.test(revisionId) ? revisionId : "00000000-0000-4000-8000-000000000000"],
+    [requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(revisionId) ? revisionId : "00000000-0000-4000-8000-000000000000"],
   );
   return rows.rows[0] ?? null;
 }

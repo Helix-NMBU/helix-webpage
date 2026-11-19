@@ -1,3 +1,5 @@
+import { isProjectBudgetMutation, loadProjectBudgetWorkspace, loadProjectBudgetDetail, mutateProjectBudget } from "./finance-project-budgets.js";
+import type { ProjectBudgetWorkspace, ProjectBudgetDetail } from "../../src/features/Finance/project-budget-types.js";
 import { loadBankSnapshot, setBankSnapshot } from "./finance-bank.js";
 import { performBudgetImport } from "./finance-budget-import.js";
 import pg from "pg";
@@ -43,6 +45,8 @@ type FlagsRow = FinanceCapabilitySet & { profiles: FinanceProfile[] };
 type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
 
 export interface FinanceServices {
+  projectBudgets(token: string, projectId?: string, departmentId?: string): Promise<ProjectBudgetWorkspace>;
+  projectBudget(token: string, projectBudgetId: string): Promise<ProjectBudgetDetail>;
   bankSnapshot(token: string): Promise<BankSnapshot | null>;
   capabilities(token: string): Promise<FinanceCapabilitiesResponse>;
   version(token: string, knownVersion?: number): Promise<{ viewVersion: number; unchanged?: boolean }>;
@@ -168,6 +172,12 @@ export function createFinanceServices(deps: {
   }
 
   return {
+    async projectBudgets(token, projectId, departmentId) {
+      return loadProjectBudgetWorkspace(db, await deps.authenticate(token), projectId, departmentId);
+    },
+    async projectBudget(token, projectBudgetId) {
+      return loadProjectBudgetDetail(db, await deps.authenticate(token), projectBudgetId);
+    },
     async bankSnapshot(token) {
       await context(token);
       return loadBankSnapshot(db);
@@ -296,6 +306,16 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
+      // Only explicitly scoped budget actions bypass the broad Financials context.
+      if (isProjectBudgetMutation(body.action)) {
+        const result = await mutateProjectBudget(db, await deps.authenticate(token), body);
+        const event = body.action === "submitProjectBudget" ? "project_budget.department_pending"
+          : body.action === "approveDepartmentBudget" ? "project_budget.finance_pending"
+          : body.action === "approveProjectBudget" ? "project_budget.approved"
+          : body.action === "returnProjectBudget" || body.action === "withdrawProjectBudget" ? "project_budget.returned" : null;
+        if (event) await dispatchEvent(result, event);
+        return result;
+      }
       const current = await context(token);
       const action = body.action;
       if (typeof action !== "string" || !isFinanceAction(action)) throw new FinanceError(400, "Unknown request.");

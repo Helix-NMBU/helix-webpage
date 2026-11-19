@@ -42,6 +42,15 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
         const action = req.query.action;
         if (typeof action !== "string" || !FINANCE_READ_ACTIONS.includes(action as FinanceReadAction)) throw new FinanceError(400, "Unknown request.");
         const version = knownVersion(req.query.knownVersion);
+        if (action === "projectBudgets") {
+          const { projectId, departmentId } = req.query;
+          if ((projectId !== undefined && typeof projectId !== "string") || (departmentId !== undefined && typeof departmentId !== "string")) throw new FinanceError(400, "Choose a valid project and department.");
+          return res.status(200).json(await services.projectBudgets(token, projectId, departmentId));
+        }
+        if (action === "projectBudget") {
+          if (typeof req.query.projectBudgetId !== "string") throw new FinanceError(400, "Choose a project budget.");
+          return res.status(200).json(await services.projectBudget(token, req.query.projectBudgetId));
+        }
         if (action === "bankSnapshot") return res.status(200).json(await services.bankSnapshot(token));
         if (action === "capabilities") return res.status(200).json(await services.capabilities(token));
         if (action === "version") return res.status(200).json(await services.version(token, version));

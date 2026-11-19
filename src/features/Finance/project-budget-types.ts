@@ -114,10 +114,12 @@ export interface ProjectBudgetDecision {
   /** Immutable contents at the time of this decision. */
   snapshot: unknown;
 }
+export interface ProjectBudgetSystemChoice { id: string; code: string; name: string; departmentName: string }
 export interface ProjectBudgetWorkspace {
   viewVersion: number;
   scopes: ProjectBudgetScope[];
   budgets: ProjectBudgetSummary[];
+  systems?: ProjectBudgetSystemChoice[];
 }
 
 interface ProjectBudgetWrite {
@@ -139,6 +141,8 @@ export interface ProjectBudgetMutationResult {
   revision: number;
   viewVersion: number;
   replayed?: boolean;
+  warnings: { message: string }[];
+  errors: { field: string; message: string }[];
 }
 export interface ProjectBudgetMappingRow {
   budgetItemId: string;

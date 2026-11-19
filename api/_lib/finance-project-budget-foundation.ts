@@ -9,10 +9,15 @@ export function projectBudgetError(error: unknown): FinanceError {
   if (error instanceof FinanceError) return error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("PROJECT_REVIEWER_MISSING")) return new FinanceError(400, "This department needs an active department lead before you can submit. Ask a workspace administrator to update its leads.");
+  if (message.startsWith("FINANCE|invalid|")) {
+    const [, , explanation, field] = message.split("|");
+    return new FinanceError(400, explanation || "Check the budget entry.", field ? [{ field, message: explanation }] : undefined);
+  }
   if (code === "42501" || message.includes("PROJECT_FORBIDDEN")) return new FinanceError(403, "You do not have access to this project budget.");
   if (code === "P0002") return new FinanceError(404, "This project budget is no longer available.");
   if (code === "23505" || code === "40001" || message.includes("PROJECT_CONFLICT")) return new FinanceError(409, "The project budget changed. Reload it before saving again.");
-  if (["23503", "23514", "22P02"].includes(code)) return new FinanceError(400, "Choose valid project budget entries and departments.");
+  if (["23503", "23514", "22P02", "22003", "22007", "22008"].includes(code)) return new FinanceError(400, "Choose valid project budget entries and departments.");
   return new FinanceError(503, "Project budgets are temporarily unavailable. Please try again.");
 }
 
