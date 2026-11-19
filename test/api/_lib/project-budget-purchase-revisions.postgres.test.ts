@@ -259,6 +259,67 @@ describe.skipIf(!url)(
       }
     });
 
+    it.each(["register", "void"] as const)(
+      "retries generic %s safely when adoption changes its header lock set",
+      async operation => {
+        const projectId = randomUUID(), itemId = randomUUID();
+        await db.query("insert into project_management.projects values($1::uuid,'S27','Adoption overlap',array[$2::uuid],array['Mechanical & Production'],1)", [projectId, f.lead]);
+        await db.query(`insert into finance.budget_items(id,budget_id,system_id,public_ref,description,category,planned_ore,priority,reuse_status,status,created_by_member_id,updated_by_member_id)
+          select $1::uuid,budget_id,system_id,$2,'Concurrent legacy material','material',100000,'P2','new','planned',$3::uuid,$3::uuid from finance.budget_items where id=$4::uuid`, [itemId, operation === "register" ? "BI-S27-90001" : "BI-S27-90002", f.head, f.entry]);
+        const created = await change("lead", { action: "createProjectBudget", projectId, responsibleDepartmentId: f.department });
+        let budget = await services.projectBudget("lead", created.id!);
+        const upload = await change("finance", { action: "authorizeUpload", fileName: "invoice.pdf", contentType: "application/pdf", byteSize: 8 });
+        await putMemoryPdf(storage, upload.stagingKey!);
+        await change("finance", { action: "finalizeUpload", uploadId: upload.id });
+        const register = { action: "registerPurchase", requestId: randomUUID(), purchase: {
+          buyerName: "Finance buyer", supplierName: "Supplier", paymentMethod: "team_account", purchaseDate: osloToday(),
+          justification: "Actual legacy material", documentKind: "receipt", uploadIds: [upload.id!],
+          lines: [{ systemId: f.system, budgetItemId: itemId, description: "Material", quantity: "1", amountNok: "25" }],
+        } };
+        const original = operation === "void" ? await change("finance", register) : null;
+        const body = operation === "register" ? register : { action: "voidPurchase", requestId: randomUUID(), purchaseId: original!.id, expectedRevision: 0, reason: "Order cancelled" };
+        const role = "finance";
+        const actor = projectBudgetIdentity(role).userId;
+        const actorGate = await pool.connect(), ledgerGate = await pool.connect(), purchaseConnection = await pool.connect(), approvalConnection = await pool.connect();
+        const purchasePid = Number((await purchaseConnection.query("select pg_backend_pid() as pid")).rows[0].pid);
+        let purchaseWork: ReturnType<typeof outcome> | undefined, approvalWork: ReturnType<typeof outcome> | undefined;
+        const failureStart = failures.length;
+        try {
+          await actorGate.query("begin");
+          await actorGate.query("select id from identity.members where id=$1::uuid for update", [actor]);
+          purchaseWork = outcome(change(role, body, service(database(purchaseConnection))));
+          await blockedBy(actorGate, operation === "register" ? "register_purchase" : "void_registered_purchase");
+          budget = await write(budget, "lead", "adoptProjectBudgetEntries", { entries: [{ budgetItemId: itemId }] });
+          budget = await write(budget, "lead", "submitProjectBudget");
+          budget = await write(budget, "departmentLead", "approveDepartmentBudget");
+          await ledgerGate.query("begin");
+          await ledgerGate.query("select b.id from finance.budgets b join finance.seasons s on s.id=b.season_id where s.code='S27' for update of b");
+          await actorGate.query("commit");
+          await blockedBy(ledgerGate, operation === "register" ? "register_purchase" : "void_registered_purchase");
+          approvalWork = outcome(change("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision }, service(database(approvalConnection))));
+          await expect.poll(async () => Number((await pool.query("select count(*) from pg_stat_activity where datname=current_database() and $1::integer=any(pg_blocking_pids(pid)) and position('mutate_project_budget' in query)>0", [purchasePid])).rows[0].count), { timeout: 5000 }).toBeGreaterThan(0);
+          await ledgerGate.query("commit");
+          const purchaseResult = await purchaseWork, approvalResult = await approvalWork;
+          expect(failures.slice(failureStart).map(error => error.code)).not.toContain("40P01");
+          expect(purchaseResult).toMatchObject({ error: { status: 409 } });
+          expect(approvalResult).toHaveProperty("value");
+          expect(failures.slice(failureStart).map(error => error.code)).toContain("40001");
+          expect((await db.query("select request_id from finance.idempotency_keys where member_id=$1::uuid and request_id=$2::uuid", [actor, body.requestId])).rows).toEqual([]);
+          if (original) expect((await db.query("select status,revision from finance.purchases where id=$1::uuid", [original.id])).rows).toEqual([{ status: "registered", revision: 0 }]);
+          const retried = await change(role, body);
+          expect(retried.ok).toBe(true);
+          expect((await change(role, body)).id).toBe(retried.id);
+          expect((await db.query("select request_id from finance.idempotency_keys where member_id=$1::uuid and request_id=$2::uuid", [actor, body.requestId])).rows).toHaveLength(1);
+          expect((await db.query("select id from finance.documents where purchase_id=$1::uuid", [retried.id])).rows).toHaveLength(1);
+          expect((await services.projectBudget("lead", budget.id)).approvedVersionId).not.toBeNull();
+        } finally {
+          await actorGate.query("rollback"); await ledgerGate.query("rollback");
+          await purchaseWork; await approvalWork;
+          actorGate.release(); ledgerGate.release(); purchaseConnection.release(); approvalConnection.release();
+        }
+      }, 20000,
+    );
+
     it.each(["purchase", "promotion"] as const)(
       "preserves v1 purchases during Draft/pending and serializes when %s wins promotion overlap",
       async (first) => {

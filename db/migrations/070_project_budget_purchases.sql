@@ -649,10 +649,24 @@ begin
 end;
 $$;
 
+-- Core writes hold the authoritative allocation anchors before returning. Adoption
+-- takes UPDATE on those anchors, so membership is now stable until commit. Never
+-- acquire a newly discovered header after anchors/ledger: retry in header order.
+create function finance.assert_purchase_project_headers(purchase_id uuid,locked_headers uuid[])
+returns void language plpgsql stable security invoker set search_path=pg_catalog as $$
+begin
+  if exists(select 1 from finance.allocations a join finance.purchase_lines l on l.id=a.line_id
+    join finance.project_budget_entries e on e.budget_item_id=a.budget_item_id
+    where l.purchase_id=$1 and not e.project_budget_id=any(locked_headers)) then
+    raise exception 'finance:PROJECT_CONFLICT' using errcode='40001';
+  end if;
+end;
+$$;
+
 alter function finance.register_purchase(uuid,uuid,text,jsonb) rename to register_purchase_before_project_tracking;
 create function finance.register_purchase(actor uuid,request_id uuid,payload_hash text,body jsonb) returns jsonb
 language plpgsql volatile security invoker set search_path=pg_catalog as $$
-declare h record; result jsonb; extra jsonb;
+declare h record; result jsonb; extra jsonb; locked_headers uuid[]:='{}';
 begin
   perform pg_advisory_xact_lock(hashtextextended(actor::text||':'||request_id::text,0));
   for h in select distinct pb.id from finance.project_budgets pb join finance.project_budget_entries e on e.project_budget_id=pb.id
@@ -661,13 +675,17 @@ begin
       union select rl.budget_item_id from jsonb_array_elements(body->'lines') l join finance.request_lines rl on rl.id=nullif(l->>'requestLineId','')::uuid
       union select rl.budget_item_id from finance.requests r join finance.request_lines rl on rl.revision_id=r.approved_revision_id where r.id=nullif(body->>'requestRecordId','')::uuid
     ) order by pb.id
-  loop perform 1 from finance.project_budgets where id=h.id for update; end loop;
+  loop
+    perform 1 from finance.project_budgets where id=h.id for update;
+    locked_headers:=array_append(locked_headers,h.id);
+  end loop;
   perform finance.lock_verified_purchase_actor(actor,'registerActual');
   if exists(select 1 from finance.purchase_lines l join finance.purchases p on p.id=l.purchase_id where p.requester_member_id=actor
     and p.id=(finance.replay_purchase_mutation(actor,$2,'registerPurchase',$3)->>'id')::uuid) then
     return finance.register_purchase_before_project_tracking(actor,$2,$3,$4);
   end if;
   result:=finance.register_purchase_before_project_tracking(actor,$2,$3,$4);
+  perform finance.assert_purchase_project_headers((result->>'id')::uuid,locked_headers);
   extra:=finance.track_project_purchase(actor,(result->>'id')::uuid);
   result:=jsonb_set(result,'{warnings}',coalesce(result->'warnings','[]')||extra);
   update finance.idempotency_keys set response=result where member_id=actor and finance.idempotency_keys.request_id=$2;
@@ -677,7 +695,7 @@ $$;
 alter function finance.void_registered_purchase(uuid,uuid,text,uuid,text,integer) rename to void_purchase_before_project_tracking;
 create function finance.void_registered_purchase(actor uuid,request_id uuid,payload_hash text,purchase_id uuid,reason text,expected_revision integer default null)
 returns jsonb language plpgsql volatile security invoker set search_path=pg_catalog as $$
-declare h record; entry record; response jsonb; replay jsonb;
+declare h record; entry record; response jsonb; replay jsonb; locked_headers uuid[]:='{}';
 begin
   perform pg_advisory_xact_lock(hashtextextended(actor::text||':'||request_id::text,0));
   for h in select distinct e.project_budget_id from finance.project_budget_entries e where e.budget_item_id in(
@@ -685,11 +703,15 @@ begin
     union select rl.budget_item_id from finance.purchases p join finance.requests r on r.id=p.request_id
       join finance.request_lines rl on rl.revision_id=r.approved_revision_id where p.id=$4
   ) order by e.project_budget_id
-  loop perform 1 from finance.project_budgets where id=h.project_budget_id for update; end loop;
+  loop
+    perform 1 from finance.project_budgets where id=h.project_budget_id for update;
+    locked_headers:=array_append(locked_headers,h.project_budget_id);
+  end loop;
   perform finance.lock_verified_purchase_actor(actor,'paymentsVoidReview');
   replay:=finance.replay_purchase_mutation(actor,$2,'voidPurchase',$3);
   response:=finance.void_purchase_before_project_tracking(actor,$2,$3,$4,$5,$6);
   if replay is not null then return response; end if;
+  perform finance.assert_purchase_project_headers($4,locked_headers);
   for entry in select distinct e.id,e.project_budget_id from finance.allocations a join finance.purchase_lines l on l.id=a.line_id
     join finance.project_budget_entries e on e.budget_item_id=a.budget_item_id where l.purchase_id=$4
   loop
@@ -707,7 +729,7 @@ $$;
 -- Internal helpers are service-owned; no browser or public execution grants.
 do $$ declare f record; begin
  for f in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='finance' and p.proname in ('assert_project_financial_assignment','lock_verified_purchase_actor','lock_project_purchase_scope','replay_project_purchase','create_project_upload_authorization',
+  where n.nspname='finance' and p.proname in ('assert_project_financial_assignment','assert_purchase_project_headers','lock_verified_purchase_actor','lock_project_purchase_scope','replay_project_purchase','create_project_upload_authorization',
   'reserve_project_upload_final_candidate','check_project_upload_access','complete_project_upload_finalize','track_project_purchase','register_project_purchase',
   'set_project_budget_completion','register_purchase','void_registered_purchase','register_purchase_before_project_tracking','void_purchase_before_project_tracking')
  loop execute format('revoke all on function %s from public',f.signature); end loop;
