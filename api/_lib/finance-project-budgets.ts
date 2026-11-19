@@ -3,13 +3,14 @@ import type { CvDatabase, WorkspaceIdentity } from "./member-cv-service.js";
 import { FinanceError } from "./finance-error.js";
 import { formatOre } from "./finance-money.js";
 import { listProjectBudgetScopes, loadProjectBudgetScope, projectBudgetError } from "./finance-project-budget-foundation.js";
+import { prepareProjectBudgetImport } from "./finance-project-budget-import.js";
 import { normalizeManualItem } from "../../src/features/Finance/budget-domain.js";
 import type { ProjectBudgetDetail, ProjectBudgetEntry, ProjectBudgetMutationResult, ProjectBudgetScope, ProjectBudgetSummary, ProjectBudgetVersion, ProjectBudgetWorkspace } from "../../src/features/Finance/project-budget-types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ACTIONS = new Set(["createProjectBudget", "saveProjectBudgetEntry", "removeProjectBudgetEntry", "submitProjectBudget", "approveDepartmentBudget", "approveProjectBudget", "returnProjectBudget", "withdrawProjectBudget"]);
-/** Dedicated completion/revision routines are reserved for their owning slices, not copies of the core SQL. */
-export function isProjectBudgetMutation(action: unknown): action is string { return typeof action === "string" && (ACTIONS.has(action) || action === "setProjectBudgetCompletion" || action === "requestProjectBudgetChanges"); }
+const ACTIONS = new Set(["createProjectBudget", "saveProjectBudgetEntry", "removeProjectBudgetEntry", "submitProjectBudget", "approveDepartmentBudget", "approveProjectBudget", "returnProjectBudget", "withdrawProjectBudget", "requestProjectBudgetChanges", "previewProjectBudgetImport", "importProjectBudgetEntries", "adoptProjectBudgetEntries"]);
+/** Completion remains a separate transaction routine so it cannot overwrite revision/import logic. */
+export function isProjectBudgetMutation(action: unknown): action is string { return typeof action === "string" && (ACTIONS.has(action) || action === "setProjectBudgetCompletion" || action === "previewImport" || action === "importItems"); }
 function uuid(value: unknown, label: string): string { if (typeof value !== "string" || !UUID.test(value)) throw new FinanceError(400, `Choose a valid ${label}.`); return value; }
 function optionalUuid(value: unknown, label: string): string | null { return value == null || value === "" ? null : uuid(value, label); }
 function canonical(value: unknown): string {
@@ -33,21 +34,54 @@ function normalizedWrite(body: Record<string, unknown>): Record<string, unknown>
       entryId: optionalUuid(input.entryId, "budget entry"), ownerMemberId: optionalUuid(input.ownerMemberId, "entry owner") };
   }
   if (body.action === "removeProjectBudgetEntry") output.entryId = uuid(body.entryId, "budget entry");
-  if (body.action === "returnProjectBudget" || body.action === "withdrawProjectBudget") {
+  if (body.action === "returnProjectBudget" || body.action === "withdrawProjectBudget" || body.action === "requestProjectBudgetChanges") {
     const reason = typeof body.reason === "string" ? body.reason.trim() : "";
     if (!reason || reason.length > 500) throw new FinanceError(400, "Enter a reason of up to 500 characters.", [{ field: "reason", message: "A reason is required." }]);
     output.reason = reason;
   }
+  if (body.action === "previewProjectBudgetImport" || body.action === "importProjectBudgetEntries") {
+    if (typeof body.csv !== "string") throw new FinanceError(400, "Enter CSV text for this project candidate.");
+    output.csv = body.csv;
+    if (body.action === "importProjectBudgetEntries") {
+      if (typeof body.previewToken !== "string" || !/^[a-f0-9]{64}$/.test(body.previewToken)) throw new FinanceError(400, "Preview this candidate import before saving.");
+      output.previewToken = body.previewToken;
+    }
+  }
+  if (body.action === "adoptProjectBudgetEntries") {
+    if (!Array.isArray(body.entries) || body.entries.length === 0 || body.entries.length > 500) throw new FinanceError(400, "Choose 1 to 500 legacy entries to adopt.");
+    const seen = new Set<string>();
+    output.entries = body.entries.map(value => {
+      const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+      const budgetItemId = uuid(row.budgetItemId, "legacy budget entry");
+      if (seen.has(budgetItemId)) throw new FinanceError(400, "Choose each legacy entry once.");
+      seen.add(budgetItemId);
+      if (row.ordinaryPriority !== undefined && !["P1", "P2", "P3", "P4"].includes(String(row.ordinaryPriority))) throw new FinanceError(400, "Choose an ordinary priority from P1 through P4.");
+      return { budgetItemId, ...(row.ordinaryPriority ? { ordinaryPriority: row.ordinaryPriority } : {}) };
+    });
+  }
   return output;
 }
 export async function mutateProjectBudget(db: CvDatabase, identity: WorkspaceIdentity, body: Record<string, unknown>): Promise<ProjectBudgetMutationResult> {
-  if (body.action === "setProjectBudgetCompletion" || body.action === "requestProjectBudgetChanges") {
-    // PBA-05 and PBA-03 wire their independent transaction routines here.
+  if (body.action === "setProjectBudgetCompletion") {
+    // PBA-05 wires its independent transaction routine here.
     throw new FinanceError(503, "This project budget operation is not available yet.");
   }
+  if (body.action === "previewImport" || body.action === "importItems") body = { ...body, action: body.action === "previewImport" ? "previewProjectBudgetImport" : "importProjectBudgetEntries" };
   const normalized = normalizedWrite(body);
   const hash = createHash("sha256").update(canonical(normalized)).digest("hex");
   try {
+    if (normalized.action === "previewProjectBudgetImport" || normalized.action === "importProjectBudgetEntries") {
+      if (normalized.action === "importProjectBudgetEntries") {
+        const replay = await db.query<{ result: ProjectBudgetMutationResult | null }>("select finance.mutate_project_budget($1::uuid,$2,$3,$4::uuid,$5,$6::jsonb) as result",
+          [identity.userId, identity.googleSub, identity.email, normalized.requestId, hash, JSON.stringify({ ...normalized, replayOnly: true })]);
+        if (replay.rows[0]?.result) return replay.rows[0].result;
+      }
+      const prepared = await prepareProjectBudgetImport(db, identity, { projectBudgetId: String(normalized.projectBudgetId), expectedRevision: Number(normalized.expectedRevision), csv: String(normalized.csv) });
+      if (normalized.action === "previewProjectBudgetImport") return { ok: true, id: String(normalized.projectBudgetId), revision: Number(normalized.expectedRevision), viewVersion: prepared.preview.viewVersion, warnings: [], errors: [], importPreview: prepared.preview };
+      if (normalized.previewToken !== prepared.preview.previewToken) throw new FinanceError(409, "The CSV or candidate changed. Preview the import again.");
+      if (prepared.preview.errors.length) throw new FinanceError(400, "Correct the CSV and preview again.", prepared.preview.errors);
+      normalized.entries = prepared.entries; normalized.snapshotToken = prepared.snapshotToken;
+    }
     const result = await db.query<{ result: ProjectBudgetMutationResult }>("select finance.mutate_project_budget($1::uuid,$2,$3,$4::uuid,$5,$6::jsonb) as result",
       [identity.userId, identity.googleSub, identity.email, normalized.requestId, hash, JSON.stringify(normalized)]);
     if (!result.rows[0]?.result) throw new FinanceError(503, "The project budget could not be saved.");
@@ -129,7 +163,7 @@ export async function loadProjectBudgetDetail(db: CvDatabase, identity: Workspac
              coalesce((select sum(a.amount_ore) from finance.allocations a join finance.purchase_lines pl on pl.id=a.line_id join finance.purchases purchase on purchase.id=pl.purchase_id where a.budget_item_id=pe.id and purchase.status='registered'),0)::text as actual_ore,
              coalesce(pc.complete,false) as complete from finance.project_budget_version_entries ve join finance.project_budget_entries pe on pe.id=ve.entry_id
              left join finance.budget_items i on i.id=pe.budget_item_id left join finance.project_budget_completion pc on pc.entry_id=pe.id where ve.version_id=v.id) erow),'[]'::jsonb) as entries
-           from finance.project_budget_versions v where v.id in (row.approved_version_id,row.pending_version_id)) vrow),'[]'::jsonb) as versions,
+           from finance.project_budget_versions v where v.project_budget_id=row.id) vrow),'[]'::jsonb) as versions,
          coalesce((select jsonb_agg(jsonb_build_object('id',decision.id,'versionId',decision.version_id,'action',decision.action,'actorMemberId',decision.actor_member_id,'reason',decision.reason,'createdAt',decision.created_at,'snapshot',decision.snapshot) order by decision.created_at,decision.id)
            from finance.project_budget_decisions decision where decision.project_budget_id=row.id),'[]'::jsonb) as decisions
        from (select ${SUMMARY_FIELDS},authorized.scope->'capabilities' as capabilities from finance.project_budgets h ${SUMMARY_JOINS} join authorized on authorized.id=h.id where ${VISIBLE}) row`,
@@ -137,6 +171,6 @@ export async function loadProjectBudgetDetail(db: CvDatabase, identity: Workspac
     )).rows[0];
     if (!result) throw new FinanceError(404, "This project budget is no longer available.");
     return { ...summary(result.header), approvedVersion: version(result.versions.find(v => v.id === result.header.approved_version_id) ?? null),
-      pendingVersion: version(result.versions.find(v => v.id === result.header.pending_version_id) ?? null), decisions: result.decisions };
+      pendingVersion: version(result.versions.find(v => v.id === result.header.pending_version_id) ?? null), historyVersions: result.versions.filter(v => v.status === "approved").sort((a, b) => a.version_number - b.version_number).map(v => version(v)!), decisions: result.decisions };
   } catch (error) { throw projectBudgetError(error); }
 }

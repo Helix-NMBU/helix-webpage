@@ -530,7 +530,7 @@ describe("finance access API", () => {
 
     await grant(adminId, "head_of_finance");
     const versionBefore = await sql<{ version: string }>("select version::text as version from finance.view_versions");
-    expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 409, body: { error: "A budget already exists for this season." } });
+    expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 409, body: { error: "Edit a project Draft and submit it for both approvals. Season budget history is read-only." } });
     const versionAfter = await sql<{ version: string }>("select version::text as version from finance.view_versions");
     expect(versionAfter.rows[0]?.version).toBe(versionBefore.rows[0]?.version);
     expect(await call({ token: "admin", body: { action: "registerPurchase", requestId, purchase: {} } })).toMatchObject({ status: 400 });

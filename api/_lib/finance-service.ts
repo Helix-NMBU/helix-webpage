@@ -1,7 +1,6 @@
 import { isProjectBudgetMutation, loadProjectBudgetWorkspace, loadProjectBudgetDetail, mutateProjectBudget } from "./finance-project-budgets.js";
 import type { ProjectBudgetWorkspace, ProjectBudgetDetail } from "../../src/features/Finance/project-budget-types.js";
 import { loadBankSnapshot, setBankSnapshot } from "./finance-bank.js";
-import { performBudgetImport } from "./finance-budget-import.js";
 import pg from "pg";
 import { isFinanceAction, isFinanceProfile, mutationAllowed, mutationRequiresRevision, presentPurchases } from "./finance-access.js";
 import { applyRequestMutation } from "./finance-requests.js";
@@ -312,7 +311,7 @@ export function createFinanceServices(deps: {
         const event = body.action === "submitProjectBudget" ? "project_budget.department_pending"
           : body.action === "approveDepartmentBudget" ? "project_budget.finance_pending"
           : body.action === "approveProjectBudget" ? "project_budget.approved"
-          : body.action === "returnProjectBudget" || body.action === "withdrawProjectBudget" ? "project_budget.returned" : null;
+          : body.action === "returnProjectBudget" || body.action === "withdrawProjectBudget" || body.action === "requestProjectBudgetChanges" ? "project_budget.returned" : null;
         if (event) await dispatchEvent(result, event);
         return result;
       }
@@ -329,7 +328,7 @@ export function createFinanceServices(deps: {
       }
       if (action === "setBankSnapshot") return setBankSnapshot(db, current.memberId, body);
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
-      if (action === "previewImport" || action === "importItems") return performBudgetImport(db, current, body);
+      if (["createBudget", "approveBudget", "addItem", "editItem", "cancelItem", "restoreItem"].includes(action)) throw new FinanceError(409, "Edit a project Draft and submit it for both approvals. Season budget history is read-only.");
       if (isBudgetMutation(action)) return performBudgetMutation(db, current, body);
       if (isRequestAction(action)) {
         const result = await applyRequestMutation(db, current.memberId, body);

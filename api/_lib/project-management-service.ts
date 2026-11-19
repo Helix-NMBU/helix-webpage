@@ -45,6 +45,7 @@ function projectError(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("project_financial_history_assignment")) throw new MemberCvError(409, "This project has financial history. Keep its season, responsible department and budget-entry departments. Create a new project for work in another scope.");
   if (message.includes("project_department_exists")) throw new MemberCvError(400, "A department with this name already exists.");
   if (message.includes("project_department_name")) throw new MemberCvError(400, "Department names cannot be changed after creation.");
   if (message.includes("project_department_member")) throw new MemberCvError(400, "Choose active platform members and a Lead who belongs to the department.");

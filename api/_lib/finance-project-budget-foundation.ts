@@ -9,6 +9,8 @@ export function projectBudgetError(error: unknown): FinanceError {
   if (error instanceof FinanceError) return error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("PROJECT_OBLIGATION_ACTIVE")) return new FinanceError(400, "This entry has an active P0 obligation. Head of Finance must release it with a reason before it can be removed, reduced, moved or downgraded.");
+  if (message.includes("PROJECT_PRIORITY_REQUIRED")) return new FinanceError(400, "Choose an ordinary priority from P1 through P4 when adopting an earmarked legacy entry.");
   if (message.includes("PROJECT_REVIEWER_MISSING")) return new FinanceError(400, "This department needs an active department lead before you can submit. Ask a workspace administrator to update its leads.");
   if (message.startsWith("FINANCE|invalid|")) {
     const [, , explanation, field] = message.split("|");
