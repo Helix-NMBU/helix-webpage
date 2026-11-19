@@ -41,7 +41,7 @@ Specification cases: V-04, V-08.
 
 ## Status
 
-Reopened on19 November2026 after a later combined run exposed uncaught PostgreSQL teardown errors. The earlier passing assertions remain evidence; cleanup repair and clean combined rerun are required before closure.
+Closed again on 19 November 2026 after the test cleanup repair and a clean integrated PostgreSQL rerun. The earlier failure and original passing results are retained below as history.
 
 
 ## Integrated completion evidence
@@ -51,3 +51,7 @@ Worker commit `56415c57534dc3823e242c5a90df2fa98a206ea8`, integration commit `da
 ## Verification reopened
 
 At integration `1cadc34`, the combined run passed23 assertions but reported2 uncaught57P01 errors when DROP DATABASE WITH FORCE raced disconnecting pg-pool clients. Repair is isolated at `/private/tmp/helix-pba-04-repair`, branch `codex/pba-04-cleanup`, agent `/root/pba_04_threshold`. No app behavior is being changed by that repair.
+
+## Cleanup repair completion
+
+Worker `0be66712a366a41514e1c2a3c23b4de2c310f7b5`; integration `4cac50f`. Test-only pool closure awaits actual client end events; no forced database drop, sleeps or error suppression. Root exact Finance PostgreSQL CI selection passed 27 tests in four files with no uncaught errors. Log `/private/tmp/helix-pba-roots-postgres-integrated.log`. HELIX-77 is Done again.

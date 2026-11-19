@@ -20,9 +20,9 @@ The current remote base has 11 API functions. The original working tree's two ex
 | Ticket | Tracker | State | Worker/worktree/branch | Evidence |
 | --- | --- | --- | --- | --- |
 | PBA-01 | HELIX-76 | closed on feature branch | `/root/pba_01_contracts`; `/Users/henrik.noteless/.codex/worktrees/pba-01-contracts/helix-webpage`; `codex/pba-01-contracts`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `5d9e052a733f039166be4a96882b388ccc6fdac2`; integrated `1cadc34`; 17 integrated foundation tests incl3 PG; all3 typechecks; Done in Linear. |
-| PBA-02 | HELIX-78 | ready | pending new isolated assignment | PBA-01 integrated/verified at `1cadc34`. |
+| PBA-02 | HELIX-78 | running | reused agent `/root/pba_01_contracts`; `/private/tmp/helix-pba-02-approval`; `codex/pba-02-approval`; base `4cac50ffe33d32142e04c9ce3c8e631b11d53393` | PBA-01 integrated and verified. Full draft/department/Head of Finance approval slice assigned. |
 | PBA-03 | HELIX-79 | blocked | unassigned | Needs integrated PBA-02. |
-| PBA-04 | HELIX-77 | reopened, repair running | `/root/pba_04_threshold`; `/private/tmp/helix-pba-04-threshold`; `codex/pba-04-threshold`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `56415c57534dc3823e242c5a90df2fa98a206ea8`; integrated `dada27b`; 104 integrated tests including6 real PG; all3 typechecks; initial104 passed; later combined teardown error reopened; repair `/root/pba_04_threshold`, `/private/tmp/helix-pba-04-repair`, `codex/pba-04-cleanup`, base `1cadc34`. |
+| PBA-04 | HELIX-77 | closed on feature branch | `/root/pba_04_threshold`; original `/private/tmp/helix-pba-04-threshold`, repair `/private/tmp/helix-pba-04-repair`; branches `codex/pba-04-threshold` and `codex/pba-04-cleanup` | Policy `56415c5` -> `dada27b`; teardown `0be6671` -> `4cac50f`; 104 initial tests, then clean exact PostgreSQL CI selection 27/27; Done again. |
 | PBA-05 | HELIX-80 | blocked | unassigned | Needs integrated PBA-02. |
 | PBA-06 | HELIX-81 | blocked | unassigned | Needs integrated PBA-05. |
 | PBA-07 | HELIX-82 | blocked | unassigned | Needs integrated PBA-03. |
@@ -38,13 +38,13 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 - Docker has no running daemon. Installed PostgreSQL17 for tests and started an isolated temporary cluster at `/private/tmp/helix-pba-postgres.J3mOMS/data`, bound only to 127.0.0.1:55475. Test URL is `postgresql://postgres@127.0.0.1:55475/postgres`; use unique disposable test databases. No production data is present; no login background service was enabled. Server path pointer: `/private/tmp/helix-pba-postgres-path`.
 - Drive destination/service identity/narrow OAuth scope/reader ACL and real entry-to-project mapping remain release inputs. No live DB or Drive writes are authorized merely for validation. Local fixtures and isolated databases are permitted.
 - Baseline npm run build passed, 9.00 MB static output and 11 source functions. Generated Vercel function compilation has not yet been checked. Log: `/private/tmp/helix-pba-baseline-build.log`.
-- Independent full-feature review has not started. No PR exists. PBA-01 is verified/closed; PBA-04 is reopened for a test teardown repair after a later combined run. The parent stays open.
+- Independent full-feature review has not started. No PR exists. PBA-01 and PBA-04 are integrated/verified/closed; PBA-02 is running. The parent stays open.
 
 ## Next action
 
-PBA-01 is integrated and verified. Dispatch PBA-02 from the current verified integration commit in a new isolated branch/worktree. PBA-04 repair is separately running on `codex/pba-04-cleanup` from `1cadc34`; integrate its focused cleanup fix and require a clean combined test result before closing HELIX-77 again. PBA-03/PBA-05 remain blocked until PBA-02 is integrated/verified.
+PBA-02 is implementing the complete first approval journey on verified base `4cac50f`. Review its transaction/authorization/notification interfaces early, then integrate and verify the real service/UI flow before closing HELIX-78. PBA-03 and PBA-05 become eligible only after that integration. Worker04 is idle after the verified cleanup repair and can be reused in a new worktree for the purchase slice. No dependent implementation is underway.
 
-The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver. Merging and deployment remain unauthorized. Local Vercel compilation passed and both source/generated function counts were 11/11; final compilation must bind to the final feature commit and avoid worker dependency-install overlap.
+The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver. Merging and deployment remain unauthorized. Both source and generated Vercel function counts passed11/11 on the root slices; final compilation must bind to the final feature commit and use isolated dependencies.
 
 ## PBA-04 integration, 19 November 2026
 
@@ -63,3 +63,11 @@ Vercel CLI65.2.0 completed a local build against the verified existing Helix NMB
 Reviewed actual foundation schema/helper/contracts/fixtures and integrated `5d9e052a733f039166be4a96882b388ccc6fdac2` as `1cadc34`. Isolated integrated foundation run passed17/17, including3 real PostgreSQL cases; all3 typechecks passed. Actual066/bootstrap065 preservation includes imported historical-paid/null-requester invoice, unbudgeted actual, stable IDs, authoritative department, canonical Electrical/Electronics and partial adoption totals. No central financial gate was widened. HELIX-76 closed with evidence. Log `/private/tmp/helix-pba01-foundation-only.log`.
 
 Combined PBA01/04 assertions passed23/23 but emitted2 uncaught57P01 errors from forced database teardown in the policy test. HELIX-77 reopened; worker04 is repairing actual client-end waits in a reusable test pool helper, not suppressing errors. This does not invalidate the clean foundation acceptance; the combined run must pass after repair. Log `/private/tmp/helix-pba01-integrated-tests.log`.
+
+## Repaired root-suite cleanup
+
+Worker repair `0be66712a366a41514e1c2a3c23b4de2c310f7b5` was inspected and integrated as `4cac50f`. Its shared test-only pool utility awaits actual public client end events before dropping databases normally. Threshold, foundation and existing Finance concurrency suites use it. Root exact Finance PostgreSQL workflow selection passed27/27 in4 files without uncaught errors; log `/private/tmp/helix-pba-roots-postgres-integrated.log`. Worker passed three6-case standalone runs, three23-case combined runs and the27-case CI selection. HELIX-77 closed again, retaining the earlier reopened state/evidence as history.
+
+## PBA-02 assignment
+
+Reused agent `/root/pba_01_contracts` with a NEW clean ticket-specific worktree `/private/tmp/helix-pba-02-approval`, branch `codex/pba-02-approval`, verified base `4cac50ffe33d32142e04c9ce3c8e631b11d53393`. Full backend, scoped API dispatch, project/department/Finance UI, local role fixtures and real decision tests are required. Migration068 reserved. Central app routing has one assigned writer at this frontier. Existing record/delivery coordinator ownership remains with root.
