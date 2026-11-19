@@ -1,0 +1,5 @@
+# Store new finance invoices in Helix's shared Drive
+
+On 19 November 2026, the user chose automatic storage in Helix's shared Google Drive for invoices uploaded through `Register a purchase`, so Finance can follow invoice references from project budgets and keep the documents in the shared Drive. This is a deliberate exception to the repository's general Neon object-storage convention and the alternative of retaining invoices in existing private platform storage. Neon continues to hold application data and authentication; this decision does not authorize moving historical attachments, changing other storage, public file sharing or implementation during Scope.
+
+Preparation must specify restricted Drive access, persistent file references and recoverable transfer without duplicate purchases or invoices. The destination Drive/folder and service identity are operational inputs before release. Confirmed requirements and decision D7 are recorded in [the project-budget scope](../features/project-budget-approvals/scope.md).
