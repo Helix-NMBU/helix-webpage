@@ -115,7 +115,8 @@ begin
     select * into legacy from finance.budgets where season_id=h.season_id for update;
     if not found then
       insert into finance.budgets(season_id,public_ref,status,created_by_member_id,updated_by_member_id)
-        values(h.season_id,'B-'||season_row.code,'draft',actor,actor) returning * into legacy;
+        values(h.season_id,'B-'||season_row.code,'draft',actor,actor) on conflict(season_id) do nothing returning * into legacy;
+      if not found then select * into legacy from finance.budgets where season_id=h.season_id for update; end if;
     end if;
     select coalesce(max(substring(i.public_ref from '([0-9]+)$')::bigint),0)+1 into ref_next from finance.budget_items i join finance.budgets b on b.id=i.budget_id
       where b.season_id=h.season_id and i.public_ref ~ ('^BI-'||season_row.code||'-[0-9]+$');

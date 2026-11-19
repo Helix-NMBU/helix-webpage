@@ -74,6 +74,24 @@ describe.skipIf(!url)("project approval transactions on independent PostgreSQL c
     else expect(budget.pendingVersion).toMatchObject({ status: "draft", departmentApprovedBy: null, approvedBy: null });
     expect(budget.decisions.filter(d => ["approveProjectBudget", "returnProjectBudget"].includes(d.action))).toHaveLength(1);
   });
+  it("approves two first budgets concurrently without inventing or racing the season ledger", async () => {
+    const departmentId = randomUUID();
+    await db.query("insert into project_management.departments(id,season,name) values($1::uuid,'S28','Mechanical & Production')", [departmentId]);
+    await db.query("insert into project_management.department_members values($1::uuid,$2::uuid,true)", [departmentId, f.departmentLead]);
+    const budgets = await Promise.all([1, 2].map(async index => {
+      const projectId = randomUUID();
+      await db.query("insert into project_management.projects values($1::uuid,'S28',$3,array[$2::uuid],array['Mechanical & Production'],1)", [projectId, f.lead, `Next frame ${index}`]);
+      const created = await mutate("lead", { action: "createProjectBudget", projectId, responsibleDepartmentId: departmentId });
+      let budget = await services.projectBudget("lead", created.id!);
+      for (const [role, action, fields] of [["lead", "saveProjectBudgetEntry", { entry }], ["lead", "submitProjectBudget", {}], ["departmentLead", "approveDepartmentBudget", {}]] as const) {
+        await mutate(role, { action, projectBudgetId: budget.id, expectedRevision: budget.revision, ...fields }); budget = await services.projectBudget("lead", budget.id);
+      }
+      return budget;
+    }));
+    await Promise.all(budgets.map(budget => mutate("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision })));
+    for (const budget of budgets) expect((await services.projectBudget("head", budget.id)).approvedVersion).toMatchObject({ status: "approved" });
+    expect((await db.query("select status,approved_by_member_id from finance.budgets where season_id=$1::uuid", [f.nextSeason])).rows).toEqual([{ status: "draft", approved_by_member_id: null }]);
+  });
   it("waits for an in-flight membership revocation and rejects the department decision after it commits", async () => {
     let budget = await draft(); await mutate("lead", { action: "submitProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision }); budget = await services.projectBudget("lead", budget.id);
     const client = await pool.connect();
