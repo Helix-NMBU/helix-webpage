@@ -33,7 +33,7 @@ export async function requireInvoiceTransferSchema(
     await db.query<{ available: boolean }>(`select
  to_regprocedure('finance.claim_invoice_transfer(uuid,text,text,uuid,integer,text,text,uuid,boolean,uuid)') is not null
  and (select count(*)=2 from pg_trigger where tgrelid='finance.documents'::regclass
-   and tgname in ('documents_verified_transfer','documents_enqueue_transfer') and tgenabled<>'D') as available`)
+   and tgname in ('documents_verified_transfer','documents_enqueue_transfer') and tgenabled in ('O','A')) as available`)
   ).rows[0]?.available;
   if (ready !== true)
     throw new FinanceError(

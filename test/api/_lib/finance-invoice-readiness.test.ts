@@ -70,6 +70,43 @@ describe("invoice migration readiness", () => {
         message: expect.stringContaining("setup is incomplete"),
       });
       expect(await count()).toBe(before);
+      await db.exec(
+        readFileSync(
+          new URL("071_drive_invoice_transfers.sql", directory),
+          "utf8",
+        ),
+      );
+      await db.exec(
+        "alter table finance.documents enable replica trigger documents_enqueue_transfer",
+      );
+      await expect(
+        services.mutate("finance", {
+          action: "registerPurchase",
+          requestId: randomUUID(),
+          purchase: {
+            buyerName: "Buyer",
+            supplierName: "Supplier",
+            paymentMethod: "team_account",
+            purchaseDate: osloToday(),
+            justification: "Incurred materials",
+            documentKind: "receipt",
+            uploadIds: [randomUUID()],
+            lines: [
+              {
+                systemId: f.system,
+                unbudgeted: true,
+                description: "Materials",
+                quantity: "1",
+                amountNok: "10.00",
+              },
+            ],
+          },
+        }),
+      ).rejects.toMatchObject({
+        status: 503,
+        message: expect.stringContaining("setup is incomplete"),
+      });
+      expect(await count()).toBe(before);
     } finally {
       await pg.close();
     }

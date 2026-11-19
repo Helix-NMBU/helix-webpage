@@ -117,6 +117,7 @@ async function register(
     count?: number;
     size?: number;
     budgetMs?: number;
+    itemId?: string;
   } = {},
 ) {
   const uploads = [];
@@ -139,7 +140,8 @@ async function register(
       lines: [
         {
           systemId: f.system,
-          unbudgeted: true,
+          unbudgeted: !options.itemId,
+          budgetItemId: options.itemId,
           description: "Unplanned materials",
           quantity: "1",
           amountNok: "10.00",
@@ -218,6 +220,11 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
   });
   it("commits every job with the expense, preserves immutable final bytes, and automatically transfers all invoices", async () => {
     const fake = driveFixture();
+    const begin = fake.drive.begin;
+    fake.drive.begin = vi.fn(async (source) => {
+      expect((await job(source.documentId)).drive_file_id).toBe(source.fileId);
+      return begin(source);
+    });
     const { result, documents, uploads } = await register({
       drive: fake.drive,
       count: 3,
@@ -351,10 +358,12 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
     const { documents } = await register(),
       fake = driveFixture(),
       original = fake.drive.upload;
-    fake.drive.upload = vi.fn(async (...args: Parameters<FinanceDrive["upload"]>) => {
-      await original(...args);
-      throw new InvoiceTransferError("transfer_uncertain");
-    });
+    fake.drive.upload = vi.fn(
+      async (...args: Parameters<FinanceDrive["upload"]>) => {
+        await original(...args);
+        throw new InvoiceTransferError("transfer_uncertain");
+      },
+    );
     await transferInvoice(
       db,
       lead,
@@ -599,5 +608,155 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
         )
       ).rows[0].referenced,
     ).toBe(true);
+  });
+  it("projects confirmed evidence through the canonical entry helper and exports provider status without service secrets", async () => {
+    const services = service();
+    const created = await services.mutate("lead", {
+      action: "createProjectBudget",
+      projectId: f.project,
+      responsibleDepartmentId: f.department,
+      requestId: randomUUID(),
+    });
+    let detail = await services.projectBudget("lead", created.id!);
+    await services.mutate("lead", {
+      action: "saveProjectBudgetEntry",
+      projectBudgetId: detail.id,
+      expectedRevision: detail.revision,
+      requestId: randomUUID(),
+      entry: {
+        systemId: f.system,
+        description: "Invoice-bearing materials",
+        category: "material",
+        plannedNok: "100.00",
+        ordinaryPriority: "P2",
+        reuseStatus: "new",
+        status: "planned",
+      },
+    });
+    detail = await services.projectBudget("lead", detail.id);
+    for (const [role, action] of [
+      ["lead", "submitProjectBudget"],
+      ["departmentLead", "approveDepartmentBudget"],
+      ["head", "approveProjectBudget"],
+    ] as const) {
+      await services.mutate(role, {
+        action,
+        projectBudgetId: detail.id,
+        expectedRevision: detail.revision,
+        requestId: randomUUID(),
+      });
+      detail = await services.projectBudget("lead", detail.id);
+    }
+    const entry = detail.approvedVersion!.entries[0],
+      fake = driveFixture();
+    const saved = await register({
+      drive: fake.drive,
+      budgetMs: 30000,
+      itemId: entry.budgetItemId!,
+    });
+    const read = await services.projectBudget("lead", detail.id);
+    expect(read.approvedVersion!.entries[0].invoices?.[0]).toMatchObject({
+      documentId: saved.documents[0],
+      backend: "google_drive",
+      transferStatus: "stored",
+      canRetry: false,
+      viewerUrl: expect.stringContaining("https://drive.google.com/file/d/"),
+    });
+    const { buildPurchaseExport } =
+      await import("../../../api/_lib/finance-export.js");
+    const exported = await buildPurchaseExport(db, "S27");
+    expect(exported.csv).toContain("invoice_transfer_status");
+    expect(exported.csv).toContain("https://drive.google.com/file/d/");
+    expect(exported.csv).toContain("private_storage");
+    expect(exported.csv).not.toMatch(
+      /Bearer|service-token|upload_id=|X-Amz|\/final\//,
+    );
+  });
+  it("resumes a persisted acknowledged offset after a worker interruption without allocating another ID", async () => {
+    const { documents } = await register({ size: 2 * 1024 * 1024 }),
+      id = documents[0],
+      fake = driveFixture(),
+      token = randomUUID();
+    let snapshot = (
+      await db.query<{ job: { revision: number } }>(
+        "select finance.claim_invoice_transfer($1::uuid,$2,$3,$4::uuid,null,$5,$6,$7::uuid,false,null) job",
+        [
+          lead.userId,
+          lead.googleSub,
+          lead.email,
+          id,
+          fake.drive.destination.driveId,
+          fake.drive.destination.folderId,
+          token,
+        ],
+      )
+    ).rows[0].job;
+    const advance = async (change: Record<string, unknown>) => {
+      snapshot = (
+        await db.query<{ job: { revision: number } }>(
+          "select finance.advance_invoice_transfer($1::uuid,$2,$3,$4::uuid,$5::uuid,$6,$7::jsonb) job",
+          [
+            lead.userId,
+            lead.googleSub,
+            lead.email,
+            id,
+            token,
+            snapshot.revision,
+            JSON.stringify(change),
+          ],
+        )
+      ).rows[0].job;
+    };
+    const fileId = await fake.drive.generateId();
+    await advance({ action: "reserve", fileId });
+    const source: InvoiceSource = {
+      documentId: id,
+      fileId,
+      driveId: fake.drive.destination.driveId,
+      folderId: fake.drive.destination.folderId,
+      name: "invoice.pdf",
+      contentType: "application/pdf",
+      byteSize: 2 * 1024 * 1024,
+      sha256: (await job(id)).content_sha256,
+    };
+    await advance({ action: "session", uri: await fake.drive.begin(source) });
+    await advance({ action: "progress", bytes: 1024 * 1024 });
+    await advance({ action: "yield" });
+    fake.drive.probe = vi.fn(async () => ({
+      done: false,
+      confirmedBytes: 1024 * 1024,
+    }));
+    await transferInvoice(
+      db,
+      finance,
+      id,
+      { drive: fake.drive, storage },
+      null,
+      false,
+      Date.now() + 30000,
+    );
+    expect((await job(id)).status).toBe("stored");
+    expect(fake.drive.generateId).toHaveBeenCalledTimes(1);
+    expect(fake.drive.upload).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fake.drive.upload).mock.calls[0][2]).toBe(1024 * 1024);
+  });
+  it("bounds unavailable source reads and leaves honest recoverable attention", async () => {
+    const { documents } = await register(),
+      fake = driveFixture();
+    const hanging = {
+      ...storage,
+      readObject: () => new Promise<Uint8Array>(() => {}),
+    };
+    await transferInvoice(
+      db,
+      lead,
+      documents[0],
+      { drive: fake.drive, storage: hanging },
+      null,
+      false,
+      Date.now() + 30,
+    );
+    expect((await job(documents[0])).status).toBe("needs_attention");
+    expect(fake.drive.begin).not.toHaveBeenCalled();
   });
 });
