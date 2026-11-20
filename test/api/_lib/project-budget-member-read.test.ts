@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createFinanceServices } from "../../../api/_lib/finance-service.js";
 import { createFinanceHandler } from "../../../api/_lib/finance-handler.js";
 import { APPROVED_MEMBER_BUDGET_CAPABILITIES } from "../../../src/features/Finance/project-budget-member-view.js";
-import { approveProjectBudgetDepartmentPackage, projectBudgetFixture as f, submitProjectBudgetDepartmentPackage, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
+import { approveProjectBudgetDepartmentPackage, projectBudgetIdentity, type ProjectBudgetFixtureRole, projectBudgetFixture as f, submitProjectBudgetDepartmentPackage, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
 import { setupMemberReadFixture, initialMemberFixtureBudget, changeMemberFixtureBudget as change, mutateMemberFixture as mutate, member, taskId, type MemberServices } from "./project-budget-member-read-fixture.js";
 let pg: PGlite, db: ProjectBudgetTestDatabase, services: MemberServices, transaction = false;
 beforeAll(async () => {
@@ -26,6 +27,21 @@ async function api(action: string, fields: Record<string, string>) {
   return { status, body };
 }
 describe("approved-only allocations for assigned current project members", () => {
+  it("denies through a raw explicit transaction without aborting it or granting private authority", async () => {
+    const budget = await initialMemberFixtureBudget(services, false);
+    const rawServices = createFinanceServices({ db: { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) },
+      authenticate: async role => role === "member" ? member : projectBudgetIdentity(role as ProjectBudgetFixtureRole) });
+    await expect(rawServices.projectBudget("otherDepartmentLead", budget.id)).rejects.toMatchObject({ status: 403 });
+    expect((await pg.query<{healthy: number}>("select 1 as healthy")).rows).toEqual([{ healthy: 1 }]);
+    await expect(rawServices.projectBudgets("otherDepartmentLead", f.project)).rejects.toMatchObject({ status: 403 });
+    expect((await rawServices.projectBudget("lead", budget.id)).pendingVersion!.entries[0].note).toBe("Private approved author note");
+    expect((await rawServices.projectBudgets("member", f.project)).budgets).toEqual([]);
+    await change(services, budget, "submitProjectBudget");
+    const submitted = await services.projectBudget("lead", budget.id);
+    await submitProjectBudgetDepartmentPackage(services, submitted); await approveProjectBudgetDepartmentPackage(services, submitted);
+    expect((await rawServices.projectBudget("member", budget.id)).approvedTotalNok).toBe("1000.00");
+    expect((await pg.query<{healthy: number}>("select 1 as healthy")).rows).toEqual([{ healthy: 1 }]);
+  });
   it("returns only approved allowlisted plans through service/API while reviewers keep their private scope", async () => {
     const budget = await initialMemberFixtureBudget(services);
     const detail = await services.projectBudget("member", budget.id);

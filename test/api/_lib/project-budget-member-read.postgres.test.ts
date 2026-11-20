@@ -45,4 +45,21 @@ describe.skipIf(!url)("approved-only member snapshot on real PostgreSQL", () => 
       await expect(services.projectBudgets("member", f.project)).rejects.toMatchObject({ status: 403 });
     } finally { await writer.query("rollback"); writer.release(); }
   });
+  it("revalidates private scope after a successful routing probe and never falls back after revocation", async () => {
+    const header = (await db.query<{id: string}>("select id from finance.project_budgets where project_id=$1::uuid", [f.project])).rows[0];
+    let revoked = false, memberQueries = 0;
+    const racingDb = { query: async <T>(sql: string, params?: unknown[]) => {
+      if (sql.includes("from project_management.tasks task")) memberQueries++;
+      if (!revoked && sql.includes("select h.id,finance.project_budget_scope")) {
+        revoked = true;
+        await pool.query("update project_management.projects set lead_ids='{}' where id=$1::uuid", [f.project]);
+      }
+      return { rows: (await pool.query(sql, params)).rows as T[] };
+    } };
+    const racingServices = createFinanceServices({ db: racingDb, authenticate: async () => projectBudgetIdentity("lead") });
+    await expect(racingServices.projectBudget("lead", header.id)).rejects.toMatchObject({ status: 403 });
+    expect(revoked).toBe(true); expect(memberQueries).toBe(0);
+    expect((await pool.query("select 1 as healthy")).rows).toEqual([{ healthy: 1 }]);
+  });
+
 });

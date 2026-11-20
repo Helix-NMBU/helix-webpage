@@ -14,6 +14,30 @@ type MemberRow = {
   actual_ore: string; unbudgeted_ore: string; view_version: number; systems: NonNullable<ProjectBudgetWorkspace["systems"]>;
 };
 
+/** Routing probe only: downstream private/member readers independently recheck authority.
+ * A normal denied scope must not raise a SQL exception before choosing the safe reader,
+ * because callers may already be inside an explicit transaction.
+ */
+export async function hasPrivateProjectBudgetReadScope(db: CvDatabase, identity: WorkspaceIdentity, target: string, byHeader: boolean): Promise<boolean> {
+  if (!UUID.test(target)) throw new FinanceError(400, "Choose a valid project budget.");
+  try {
+    const result = await db.query<{ allowed: boolean }>(`with viewer as materialized (
+      select finance.project_budget_verified_member($1::uuid,$2,$3) as verified,
+        coalesce((finance.capability_flags($1::uuid)->>'purchaseRegister')::boolean,false) as finance
+    ) select viewer.verified and (viewer.finance or exists(
+      select 1 from project_management.projects project join finance.seasons season on season.code=project.season
+      left join finance.project_budgets header on header.project_id=project.id and header.season_id=season.id
+      where ${byHeader ? "header.id=$4::uuid" : "project.id=$4::uuid"} and (
+        $1::uuid=any(project.lead_ids) or exists(select 1 from project_management.departments department
+          join project_management.department_members membership on membership.department_id=department.id
+          where department.season=project.season and department.name=any(project.departments)
+            and (header.id is null or department.id=header.responsible_department_id)
+            and membership.member_id=$1::uuid and membership.is_lead)
+      ))) as allowed from viewer`, [identity.userId, identity.googleSub, identity.email, target]);
+    return result.rows[0]?.allowed === true;
+  } catch (error) { throw projectBudgetError(error); }
+}
+
 /** This read permission is deliberately separate from every Finance mutation/evidence scope.
  * Authorization and the approved pointer/entries are selected in one statement snapshot.
  * No draft rows, audit payloads, owner/funding details or invoice identifiers enter this projection.
