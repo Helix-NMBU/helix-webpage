@@ -1,3 +1,4 @@
+import { isProjectMemberPreview } from "./local-member-profile-selection";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -51,6 +52,10 @@ async function readMemberAccess(userId: string | null): Promise<MemberFeatureSta
   if (isLocalMemberMode() && localMemberSignedIn()) {
     return {
       ...LOCAL_MEMBER,
+      ...(isProjectMemberPreview(true) ? {
+        roles: [{ key: "team_member" as const, label: "Team Member" }],
+        features: ["team.mechanical-production"],
+      } : {}),
       sponsorPages: {
         pipeline: localMemberHasPartnerSpace("pipeline"),
         agreements: localMemberHasPartnerSpace("partner-agreements"),

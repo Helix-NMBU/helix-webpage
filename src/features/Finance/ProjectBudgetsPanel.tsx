@@ -904,6 +904,7 @@ export function ProjectBudgetsPanel({
     ) ?? [];
   const filterChoices=projectBudgetFilterChoices(workspace?.budgets??[]);
   const matching = workspace?.budgets.filter(budget=>matchesProjectBudget(budget,{stage,projectId:projectFilter,departmentId:departmentFilter}))??[];
+  const budgetAccessRequired = denied || Boolean(projectId && workspace && !workspace.scopes.some(scope => scope.projectId === projectId && scope.capabilities.canRead));
   const detailVisible=detail && (dirty.current||matching.some(budget=>budget.id===detail.id));
   const canEdit = Boolean(
     detail?.capabilities.canDraft &&
@@ -1036,10 +1037,10 @@ export function ProjectBudgetsPanel({
         <Empty className="min-h-40 border">
           <EmptyHeader>
             <EmptyTitle>
-              {denied ? "Budget access required" : "No project budgets yet"}
+              {budgetAccessRequired ? "Budget access required" : "No project budgets yet"}
             </EmptyTitle>
             <EmptyDescription>
-              {denied
+              {budgetAccessRequired
                 ? "Your current assignments do not give access to these budgets."
                 : authorScopes.length
                   ? "Create a budget for a project you lead."

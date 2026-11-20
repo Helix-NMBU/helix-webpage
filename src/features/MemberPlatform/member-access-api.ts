@@ -1,3 +1,4 @@
+import { isProjectMemberPreview } from "./local-member-profile-selection";
 import { localFinanceProfileSelection } from "./local-finance-profile";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "./local-mode";
@@ -66,6 +67,7 @@ export function localMemberHasSeasonOverview(): boolean {
 }
 
 export function localMemberHasFinancials(): boolean {
+  if (isProjectMemberPreview(isLocalMemberMode())) return false;
   const selected = localFinanceProfileSelection();
   if (!isLocalMemberMode() || !localMemberSignedIn()) return false;
   if (selected !== undefined) return selected !== null;
@@ -74,6 +76,7 @@ export function localMemberHasFinancials(): boolean {
 }
 
 export function localMemberHasPartnerSpace(space: "pipeline" | "partner-agreements"): boolean {
+  if (isProjectMemberPreview(isLocalMemberMode())) return false;
   if (!isLocalMemberMode() || !localMemberSignedIn()) return false;
   const id = "00000000-0000-4000-8000-000000000001";
   const selected = savedLocalSpaces()[id];

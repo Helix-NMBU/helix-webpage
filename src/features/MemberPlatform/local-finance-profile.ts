@@ -1,3 +1,4 @@
+import { isProjectMemberPreview } from "./local-member-profile-selection";
 import { isLocalMemberMode, localMemberSignedIn } from "./local-mode";
 
 export type LocalFinanceProfile = "finance" | "head_of_finance";
@@ -13,6 +14,7 @@ export function localFinanceProfileSelection(): LocalFinanceProfile | null | und
     selectedProfile = undefined;
     return null;
   }
+  if (isProjectMemberPreview(true)) { selectedProfile = undefined; return null; }
   if (!observedWindows.has(window)) {
     observedWindows.add(window);
     window.addEventListener("helix-member-local-session-changed", () => { selectedProfile = undefined; });

@@ -1,3 +1,5 @@
+import { isProjectMemberPreview } from "../MemberPlatform/local-member-profile-selection";
+import { projectMemberWorkspace } from "../ProjectManagement/local-member-preview";
 import { canReadProjectBudgetDraft } from "./project-budget-visibility";
 import { invalidateLocalDepartmentPackage } from "./department-budget-local-model";
 import { localInvoiceReference } from "./local-invoice-reference";
@@ -28,7 +30,7 @@ import type {
 
 const KEY = "helix-project-budgets-local-v1";
 const PROJECT_KEY = "helix-member-local-projects-v1";
-type Role = "project_lead" | "department_lead" | "finance" | "head_of_finance";
+type Role = "member" | "project_lead" | "department_lead" | "finance" | "head_of_finance";
 interface State {
   previews?: Record<
     string,
@@ -55,6 +57,7 @@ function enabled() {
 }
 export function localBudgetRole(): Role {
   enabled();
+  if (isProjectMemberPreview(true)) return "member";
   const selected = new URLSearchParams(window.location.search).get(
     "budgetRole",
   );
@@ -75,12 +78,12 @@ export function localBudgetWorkspace(): ProjectWorkspace {
   const saved = localStorage.getItem(PROJECT_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved) as ProjectWorkspace;
+      return projectMemberWorkspace(JSON.parse(saved) as ProjectWorkspace);
     } catch {
       /* Start from this mode's normal fixtures. */
     }
   }
-  return initialLocalWorkspace();
+  return projectMemberWorkspace(initialLocalWorkspace());
 }
 function read(): State {
   enabled();

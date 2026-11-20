@@ -688,3 +688,12 @@ describe("project budget controls", () => {
     },
   );
 });
+
+it("explains restricted project scope without claiming the existing budget is missing", async () => {
+  const detail = vi.fn(repo.detail);
+  await render({ ...repo, detail, load: async filters => ({ ...await repo.load(filters), budgets: [], scopes: [] }) });
+  expect(container.textContent).toContain("Budget access required");
+  expect(container.textContent).not.toContain("No project budgets yet");
+  expect(container.textContent).not.toContain("Create budget");
+  expect(detail).not.toHaveBeenCalled();
+});
