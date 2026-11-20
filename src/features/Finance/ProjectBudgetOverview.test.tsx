@@ -256,7 +256,7 @@ describe("project budget overview", () => {
       ),
     ).not.toBeNull();
   });
-  it("offers final approval only for the department-approved candidate", async () => {
+  it("never offers standalone final approval, including for department-approved candidates", async () => {
     await render();
     await act(async () =>
       container
@@ -281,6 +281,6 @@ describe("project budget overview", () => {
       [...container.querySelectorAll("button")].some(
         (b) => b.textContent === "Approve budget",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

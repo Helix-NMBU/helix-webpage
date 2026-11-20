@@ -1,3 +1,7 @@
+import { useOptionalFinanceAccess } from "../MemberPlatform/FinanceAccess";
+import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
+import { localBudgetRole } from "../Finance/project-budget-local";
+import { DepartmentBudgetsPanel } from "../Finance/DepartmentBudgetsPanel";
 import { ProjectBudgetsPanel } from "../Finance/ProjectBudgetsPanel";
 import { DepartmentBudgetWidget } from "./DepartmentBudgetWidget";
 import { departmentMemberIds } from "../ProjectManagement/permissions";
@@ -215,8 +219,12 @@ export function DepartmentWorkspace({
   const alive = useRef(false);
   const saving = useRef(false);
   const [params, setParams] = useSearchParams();
+  const financeAccess=useOptionalFinanceAccess();
+  const local=isLocalMemberMode()&&localMemberSignedIn();
+  const currentLead=(department.leadIds??(department.leadId?[department.leadId]:[])).includes(data.viewerId);
+  const canReviewBudgets=(currentLead&&(!local||localBudgetRole()==="department_lead"))||(financeAccess?.access==="allowed"&&financeAccess.capabilities?.purchaseRegister===true);
   const selected = params.get("tab");
-  const tab = selected === "documents" || selected === "members" || selected === "budgets" ? selected : "overview";
+  const tab = selected === "documents" || selected === "members" || (selected === "budgets" && canReviewBudgets) ? selected : "overview";
   const notify = useNotify();
   const navigate = useNavigate();
   const DepartmentIcon = getDepartmentIcon(department.name);
@@ -351,9 +359,9 @@ export function DepartmentWorkspace({
           >
             Members
           </TabsTrigger>
-          <TabsTrigger value="budgets" className="rounded-full border bg-muted/40 px-4 py-2 data-[state=active]:bg-muted data-[state=active]:text-foreground">Budgets</TabsTrigger>
+          {canReviewBudgets&&<TabsTrigger value="budgets" className="rounded-full border bg-muted/40 px-4 py-2 data-[state=active]:bg-muted data-[state=active]:text-foreground">Budgets</TabsTrigger>}
         </TabsList>
-        <TabsContent value="budgets" className="mt-7"><ProjectBudgetsPanel departmentId={department.id} title="Budget approvals" /></TabsContent>
+        {canReviewBudgets&&<TabsContent value="budgets" className="mt-7 space-y-8"><DepartmentBudgetsPanel departmentId={department.id}/><ProjectBudgetsPanel departmentId={department.id} title="Project budgets" /></TabsContent>}
         <TabsContent value="overview" className="mt-7">
           <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
             <div className="min-w-0 space-y-10">

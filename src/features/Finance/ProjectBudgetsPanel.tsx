@@ -494,8 +494,8 @@ function ReasonDialog({
           </DialogTitle>
           <DialogDescription>
             {action === "requestProjectBudgetChanges"
-              ? "The project lead can revise the Draft proposal. An existing proposal is reused and its approvals reset. The approved version remains available for purchases."
-              : "The budget will return to Draft and need both approvals after resubmission."}
+              ? "The project lead can revise the Draft proposal. Any active department package containing it is invalidated and all included candidates return to Draft. The approved version remains available for purchases."
+              : "The budget will return to Draft and need both approvals after resubmission. Any active department package containing this candidate is invalidated and all its included candidates return to Draft."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -748,6 +748,7 @@ export function ProjectBudgetsPanel({
       if (document.visibilityState !== "hidden") void load();
     };
     window.addEventListener("focus", refresh);
+    window.addEventListener("helix-workspace-updated",refresh);
     document.addEventListener("visibilitychange", refresh);
     const timer = window.setInterval(refresh, 30000);
     const stop = repository.watchSession?.(() => {
@@ -763,6 +764,7 @@ export function ProjectBudgetsPanel({
       generation.current++;
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("helix-workspace-updated",refresh);
       document.removeEventListener("visibilitychange", refresh);
       stop?.();
     };
@@ -884,14 +886,9 @@ export function ProjectBudgetsPanel({
     candidate?.status === "draft" &&
     viewingCandidate,
   );
-  const canDepartmentApprove = Boolean(
+  const canDepartmentReview = Boolean(
     detail?.capabilities.canReviewDepartment &&
     candidate?.status === "department_pending" &&
-    viewingCandidate,
-  );
-  const canFinanceApprove = Boolean(
-    detail?.capabilities.canApproveFinance &&
-    candidate?.status === "finance_pending" &&
     viewingCandidate,
   );
   const systems =
@@ -907,12 +904,7 @@ export function ProjectBudgetsPanel({
     ) ?? [];
   const incurredScopes = workspace?.scopes.filter(scope => scope.capabilities.canRegisterPurchase && scope.responsibleDepartmentId && !workspace.budgets.some(header => header.projectId === scope.projectId)) ?? [];
   const incurredScope = incurredScopes.find(scope => scope.projectId === purchaseScopeId) ?? incurredScopes[0];
-  const write = (
-    action:
-      | "submitProjectBudget"
-      | "approveDepartmentBudget"
-      | "approveProjectBudget",
-  ) =>
+  const write = (action: "submitProjectBudget") =>
     detail &&
     mutate({
       action,
@@ -1143,23 +1135,8 @@ export function ProjectBudgetsPanel({
                   </Button>
                 </>
               )}
-              {canDepartmentApprove && (
-                <Button
-                  disabled={busy}
-                  onClick={() => void write("approveDepartmentBudget")}
-                >
-                  Approve and send to Finance
-                </Button>
-              )}
-              {canFinanceApprove && (
-                <Button
-                  disabled={busy}
-                  onClick={() => void write("approveProjectBudget")}
-                >
-                  Approve budget
-                </Button>
-              )}
-              {(canDepartmentApprove || canFinanceApprove) && (
+              {canDepartmentReview && <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the current edit","Save or cancel your input before leaving this budget.",{variant:"warning",href:null});}}}>Review department submission</BudgetWorkspaceLink>}
+              {canDepartmentReview && (
                 <Button
                   variant="outline"
                   disabled={busy}
@@ -1405,6 +1382,10 @@ export function ProjectBudgetsPanel({
                         submitProjectBudget: "Sent to department lead",
                         approveDepartmentBudget: "Department approved",
                         approveProjectBudget: "Head of Finance approved",
+                        sendDepartmentBudgetPackage:"Department package sent",
+                        approveDepartmentBudgetPackage:"Department package approved",
+                        returnDepartmentBudgetPackage:"Department package returned",
+                        withdrawDepartmentBudgetPackage:"Department package withdrawn",
                         requestProjectBudgetChanges: "Budget changes requested",
                         importProjectBudgetEntries:
                           "Candidate entries imported",

@@ -562,3 +562,5 @@ export function loadLocalDepartmentHomeBudget(
       })),
   };
 }
+
+export const localDepartmentKey=departmentKey;

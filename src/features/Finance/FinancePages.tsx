@@ -1,4 +1,5 @@
 import { hasVisibleApprovedFinances } from "./finance-calculations";
+import { DepartmentBudgetsPanel } from "./DepartmentBudgetsPanel";
 import { ProjectBudgetsPanel } from "./ProjectBudgetsPanel";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@libs/components/ui/collapsible";
 import { useEffect } from "react";
@@ -80,7 +81,8 @@ function FinanceSection({ page }: { page: FinancePageId }) {
       {page === "overview" && session.capabilities?.draftBudgetItems ? <BankSnapshotEditor /> : null}
       {page === "budgets" ? (
         <>
-          <ProjectBudgetsPanel title="Project budget approvals" />
+          <DepartmentBudgetsPanel />
+          <ProjectBudgetsPanel title="Project budgets" />
           <Collapsible className="space-y-4">
             <CollapsibleTrigger asChild><Button variant="outline">Season budget</Button></CollapsibleTrigger>
             <CollapsibleContent>

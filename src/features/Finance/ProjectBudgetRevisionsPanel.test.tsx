@@ -1,3 +1,4 @@
+import { approveLocalDepartmentCandidates, sendLocalDepartmentCandidates, approvePendingLocalDepartmentPackage } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -64,22 +65,7 @@ async function approveInitial() {
     expectedRevision: budget.revision,
     requestId: crypto.randomUUID(),
   });
-  role("department_lead");
-  budget = await repo.detail(id);
-  await repo.mutate({
-    action: "approveDepartmentBudget",
-    projectBudgetId: id,
-    expectedRevision: budget.revision,
-    requestId: crypto.randomUUID(),
-  });
-  role("head_of_finance");
-  budget = await repo.detail(id);
-  await repo.mutate({
-    action: "approveProjectBudget",
-    projectBudgetId: id,
-    expectedRevision: budget.revision,
-    requestId: crypto.randomUUID(),
-  });
+  await approveLocalDepartmentCandidates(departmentId);
 }
 async function chooseVersion(text: string) {
   const trigger = document.getElementById("project-budget-version")!;
@@ -179,7 +165,9 @@ describe("reviewing revisions and CSV changes", () => {
     role("department_lead");
     await render();
     expect(container.textContent).toContain("Changes from approved version 1");
-    await click("Approve and send to Finance");
+    expect(container.textContent).toContain("Review department submission");
+    await sendLocalDepartmentCandidates(departmentId);
+    await render();
     expect((await repo.detail(id)).approvedTotalNok).toBe("10000.00");
     role("finance");
     await render();
@@ -187,7 +175,9 @@ describe("reviewing revisions and CSV changes", () => {
     role("head_of_finance");
     await render();
     expect(container.textContent).toContain("NOK 2,550.25");
-    await click("Approve budget");
+    expect(container.textContent).not.toContain("Approve budget");
+    await approvePendingLocalDepartmentPackage(departmentId);
+    await render();
     expect((await repo.detail(id)).approvedTotalNok).toBe("12550.25");
     await chooseVersion("Earlier approved version 1");
     expect(container.textContent).toContain("Version 1");

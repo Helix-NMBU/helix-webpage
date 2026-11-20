@@ -1,3 +1,4 @@
+import { sendLocalDepartmentCandidates, approvePendingLocalDepartmentPackage } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
@@ -72,17 +73,17 @@ describe("local initial project budget approvals", () => {
       "department_pending",
     );
     await expect(transition(id, "approveProjectBudget")).rejects.toMatchObject({
-      status: 403,
+      status: 409,
     });
     role("department_lead");
     expect((await repo.load({ departmentId })).budgets[0].id).toBe(id);
-    await transition(id, "approveDepartmentBudget");
+    await sendLocalDepartmentCandidates(departmentId);
     role("finance");
     await expect(transition(id, "approveProjectBudget")).rejects.toMatchObject({
-      status: 403,
+      status: 409,
     });
     role("head_of_finance");
-    await transition(id, "approveProjectBudget");
+    await approvePendingLocalDepartmentPackage(departmentId);
     const approved = await createLocalProjectBudgetRepository().detail(id);
     expect(approved.pendingVersion).toBeNull();
     expect(approved.approvedVersion!.status).toBe("approved");
@@ -90,12 +91,12 @@ describe("local initial project budget approvals", () => {
     expect(approved.approvedVersion!.entries[0]).toMatchObject({
       ...before[0],
       budgetItemId: before[0].entryId,
-      publicRef: "BI-S27-001",
+      publicRef: expect.stringMatching(/^BI-S27-/),
     });
     expect(approved.decisions.map((decision) => decision.action)).toEqual([
       "submitProjectBudget",
-      "approveDepartmentBudget",
-      "approveProjectBudget",
+      "sendDepartmentBudgetPackage",
+      "approveDepartmentBudgetPackage",
     ]);
     expect(approved.decisions[0].snapshot).toEqual(before);
   });
@@ -115,19 +116,19 @@ describe("local initial project budget approvals", () => {
     ).rejects.toMatchObject({ status: 403 });
     role("head_of_finance");
     await expect(transition(id, "approveProjectBudget")).rejects.toMatchObject({
-      status: 403,
+      status: 409,
     });
     role("department_lead");
-    await transition(id, "approveDepartmentBudget");
+    await sendLocalDepartmentCandidates(departmentId);
     await expect(
       transition(id, "approveDepartmentBudget"),
-    ).rejects.toMatchObject({ status: 403 });
+    ).rejects.toMatchObject({ status: 409 });
   });
   it("requires a return reason and clears approvals when a submitted version returns to Draft", async () => {
     const { repo, id } = await draft();
     await transition(id, "submitProjectBudget");
     role("department_lead");
-    await transition(id, "approveDepartmentBudget");
+    await sendLocalDepartmentCandidates(departmentId);
     role("head_of_finance");
     const budget = await repo.detail(id);
     const change: ProjectBudgetMutation = {
@@ -154,7 +155,7 @@ describe("local initial project budget approvals", () => {
     await transition(id, "submitProjectBudget");
     role("head_of_finance");
     await expect(transition(id, "approveProjectBudget")).rejects.toMatchObject({
-      status: 403,
+      status: 409,
     });
   });
   it("retains totals on stale writes and deduplicates exact request retries", async () => {

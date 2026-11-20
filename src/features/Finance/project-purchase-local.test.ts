@@ -1,3 +1,4 @@
+import { approveLocalDepartmentCandidates } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
@@ -41,20 +42,8 @@ async function approved() {
       status: "planned",
     },
   });
-  for (const [profile, action] of [
-    ["project_lead", "submitProjectBudget"],
-    ["department_lead", "approveDepartmentBudget"],
-    ["head_of_finance", "approveProjectBudget"],
-  ] as const) {
-    role(profile);
-    budget = await repo.detail(budget.id);
-    await repo.mutate({
-      action,
-      projectBudgetId: budget.id,
-      expectedRevision: budget.revision,
-      requestId: crypto.randomUUID(),
-    });
-  }
+  budget=await repo.detail(budget.id);await repo.mutate({action:"submitProjectBudget",projectBudgetId:budget.id,expectedRevision:budget.revision,requestId:crypto.randomUUID()});
+  await approveLocalDepartmentCandidates(responsibleDepartmentId);
   role("department_lead");
   return repo.detail(budget.id);
 }

@@ -1,3 +1,4 @@
+import { sendLocalDepartmentCandidates, approvePendingLocalDepartmentPackage } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
@@ -26,6 +27,8 @@ async function write(
       }
     | { action: "requestProjectBudgetChanges"; reason: string },
 ) {
+  if(change.action==="approveDepartmentBudget")return sendLocalDepartmentCandidates(departmentId);
+  if(change.action==="approveProjectBudget")return approvePendingLocalDepartmentPackage(departmentId);
   return repository().mutate({
     ...change,
     projectBudgetId: id,

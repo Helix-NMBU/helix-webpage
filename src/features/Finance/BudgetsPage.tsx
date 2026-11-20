@@ -79,7 +79,8 @@ export function BudgetsBoard() {
               </div>
               {department.systems.map((system) => (
                 <SystemBudget
-                  key={system.id}
+                  key={`${department.departmentKey}:${system.id}`}
+                  departmentKey={department.departmentKey}
                   system={system}
                   showCancelled={showCancelled}
                   onEvidenceChanged={()=>session.loadPage("budgets")}
@@ -113,11 +114,13 @@ function AmountLine({
 }
 
 function SystemBudget({
+  departmentKey,
   system,
   showCancelled,
   onEvidenceChanged,
   onAccessEnded,
 }: {
+  departmentKey:string;
   system: PublicSystemBudget;
   showCancelled: boolean;
   onEvidenceChanged:()=>Promise<void>;
@@ -127,9 +130,9 @@ function SystemBudget({
     (item) => showCancelled || item.status !== "cancelled",
   );
   return (
-    <section className="space-y-3" aria-labelledby={`system-${system.id}`}>
+    <section className="space-y-3" aria-labelledby={`system-${departmentKey}-${system.id}`}>
       <div className="space-y-1">
-        <h3 id={`system-${system.id}`} className="text-base font-medium">
+        <h3 id={`system-${departmentKey}-${system.id}`} className="text-base font-medium">
           {system.name}
         </h3>
         <AmountLine

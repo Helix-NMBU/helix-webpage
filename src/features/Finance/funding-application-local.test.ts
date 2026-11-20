@@ -1,3 +1,4 @@
+import { approveLocalDepartmentCandidates } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -117,20 +118,7 @@ describe("funding applications and stable budget obligations", () => {
       projectBudgetId: budget.id,
       expectedRevision: changed.revision,
     });
-    fundingRole("department_lead");
-    result = await budgets.mutate({
-      action: "approveDepartmentBudget",
-      requestId: crypto.randomUUID(),
-      projectBudgetId: budget.id,
-      expectedRevision: result.revision,
-    });
-    fundingRole("head_of_finance");
-    await budgets.mutate({
-      action: "approveProjectBudget",
-      requestId: crypto.randomUUID(),
-      projectBudgetId: budget.id,
-      expectedRevision: result.revision,
-    });
+    await approveLocalDepartmentCandidates(budget.responsibleDepartmentId);
     changed = await budgets.detail(budget.id);
     expect(changed.approvedTotalNok).toBe("1250.25");
     expect((await repository.detail(app.id)).proposals[0].approvalStatus).toBe(
@@ -162,11 +150,7 @@ describe("funding applications and stable budget obligations", () => {
       await budgets.mutate({ action: "saveProjectBudgetEntry", requestId: crypto.randomUUID(), projectBudgetId: budget.id,
         expectedRevision: current.revision, entry: { ...original, plannedNok: amount, description, earmarkId } });
       current = await budgets.detail(budget.id);
-      for (const [role, action] of [["project_lead", "submitProjectBudget"], ["department_lead", "approveDepartmentBudget"], ["head_of_finance", "approveProjectBudget"]] as const) {
-        fundingRole(role);
-        await budgets.mutate({ action, requestId: crypto.randomUUID(), projectBudgetId: budget.id, expectedRevision: current.revision });
-        current = await budgets.detail(budget.id);
-      }
+      fundingRole("project_lead");await budgets.mutate({action:"submitProjectBudget",requestId:crypto.randomUUID(),projectBudgetId:budget.id,expectedRevision:current.revision});await approveLocalDepartmentCandidates(budget.responsibleDepartmentId);current=await budgets.detail(budget.id);
       expect((await repository.detail(app.id)).proposals[0].approvalStatus).toBe(expected);
     }
   });

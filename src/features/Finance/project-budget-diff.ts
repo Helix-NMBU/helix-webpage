@@ -1,4 +1,5 @@
 import { formatOre } from "./money";
+import type { DepartmentBudgetPlanEntry } from "./department-budget-types";
 import type {
   ProjectBudgetEntry,
   ProjectBudgetVersion,
@@ -25,11 +26,13 @@ export interface ProjectBudgetFieldChange {
   before: string | null;
   after: string | null;
 }
-export interface ProjectBudgetEntryChange {
+export interface ProjectBudgetEntryChange<
+  Entry extends DepartmentBudgetPlanEntry = ProjectBudgetEntry,
+> {
   entryId: string;
   kind: "added" | "changed" | "removed" | "unchanged";
-  before: ProjectBudgetEntry | null;
-  after: ProjectBudgetEntry | null;
+  before: Entry | null;
+  after: Entry | null;
   changes: ProjectBudgetFieldChange[];
 }
 export function canonicalNokOre(value: string): bigint {
@@ -46,8 +49,8 @@ export function projectBudgetMoney(value: string): string {
   return `NOK ${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction}`;
 }
 export function compareProjectBudgetEntries(
-  before: ProjectBudgetEntry | null,
-  after: ProjectBudgetEntry | null,
+  before: DepartmentBudgetPlanEntry | null,
+  after: DepartmentBudgetPlanEntry | null,
 ): ProjectBudgetFieldChange[] {
   return (
     Object.keys(PROJECT_BUDGET_FIELD_LABELS) as ProjectBudgetDiffField[]
@@ -59,21 +62,25 @@ export function compareProjectBudgetEntries(
       : [{ field, before: oldValue, after: newValue }];
   });
 }
-export function projectBudgetDiff(
-  approved: ProjectBudgetVersion,
-  proposed: ProjectBudgetVersion,
+export function projectBudgetDiff<Entry extends DepartmentBudgetPlanEntry>(
+  approved:
+    | (Pick<ProjectBudgetVersion, "totalNok"> & { entries: Entry[] })
+    | null,
+  proposed:
+    | (Pick<ProjectBudgetVersion, "totalNok"> & { entries: Entry[] })
+    | null,
 ) {
   const before = new Map(
-    approved.entries
+    (approved?.entries ?? [])
       .filter((entry) => !entry.removed)
       .map((entry) => [entry.entryId, entry]),
   );
   const after = new Map(
-    proposed.entries
+    (proposed?.entries ?? [])
       .filter((entry) => !entry.removed)
       .map((entry) => [entry.entryId, entry]),
   );
-  const entries: ProjectBudgetEntryChange[] = [
+  const entries: ProjectBudgetEntryChange<Entry>[] = [
     ...new Set([...before.keys(), ...after.keys()]),
   ].map((entryId) => {
     const oldEntry = before.get(entryId) ?? null,
@@ -98,10 +105,11 @@ export function projectBudgetDiff(
   return {
     entries,
     counts,
-    approvedTotalNok: approved.totalNok,
-    proposedTotalNok: proposed.totalNok,
+    approvedTotalNok: approved?.totalNok ?? "0.00",
+    proposedTotalNok: proposed?.totalNok ?? "0.00",
     netTotalNok: formatOre(
-      canonicalNokOre(proposed.totalNok) - canonicalNokOre(approved.totalNok),
+      canonicalNokOre(proposed?.totalNok ?? "0.00") -
+        canonicalNokOre(approved?.totalNok ?? "0.00"),
     ),
   };
 }

@@ -45,4 +45,11 @@ describe("department member displays", () => {
     expect(table?.textContent).not.toContain("Viewer Example");
     expect(table?.querySelectorAll("tbody tr")).toHaveLength(2);
   });
+  it("keeps ordinary members and administrators on Home without private packet requests",async()=>{
+    const data=directoryFixture();data.canAdmin=true;data.canManageProjects=true;const department={...data.departments[0],memberIds:[data.viewerId],leadId:"other-lead",leadIds:["other-lead"]};data.departments=[department];
+    const request=vi.fn(async(_url:RequestInfo|URL)=>Response.json({}));vi.stubGlobal("fetch",request);
+    await act(async()=>root.render(<MemoryRouter initialEntries={["/departments/management?tab=budgets"]}><MemberThemeProvider><MemberNotificationsProvider><DepartmentWorkspace department={department} data={data}/></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+    expect(container.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe("Home");expect([...container.querySelectorAll('[role="tab"]')].some(tab=>tab.textContent==="Budgets")).toBe(false);expect(request.mock.calls.some(call=>/departmentBudgetPackage|departmentBudgetPreview|action=projectBudget/.test(String(call[0])))).toBe(false);
+  });
+
 });

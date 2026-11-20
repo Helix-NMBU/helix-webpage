@@ -43,6 +43,7 @@ function financeResponse(url: string): Response {
   const action = new URL(url, "https://member.example").searchParams.get("action");
   if (!financialsAllowed) return { ok: false, status: 403, json: async () => ({ error: "Financials access is required." }) } as unknown as Response;
   if (action === "financing") return { ok: false, status: 403, json: async () => ({ error: "Financing access is required." }) } as unknown as Response;
+  if (action === "departmentBudgetPackages") return { ok: true, status: 200, json: async () => ({viewVersion:0,departments:[],packages:[]}) } as unknown as Response;
   if (action === "projectBudgets") return { ok: true, status: 200, json: async () => ({ viewVersion: 0, scopes: [], budgets: [] }) } as unknown as Response;
   const body = action === "capabilities"
     ? { memberId: "member", viewVersion: 0, profiles: [], capabilities: memberCapabilities, seasonCode: null, approvalThresholdNok: null, today: "2026-10-26" }

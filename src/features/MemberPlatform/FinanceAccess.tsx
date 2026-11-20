@@ -183,7 +183,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     const onFocus = () => revalidate();
     window.addEventListener("focus", onFocus);
     window.addEventListener(MEMBER_ACCESS_CHANGED, onFocus);
-    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener(MEMBER_ACCESS_CHANGED, onFocus); };
+    window.addEventListener("helix-workspace-updated",onFocus);
+    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener(MEMBER_ACCESS_CHANGED, onFocus);window.removeEventListener("helix-workspace-updated",onFocus); };
   }, [revalidate]);
   const bankSnapshot = useCallback(() => api.bankSnapshot(), [api]);
   const mutate = useCallback(async (body: Record<string, unknown>) => {
@@ -275,6 +276,9 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   );
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
+
+/** Scoped department hosts may inspect an already verified Finance capability without requiring the provider. */
+export function useOptionalFinanceAccess(){return useContext(FinanceContext);}
 
 export function useFinanceAccess() {
   const session = useContext(FinanceContext);

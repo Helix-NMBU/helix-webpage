@@ -1,3 +1,4 @@
+import { approveLocalDepartmentCandidates, sendLocalDepartmentCandidates, approvePendingLocalDepartmentPackage } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import * as invoiceComponents from "./InvoiceEvidence";
 import { act } from "react";
@@ -68,22 +69,8 @@ async function submit() {
 }
 async function removedBeforeAward() {
   await submit();
-  role("department_lead");
-  let budget = await repo.detail(id);
-  await repo.mutate({
-    action: "approveDepartmentBudget",
-    projectBudgetId: id,
-    expectedRevision: budget.revision,
-    requestId: crypto.randomUUID(),
-  });
-  role("head_of_finance");
-  budget = await repo.detail(id);
-  await repo.mutate({
-    action: "approveProjectBudget",
-    projectBudgetId: id,
-    expectedRevision: budget.revision,
-    requestId: crypto.randomUUID(),
-  });
+  await approveLocalDepartmentCandidates(departmentId);
+  let budget;
   role("project_lead");
   budget = await repo.detail(id);
   await repo.mutate({
@@ -232,16 +219,20 @@ describe("project budget controls", () => {
     expect(container.textContent).not.toContain("Approve and send to Finance");
     role("department_lead");
     await render();
-    await click("Approve and send to Finance");
+    expect(container.textContent).toContain("Review department submission");
+    await sendLocalDepartmentCandidates(departmentId);
+    await render();
     expect(container.textContent).toContain("Sent to approval (Finance)");
     role("finance");
     await render();
     expect(container.textContent).not.toContain("Approve budget");
     role("head_of_finance");
     await render();
-    await click("Approve budget");
+    expect(container.textContent).not.toContain("Approve budget");
+    await approvePendingLocalDepartmentPackage(departmentId);
+    await render();
     expect(container.textContent).toContain("Approved");
-    expect(container.textContent).toContain("Head of Finance approved");
+    expect(container.textContent).toContain("Department package approved");
     expect((await repo.detail(id)).approvedTotalNok).toBe("10000.00");
   });
   it("keeps dirty entry input across focus refresh, stale saves and explicit reload", async () => {

@@ -1,3 +1,4 @@
+import { invalidateLocalDepartmentPackage } from "./department-budget-local-model";
 import { localInvoiceReference } from "./local-invoice-reference";
 import { assertLocalFundingEntry } from "./funding-application-local";
 import { planLocalProjectBudgetImport } from "./project-budget-import-model";
@@ -50,7 +51,7 @@ function enabled() {
   if (!isLocalMemberMode() || !localMemberSignedIn())
     fail("Sign in to continue.", 401);
 }
-function role(): Role {
+export function localBudgetRole(): Role {
   enabled();
   const selected = new URLSearchParams(window.location.search).get(
     "budgetRole",
@@ -67,7 +68,8 @@ function role(): Role {
   const saved = localStorage.getItem("helix-project-budgets-local-role-v1");
   return valid(saved) ? saved : "project_lead";
 }
-function projects(): ProjectWorkspace {
+export function localBudgetWorkspace(): ProjectWorkspace {
+  enabled();
   const saved = localStorage.getItem(PROJECT_KEY);
   if (saved) {
     try {
@@ -102,13 +104,11 @@ function total(entries: ProjectBudgetEntry[]) {
   );
 }
 function scopes(state: State): ProjectBudgetScope[] {
-  const data = projects(),
-    profile = role();
+  const data = localBudgetWorkspace(),
+    profile = localBudgetRole();
   const finance = profile === "finance" || profile === "head_of_finance",
     head = profile === "head_of_finance";
-  const reviewerDepartment = data.departments.find(
-    (department) => department.name === "Mechanical & Production",
-  );
+  const reviewerDepartments = data.departments.filter(department=>(department.leadIds??(department.leadId?[department.leadId]:[])).includes(data.viewerId));
   return data.projects.flatMap((project) => {
     const departments = data.departments.filter((department) =>
       project.departments.includes(department.name),
@@ -117,13 +117,13 @@ function scopes(state: State): ProjectBudgetScope[] {
     const responsible =
       budget?.responsibleDepartmentId ??
       (departments.length === 1 ? departments[0].id :
-        profile === "department_lead" ? departments.find(item => item.id === reviewerDepartment?.id)?.id ?? null :
+        profile === "department_lead" ? departments.find(item => reviewerDepartments.some(department=>department.id===item.id))?.id ?? null :
         finance ? departments[0]?.id ?? null : null);
     const author =
       profile === "project_lead" &&
       (project.leadIds ?? []).includes(data.viewerId);
     const reviewer =
-      profile === "department_lead" && responsible === reviewerDepartment?.id;
+      profile === "department_lead" && reviewerDepartments.some(department=>department.id===responsible);
     if (!finance && !author && !reviewer) return [];
     const capabilities: ProjectBudgetCapabilities = {
       canRead: true,
@@ -167,7 +167,7 @@ function view(
   state: State,
   filters: ProjectBudgetFilters = {},
 ): ProjectBudgetWorkspaceView {
-  const data = projects();
+  const data = localBudgetWorkspace();
   const visible = scopes(state).filter(
     (scope) =>
       (!filters.projectId || scope.projectId === filters.projectId) &&
@@ -219,7 +219,8 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
     async mutate(change: ProjectBudgetMutation) {
       const state = read(),
         fingerprint = JSON.stringify(change),
-        profile = role();
+        profile = localBudgetRole();
+      if(change.action==="approveDepartmentBudget"||change.action==="approveProjectBudget")fail("Use the department package preview and decision workflow.",409);
       const requestKey = `${profile}:${change.requestId}`;
       const previous = state.requests[requestKey];
       if (previous) {
@@ -296,6 +297,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
           if (!scope.capabilities.canRequestChanges || !budget.approvedVersion)
             fail("You cannot request changes to this budget.");
           if (!change.reason.trim()) fail("Enter a reason.", 400);
+          invalidateLocalDepartmentPackage(state,budget.id,scope.memberId,change.reason.trim());
           if (!budget.pendingVersion) {
             budget.pendingVersion = {
               ...structuredClone(budget.approvedVersion),
@@ -477,66 +479,6 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
             fail("Assign a department lead before submitting.", 400);
           candidate.status = "department_pending";
           candidate.submittedAt = new Date().toISOString();
-        } else if (change.action === "approveDepartmentBudget") {
-          if (
-            !scope.capabilities.canReviewDepartment ||
-            candidate.status !== "department_pending"
-          )
-            fail(
-              "This budget needs its responsible department's approval first.",
-            );
-          candidate.status = "finance_pending";
-          candidate.departmentApprovedBy = scope.memberId;
-          candidate.departmentApprovedAt = new Date().toISOString();
-        } else if (change.action === "approveProjectBudget") {
-          if (
-            !scope.capabilities.canApproveFinance ||
-            candidate.status !== "finance_pending"
-          )
-            fail(
-              "Head of Finance can approve only department-approved budgets.",
-            );
-          for (const entry of candidate.entries) assertLocalFundingEntry(entry.entryId, entry);
-          for (const entry of budget.approvedVersion?.entries ?? []) if (!candidate.entries.some(item => item.entryId === entry.entryId)) assertLocalFundingEntry(entry.entryId, { ...entry, removed: true });
-          candidate.status = "approved";
-          candidate.approvedBy = scope.memberId;
-          candidate.approvedAt = new Date().toISOString();
-          candidate.entries = candidate.entries.map((entry, index) => {
-            const effective = budget.approvedVersion?.entries.find(
-              (item) => item.entryId === entry.entryId,
-            );
-            return {
-              ...entry,
-              actualNok: effective?.actualNok ?? entry.actualNok,
-              completion: effective?.completion ?? entry.completion,
-              invoices: effective?.invoices ?? entry.invoices,
-              budgetItemId: entry.removed ? entry.budgetItemId : entry.entryId,
-              publicRef:
-                entry.publicRef ??
-                (entry.removed
-                  ? null
-                  : budget.approvedVersion
-                    ? `BI-S27-${entry.entryId.slice(0, 8)}-${index + 1}`
-                    : `BI-S27-${String(index + 1).padStart(3, "0")}`),
-            };
-          });
-          if (
-            budget.approvedVersion &&
-            !(budget.historyVersions ?? []).some(
-              (version) => version.id === budget.approvedVersion!.id,
-            )
-          )
-            budget.historyVersions = [
-              ...(budget.historyVersions ?? []),
-              structuredClone(budget.approvedVersion),
-            ];
-          budget.approvedVersion = structuredClone(candidate);
-          budget.approvedVersionId = candidate.id;
-          budget.approvedTotalNok = candidate.totalNok;
-          budget.pendingVersionId = null;
-          budget.pendingTotalNok = null;
-          budget.pendingStage = null;
-          budget.pendingVersion = null;
         } else if (
           change.action === "returnProjectBudget" ||
           change.action === "withdrawProjectBudget"
@@ -551,6 +493,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
           if (!allowed)
             fail("You cannot return this budget at its current stage.");
           if (!change.reason.trim()) fail("Enter a reason.", 400);
+          invalidateLocalDepartmentPackage(state,budget.id,scope.memberId,change.reason.trim(),change.action==="withdrawProjectBudget");
           candidate.status = "draft";
           candidate.submittedAt = null;
           candidate.departmentApprovedBy = null;

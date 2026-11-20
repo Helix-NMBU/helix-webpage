@@ -1,3 +1,4 @@
+import { approveLocalDepartmentCandidates } from "./department-budget.test-support";
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
 import {
   createLocalFundingApplicationRepository,
@@ -48,20 +49,7 @@ export async function fundingFixture() {
     expectedRevision: result.revision,
     requestId: crypto.randomUUID(),
   });
-  fundingRole("department_lead");
-  result = await budgets.mutate({
-    action: "approveDepartmentBudget",
-    projectBudgetId: created.id,
-    expectedRevision: result.revision,
-    requestId: crypto.randomUUID(),
-  });
-  fundingRole("head_of_finance");
-  await budgets.mutate({
-    action: "approveProjectBudget",
-    projectBudgetId: created.id,
-    expectedRevision: result.revision,
-    requestId: crypto.randomUUID(),
-  });
+  await approveLocalDepartmentCandidates("00000000-0000-4000-8000-000000000300");
   fundingRole("marketing");
   ensureLocalFundingFixtures();
   const state = readLocalPartnerState();

@@ -84,7 +84,7 @@ export function OverviewBoard() {
             {open ? (
               <div id={panelId} className="space-y-4">
                 {department.systems.map((system) => (
-                  <article key={system.id} className="space-y-1">
+                  <article key={`${department.departmentKey}:${system.id}`} className="space-y-1">
                     <h3 className="text-base font-medium">{system.name}{system.active ? "" : " · Inactive"}</h3>
                     <p className="text-sm text-muted-foreground">{system.code}</p>
                     <BudgetSummary
