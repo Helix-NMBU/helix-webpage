@@ -547,7 +547,7 @@ describe("finance access API", () => {
     await seedPrivateRows();
     await sql("update finance.budgets set status = 'draft', approved_by_member_id = null, approved_on = null");
     const hidden = await call({ query: { action: "budgets" }, token: "member" });
-    expect(hidden.body).toMatchObject({ budgetStatus: "draft", departments: [] });
+    expect(hidden.body).toMatchObject({ budgetStatus: "draft", hasRecordedActuals: true, departments: [{ plannedNok: "0.00", actualNok: "0.00", systems: [{ items: [] }] }] });
     expect(JSON.stringify(hidden.body)).not.toContain("Frame tube");
     await grant(memberId, "business");
     expect(JSON.stringify((await call({ query: { action: "budgets" }, token: "member" })).body)).not.toContain("Frame tube");

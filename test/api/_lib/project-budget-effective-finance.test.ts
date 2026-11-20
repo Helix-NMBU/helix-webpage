@@ -6,6 +6,7 @@ import { createFinanceServices } from "../../../api/_lib/finance-service.js";
 import { loadBudgetHierarchy } from "../../../api/_lib/finance-budgets.js";
 import { loadEffectiveFinancePresence } from "../../../api/_lib/finance-effective-read.js";
 import { loadFundingScenarios } from "../../../api/_lib/finance-summary.js";
+import { buildPurchaseExport } from "../../../api/_lib/finance-export.js";
 import { loadFundingRecords } from "../../../api/_lib/finance-funding-read.js";
 import { createSeasonFinancialServices } from "../../../api/_lib/season-financials-service.js";
 import { capabilitiesForProfiles } from "../../../src/features/Finance/access.js";
@@ -34,6 +35,8 @@ beforeEach(() => pg.exec("begin")); afterEach(() => pg.exec("rollback")); afterA
 describe("canonical effective Finance reads", () => {
   it("counts legacy, imported paid actuals, adoption and pending revisions once; removal retains actuals", async () => {
     expect(plan(await budgets())).toBe(15000); expect(actual(await budgets())).toBe(2000);
+    expect(items(await budgets()).find(i=>i.id===f.entry)).toMatchObject({completion:"partial",invoices:[{documentId:f.document,backend:"private_storage"}]});
+    expect(items(await budgets()).find(i=>i.id===f.electronicEntry)).toMatchObject({completion:"partial"});
     let b = await draft(); b = await write(b, "saveProjectBudgetEntry", { entry: { ...input, entryId: f.entry, plannedNok: "9000" } });
     expect(plan(await budgets())).toBe(15000); b = await approve(b);
     expect(plan(await budgets())).toBe(14000); expect(actual(await budgets())).toBe(2000);
@@ -41,6 +44,8 @@ describe("canonical effective Finance reads", () => {
     expect(plan(await budgets())).toBe(14000); b = await write(b, "removeProjectBudgetEntry", { entryId: f.entry }); b = await approve(b);
     expect(plan(await budgets())).toBe(5000); expect(actual(await budgets())).toBe(2000);
     expect(items(await budgets()).find(i => i.id === f.entry)).toMatchObject({ actualNok: "1200.00", effectivePlanNok: "0.00", status: "cancelled" });
+    const exported=await buildPurchaseExport(db,"S27"); const header=exported.csv.split("\r\n")[0].split(","); const rows=exported.csv.split("\r\n").slice(1).map(line=>line.split(","));
+    expect(rows.find(row=>row[header.indexOf("row_kind")] === "line" && row[header.indexOf("line_ref")] === "2026-0100-L1")?.[header.indexOf("budget_status")]).toBe("over_budget");
     await db.query("update finance.purchases set status='voided',void_reason='Duplicate historical entry',voided_at=clock_timestamp(),voided_by_member_id=$2::uuid where id=$1::uuid", [f.importedPurchase,f.head]);
     expect(actual(await budgets())).toBe(1500);
   });
