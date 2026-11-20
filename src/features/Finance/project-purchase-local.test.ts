@@ -147,6 +147,11 @@ describe("dedicated local project purchase fixtures", () => {
     });
     expect(budget.approvedVersion!.entries[0].invoices).toHaveLength(2);
   });
+  it("projects invoice retry controls from the current local budget scope",async()=>{
+    const budget=await approved(),repo=createLocalProjectPurchaseRepository();await repo.mutate({action:"registerProjectPurchase",...binding,requestId:crypto.randomUUID(),purchase:await input(budget.approvedVersion!.entries[0].entryId)});
+    const budgets=createLocalProjectBudgetRepository();expect((await budgets.detail(budget.id)).approvedVersion!.entries[0].invoices?.[0].canRetry).toBe(true);
+    role("project_lead");const read=await budgets.detail(budget.id);expect(read.approvedVersion!.entries[0].invoices?.[0]).toMatchObject({transferStatus:"needs_attention",canRetry:false,viewerUrl:null});
+  });
   it("rejects unauthorized profiles, forged entries and files already consumed by another purchase", async () => {
     await approved();
     const repo = createLocalProjectPurchaseRepository(),

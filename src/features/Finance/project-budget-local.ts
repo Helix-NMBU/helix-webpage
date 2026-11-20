@@ -211,7 +211,9 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
         scopes(state).find((item) => item.projectId === budget.projectId);
       if (!budget || !scope)
         fail("You do not have access to this project budget.");
-      return structuredClone({ ...budget, capabilities: scope.capabilities });
+      const detail=structuredClone({ ...budget, capabilities: scope.capabilities });
+      for(const version of [detail.approvedVersion,detail.pendingVersion,...(detail.historyVersions??[])])for(const entry of version?.entries??[])for(const invoice of entry.invoices??[])invoice.canRetry=scope.capabilities.canRegisterPurchase && invoice.backend==='google_drive' && invoice.transferStatus!=='stored';
+      return detail;
     },
     async mutate(change: ProjectBudgetMutation) {
       const state = read(),
