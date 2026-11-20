@@ -18,7 +18,7 @@ export function allocatedSystemCatalog(systems:readonly BudgetHierarchySystem[],
     if(output.some(system=>system.id===partition.systemId&&system.departmentKey===partition.departmentKey))continue;
     const physical=systems.find(system=>system.id===partition.systemId),department=departments.find(department=>department.departmentKey===partition.departmentKey);
     if(!physical||!department)throw new Error("The financial allocation catalog is incomplete.");
-    output.push({...physical,...department,physicalDepartmentKey:physical.physicalDepartmentKey??physical.departmentKey});
+    output.push({...physical,departmentKey:department.departmentKey,departmentName:department.departmentName,sortOrder:department.sortOrder,physicalDepartmentKey:physical.physicalDepartmentKey??physical.departmentKey});
   }
   return output;
 }

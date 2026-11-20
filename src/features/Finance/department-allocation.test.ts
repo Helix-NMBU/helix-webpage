@@ -18,7 +18,8 @@ describe("responsible budget department allocation",()=>{
 
 it("partitions one physical system between accounting departments without duplicating purchase choices",()=>{
  const physical={id:"shared",code:"SYS",name:"Shared",active:true,departmentKey:"electrical",departmentName:"Electronics",sortOrder:2};
- const systems=allocatedSystemCatalog([physical],[{departmentKey:"mechanical",departmentName:"Mechanical",sortOrder:1}],[{systemId:"shared",departmentKey:"mechanical"}]);
+ const ownerWithExtraFields={id:"DEPARTMENT-ID",departmentKey:"mechanical",departmentName:"Mechanical",sortOrder:1};
+ const systems=allocatedSystemCatalog([physical],[ownerWithExtraFields,{departmentKey:"mechanical",departmentName:"Mechanical",sortOrder:1}],[{systemId:"shared",departmentKey:"mechanical"}]);
  const result=buildBudgetHierarchy({systems,items:[],unallocated:[{id:"protected",publicRef:"UNALLOC",systemId:"shared",actualNok:"25.00",note:null,revision:0,allocationDepartmentKey:"mechanical"},{id:"protected",publicRef:"UNALLOC",systemId:"shared",actualNok:"10.00",note:null,revision:0,allocationDepartmentKey:"electrical"}],includePrivateUnallocated:false});
  expect(result.departments.map(d=>[d.departmentKey,d.actualNok])).toEqual([["mechanical","25.00"],["electrical","10.00"]]);
  expect(result.choices.systems).toHaveLength(1);expect(result.choices.systems[0]).toMatchObject({id:"shared",departmentKey:"electrical"});

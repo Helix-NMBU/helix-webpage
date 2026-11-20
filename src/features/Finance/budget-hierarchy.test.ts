@@ -17,3 +17,7 @@ it("sums effective plans and every actual once while retaining removed and unbud
 it("refuses duplicate stable identities rather than doubling a mapping copy", () => {
   expect(() => buildBudgetHierarchy({ systems, items: [item("same"), item("same")], unallocated: [], includePrivateUnallocated: true })).toThrow(/once/);
 });
+
+it("rejects a normal plan duplicated across accounting departments",()=>{
+ expect(()=>buildBudgetHierarchy({systems:[...systems,{...systems[0],departmentKey:"other"}],items:[item("same",{allocationDepartmentKey:"dep"}),item("same",{allocationDepartmentKey:"other"})],unallocated:[],includePrivateUnallocated:false})).toThrow(/once/);
+});

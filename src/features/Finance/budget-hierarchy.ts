@@ -21,7 +21,7 @@ export function buildBudgetHierarchy(input: {
 }): { departments: PublicDepartmentBudget[]; choices: BudgetChoices } {
   const seen = new Set<string>();
   for (const entry of [...input.items, ...input.unallocated]) {
-    const identity = "allocationDepartmentKey" in entry && entry.allocationDepartmentKey ? `${entry.id}:${entry.allocationDepartmentKey}` : entry.id;
+    const identity = input.unallocated.some(unallocated=>unallocated===entry) && "allocationDepartmentKey" in entry && entry.allocationDepartmentKey ? `${entry.id}:${entry.allocationDepartmentKey}` : entry.id;
     if (seen.has(identity)) throw new Error("A stable budget entry must occur once in the effective hierarchy.");
     seen.add(identity);
   }
