@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
+import { IconRefresh } from "@tabler/icons-react";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { MEMBER_ACCESS_CHANGED } from "../MemberPlatform/member-access-api";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -94,23 +94,21 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
     };
   }, [clear, refresh, repository, notify, navigate]);
   const data = state.scope === scope ? state.value : null;
-  return <Card aria-labelledby="department-budget-title" aria-busy={loading} className="gap-4">
-    <CardHeader className="gap-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <CardTitle><h2 id="department-budget-title" className="text-lg font-medium">Allocated budget</h2></CardTitle>
-        <Button variant="ghost" size="sm" disabled={loading || sessionEnded} onClick={() => void refresh()}>Refresh allocated budget</Button>
+  return <section aria-labelledby="department-budget-title" aria-busy={loading} className="min-w-0 space-y-4 border-t pt-6">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="department-budget-title" className="text-sm font-medium text-muted-foreground">Allocated budget</h2>
+        <Button aria-label="Refresh allocated budget" variant="ghost" size="icon" className="size-7 shrink-0" disabled={loading || sessionEnded} onClick={() => void refresh()}><IconRefresh aria-hidden="true" className="size-3.5" /></Button>
       </div>
-      <CardDescription>{data ? `${state.stale ? "Last loaded approved allocation" : "Approved allocation"} · ${data.seasonCode}` : "Approved department allocation by project."}</CardDescription>
-      {loading && !data ? <Skeleton className="h-9 w-40" aria-label="Loading allocated budget" /> : <p className="text-3xl font-medium tabular-nums">{data ? amount(data.approvedTotalNok) : "—"}</p>}
-    </CardHeader>
-    <CardContent>
-      {data && <>
-        {data.projects.length ? <dl className="divide-y">{data.projects.map(project => <div className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 py-3" key={project.projectId}>
-          <dt className="min-w-0 break-words"><Link className="underline-offset-4 hover:underline focus-visible:underline" to={`/projects/${encodeURIComponent(project.projectId)}`}>{project.projectName}</Link></dt>
-          <dd className="tabular-nums">{amount(project.approvedTotalNok)}</dd>
-        </div>)}</dl> : <p className="text-sm text-muted-foreground">No approved project budgets yet.</p>}
-        {data.legacyTotalNok !== "0.00" && <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3 border-t pt-3 text-sm"><span>Unmapped legacy budget</span><span className="tabular-nums">{amount(data.legacyTotalNok)}</span></div>}
-      </>}
-    </CardContent>
-  </Card>;
+      {loading && !data ? <Skeleton className="h-8 w-36" aria-label="Loading allocated budget" /> : <p className="break-words text-2xl font-medium tabular-nums">{data ? amount(data.approvedTotalNok) : "—"}</p>}
+      <p className="text-xs text-muted-foreground">{data ? `${state.stale ? "Last loaded approved allocation" : "Approved allocation"} · ${data.seasonCode}` : "Approved department allocation by project."}</p>
+    </div>
+    {data && <>
+      {data.projects.length ? <dl className="space-y-4">{data.projects.map(project => <div className="min-w-0 space-y-1" key={project.projectId}>
+        <dt className="break-words text-sm"><Link className="underline-offset-4 hover:underline focus-visible:underline" to={`/projects/${encodeURIComponent(project.projectId)}`}>{project.projectName}</Link></dt>
+        <dd className="break-words text-sm tabular-nums text-muted-foreground">{amount(project.approvedTotalNok)}</dd>
+      </div>)}</dl> : <p className="text-sm text-muted-foreground">No approved project budgets yet.</p>}
+      {data.legacyTotalNok !== "0.00" && <div className="space-y-1 border-t pt-3 text-sm"><p className="text-muted-foreground">Unmapped legacy budget</p><p className="break-words tabular-nums">{amount(data.legacyTotalNok)}</p></div>}
+    </>}
+  </section>;
 }

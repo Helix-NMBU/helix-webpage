@@ -1,3 +1,4 @@
+import { BudgetDisclosure } from "./BudgetDisclosure";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@libs/components/ui/button";
 import {
@@ -38,11 +39,13 @@ export function FundingBudgetProposals({
   onChanged,
   onDirtyChange,
   repository: provided,
+  compact = false,
 }: {
   budget: ProjectBudgetDetail;
   onChanged: () => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
   repository?: FundingApplicationRepository;
+  compact?: boolean;
 }) {
   const repository = useMemo(
     () => provided ?? createFundingApplicationRepository(),
@@ -131,6 +134,7 @@ export function FundingBudgetProposals({
     budget.capabilities.canDraft &&
     (!budget.pendingVersion || budget.pendingVersion.status === "draft");
   return (
+    <BudgetDisclosure compact={compact} label="Funding proposals" locked={!!selected}>
     <section
       aria-label="Funding budget proposals"
       className="space-y-3 border-t pt-4"
@@ -256,5 +260,6 @@ export function FundingBudgetProposals({
         </Dialog>
       )}
     </section>
+    </BudgetDisclosure>
   );
 }

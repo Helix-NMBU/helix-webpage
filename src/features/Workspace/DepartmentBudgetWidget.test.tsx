@@ -62,6 +62,9 @@ it("refreshes approvals without touching surrounding dirty input", async () => {
   const data = directoryFixture(), department = data.departments[0];
   await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><DepartmentWorkspace department={department} data={data} /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
   await act(async () => (container.querySelector('[aria-label="Edit department description"]') as HTMLButtonElement).click());
+  const sidebar = container.querySelector('aside[aria-label="Department details"]')!;
+  expect(sidebar.querySelector('[aria-labelledby="department-budget-title"]')).not.toBeNull();
+  expect(sidebar.textContent!.indexOf("Go to")).toBeLessThan(sidebar.textContent!.indexOf("Allocated budget"));
   const draft = container.querySelector('[aria-label="Department description"]') as HTMLTextAreaElement;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "Unfinished department description");

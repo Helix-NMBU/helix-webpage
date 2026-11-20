@@ -442,7 +442,6 @@ export function DepartmentWorkspace({
                   </button>
                 ) : null}
               </div>
-              {home && <DepartmentBudgetWidget key={`${data.viewerId}:${department.id}`} departmentId={department.id} viewerId={data.viewerId} />}
               <section
                 aria-labelledby="department-resources-title"
                 className="space-y-4"
@@ -483,7 +482,7 @@ export function DepartmentWorkspace({
                 )}
               </section>
             </div>
-            <aside className="space-y-8">
+            <aside aria-label="Department details" className="min-w-0 space-y-8">
               <div className="space-y-3">
                 <h2 className="text-sm font-medium text-muted-foreground">
                   Members
@@ -569,6 +568,7 @@ export function DepartmentWorkspace({
                   </Button>
                 )}
               </nav>
+              {home && <DepartmentBudgetWidget key={`${data.viewerId}:${department.id}`} departmentId={department.id} viewerId={data.viewerId} />}
             </aside>
           </div>
         </TabsContent>

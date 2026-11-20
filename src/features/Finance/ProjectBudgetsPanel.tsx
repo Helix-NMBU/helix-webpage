@@ -1,3 +1,5 @@
+import { BudgetDisclosure } from "./BudgetDisclosure";
+import { canonicalNokOre } from "./project-budget-diff";
 import { canReadProjectBudgetDraft } from "./project-budget-visibility";
 import { Link, useInRouterContext } from "react-router-dom";
 import type {MouseEvent,ReactNode} from "react";
@@ -53,7 +55,7 @@ import {
 } from "@libs/components/ui/empty";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { BUDGET_ITEM_CATEGORIES } from "./budget-domain";
-import { parseNokToOre } from "./money";
+import { formatOre, parseNokToOre } from "./money";
 import {
   PROJECT_BUDGET_STAGE_LABELS,
   type ProjectBudgetCapabilities,
@@ -926,6 +928,65 @@ export function ProjectBudgetsPanel({
     ) ?? [];
   const incurredScopes = workspace?.scopes.filter(scope => scope.capabilities.canRegisterPurchase && scope.responsibleDepartmentId && !workspace.budgets.some(header => header.projectId === scope.projectId)) ?? [];
   const incurredScope = incurredScopes.find(scope => scope.projectId === purchaseScopeId) ?? incurredScopes[0];
+  const secondaryActions = detail && (
+            <div className="flex flex-wrap items-center gap-2">
+              {projectId && <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event => { if (dirty.current) { event.preventDefault(); notify("Finish the open form", "Save or cancel your current form before leaving this budget.", { variant: "warning", href: null }); } }}>Open department budgets</BudgetWorkspaceLink>}
+              {detail.approvedVersion &&
+                detail.capabilities.canRequestChanges && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={(event) => {
+                      dialogOpener.current = event.currentTarget;
+                      setReasonAction("requestProjectBudgetChanges");
+                    }}
+                  >
+                    Request changes
+                  </Button>
+                )}
+              {canEdit && (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={(event) => {
+                      dialogOpener.current = event.currentTarget;
+                      setImportOpen(true);
+                    }}
+                  >
+                    Import CSV
+                  </Button>
+                </>
+              )}
+              {canDepartmentReview && <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the current edit","Save or cancel your input before leaving this budget.",{variant:"warning",href:null});}}}>Review department submission</BudgetWorkspaceLink>}
+              {canDepartmentReview && (
+                <Button
+                  variant="outline"
+                  disabled={busy}
+                  onClick={(event) => {
+                    dialogOpener.current = event.currentTarget;
+                    setReasonAction("returnProjectBudget");
+                  }}
+                >
+                  Return for correction
+                </Button>
+              )}
+              {detail.capabilities.canDraft &&
+                candidate &&
+                candidate.status !== "draft" && (
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={(event) => {
+                      dialogOpener.current = event.currentTarget;
+                      setReasonAction("withdrawProjectBudget");
+                    }}
+                  >
+                    Withdraw submission
+                  </Button>
+                )}
+            </div>
+  );
   const write = (action: "submitProjectBudget") =>
     detail &&
     mutate({
@@ -943,10 +1004,9 @@ export function ProjectBudgetsPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-medium">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Project budgets pass through their department lead and then Head of
-            Finance.
-          </p>
+          {!projectId && <p className="mt-1 text-sm text-muted-foreground">
+            Project budgets pass through their department lead and then Head of Finance.
+          </p>}
         </div>
         <div className="flex gap-2">
           <Button
@@ -1023,7 +1083,7 @@ export function ProjectBudgetsPanel({
               </div>
             </div>
           )}
-          <Table aria-label="Project budget list">
+          {!projectId && <Table aria-label="Project budget list">
             <TableHeader>
               <TableRow>
                 <TableHead>Project</TableHead>
@@ -1081,7 +1141,7 @@ export function ProjectBudgetsPanel({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </Table>}
           {matching.length === 0 && (
             <p className="text-sm text-muted-foreground">
               No budgets match these filters.
@@ -1092,16 +1152,17 @@ export function ProjectBudgetsPanel({
       {detailVisible && detail && displayed && (
         <section
           aria-label={`${detail.projectName} budget details`}
-          className="space-y-4 rounded-xl border p-4 sm:p-6"
+          className={projectId ? "min-w-0 space-y-5" : "space-y-4 rounded-xl border p-4 sm:p-6"}
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
-              <h3 className="text-lg font-medium">{detail.projectName}</h3>
+              {!projectId && <h3 className="text-lg font-medium">{detail.projectName}</h3>}
               <p className="text-sm text-muted-foreground">
                 {detail.responsibleDepartmentName} · {detail.seasonCode} ·
                 Version {displayed.versionNumber}
               </p>
               <Badge variant="secondary">{PROJECT_BUDGET_STAGE_LABELS[displayed.status]}</Badge>
+              {!projectId && <>
               <p className="text-sm text-muted-foreground">
                 {detail.approvedVersionId ? `Approved plan: ${money(detail.approvedTotalNok)}` : "No approved project plan"}
                 {detail.pendingTotalNok!==null ? ` · Proposed plan: ${money(detail.pendingTotalNok)}` : ""}
@@ -1110,33 +1171,9 @@ export function ProjectBudgetsPanel({
                 <BudgetWorkspaceLink href={`/projects/${detail.projectId}?tab=budget`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the open form","Save or cancel your current form before leaving this budget.",{variant:"warning",href:null});}}} >Open project budget</BudgetWorkspaceLink>
                 <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the open form","Save or cancel your current form before leaving this budget.",{variant:"warning",href:null});}}} >Open department budgets</BudgetWorkspaceLink>
               </div>
+              </>}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {detail.approvedVersion &&
-                detail.capabilities.canRequestChanges && (
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={(event) => {
-                      dialogOpener.current = event.currentTarget;
-                      setReasonAction("requestProjectBudgetChanges");
-                    }}
-                  >
-                    Request changes
-                  </Button>
-                )}
-              {canEdit && (
-                <>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={(event) => {
-                      dialogOpener.current = event.currentTarget;
-                      setImportOpen(true);
-                    }}
-                  >
-                    Import CSV
-                  </Button>
+            {canEdit && <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     disabled={busy || systems.length === 0}
@@ -1155,40 +1192,17 @@ export function ProjectBudgetsPanel({
                   >
                     Send to department lead
                   </Button>
-                </>
-              )}
-              {canDepartmentReview && <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the current edit","Save or cancel your input before leaving this budget.",{variant:"warning",href:null});}}}>Review department submission</BudgetWorkspaceLink>}
-              {canDepartmentReview && (
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={(event) => {
-                    dialogOpener.current = event.currentTarget;
-                    setReasonAction("returnProjectBudget");
-                  }}
-                >
-                  Return for correction
-                </Button>
-              )}
-              {detail.capabilities.canDraft &&
-                candidate &&
-                candidate.status !== "draft" && (
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={(event) => {
-                      dialogOpener.current = event.currentTarget;
-                      setReasonAction("withdrawProjectBudget");
-                    }}
-                  >
-                    Withdraw submission
-                  </Button>
-                )}
-            </div>
+            </div>}
+            {!projectId && secondaryActions}
           </div>
+          {projectId && <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 sm:grid-cols-3">
+            <div><dt className="text-xs text-muted-foreground">{viewingCandidate ? "Proposed budget" : "Budget"}</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(displayed.totalNok)}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Spent</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.actualNok ?? formatOre(displayed.entries.reduce((total, item) => total + canonicalNokOre(item.actualNok), 0n)))}</dd></div>
+            {viewingCandidate && detail.approvedVersion && <div><dt className="text-xs text-muted-foreground">Approved budget</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.approvedTotalNok)}</dd></div>}
+          </dl>}
           {detail.approvedVersion && (
-            <div className="max-w-md space-y-2">
-              <Label htmlFor="project-budget-version">Budget version</Label>
+            <div className={projectId ? "max-w-xs space-y-2" : "max-w-md space-y-2"}>
+              <Label htmlFor="project-budget-version" className={projectId ? "sr-only" : undefined}>Budget version</Label>
               <Select
                 value={
                   viewingCandidate
@@ -1229,24 +1243,26 @@ export function ProjectBudgetsPanel({
             </div>
           )}
           {detail.approvedVersion && candidate && (
+            <BudgetDisclosure compact={!!projectId} label="Review changes">
             <ProjectBudgetComparison
               approved={detail.approvedVersion}
               proposed={candidate}
               systems={workspace?.systems ?? []}
             />
+            </BudgetDisclosure>
           )}
-          {viewingCandidate && <p className="text-sm text-muted-foreground">Proposed amounts await both approvals. Actual costs and invoice history remain visible.</p>}
-          <p className="text-sm text-muted-foreground">Completion records fulfillment. Invoice payment is tracked separately.</p>
+          {!projectId && viewingCandidate && <p className="text-sm text-muted-foreground">Proposed amounts await both approvals. Actual costs and invoice history remain visible.</p>}
+          {!projectId && <p className="text-sm text-muted-foreground">Completion records fulfillment. Invoice payment is tracked separately.</p>}
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Description</TableHead>
-                <TableHead>System</TableHead>
+                {!projectId && <TableHead>System</TableHead>}
                 <TableHead>Priority</TableHead>
-                <TableHead>Category</TableHead>
+                {!projectId && <TableHead>Category</TableHead>}
                 <TableHead className="text-right">Planned</TableHead>
                 <TableHead className="text-right">Actual</TableHead>
-                <TableHead>Fulfillment</TableHead>
+                {!projectId && <TableHead>Fulfillment</TableHead>}
                 {canEdit && (
                   <TableHead>
                     <span className="sr-only">Actions</span>
@@ -1258,8 +1274,13 @@ export function ProjectBudgetsPanel({
               {entries.map((item) => (
                 <TableRow key={item.entryId}>
                   <TableCell className="max-w-sm whitespace-normal">
-                    {item.description}
+                    <span className="font-medium">{item.description}</span>
+                    {projectId && <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <span>{workspace?.systems?.find(system => system.id === item.systemId)?.name ?? "System"}</span>
+                      {item.completion !== "not_purchased" && <span>{item.completion === "complete" ? "Complete" : "Partially purchased"}</span>}
+                    </div>}
                     {item.invoices?.length ? (
+                      <BudgetDisclosure compact={!!projectId} label={`Invoices (${item.invoices.length})`}>
                       <ul className="mt-2 space-y-2">
                         {item.invoices.map(invoice => (
                           <li key={`${invoice.purchaseId}-${invoice.documentId}`}>
@@ -1267,20 +1288,21 @@ export function ProjectBudgetsPanel({
                           </li>
                         ))}
                       </ul>
+                      </BudgetDisclosure>
                     ) : null}
                   </TableCell>
-                  <TableCell>
+                  {!projectId && <TableCell>
                     {workspace?.systems?.find(
                       (system) => system.id === item.systemId,
                     )?.name ?? "System"}
-                  </TableCell>
+                  </TableCell>}
                   <TableCell>{item.priority}</TableCell>
-                  <TableCell>{item.category.replace(/_/g, " ")}</TableCell>
+                  {!projectId && <TableCell>{item.category.replace(/_/g, " ")}</TableCell>}
                   <TableCell className="text-right whitespace-nowrap">
                     {money(item.plannedNok)}
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">{money(item.actualNok)}</TableCell>
-                  <TableCell>{item.completion==="complete" ? "Complete" : item.completion==="partial" ? "Partially purchased" : "Not purchased"}</TableCell>
+                  {!projectId && <TableCell>{item.completion==="complete" ? "Complete" : item.completion==="partial" ? "Partially purchased" : "Not purchased"}</TableCell>}
                   {canEdit && (
                     <TableCell>
                       <div className="flex gap-1">
@@ -1323,6 +1345,7 @@ export function ProjectBudgetsPanel({
           {canEdit &&
             candidate &&
             candidate.entries.some((item) => item.removed) && (
+              <BudgetDisclosure compact={!!projectId} label={`Removed entries (${candidate.entries.filter(item => item.removed).length})`}>
               <section
                 aria-label="Removed entries"
                 className="space-y-3 border-t pt-4"
@@ -1382,15 +1405,20 @@ export function ProjectBudgetsPanel({
                   </TableBody>
                 </Table>
               </section>
+              </BudgetDisclosure>
             )}
-          <p className="text-right font-medium">
+          {!projectId && <p className="text-right font-medium">
             Total {money(displayed.totalNok)}
-          </p>
-          <FundingBudgetProposals budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />
+          </p>}
+          {projectId && <BudgetDisclosure compact label="More actions" locked={busy || dirty.current}>{secondaryActions}</BudgetDisclosure>}
+          <FundingBudgetProposals compact={!!projectId} budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />
           {detail.capabilities.canRegisterPurchase && (
+            <BudgetDisclosure compact={!!projectId} label="Purchases and completion" locked={purchaseDirty}>
             <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onEvidenceChanged={() => load(false)} onDirtyChange={setPurchaseDirty} onAccessLost={clearPrivate} />
+            </BudgetDisclosure>
           )}
           {detail.decisions.length > 0 && (
+            <BudgetDisclosure compact={!!projectId} label="Approval history">
             <div className="space-y-2 border-t pt-4">
               <h4 className="text-sm font-medium">Approval history</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -1422,6 +1450,7 @@ export function ProjectBudgetsPanel({
                 ))}
               </ul>
             </div>
+            </BudgetDisclosure>
           )}
         </section>
       )}
