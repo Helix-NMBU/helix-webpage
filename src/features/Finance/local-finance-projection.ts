@@ -290,7 +290,11 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
             line.systemId,
             "project",
             purchase.projectId,
-            purchase.responsibleDepartmentId,
+            input.budgets.find(
+              (budget) =>
+                budget.projectId === purchase.projectId &&
+                budget.seasonCode === input.seasonCode,
+            )?.responsibleDepartmentId ?? purchase.responsibleDepartmentId,
             true,
           ),
           key = `${line.systemId}:${allocationDepartmentKey}`,

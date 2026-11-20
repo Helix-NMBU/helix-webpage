@@ -302,6 +302,56 @@ describe("canonical local Finance projection", () => {
     ).toBe(true);
   });
 
+  it("moves pre-header incurred actuals to the subsequently selected owner without rewriting recorded purchase context", () => {
+    const data = input();
+    data.departments = [
+      {
+        id: "recorded-a",
+        departmentKey: "mechanical",
+        departmentName: "Mechanical",
+        sortOrder: 0,
+      },
+      {
+        id: "current-b",
+        departmentKey: "b",
+        departmentName: "Owner B",
+        sortOrder: 1,
+      },
+    ];
+    const record = purchase("incurred", null, "75.00", {
+      responsibleDepartmentId: "recorded-a",
+    });
+    data.purchases = [record];
+    expect(
+      projectLocalFinance(data).budgets.departments.find(
+        (department) => department.departmentKey === "mechanical",
+      )?.actualNok,
+    ).toBe("75.00");
+    const header = budget([]);
+    header.responsibleDepartmentId = "current-b";
+    header.approvedVersion = null;
+    header.approvedVersionId = null;
+    header.approvedTotalNok = "0.00";
+    data.budgets = [header];
+    const moved = projectLocalFinance(data);
+    expect(
+      moved.budgets.departments.find(
+        (department) => department.departmentKey === "mechanical",
+      )?.actualNok,
+    ).toBe("0.00");
+    expect(
+      moved.budgets.departments.find(
+        (department) => department.departmentKey === "b",
+      ),
+    ).toMatchObject({
+      plannedNok: "0.00",
+      actualNok: "75.00",
+      unbudgetedNok: "75.00",
+    });
+    expect(record.responsibleDepartmentId).toBe("recorded-a");
+    expect(record.purchase.lines[0].systemId).toBe(systemId);
+  });
+
   it("keeps genuine legacy approval until first project approval, then replaces the same stable anchor", () => {
     const b = budget([
       entry("00000000-0000-4000-8000-000000000100", { actualNok: "50.00" }),
