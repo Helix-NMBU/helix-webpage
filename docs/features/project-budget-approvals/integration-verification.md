@@ -56,3 +56,8 @@ No hosted staging, live Finance migration, invoice service write or deployment w
 - Separate user authorization for merge, production migration and deployment.
 
 These inputs do not prevent local implementation or an accurately described unmerged code PR. Mocked transfers and synthetic identities do not establish configured-service acceptance.
+
+
+## PR evidence
+
+Single [PR #144](https://github.com/Helix-NMBU/helix-webpage/pull/144), base main atb05c5a4, final reviewed product36b41f8. Documentation-only publication does not change product review applicability. GitHub's live head/check/merge state and the [HELIX-84 verification closure](https://linear.app/helixnmbu/issue/HELIX-84/pba-09-rehearse-migration-and-verify-the-integrated-feature) record the exact final CI outcome after this publication checkpoint. Required verify must pass with strict current-base freshness; the real Finance PostgreSQL job must also pass without skipped race coverage. The PR remains unmerged, and HELIX-75 remains open until merge.
