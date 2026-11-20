@@ -135,10 +135,12 @@ describe("reviewing revisions and CSV changes", () => {
     );
     await textarea("budget-return-reason", "Update supplier quote");
     await click("Request changes");
-    expect(container.textContent).toContain("No entry changes yet");
+    expect(container.textContent).not.toContain("No entry changes yet");
+    expect((await repo.detail(id)).pendingVersion).toBeNull();
     expect(container.textContent).not.toContain("Import CSV");
     role("project_lead");
     await render();
+    expect(container.textContent).toContain("No entry changes yet");
     await click("Import CSV");
     await textarea(
       "project-budget-csv",

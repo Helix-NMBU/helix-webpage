@@ -86,6 +86,8 @@ describe("project revision and candidate CSV fixtures", () => {
       action: "requestProjectBudgetChanges",
       reason: "Update supplier quote",
     });
+    expect((await repo.detail(id)).pendingVersion).toBeNull();
+    role("project_lead");
     const candidate = (await repo.detail(id)).pendingVersion!;
     expect(candidate.entries[0].entryId).toBe(
       initial.approvedVersion!.entries[0].entryId,
@@ -99,6 +101,8 @@ describe("project revision and candidate CSV fixtures", () => {
       action: "requestProjectBudgetChanges",
       reason: "Correct category",
     });
+    expect((await repo.detail(id)).pendingVersion).toBeNull();
+    role("project_lead");
     const changed = await repo.detail(id);
     expect(changed.pendingVersion).toMatchObject({
       id: candidate.id,

@@ -92,6 +92,13 @@ function budgets(): {
   const saved = localStorage.getItem(BUDGET_KEY);
   return saved ? JSON.parse(saved) : { version: 0, budgets: [], requests: {} };
 }
+function eligibleFundingEntries(budget: ProjectBudgetDetail): ProjectBudgetEntry[] {
+  const approved = (budget.approvedVersion?.entries ?? []).filter(entry => !entry.removed && entry.status !== "cancelled");
+  const submitted = ["department_pending", "finance_pending"].includes(budget.pendingVersion?.status ?? "")
+    ? (budget.pendingVersion?.entries ?? []).filter(entry => !entry.removed && entry.status !== "cancelled") : [];
+  const approvedIds = new Set(approved.map(entry => entry.entryId));
+  return [...approved, ...submitted.filter(entry => !approvedIds.has(entry.entryId))];
+}
 function head() {
   if (localFundingRole() !== "head_of_finance")
     fail("Head of Finance access is required.");
@@ -325,12 +332,7 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
           ),
         })),
         entries: data.budgets.flatMap((budget) =>
-          (
-            budget.approvedVersion?.entries ??
-            budget.pendingVersion?.entries ??
-            []
-          )
-            .filter((entry) => !entry.removed && entry.status !== "cancelled")
+          eligibleFundingEntries(budget)
             .map((entry) => ({
               entryId: entry.entryId,
               projectBudgetId: budget.id,
@@ -338,8 +340,8 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
               description: entry.description,
               plannedNok: entry.plannedNok,
               ordinaryPriority: entry.ordinaryPriority,
-              effectivePriority: entry.priority,
-              approved: !!budget.approvedVersion,
+              effectivePriority: budget.approvedVersion?.entries.some(item => item.entryId === entry.entryId && !item.removed && item.status !== "cancelled") ? entry.priority : "Pending approval",
+              approved: budget.approvedVersion?.entries.some(item => item.entryId === entry.entryId && !item.removed && item.status !== "cancelled") ?? false,
               entry,
             })),
         ),
@@ -563,15 +565,9 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
             entry: ProjectBudgetEntryInput;
           if (change.action === "linkFundingApplicationEntry") {
             budget = data.budgets.find((item) =>
-              [
-                ...(item.approvedVersion?.entries ?? []),
-                ...(item.pendingVersion?.entries ?? []),
-              ].some((entry) => entry.entryId === change.entryId),
+              eligibleFundingEntries(item).some((entry) => entry.entryId === change.entryId),
             );
-            const found = [
-              ...(budget?.approvedVersion?.entries ?? []),
-              ...(budget?.pendingVersion?.entries ?? []),
-            ].find(
+            const found = (budget ? eligibleFundingEntries(budget) : []).find(
               (entry) => entry.entryId === change.entryId && !entry.removed,
             );
             if (!found || !budget)

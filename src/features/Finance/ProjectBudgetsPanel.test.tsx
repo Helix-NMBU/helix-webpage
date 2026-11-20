@@ -299,6 +299,30 @@ describe("project budget controls", () => {
     const attempts=mutate.mock.calls.filter(call=>call[0].action==="saveProjectBudgetEntry");expect(attempts[attempts.length-1][0]).toMatchObject({expectedRevision:initial.revision});
     expect((await original(id)).pendingVersion!.entries[0].description).toBe("Frame tubes");expect((await original(id)).pendingVersion!.entries[0].plannedNok).toBe("12000.00");
   });
+  it("clears an overlapping Finance author's private editor when the project assignment is removed", async () => {
+    await submit();
+    await approveLocalDepartmentCandidates(departmentId);
+    role("project_lead");
+    const approved = await repo.detail(id);
+    await repo.mutate({ action: "requestProjectBudgetChanges", projectBudgetId: id, expectedRevision: approved.revision, requestId: crypto.randomUUID(), reason: "Private revision" });
+    const { localBudgetWorkspace } = await import("./project-budget-local");
+    const workspace = localBudgetWorkspace(), project = workspace.projects.find(item => item.id === projectId)!;
+    const financeActor = "33333333-3333-4333-8333-333333333333";
+    project.leadIds = [...(project.leadIds ?? []), financeActor];
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify(workspace));
+    role("finance");
+    await render();
+    await click("Edit");
+    await act(async () => input("budget-entry-description", "Private overlapping role quote"));
+    project.leadIds = (project.leadIds ?? []).filter(actor => actor !== financeActor);
+    localStorage.setItem("helix-member-local-projects-v1", JSON.stringify(workspace));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("Private overlapping role quote");
+    expect(container.textContent).toContain("Frame tubes");
+    expect(container.textContent).toContain("Request changes");
+    expect((await repo.detail(id)).pendingVersion).toBeNull();
+  });
   it("uses Radix dismissal and preserves a failed reason form until correction", async () => {
     await submit();
     role("department_lead");

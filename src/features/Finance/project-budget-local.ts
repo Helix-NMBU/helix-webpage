@@ -1,3 +1,4 @@
+import { canReadProjectBudgetDraft } from "./project-budget-visibility";
 import { invalidateLocalDepartmentPackage } from "./department-budget-local-model";
 import { localInvoiceReference } from "./local-invoice-reference";
 import { assertLocalFundingEntry } from "./funding-application-local";
@@ -17,6 +18,7 @@ import type {
   ProjectBudgetMutation,
   ProjectBudgetMutationResult,
   ProjectBudgetScope,
+  ProjectBudgetSummary,
 } from "./project-budget-types";
 import type {
   ProjectBudgetFilters,
@@ -119,11 +121,11 @@ function scopes(state: State): ProjectBudgetScope[] {
       (departments.length === 1 ? departments[0].id :
         profile === "department_lead" ? departments.find(item => reviewerDepartments.some(department=>department.id===item.id))?.id ?? null :
         finance ? departments[0]?.id ?? null : null);
-    const author =
-      profile === "project_lead" &&
-      (project.leadIds ?? []).includes(data.viewerId);
-    const reviewer =
-      profile === "department_lead" && reviewerDepartments.some(department=>department.id===responsible);
+    const financeActor = head ? "44444444-4444-4444-8444-444444444444" : "33333333-3333-4333-8333-333333333333";
+    const author = (project.leadIds ?? []).includes(finance ? financeActor : data.viewerId) && (finance || profile === "project_lead");
+    const reviewer = profile === "department_lead"
+      ? reviewerDepartments.some(department=>department.id===responsible)
+      : finance && data.departments.some(department => department.id === responsible && (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(financeActor));
     if (!finance && !author && !reviewer) return [];
     const capabilities: ProjectBudgetCapabilities = {
       canRead: true,
@@ -138,7 +140,9 @@ function scopes(state: State): ProjectBudgetScope[] {
     };
     return [
       {
-        memberId: author
+        memberId: finance
+          ? financeActor
+          : author
           ? data.viewerId
           : reviewer
             ? "22222222-2222-4222-8222-222222222222"
@@ -163,6 +167,21 @@ function scopes(state: State): ProjectBudgetScope[] {
     ];
   });
 }
+function summary(budget: ProjectBudgetDetail, capabilities: ProjectBudgetCapabilities): ProjectBudgetSummary {
+  return {
+    id: budget.id, projectId: budget.projectId, projectName: budget.projectName,
+    seasonId: budget.seasonId, seasonCode: budget.seasonCode,
+    responsibleDepartmentId: budget.responsibleDepartmentId,
+    responsibleDepartmentName: budget.responsibleDepartmentName,
+    revision: budget.revision, approvedVersionId: budget.approvedVersionId,
+    pendingVersionId: budget.pendingVersionId, pendingStage: budget.pendingStage,
+    approvedTotalNok: budget.approvedTotalNok,
+    pendingTotalNok: budget.pendingStage === "draft" && !canReadProjectBudgetDraft(capabilities) ? null : budget.pendingTotalNok,
+    ...(budget.actualNok !== undefined ? { actualNok: budget.actualNok } : {}),
+    ...(budget.unbudgetedNok !== undefined ? { unbudgetedNok: budget.unbudgetedNok } : {}),
+    capabilities,
+  };
+}
 function view(
   state: State,
   filters: ProjectBudgetFilters = {},
@@ -182,14 +201,11 @@ function view(
       .filter(
         (budget) =>
           byProject.has(budget.projectId) &&
-          (!byProject.get(budget.projectId)!.capabilities.canReadFinance ||
+          (canReadProjectBudgetDraft(byProject.get(budget.projectId)!.capabilities) ||
             budget.pendingStage !== "draft" ||
             budget.approvedVersionId !== null),
       )
-      .map((budget) => ({
-        ...budget,
-        capabilities: byProject.get(budget.projectId)!.capabilities,
-      })),
+      .map((budget) => summary(budget, byProject.get(budget.projectId)!.capabilities)),
     systems: data.departments.map((department, index) => ({
       id: `90000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
       code: `SYS-${index + 1}`,
@@ -212,7 +228,14 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
         scopes(state).find((item) => item.projectId === budget.projectId);
       if (!budget || !scope)
         fail("You do not have access to this project budget.");
-      const detail=structuredClone({ ...budget, capabilities: scope.capabilities });
+      const draftAccess = canReadProjectBudgetDraft(scope.capabilities);
+      const detail: ProjectBudgetDetail = structuredClone({
+        ...summary(budget, scope.capabilities),
+        approvedVersion: budget.approvedVersion,
+        pendingVersion: budget.pendingVersion?.status === "draft" && !draftAccess ? null : budget.pendingVersion,
+        historyVersions: budget.historyVersions,
+        decisions: budget.decisions.map(decision => ({ ...decision, snapshot: draftAccess ? decision.snapshot : {} })),
+      });
       for(const version of [detail.approvedVersion,detail.pendingVersion,...(detail.historyVersions??[])])for(const entry of version?.entries??[])for(const invoice of entry.invoices??[])Object.assign(invoice,localInvoiceReference(invoice,scope.capabilities.canRegisterPurchase));
       return detail;
     },

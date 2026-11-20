@@ -98,7 +98,9 @@ describe("local initial project budget approvals", () => {
       "sendDepartmentBudgetPackage",
       "approveDepartmentBudgetPackage",
     ]);
-    expect(approved.decisions[0].snapshot).toEqual(before);
+    expect(approved.decisions[0].snapshot).toEqual({});
+    role("project_lead");
+    expect((await repo.detail(id)).decisions[0].snapshot).toEqual(before);
   });
   it("forbids editing submitted contents and requires the responsible department before Finance", async () => {
     const { repo, id } = await draft();
@@ -140,6 +142,8 @@ describe("local initial project budget approvals", () => {
     };
     await expect(repo.mutate(change)).rejects.toMatchObject({ status: 400 });
     await repo.mutate({ ...change, reason: "Include the supplier quote" });
+    expect((await repo.detail(id)).pendingVersion).toBeNull();
+    role("project_lead");
     const returned = await repo.detail(id);
     expect(returned.pendingVersion).toMatchObject({
       status: "draft",

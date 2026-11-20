@@ -1,3 +1,4 @@
+import { canReadProjectBudgetDraft } from "./project-budget-visibility";
 import { Link, useInRouterContext } from "react-router-dom";
 import type {MouseEvent,ReactNode} from "react";
 import { departmentPath } from "../Workspace/types";
@@ -55,6 +56,7 @@ import { BUDGET_ITEM_CATEGORIES } from "./budget-domain";
 import { parseNokToOre } from "./money";
 import {
   PROJECT_BUDGET_STAGE_LABELS,
+  type ProjectBudgetCapabilities,
   type ProjectBudgetDetail,
   type ProjectBudgetEntryInput,
   type ProjectBudgetMutation,
@@ -598,6 +600,7 @@ export function ProjectBudgetsPanel({
     saving = useRef(false),
     mutationGeneration = useRef(0),
     selected = useRef<string | null>(null),
+    selectedCapabilities = useRef<ProjectBudgetCapabilities | null>(null),
     dirty = useRef(false),
     version = useRef<number | null>(null);
   dirty.current =
@@ -645,6 +648,7 @@ export function ProjectBudgetsPanel({
     setPurchaseDirty(false);
     dirty.current = false;
     selected.current = null;
+    selectedCapabilities.current = null;
     setDenied(true);
   }, []);
   useEffect(() => {
@@ -676,6 +680,23 @@ export function ProjectBudgetsPanel({
         }
         if (!selected.current && next.budgets.length === 1)
           selected.current = next.budgets[0].id;
+        const currentCapabilities = next.budgets.find(budget => budget.id === selected.current)?.capabilities;
+        const previousCapabilities = selectedCapabilities.current;
+        selectedCapabilities.current = currentCapabilities ?? null;
+        if (currentCapabilities && previousCapabilities &&
+          ((previousCapabilities.canDraft && !currentCapabilities.canDraft) ||
+           (canReadProjectBudgetDraft(previousCapabilities) && !canReadProjectBudgetDraft(currentCapabilities)))) {
+          // Authorization loss takes precedence over keeping unsaved private Draft input.
+          authorizationEpoch.current++;
+          mutationGeneration.current++;
+          setDetail(null);
+          setEntry(null);
+          setReasonAction(null);
+          setImportOpen(false);
+          setProposalDirty(false);
+          setVersionView("approved");
+          dirty.current = false;
+        }
         if (dirty.current && !force) {
           if (changed)
             notify(
@@ -742,6 +763,7 @@ export function ProjectBudgetsPanel({
     setStage("all");setProjectFilter("all");setDepartmentFilter("all");
     dirty.current = false;
     selected.current = null;
+    selectedCapabilities.current = null;
     version.current = null;
     void load();
     const refresh = () => {
