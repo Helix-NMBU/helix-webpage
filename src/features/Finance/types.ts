@@ -1,5 +1,5 @@
 import type { FinanceInvoiceRecoveryRow, InvoiceEvidenceSummary } from "./invoice-types.js";
-import type { InvoiceStorageBackend, InvoiceTransferStatus } from "./project-budget-types.js";
+import type { InvoiceStorageBackend, InvoiceTransferStatus, OrdinaryBudgetPriority, ProjectBudgetCompletion, ProjectBudgetInvoiceReference } from "./project-budget-types.js";
 export const FINANCE_PROFILES = ["business", "finance", "head_of_finance"] as const;
 export type FinanceProfile = (typeof FINANCE_PROFILES)[number];
 
@@ -30,6 +30,9 @@ export type FinanceFieldError = {
 export type FinanceWarning = { message: string };
 
 export type BudgetItemPriority = "P1" | "P2" | "P3" | "P4" | "EM";
+/** Read projection only; manual entry validation retains BudgetItemPriority. */
+export type EffectiveBudgetItemPriority = BudgetItemPriority | "P0";
+export type FinanceApprovalPresence = { legacyBudget: boolean; projectBudgets: boolean };
 export type BudgetItemReuse = "new" | "reuse" | "inspect" | "consumable";
 export type BudgetItemStatus = "planned" | "active" | "done" | "cancelled";
 export type BudgetStatus = "draft" | "approved";
@@ -109,6 +112,8 @@ export type PublicOverview = {
   seasonCode: string | null;
   budgetStatus: "absent" | BudgetStatus;
   approvedOn: string | null;
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
   departments: PublicDepartmentSummary[];
   publicEarmarks: PublicEarmarkSummary[];
   scenarios?: FundingScenario[];
@@ -126,7 +131,17 @@ export type PublicBudgetItem = {
   effectivePlanNok: string;
   actualNok: string;
   differenceNok: string;
-  priority: BudgetItemPriority;
+  priority: EffectiveBudgetItemPriority;
+  ordinaryPriority?: OrdinaryBudgetPriority | null;
+  approved?: boolean;
+  source?: "legacy" | "project";
+  projectBudgetId?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  responsibleDepartmentId?: string | null;
+  approvedVersionId?: string | null;
+  completion?: ProjectBudgetCompletion;
+  invoices?: ProjectBudgetInvoiceReference[];
   reuseStatus: BudgetItemReuse;
   expectedPurchaseDate: string | null;
   status: BudgetItemStatus;
@@ -216,6 +231,8 @@ export type PublicBudgets = {
   seasonCode: string | null;
   budgetStatus: "absent" | BudgetStatus;
   approvedOn: string | null;
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
   revision: number;
   departments: PublicDepartmentBudget[];
   choices: BudgetChoices;
