@@ -1,7 +1,7 @@
 # Department budget submission amendment
 
 Feature: `project-budget-approvals`, parent HELIX-75.
-Status: draft amendment to specification revision 1. Not yet published or implemented.
+Status: draft amendment incorporated into specification revision 2. Not yet published or implemented.
 Date: 20 November 2026.
 Source: the user's department-budget clarification and explicit answers D11 through D14 in scope.md.
 
@@ -11,7 +11,7 @@ A department lead submits the whole allocated department budget. Head of Finance
 
 Before sending, the department lead sees every relevant project, including No budget and Draft projects. Missing or unfinished budgets do not block submission. An unfinished project contributes its last approved amount if it has one; unapproved proposed amounts remain outside the submitted total. The submission clearly identifies the candidates it includes, the unchanged approved baselines and the unfinished projects.
 
-One allocation question remains pending: whole project under its responsible budget department versus entries split by system department. The current implementation uses system department for its aggregate hierarchy, so this must be resolved before finalizing the amendment.
+The user confirmed full-project allocation to its responsible budget department, including other departments' systems. This supersedes the current system-department aggregation for project-owned entries. The concrete revision is now in spec.md and the new task draft is issues/pba-10-department-budget-packages.md. All product questions for this amendment are resolved.
 
 ## Proposed executable contract
 
@@ -32,4 +32,4 @@ Extend PBA-09's verification matrix and blockers so it follows PBA-04, PBA-08 an
 
 Dependency change: PBA-08 -> PBA-10 -> PBA-09. PBA-04 remains a prerequisite of PBA-09.
 
-No merge, production migration, Drive setup or deployment is included. Existing real-service and operator mapping release gates remain open. Publication and implementation of this amendment will be requested against the complete revised specification and ticket draft after the allocation decision is resolved.
+No merge, production migration, Drive setup or deployment is included. Existing real-service and operator mapping release gates remain open. Publication and implementation of this amendment will be requested against the complete revised specification and ticket draft against the complete specification revision 2 and task plan.

@@ -2,11 +2,11 @@
 
 ## Parent and requirements
 
-Feature: `project-budget-approvals`, specification revision 1.
-Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), approved specification revision 1. Read the complete approved specification before implementation.
+Feature: `project-budget-approvals`, specification revision 2.
+Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), specification revision 2, amendment pending approval. Read the complete approved specification before implementation.
 Requirements: F-01, F-02, F-03, F-04, F-05, F-06, F-07, F-08, F-09, F-10, F-11, F-12, F-13, F-14, F-15.
 Tracker: Linear HELIX, project P-HELIX-4, existing Finance milestone.
-Source: scope.md decisions D1-D10. Approved for publication on 19 November 2026. Implementation starts only with a separate Deliver request.
+Source: scope.md decisions D1-D15. Revision 1 was published on 19 November 2026; revision 2 amendment approval is pending. Deliver is already active.
 
 ## What to build
 
@@ -14,7 +14,8 @@ Verify the complete project-budget workflow and safe adoption of existing financ
 
 ## Acceptance criteria
 
-- [ ] Run V-01 through V-09 against the integrated feature, including real PostgreSQL races and a legacy-to-project mapping rehearsal. Recheck all ten scope decisions and all F-01 through F-15 requirements against implementation evidence.
+- [ ] Verify department readiness with No budget/Draft projects, grouped New/Changed/Removed comparisons, complete responsible-department allocation and two-project all-or-none package approval. Deny individual-project final bypass and preserve unchanged approved baselines, purchases and invoice history through stale/returned/withdrawn packages.
+- [ ] Run V-01 through V-09 against the integrated feature, including real PostgreSQL races and a legacy-to-project mapping rehearsal. Recheck all fifteen scope decisions and all F-01 through F-15 requirements against implementation evidence.
 - [ ] Demonstrate a dry run writes nothing, mapping conflicts remain visible, real mapped project candidates receive sequential approval, legacy effective plan switches once, and IDs/actuals/requests/commitments/private evidence/payment/void history survive. Preserve unmatched records; do not fabricate mapping data.
 - [ ] Ensure finance concurrency CI actually loads the new migrations and executes the new cases with its loopback test database. A green run with skipped race cases is insufficient.
 - [ ] Pass client/API/runtime typechecks, relevant full tests, lint, build/static guard and both source/generated at-most-11 function checks. Re-run only when further changes or unresolved failures justify it; document unrelated baseline issues without hiding them.
@@ -24,7 +25,7 @@ Verify the complete project-budget workflow and safe adoption of existing financ
 
 ## Blocked by
 
-HELIX-77, HELIX-83. These must be integrated and their contracts available before scheduling this ticket.
+HELIX-77, HELIX-83 and PBA-10, whose Linear identifier will be recorded after amendment approval. These must be integrated and their contracts available before scheduling this ticket.
 
 ## Shared contracts and change areas
 
@@ -42,5 +43,5 @@ Specification cases: V-01, V-02, V-03, V-04, V-05, V-06, V-07, V-08, V-09.
 
 ## Status
 
-Approved, published in Linear. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
+Existing HELIX-84 is published and Backlog. Its revision 2 scope and added PBA-10 blocker await complete amendment approval. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
 

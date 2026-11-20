@@ -1,0 +1,16 @@
+{
+  "revision": 2,
+  "status": "draft_awaiting_approval",
+  "parent": "HELIX-75",
+  "new_child": "PBA-10",
+  "changed_existing_child": "HELIX-84",
+  "milestoneId": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+  "approvedDraftHashes": {
+    "spec.md": "fc3ba22dbcb011b5ef6117749e6c4c6e85debff26a54bc0afbc21df76733c72e",
+    "tickets.md": "66599cc93441a5656a1fbb65b7601eac3a2e2692fa6eb5be83fd998e2ff917d5",
+    "issues/pba-10-department-budget-packages.md": "a13b95a38dff922b4d29c90a3fe0ebf0709347e5de1849a8a1d6a744f8853d59",
+    "issues/pba-09-integration-and-migration-verification.md": "5c6d9c9e38e3902a49356e2551698cb3875bcaa28d259adfee6b0c6d6b8deead"
+  },
+  "approval": null,
+  "publication": null
+}

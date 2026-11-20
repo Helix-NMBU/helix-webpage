@@ -1,7 +1,7 @@
 # Project budgets, approvals and purchases
 
 Feature: `project-budget-approvals`
-Status: `draft amendment`
+Status: `ready-for-prepare`
 Updated: 20 November 2026
 Tracker: Linear, Helix member Platform, `P-HELIX-4`
 Linear scope: [Project budgets, approvals and purchases](https://linear.app/helixnmbu/document/project-budgets-approvals-and-purchases-draft-scope-992741c7eff0), document `9dd33fe4-7434-4a84-a693-9fd815ef2deb`.
@@ -120,7 +120,7 @@ These observations come from the current working tree, which contains unrelated 
 
 ## Preparation details and operational inputs
 
-Revision 1 was approved against D1 through D10. The department-submission clarification below adds confirmed decisions and one allocation question. Its complete delivery amendment is being prepared before publication. The following details belong in the reviewable Prepare specification; they are not additional user decisions already approved in this chat.
+Revision 1 was approved against D1 through D10. The department-submission clarification below adds confirmed decisions D11 through D15. Its complete delivery amendment is being prepared before publication. The following details belong in the reviewable Prepare specification; they are not additional user decisions already approved in this chat.
 
 - Use project and department entry points for scoped drafting and first approval, and Finance for the overview/final queue. Exact navigation, filters, read access, role-to-assignment resolution, return-for-correction controls, reasons and approval notifications are preparation details. Do not give a project lead organization-wide Financials access merely to use their own budget.
 - Work with one current budget for a project in a season and its revisions as the preparation default inferred from the requested singular project budget. If multiple independent budgets per project are needed, bring that scope change back to the user. Define stable entry identity, one pending revision, approved snapshots, comparison baselines, concurrency and edits after submission in the specification.
@@ -163,6 +163,8 @@ The user clarified that Finance receives the whole allocated department budget, 
 - D13: Finance review groups entries under their project, with project subtotals, a department total and explicit New, Changed and Removed labels with previous/proposed values.
 - D14: The department lead's pre-submission view includes projects that have not started a budget, rather than listing only existing budget headers.
 
-Open allocation decision: for a project spanning departments, should its full budget count under the responsible budget department or should entries be split by their system's department? The current canonical Finance hierarchy groups entries by system department. The saved Mechanical-owned project includes an Electronics entry, so this affects real totals and is not only presentation.
+- D15: The full project budget counts under its one responsible budget department, including entries for systems used by another department. The user explicitly chose this over splitting by system department. A project contributes to one department submission and is never counted twice.
+
+The current implementation groups canonical Finance aggregates by system department. PBA-10 must change this attribution for project-owned entries while preserving physical system identity and historical purchases. Projects with no selected budget department remain explicitly unallocated in readiness views until their project lead chooses the responsible department; a caller-dependent scope fallback is not financial ownership.
 
 The draft amendment is in `department-submission-amendment.md`. Existing PBA-08 canonical facts, historical evidence and refresh work can continue. The new department package lifecycle and final feature acceptance must use the amended approved contract. Revision 1 implementation evidence remains historical evidence and does not prove the new package behavior.
