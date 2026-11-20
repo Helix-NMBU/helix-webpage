@@ -41,6 +41,7 @@ PBA-01 through PBA-07 are complete on the feature branch under revision 1. PBA-0
 
 - Project leads draft and submit their own candidates. Department leads preview all projects and send the complete department budget. Head of Finance approves the included project changes together, with no individual-project final-approval bypass.
 - Missing/Draft projects remain visible for follow-up and do not block sending. They contribute only their last approved amounts. Multi-department projects with no selected budget owner are explicitly unallocated; a scope-discovery fallback never creates financial ownership.
+- Each department homepage shows its approved allocation and project breakdown to authorized department members. It reuses the same totals and omits private evidence and unsubmitted Draft values.
 - Each project contributes its full budget to its responsible department, including entries for another department's systems. Keep physical system and recorded purchase identities. Show unmapped legacy plans separately until genuine approved replacement.
 - Finance sees every project group, entry, project subtotal and department total, with New/Changed/Removed and old/new values. A fixed submission pins plan contents while actuals/invoices refresh separately.
 - Atomic approval, package-aware return/withdrawal, current role checks and ordered locks preserve old approvals, purchased evidence, P0 and restricted funding. Existing Finance-pending candidates need a real department package send; no synthetic package approval.

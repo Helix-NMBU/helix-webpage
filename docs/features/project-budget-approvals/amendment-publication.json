@@ -82,9 +82,18 @@
     "childCount": 10
   },
   "publishedDocumentHashes": {
-    "spec.md": "dbabd53024eb72a85d23fa0a79f6e8c9b482029a8ec0a46b5130af223f6252f5",
-    "tickets.md": "986037b3f00c6aca85a5141e0ff35eac1ee99169cf43e6617630d8b393268054",
-    "issues/pba-10-department-budget-packages.md": "31a0c9ddc6ee3267fefc1ca84a81507d4daed09cf4af60a6decdeac9167a98ab",
-    "issues/pba-09-integration-and-migration-verification.md": "3194198c312440fd0bf4950b0a55cfc6aa397439f96f78503975bec32ba379ec"
-  }
+    "spec.md": "68df4c31436e12297b6cd99b3077f651bbcc8005c45169a6366de1a367018af8",
+    "tickets.md": "cf7f8cc34ea970005bd4bcec9cec373850215281a397961fadeed56f70cc9aca",
+    "issues/pba-10-department-budget-packages.md": "34e8379065b1599d815b5362f6757c81d7c1e7b7fcd44fa8df181cb1b75828fe",
+    "issues/pba-09-integration-and-migration-verification.md": "e9e7d19fa81868ade99544ce49d0ded29f20491d8947dd783babd8469db34986"
+  },
+  "userAddenda": [
+    {
+      "date": "2026-11-20",
+      "decision": "D16",
+      "exactRequest": "Also, i dont remember if i stated it, but on the departments homepage then there should be a widget that displays the allocated budget to that department and a easy overview of just how its spread on what projects. so people can see at a glance within the department",
+      "scope": "Department homepage allocated-budget widget and project breakdown, included in PBA-10",
+      "authorization": "Direct user implementation request; no additional approval or allocation-policy change"
+    }
+  ]
 }

@@ -6,7 +6,7 @@ Feature: `project-budget-approvals`, specification revision 2.
 Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), approved specification revision 2. Read the complete approved specification before implementation.
 Requirements: F-01, F-02, F-03, F-04, F-05, F-06, F-07, F-08, F-09, F-10, F-11, F-12, F-13, F-14, F-15.
 Tracker: Linear HELIX, project P-HELIX-4, existing Finance milestone.
-Source: scope.md decisions D1-D15. Revision 1 was published on 19 November 2026; revision 2 was approved on 20 November 2026 with "Approve, publish and continue delivery". Deliver is already active.
+Source: scope.md decisions D1-D16. Revision 1 was published on 19 November 2026; revision 2 was approved on 20 November 2026 with "Approve, publish and continue delivery". Deliver is already active.
 
 ## What to build
 
@@ -14,8 +14,9 @@ Verify the complete project-budget workflow and safe adoption of existing financ
 
 ## Acceptance criteria
 
+- [ ] Verify the department homepage allocation widget for ordinary authorized department members, correct project subtotals, current approval freshness, cross-department/revoked denial and no invoice/pipeline/Draft leakage.
 - [ ] Verify department readiness with No budget/Draft projects, grouped New/Changed/Removed comparisons, complete responsible-department allocation and two-project all-or-none package approval. Deny individual-project final bypass and preserve unchanged approved baselines, purchases and invoice history through stale/returned/withdrawn packages.
-- [ ] Run V-01 through V-09 against the integrated feature, including real PostgreSQL races and a legacy-to-project mapping rehearsal. Recheck all fifteen scope decisions and all F-01 through F-15 requirements against implementation evidence.
+- [ ] Run V-01 through V-09 against the integrated feature, including real PostgreSQL races and a legacy-to-project mapping rehearsal. Recheck all sixteen scope decisions and all F-01 through F-15 requirements against implementation evidence.
 - [ ] Demonstrate a dry run writes nothing, mapping conflicts remain visible, real mapped project candidates receive sequential approval, legacy effective plan switches once, and IDs/actuals/requests/commitments/private evidence/payment/void history survive. Preserve unmatched records; do not fabricate mapping data.
 - [ ] Ensure finance concurrency CI actually loads the new migrations and executes the new cases with its loopback test database. A green run with skipped race cases is insufficient.
 - [ ] Pass client/API/runtime typechecks, relevant full tests, lint, build/static guard and both source/generated at-most-11 function checks. Re-run only when further changes or unresolved failures justify it; document unrelated baseline issues without hiding them.

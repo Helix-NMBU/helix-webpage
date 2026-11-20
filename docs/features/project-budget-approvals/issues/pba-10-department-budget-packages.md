@@ -4,7 +4,7 @@
 
 Parent: HELIX-75, `project-budget-approvals`, approved specification revision 2.
 Requirements: F-01, F-02, F-03, F-04, F-05, F-12, F-13, F-14, F-15.
-Source: scope.md decisions D11 through D15 and the department-submission contract in spec.md.
+Source: scope.md decisions D11 through D16 and the department-submission contract in spec.md.
 Tracker target: HELIX / Helix member Platform / existing Finance milestone. One new child; reuse the existing parent and nine published children.
 
 ## What to build
@@ -13,6 +13,7 @@ Replace individual project handoff/final approval with one department package. D
 
 ## Acceptance criteria
 
+- [ ] Each department homepage has an allocated-budget widget showing its effective approved total and project subtotals at a glance. Current department members can read this aggregate without broad Financials access; other departments and revoked members cannot. Use the same canonical responsible-department allocation, refresh after approval, and omit invoices, pipeline and unsubmitted Draft details.
 - [ ] The department view lists every associated project, including No budget, Draft, submitted candidates and approved baselines. It identifies who needs follow-up, the selected responsible budget department, readiness and last approved/proposed amounts. Projects with no selected owner remain explicitly unallocated rather than borrowing a caller-dependent fallback.
 - [ ] A current department lead previews and sends the whole allocated department budget. All included ready submitted candidate versions receive the department decision and enter Sent to approval (Finance). Unchanged projects use their approved baselines. Unfinished projects remain visible, do not block submission and do not add unsubmitted amounts.
 - [ ] The complete project budget belongs to its one responsible department, including other departments' systems. Other associated departments do not count it again. Preserve physical system identity, project-owned unbudgeted costs, removed-entry actuals and explicitly unmapped legacy subtotals in the canonical Finance and minimal Season aggregate readers.
