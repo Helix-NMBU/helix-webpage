@@ -107,7 +107,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      join finance.purchases p on p.id = l.purchase_id
      join finance.seasons season on season.id = p.season_id
      join finance.systems s on s.id = l.system_id
-     left join finance.budget_items i on i.id = l.budget_item_id
+     left join finance.effective_budget_entries i on i.id = l.budget_item_id
      where season.code = $1
      order by l.public_ref`,
     [seasonCode],

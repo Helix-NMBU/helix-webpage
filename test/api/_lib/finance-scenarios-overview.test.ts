@@ -435,7 +435,7 @@ describe("FIN-09-A01 commitment sums", () => {
     const itemId = await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
     let injections = 0;
     afterQuery = async (query) => {
-      if (!query.includes("i.id as item_id, i.public_ref")) return;
+      if (!query.includes("i.id as item_id,i.public_ref")) return;
       afterQuery = null;
       injections += 1;
       await pg.exec(`begin; update finance.budget_items set planned_ore = 20000 where id = '${itemId}'::uuid; select finance.bump_view_version(); commit;`);
@@ -697,7 +697,7 @@ describe("FIN-09-A04 overview ordering and retention", () => {
 });
 
 describe("FIN-09-A05 role filtered overview", () => {
-  it("shows draft aggregates only to finance and head, and scenarios without draft plans to business", async () => {
+  it("keeps legacy Draft rows outside approved aggregates and scenarios for every profile", async () => {
     const seasonId = await openSeason();
     const budgetId = await insertBudget(seasonId, "draft");
     const systemId = await insertSystem("mechanical-production", "SYS-DR", "Frame");
@@ -722,13 +722,13 @@ describe("FIN-09-A05 role filtered overview", () => {
 
     await grant("finance");
     const financeView = await readOverview();
-    expect(financeView.departments[0]?.plannedNok).toBe("77.00");
-    expect(financeView.scenarios?.[0]?.needNok).toBe("77.00");
+    expect(financeView.departments[0]?.plannedNok).toBe("0.00");
+    expect(financeView.scenarios?.[0]?.needNok).toBe("0.00");
     expect(financeView.earmarkSources).toEqual([]);
 
     await grant("head_of_finance");
     const headView = await readOverview();
-    expect(headView.departments[0]?.systems[0]?.plannedNok).toBe("77.00");
+    expect(headView.departments[0]?.systems[0]?.plannedNok).toBe("0.00");
     expect(headView.scenarios?.[2]?.eligibleFundingNok).toBe("500.00");
     expect(JSON.stringify(headView)).not.toContain("bank");
   });

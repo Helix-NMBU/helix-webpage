@@ -42,10 +42,10 @@ const read = (name: string) => readFileSync(new URL(name, migrationDirectory), "
 
 /** The minimal budget fixture uses the real verified pipeline permission functions. */
 export async function setupFundingPipelineFixture(db: ProjectBudgetTestDatabase) {
-  await db.exec(`alter table partner_deals.deals add column title text not null default 'Synthetic application',add column revision integer not null default 0,
-    add column primary_season_id uuid,add column stage text not null default 'proposal',add column negotiation_notes text not null default 'Private negotiation';
-    create table partner_deals.space_access(member_id uuid primary key references identity.members(id),pipeline boolean not null default false,agreements boolean not null default false);
-    create table partner_deals.member_grants(member_id uuid references identity.members(id),capability text,active boolean);
+  await db.exec(`alter table partner_deals.deals add column if not exists title text not null default 'Synthetic application',add column if not exists revision integer not null default 0,
+    add column if not exists primary_season_id uuid,add column if not exists stage text not null default 'proposal',add column if not exists negotiation_notes text not null default 'Private negotiation';
+    create table if not exists partner_deals.space_access(member_id uuid primary key references identity.members(id),pipeline boolean not null default false,agreements boolean not null default false);
+    create table if not exists partner_deals.member_grants(member_id uuid references identity.members(id),capability text,active boolean);
   `);
   const source = read("058_partner_deal_space_access.sql");
   for (const name of ["capabilities", "lock_actor"]) {

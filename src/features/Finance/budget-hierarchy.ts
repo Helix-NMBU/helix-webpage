@@ -16,6 +16,8 @@ export function buildBudgetHierarchy(input: {
   items: readonly PublicBudgetItem[];
   unallocated: readonly BudgetHierarchyUnallocated[];
   includePrivateUnallocated: boolean;
+  /** Aggregate-only actuals from unpublished legacy rows; no private entry metadata. */
+  retainedActuals?: readonly { systemId: string; actualNok: string; commitmentNok?: string }[];
 }): { departments: PublicDepartmentBudget[]; choices: BudgetChoices } {
   const seen = new Set<string>();
   for (const entry of [...input.items, ...input.unallocated]) {
@@ -31,11 +33,13 @@ export function buildBudgetHierarchy(input: {
   for (const catalog of ordered) {
     const items = input.items.filter(item => item.systemId === catalog.id).sort((a, b) => compareNb(a.publicRef, b.publicRef));
     const unallocated = input.unallocated.find(item => item.systemId === catalog.id);
-    if (!catalog.active && !items.length && !unallocated) continue;
+    const retained = input.retainedActuals?.filter(entry => entry.systemId === catalog.id) ?? [];
+    if (!catalog.active && !items.length && !unallocated && !retained.length) continue;
     const planned = items.reduce((total, item) => total + nokToOre(item.effectivePlanNok), 0n);
     const unbudgeted = nokToOre(unallocated?.actualNok ?? "0.00");
-    const actual = items.reduce((total, item) => total + nokToOre(item.actualNok), unbudgeted);
-    const commitment = items.reduce((total, item) => total + nokToOre(item.commitmentNok ?? "0.00"), nokToOre(unallocated?.commitmentNok ?? "0.00"));
+    const retainedActual = retained.reduce((total, entry) => total + nokToOre(entry.actualNok), 0n);
+    const actual = items.reduce((total, item) => total + nokToOre(item.actualNok), unbudgeted + retainedActual);
+    const commitment = items.reduce((total, item) => total + nokToOre(item.commitmentNok ?? "0.00"), nokToOre(unallocated?.commitmentNok ?? "0.00") + retained.reduce((total, entry) => total + nokToOre(entry.commitmentNok ?? "0.00"), 0n));
     const system: PublicSystemBudget = {
       id: catalog.id, code: catalog.code, name: catalog.name, active: catalog.active,
       plannedNok: formatOre(planned), actualNok: formatOre(actual), differenceNok: formatOre(planned - actual),

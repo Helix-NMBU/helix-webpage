@@ -1,3 +1,5 @@
+import { loadEffectiveFinancePresence, type EffectiveFinancePresence } from "./finance-effective-read.js";
+import { hasVisibleApprovedFinances } from "../../src/features/Finance/finance-calculations.js";
 import { createFinanceDrive, type FinanceDrive } from "./finance-drive.js";
 import { dispatchPurchaseInvoices, loadInvoiceRecovery, loadPurchaseInvoiceReferences, mutateInvoice } from "./finance-invoices.js";
 import { isProjectPurchaseMutation, loadProjectPurchaseContext, mutateProjectPurchase, setProjectBudgetCompletion } from "./finance-project-purchases.js";
@@ -22,7 +24,7 @@ import { deliverPending } from "./finance-outbox.js";
 import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
 import { loadFundingRecords } from "./finance-funding-read.js";
-import { attachCommitmentSummaries, loadFundingScenarios, loadOverview } from "./finance-summary.js";
+import { loadFundingScenarios, loadOverview } from "./finance-summary.js";
 import { osloToday } from "./finance-money.js";
 import { isFundingAction } from "../../src/features/Finance/funding.js";
 import { isRequestAction } from "../../src/features/Finance/requests.js";
@@ -176,8 +178,9 @@ export function createFinanceServices(deps: {
     return { unchanged: true, viewVersion: current.viewVersion };
   }
 
-  async function budgetState(seasonCode: string | null): Promise<{ status: "absent" | "draft" | "approved"; approvedOn: string | null; budgetId: string | null; revision: number }> {
-    if (!seasonCode) return { status: "absent", approvedOn: null, budgetId: null, revision: 0 };
+  async function budgetState(seasonCode: string | null): Promise<{ status: "absent" | "draft" | "approved"; approvedOn: string | null; budgetId: string | null; revision: number } & EffectiveFinancePresence> {
+    const presence = await loadEffectiveFinancePresence(db.query.bind(db), seasonCode);
+    if (!seasonCode) return { status: "absent", approvedOn: null, budgetId: null, revision: 0, ...presence };
     const [row] = await rows<{ status: "draft" | "approved" | null; approved_on: string | null; id: string | null; revision: number | null }>(
       `select b.status, b.approved_on::text as approved_on, b.id, b.revision
        from finance.seasons s
@@ -185,8 +188,8 @@ export function createFinanceServices(deps: {
        where s.code = $1`,
       [seasonCode],
     );
-    if (!row?.status || !row.id) return { status: "absent", approvedOn: null, budgetId: null, revision: 0 };
-    return { status: row.status, approvedOn: row.approved_on, budgetId: row.id, revision: Number(row.revision ?? 0) };
+    if (!row?.status || !row.id) return { status: "absent", approvedOn: null, budgetId: null, revision: 0, ...presence };
+    return { status: row.status, approvedOn: row.approved_on, budgetId: row.id, revision: Number(row.revision ?? 0), ...presence };
   }
 
   return {
@@ -239,7 +242,9 @@ export function createFinanceServices(deps: {
           seasonCode: current.seasonCode,
           budgetStatus: budget.status,
           approvedOn: budget.approvedOn,
-          showAggregates: budget.status === "approved" || (budget.status === "draft" && current.capabilities.draftBudgetItems),
+          approvedPresence: budget.approvedPresence,
+          hasRecordedActuals: budget.hasRecordedActuals,
+          showAggregates: hasVisibleApprovedFinances({ ...budget, budgetStatus: budget.status }) || (budget.status === "draft" && current.capabilities.draftBudgetItems),
           showPrivate: current.capabilities.financing,
           includeDraftItems: current.capabilities.draftBudgetItems,
           today: osloToday(),
@@ -256,7 +261,7 @@ export function createFinanceServices(deps: {
         const same = unchanged(current, knownVersion);
         if (same) return same;
         const budget = await budgetState(current.seasonCode);
-        const showItems = budget.status !== "draft" || current.capabilities.draftBudgetItems;
+        const showItems = hasVisibleApprovedFinances({ ...budget, budgetStatus: budget.status }) || current.capabilities.draftBudgetItems;
         const view: PublicBudgets = !budget.budgetId || !showItems
           ? {
             viewVersion: current.viewVersion,
@@ -264,10 +269,12 @@ export function createFinanceServices(deps: {
             budgetStatus: budget.status,
             approvedOn: budget.approvedOn,
             revision: budget.revision,
+            approvedPresence: budget.approvedPresence,
+            hasRecordedActuals: budget.hasRecordedActuals,
             departments: [],
             choices: { systems: [], items: [] },
           }
-          : await attachCommitmentSummaries(db.query.bind(db), await loadBudgetHierarchy(db, current, budget), current.seasonCode);
+          : await loadBudgetHierarchy(db, current, budget, await deps.authenticate(token));
         if ((await context(token)).viewVersion === current.viewVersion) return view;
       }
       throw new FinanceError(409, "Finance changed while loading budgets. Please try again.");

@@ -13,9 +13,12 @@ export async function bootstrapFinanceFeature(pg: ProjectBudgetTestDatabase) {
     create table if not exists neon_auth."user"(id uuid primary key,email text not null,"emailVerified" boolean not null,banned boolean);
     create table if not exists neon_auth.account(id uuid primary key,"userId" uuid references neon_auth."user"(id),"providerId" text,"accountId" text);
     alter table identity.members add column if not exists auth_user_id uuid references neon_auth."user"(id);
-    insert into neon_auth."user" select id,email,true,false from identity.members on conflict(id) do nothing;
+    insert into neon_auth."user" select coalesce(auth_user_id,id),email,true,false from identity.members on conflict(id) do nothing;
     update identity.members set auth_user_id=id where auth_user_id is null;
-    insert into neon_auth.account select id,id,'google',google_sub from identity.members on conflict(id) do nothing;
+    alter table neon_auth.account add column if not exists id uuid default gen_random_uuid();
+    insert into neon_auth.account(id,"userId","providerId","accountId")
+      select gen_random_uuid(),m.auth_user_id,'google',m.google_sub from identity.members m
+      where not exists(select 1 from neon_auth.account a where a."userId"=m.auth_user_id and a."providerId"='google' and a."accountId"=m.google_sub);
     create schema if not exists project_management;
     create table if not exists project_management.projects(id uuid primary key,season text not null,name text not null,lead_ids uuid[] not null,departments text[] not null,revision integer not null default 1);
     create table if not exists project_management.departments(id uuid primary key,season text not null,name text not null,revision integer not null default 1);

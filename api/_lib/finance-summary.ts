@@ -1,60 +1,30 @@
+import { REGISTERED_ACTUAL_ORE, OPEN_APPROVED_COMMITMENT_ORE } from "./finance-effective-read.js";
 import {
   buildDepartmentSummaries,
   calculateScenarios,
-  nokToOre,
   presentFinanceOverview,
-  usedFraction,
   type BudgetItemFact,
   type FundingFact,
   type FundingPartFact,
   type OverviewSystemFact,
 } from "../../src/features/Finance/finance-calculations.js";
 import { loadPublicEarmarks } from "./finance-funding-read.js";
-import { formatOre } from "./finance-money.js";
 import type { CvDatabase } from "./member-cv-service.js";
 import type {
-  BudgetItemPriority,
+  EffectiveBudgetItemPriority,
   BudgetItemStatus,
   FundingConfidence,
   FundingScenario,
   FundingStatus,
-  PublicBudgetItem,
-  PublicBudgets,
-  PublicDepartmentBudget,
   PublicOverview,
-  PublicSystemBudget,
 } from "./finance-types.js";
 
 type Query = CvDatabase["query"];
 
-const OPEN_COMMITMENT_ORE = `
-coalesce((
-  select sum(
-    case
-      when r.status = 'approved'
-       and r.approved_revision_id = rev.id
-       and coalesce(rl.approved_ore, 0) > coalesce(linked.spent, 0)
-      then coalesce(rl.approved_ore, 0) - coalesce(linked.spent, 0)
-      else 0
-    end
-  )
-  from finance.request_lines rl
-  join finance.request_revisions rev on rev.id = rl.revision_id
-  join finance.requests r on r.id = rev.request_id
-  left join lateral (
-    select coalesce(sum(pl.amount_ore), 0) as spent
-    from finance.purchase_lines pl
-    join finance.purchases p on p.id = pl.purchase_id
-    where pl.request_line_id = rl.id
-      and p.status = 'registered'
-  ) linked on true
-  where rl.budget_item_id = i.id
-), 0)
-`;
 
 type ItemRow = {
   id: string;
-  priority: BudgetItemPriority;
+  priority: EffectiveBudgetItemPriority;
   status: BudgetItemStatus;
   planned_ore: string;
   protected: boolean;
@@ -67,6 +37,7 @@ type ItemRow = {
   system_id: string;
   actual_ore: string;
   commitment_ore: string;
+  restricted_actual: { partId: string; amountOre: string }[];
 };
 
 type SystemRow = {
@@ -98,22 +69,21 @@ async function loadFacts(query: Query, seasonCode: string, includeDraftItems: bo
               i.earmark_id, part.amount_ore::text as earmark_amount_ore,
               fund.id as funding_id, fund.status as funding_status, fund.confidence as funding_confidence,
               fund.amount_ore::text as funding_amount_ore, i.system_id,
-              coalesce(act.actual_ore, 0)::text as actual_ore,
-              (${OPEN_COMMITMENT_ORE})::text as commitment_ore
-       from finance.budget_items i
-       join finance.budgets b on b.id = i.budget_id
-       join finance.seasons s on s.id = b.season_id
+              ${REGISTERED_ACTUAL_ORE}::text as actual_ore,
+              (${OPEN_APPROVED_COMMITMENT_ORE})::text as commitment_ore,
+              coalesce((select jsonb_agg(jsonb_build_object('partId',recorded_earmark_id,'amountOre',amount_ore::text)) from (
+                select actual.recorded_earmark_id,sum(actual.amount_ore) as amount_ore
+                from finance.registered_allocation_facts actual join finance.funding_parts recorded_part on recorded_part.id=actual.recorded_earmark_id
+                where actual.budget_item_id=i.id
+                group by actual.recorded_earmark_id) recorded),'[]'::jsonb) as restricted_actual
+       from finance.effective_budget_entries i
+       join finance.seasons s on s.id = i.season_id
        left join finance.funding_parts part on part.id = i.earmark_id
        left join finance.funding fund on fund.id = part.funding_id
-       left join lateral (
-         select coalesce(sum(a.amount_ore), 0) as actual_ore
-         from finance.allocations a
-         join finance.purchase_lines l on l.id = a.line_id
-         join finance.purchases p on p.id = l.purchase_id and p.status = 'registered'
-         where a.budget_item_id = i.id
-       ) act on true
        where s.code = $1
-         and ($2::boolean or b.status = 'approved')
+         and ($2::boolean or i.approved_version_id is not null or i.legacy_budget_status='approved' or i.protected
+           or exists(select 1 from finance.registered_allocation_facts actual where actual.budget_item_id=i.id)
+           or ${OPEN_APPROVED_COMMITMENT_ORE}>0)
        ) items), '[]'::jsonb) as items,
       coalesce((select jsonb_agg(to_jsonb(systems) order by systems.sort_order, systems.department_name,
                                  systems.department_key, systems.name, systems.code) from (
@@ -162,6 +132,7 @@ function toItemFact(row: ItemRow): BudgetItemFact {
     earmarkId: row.earmark_id,
     earmarkAmountOre: row.earmark_amount_ore === null ? null : ore(row.earmark_amount_ore),
     funding,
+    restrictedActual: row.restricted_actual.map(actual => ({ partId: actual.partId, amountOre: ore(actual.amountOre) })),
   };
 }
 
@@ -215,6 +186,8 @@ export async function loadOverview(query: Query, input: {
   seasonCode: string | null;
   budgetStatus: PublicOverview["budgetStatus"];
   approvedOn: string | null;
+  approvedPresence?: PublicOverview["approvedPresence"];
+  hasRecordedActuals?: boolean;
   showAggregates: boolean;
   showPrivate: boolean;
   includeDraftItems: boolean;
@@ -226,6 +199,8 @@ export async function loadOverview(query: Query, input: {
       seasonCode: null,
       budgetStatus: input.budgetStatus,
       approvedOn: input.approvedOn,
+      approvedPresence: input.approvedPresence,
+      hasRecordedActuals: input.hasRecordedActuals,
       departments: [],
       publicEarmarks: [],
       scenarios: [],
@@ -258,6 +233,8 @@ export async function loadOverview(query: Query, input: {
     seasonCode,
     budgetStatus: input.budgetStatus,
     approvedOn: input.approvedOn,
+    approvedPresence: input.approvedPresence,
+    hasRecordedActuals: input.hasRecordedActuals,
     departments,
     publicEarmarks,
     scenarios,
@@ -265,47 +242,4 @@ export async function loadOverview(query: Query, input: {
     showAggregates: input.showAggregates,
     showPrivate: input.showPrivate,
   });
-}
-
-function withUse<T extends { plannedNok: string; actualNok: string; commitmentNok?: string; usedFraction?: string | null }>(
-  entry: T,
-  commitmentOre: bigint,
-): T {
-  return {
-    ...entry,
-    commitmentNok: formatOre(commitmentOre),
-    usedFraction: usedFraction(nokToOre(entry.actualNok), nokToOre(entry.plannedNok)),
-  };
-}
-
-export async function attachCommitmentSummaries(query: Query, budgets: PublicBudgets, seasonCode: string | null): Promise<PublicBudgets> {
-  if (!seasonCode || budgets.departments.length === 0) return budgets;
-  const rows = await query<{ id: string; commitment_ore: string }>(
-    `select i.id, (${OPEN_COMMITMENT_ORE})::text as commitment_ore
-     from finance.budget_items i
-     join finance.budgets b on b.id = i.budget_id
-     join finance.seasons s on s.id = b.season_id
-     where s.code = $1`,
-    [seasonCode],
-  );
-  const commitment = new Map(rows.rows.map((row) => [row.id, ore(row.commitment_ore)]));
-  const departments = budgets.departments.map((department): PublicDepartmentBudget => {
-    let departmentCommitment = 0n;
-    const systems = department.systems.map((system): PublicSystemBudget => {
-      let systemCommitment = commitment.get(system.unbudgetedItemId ?? "") ?? 0n;
-      const items = system.items.map((item): PublicBudgetItem => {
-        const itemCommitment = commitment.get(item.id) ?? 0n;
-        systemCommitment += itemCommitment;
-        return {
-          ...item,
-          commitmentNok: formatOre(itemCommitment),
-          usedFraction: usedFraction(nokToOre(item.actualNok), nokToOre(item.effectivePlanNok)),
-        };
-      });
-      departmentCommitment += systemCommitment;
-      return { ...withUse(system, systemCommitment), items };
-    });
-    return { ...withUse(department, departmentCommitment), systems };
-  });
-  return { ...budgets, departments };
 }

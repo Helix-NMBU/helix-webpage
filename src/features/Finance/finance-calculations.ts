@@ -49,7 +49,7 @@ export type BudgetItemFact = {
   earmarkId: string | null;
   earmarkAmountOre: bigint | null;
   funding: FundingFact | null;
-  /** Eligible actual cost attributed to recorded funding parts, independently of the current plan link. */
+  /** Actual cost attributed to recorded funding parts, independently of the current plan link. */
   restrictedActual?: readonly { partId: string; amountOre: bigint }[];
 };
 

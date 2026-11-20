@@ -94,15 +94,18 @@ type SummaryRow = {
   id: string; project_id: string; project_name: string; season_id: string; season_code: string;
   responsible_department_id: string; department_name: string; revision: number;
   approved_version_id: string | null; pending_version_id: string | null; pending_stage: ProjectBudgetSummary["pendingStage"];
-  approved_total_ore: string; pending_total_ore: string | null; capabilities: ProjectBudgetScope["capabilities"];
+  approved_total_ore: string; pending_total_ore: string | null; actual_ore: string; unbudgeted_ore: string; capabilities: ProjectBudgetScope["capabilities"];
 };
 function summary(row: SummaryRow): ProjectBudgetSummary {
   return { id: row.id, projectId: row.project_id, projectName: row.project_name, seasonId: row.season_id, seasonCode: row.season_code,
     responsibleDepartmentId: row.responsible_department_id, responsibleDepartmentName: row.department_name, revision: row.revision,
     approvedVersionId: row.approved_version_id, pendingVersionId: row.pending_version_id, pendingStage: row.pending_stage,
+    actualNok: formatOre(BigInt(row.actual_ore ?? "0")), unbudgetedNok: formatOre(BigInt(row.unbudgeted_ore ?? "0")),
     approvedTotalNok: formatOre(BigInt(row.approved_total_ore ?? "0")), pendingTotalNok: row.pending_total_ore === null ? null : formatOre(BigInt(row.pending_total_ore)), capabilities: row.capabilities };
 }
 const SUMMARY_FIELDS = `h.id,h.project_id,p.name as project_name,h.season_id,s.code as season_code,h.responsible_department_id,d.name as department_name,
+ coalesce((select sum(a.amount_ore) from finance.registered_allocation_facts a where a.project_id=h.project_id and a.season_id=h.season_id),0)::text as actual_ore,
+ coalesce((select sum(a.amount_ore) from finance.registered_allocation_facts a where a.project_id=h.project_id and a.season_id=h.season_id and a.unbudgeted),0)::text as unbudgeted_ore,
  h.revision,h.approved_version_id,h.pending_version_id,pending.status as pending_stage,
  coalesce((select sum(e.planned_ore) from finance.project_budget_version_entries e where e.version_id=h.approved_version_id and not e.removed and e.status<>'cancelled'),0)::text as approved_total_ore,
  case when h.pending_version_id is not null then coalesce((select sum(e.planned_ore) from finance.project_budget_version_entries e where e.version_id=h.pending_version_id and not e.removed and e.status<>'cancelled'),0)::text else null end as pending_total_ore`;
@@ -123,7 +126,9 @@ export async function loadProjectBudgetWorkspace(db: CvDatabase, identity: Works
     if (departmentId) scopes = scopes.filter(scope => scope.responsibleDepartmentId === departmentId);
     const result = (await db.query<{ scopes: ProjectBudgetScope[]; headers: SummaryRow[]; systems: NonNullable<ProjectBudgetWorkspace["systems"]>; view_version: string }>(
       `with authorized as materialized (select finance.project_budget_scope($1::uuid,$2,$3,(item->>'projectId')::uuid,nullif(item->>'responsibleDepartmentId','')::uuid) as scope from jsonb_array_elements($4::jsonb) item)
-       select coalesce((select jsonb_agg(scope) from authorized),'[]'::jsonb) as scopes,
+       select coalesce((select jsonb_agg(scope || jsonb_build_object('financials',jsonb_build_object(
+         'actualNok',(coalesce((select sum(a.amount_ore) from finance.registered_allocation_facts a where a.project_id=(scope->>'projectId')::uuid and a.season_id=(scope->>'seasonId')::uuid),0)::numeric/100)::numeric(20,2)::text,
+         'unbudgetedNok',(coalesce((select sum(a.amount_ore) from finance.registered_allocation_facts a where a.project_id=(scope->>'projectId')::uuid and a.season_id=(scope->>'seasonId')::uuid and a.unbudgeted),0)::numeric/100)::numeric(20,2)::text))) from authorized),'[]'::jsonb) as scopes,
        coalesce((select jsonb_agg(to_jsonb(row)) from (select ${SUMMARY_FIELDS},authorized.scope->'capabilities' as capabilities
          from finance.project_budgets h ${SUMMARY_JOINS} join authorized on authorized.scope->>'projectId'=h.project_id::text where ${VISIBLE} order by p.name,h.id) row),'[]'::jsonb) as headers,
        coalesce((select jsonb_agg(jsonb_build_object('id',sys.id,'code',sys.code,'name',sys.name,'departmentName',project_management.canonical_department(dept.name)) order by sys.code)

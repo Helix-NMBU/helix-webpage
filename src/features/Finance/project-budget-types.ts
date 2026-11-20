@@ -26,6 +26,10 @@ export interface ProjectBudgetCapabilities {
   canRecordAward: boolean;
   canReleaseObligation: boolean;
 }
+export interface ProjectBudgetFinancials {
+  actualNok: string;
+  unbudgetedNok: string;
+}
 export interface ProjectBudgetScope {
   memberId: string;
   projectId: string;
@@ -36,6 +40,8 @@ export interface ProjectBudgetScope {
   departments: { id: string; name: string; leadIds: string[] }[];
   responsibleDepartmentId: string | null;
   capabilities: ProjectBudgetCapabilities;
+  /** Project-owned actuals, including incurred unbudgeted costs before a header exists. */
+  financials?: ProjectBudgetFinancials;
 }
 export interface ProjectBudgetEntryInput {
   entryId?: string;
@@ -100,6 +106,8 @@ export interface ProjectBudgetSummary {
   pendingStage: ProjectBudgetStage | null;
   approvedTotalNok: string;
   pendingTotalNok: string | null;
+  actualNok?: string;
+  unbudgetedNok?: string;
   capabilities: ProjectBudgetCapabilities;
 }
 export interface ProjectBudgetDetail extends ProjectBudgetSummary {

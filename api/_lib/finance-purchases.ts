@@ -1,3 +1,4 @@
+import { loadEffectiveFinancePresence } from "./finance-effective-read.js";
 import { requireInvoiceTransferSchema } from "./finance-invoices.js";
 import { projectBudgetError } from "./finance-project-budget-foundation.js";
 import { createHash, randomUUID } from "node:crypto";
@@ -171,7 +172,7 @@ function parsePurchase(body: Record<string, unknown>): PurchaseInput {
   return body.purchase as PurchaseInput;
 }
 
-async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promise<{
+async function validationContext(db: CvDatabase, caller: PurchaseCaller, incurredUnbudgeted: boolean): Promise<{
   choices: BudgetChoices;
   itemActualOre: (itemId: string) => Promise<bigint>;
   itemPlannedOre: (itemId: string) => Promise<bigint>;
@@ -185,15 +186,16 @@ async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promis
     [caller.seasonCode],
   );
   const row = budget.rows[0];
-  if (!row?.budget_id || row.status !== "approved") {
-    throw new FinanceError(409, "The season budget must be approved before registering purchases.");
+  const presence = await loadEffectiveFinancePresence(db.query.bind(db), caller.seasonCode);
+  if (!row?.budget_id || (!presence.approvedPresence.legacyBudget && !presence.approvedPresence.projectBudgets && !incurredUnbudgeted)) {
+    throw new FinanceError(409, "Choose an effective approved entry or register an incurred unbudgeted cost from its project.");
   }
   const hierarchy = await loadBudgetHierarchy(db, {
     memberId: caller.memberId,
     viewVersion: caller.viewVersion,
     seasonCode: caller.seasonCode,
     capabilities: caller.capabilities,
-  }, { status: "approved", approvedOn: null, budgetId: row.budget_id, revision: 0 });
+  }, { status: row.status as "draft" | "approved", approvedOn: null, budgetId: row.budget_id, revision: 0, ...presence });
   const choices = hierarchy.choices ?? { systems: [], items: [] };
   return {
     choices,
@@ -203,7 +205,7 @@ async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promis
     },
     async itemPlannedOre(itemId: string) {
       const result = await db.query<{ planned: string; protected: boolean; status: string }>(
-        "select planned_ore::text as planned, protected, status from finance.budget_items where id = $1::uuid",
+        "select planned_ore::text as planned, protected, status from finance.effective_budget_entries where id = $1::uuid",
         [itemId],
       );
       const item = result.rows[0];
@@ -217,7 +219,7 @@ async function validatePurchase(db: CvDatabase, caller: PurchaseCaller, purchase
   const normalized = normalizePurchaseInput(purchase);
   if (normalized.errors.length) throw invalid(normalized.errors);
   if (!normalized.purchase) throw invalid([{ field: "purchase", message: "Enter a valid purchase." }]);
-  const context = await validationContext(db, caller);
+  const context = await validationContext(db, caller, normalized.purchase.lines.every(line => line.unbudgeted));
   const related = await validatePurchaseRelationships(normalized.purchase, {
     today: osloToday(),
     choices: context.choices,

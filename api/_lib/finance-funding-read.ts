@@ -34,22 +34,18 @@ export async function loadPublicEarmarks(query: Query, seasonCode: string, today
     `select p.id, p.public_ref, p.purpose, p.amount_ore::text as amount_ore, p.spend_by::text as spend_by,
             (
               select coalesce(sum(a.amount_ore), 0)::text
-              from finance.budget_items i
-              join finance.allocations a on a.budget_item_id = i.id
-              join finance.purchase_lines l on l.id = a.line_id
-              join finance.purchases pur on pur.id = l.purchase_id
-              where i.earmark_id = p.id
-                and pur.status = 'registered'
-                and (p.spend_by is null or pur.purchase_date <= p.spend_by)
+              from finance.registered_allocation_facts a
+              where a.recorded_earmark_id = p.id
+                and (p.spend_by is null or a.purchase_date <= p.spend_by)
             ) as eligible_spent_ore,
             (
               select sys.name
-              from finance.budget_items i
+              from finance.effective_budget_entries i
               join finance.systems sys on sys.id = i.system_id
-              join finance.budgets b on b.id = i.budget_id
+              join finance.seasons effective_season on effective_season.id = i.season_id
               where i.earmark_id = p.id
                 and i.status <> 'cancelled'
-                and b.status <> 'draft'
+                and (i.approved_version_id is not null or i.legacy_budget_status='approved')
               order by sys.name
               limit 1
             ) as system_name
@@ -122,13 +118,9 @@ export async function loadFundingRecords(query: Query, seasonCode: string, today
               p.spend_by::text as spend_by, p.conditions, p.revision,
               (
                 select coalesce(sum(a.amount_ore), 0)::text
-                from finance.budget_items i
-                join finance.allocations a on a.budget_item_id = i.id
-                join finance.purchase_lines l on l.id = a.line_id
-                join finance.purchases pur on pur.id = l.purchase_id
-                where i.earmark_id = p.id
-                  and pur.status = 'registered'
-                  and (p.spend_by is null or pur.purchase_date <= p.spend_by)
+                from finance.registered_allocation_facts a
+                where a.recorded_earmark_id = p.id
+                  and (p.spend_by is null or a.purchase_date <= p.spend_by)
               ) as eligible_spent_ore
        from finance.funding_parts p
        join finance.funding f on f.id = p.funding_id
@@ -149,15 +141,15 @@ export async function loadFundingRecords(query: Query, seasonCode: string, today
     }>(
       `select i.earmark_id, i.id, i.public_ref, i.description, i.status,
               sys.id as system_id, sys.code as system_code, sys.name as system_name
-       from finance.budget_items i
+       from finance.effective_budget_entries i
        join finance.systems sys on sys.id = i.system_id
-       join finance.budgets b on b.id = i.budget_id
+       join finance.seasons effective_season on effective_season.id = i.season_id
        join finance.funding_parts p on p.id = i.earmark_id
        join finance.funding f on f.id = p.funding_id
        join finance.seasons s on s.id = f.season_id
        where s.code = $1
          and i.status <> 'cancelled'
-         and ($2::boolean or b.status <> 'draft')
+         and ($2::boolean or i.approved_version_id is not null or i.legacy_budget_status='approved')
        order by sys.name, i.public_ref`,
       [seasonCode, includeDraftItems],
     ),
