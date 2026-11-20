@@ -5,7 +5,7 @@ export const DEPARTMENT_BUDGET_READINESS_LABELS: Record<DepartmentBudgetReadines
   department_pending:"Ready for department submission",finance_pending:"Sent to approval (Finance)",approved:"Approved",
 };
 /** Immutable plan only. Actuals, completion and invoice references are read separately. */
-export type DepartmentBudgetPlanEntry = Omit<ProjectBudgetEntry,"actualNok"|"completion"|"invoices">;
+export type DepartmentBudgetPlanEntry = Omit<ProjectBudgetEntry,"actualNok"|"completion"|"invoices"> & {systemName?:string;systemCode?:string};
 export type DepartmentBudgetPlanVersion = Omit<ProjectBudgetVersion,"entries"> & { entries:DepartmentBudgetPlanEntry[] };
 export interface DepartmentBudgetProject {
   projectId:string; projectName:string; projectLeadIds:string[];

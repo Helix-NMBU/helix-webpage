@@ -154,6 +154,7 @@ export interface ProjectBudgetImportPreview extends BudgetImportPreview {
   candidateRevision: number;
 }
 export interface ProjectBudgetMutationResult {
+  departmentPackageId?: string;
   ok: true;
   id: string;
   revision: number;

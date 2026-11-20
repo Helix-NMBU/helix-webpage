@@ -134,8 +134,22 @@ export async function seedProjectBudgetLegacy(db: ProjectBudgetTestDatabase) {
 
 /** Include every reserved feature migration actually present, not the old 011-029 filter. */
 export async function applyProjectBudgetMigrations(db: ProjectBudgetTestDatabase) {
-  const files = readdirSync(migrationDirectory).filter(name => /^0(6[6-9]|7[0-3])_.*\.sql$/.test(name)).sort();
+  const files = readdirSync(migrationDirectory).filter(name => /^0(6[6-9]|7[0-4])_.*\.sql$/.test(name)).sort();
   if (!files.includes("066_project_budget_foundation.sql")) throw new Error("Project budget foundation migration is missing.");
   for (const file of files) await db.exec(read(file));
   return files;
+}
+
+/** Genuine revision-2 approval helpers. No direct SQL approval or test-only service bypass. */
+export async function submitProjectBudgetDepartmentPackage(services:import("../../../api/_lib/finance-service.js").FinanceServices,budget:import("../../../src/features/Finance/project-budget-types.js").ProjectBudgetDetail,role:ProjectBudgetFixtureRole="departmentLead") {
+ const preview=await services.departmentBudgetPreview(role,budget.responsibleDepartmentId);
+ const sent=await services.mutate(role,{action:"sendDepartmentBudgetPackage",requestId:crypto.randomUUID(),departmentId:budget.responsibleDepartmentId,previewToken:preview.previewToken});
+ return {packageId:sent.id!,budget:await services.projectBudget("lead",budget.id)};
+}
+export async function approveProjectBudgetDepartmentPackage(services:import("../../../api/_lib/finance-service.js").FinanceServices,budget:import("../../../src/features/Finance/project-budget-types.js").ProjectBudgetDetail) {
+ const queue=await services.departmentBudgetPackages("head",budget.responsibleDepartmentId);
+ const packet=queue.packages.find(packet=>packet.status==="finance_pending"&&packet.snapshot.projects.some(project=>project.projectBudgetId===budget.id&&project.included));
+ if(!packet)throw new Error("Send this project's exact submitted version through its department package first.");
+ await services.mutate("head",{action:"approveDepartmentBudgetPackage",requestId:crypto.randomUUID(),packageId:packet.id,expectedRevision:packet.revision});
+ return services.projectBudget("lead",budget.id);
 }

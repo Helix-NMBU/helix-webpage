@@ -1,3 +1,6 @@
+import {loadDepartmentHomeBudget} from "./finance-department-home.js";
+import {isDepartmentBudgetPackageMutation,loadDepartmentBudgetPreview,loadDepartmentBudgetPackages,loadDepartmentBudgetPackage,mutateDepartmentBudgetPackage} from "./finance-department-packages.js";
+import type {DepartmentHomeBudget,DepartmentBudgetPreview,DepartmentBudgetPackageQueue,DepartmentBudgetPackageDetail} from "../../src/features/Finance/department-budget-types.js";
 import { loadEffectiveFinancePresence, type EffectiveFinancePresence } from "./finance-effective-read.js";
 import { hasVisibleApprovedFinances } from "../../src/features/Finance/finance-calculations.js";
 import { createFinanceDrive, type FinanceDrive } from "./finance-drive.js";
@@ -52,6 +55,10 @@ type FlagsRow = FinanceCapabilitySet & { profiles: FinanceProfile[] };
 type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
 
 export interface FinanceServices {
+  departmentHomeBudget(token:string,departmentId:unknown):Promise<DepartmentHomeBudget>;
+  departmentBudgetPreview(token:string,departmentId:unknown):Promise<DepartmentBudgetPreview>;
+  departmentBudgetPackages(token:string,departmentId?:unknown):Promise<DepartmentBudgetPackageQueue>;
+  departmentBudgetPackage(token:string,packageId:unknown):Promise<DepartmentBudgetPackageDetail>;
   fundingApplications(token: string): Promise<FundingApplicationQueue>;
   fundingApplication(token: string, applicationId: unknown): Promise<FundingApplicationDetail>;
   fundingApplicationBudgetContext(token: string, applicationId: unknown): Promise<FundingApplicationBudgetContext>;
@@ -200,6 +207,10 @@ export function createFinanceServices(deps: {
     async projectBudgets(token, projectId, departmentId) {
       return loadProjectBudgetWorkspace(db, await deps.authenticate(token), projectId, departmentId);
     },
+    async departmentHomeBudget(token,departmentId){return loadDepartmentHomeBudget(db,await deps.authenticate(token),departmentId);},
+    async departmentBudgetPreview(token,departmentId){return loadDepartmentBudgetPreview(db,await deps.authenticate(token),departmentId);},
+    async departmentBudgetPackages(token,departmentId){return loadDepartmentBudgetPackages(db,await deps.authenticate(token),departmentId);},
+    async departmentBudgetPackage(token,packageId){return loadDepartmentBudgetPackage(db,await deps.authenticate(token),packageId);},
     async projectBudget(token, projectBudgetId) {
       return loadProjectBudgetDetail(db, await deps.authenticate(token), projectBudgetId);
     },
@@ -340,6 +351,10 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
+      if(isDepartmentBudgetPackageMutation(body.action)){
+        const result=await mutateDepartmentBudgetPackage(db,await deps.authenticate(token),body);
+        await dispatchEvent(result,body.action==="sendDepartmentBudgetPackage"?"department_package.submitted":body.action==="approveDepartmentBudgetPackage"?"department_package.approved":"department_package.returned");return result;
+      }
       if (["downloadDocument", "retryInvoiceTransfer", "continueInvoiceTransfers"].includes(String(body.action))) return mutateInvoice(db, await deps.authenticate(token), body, invoiceDispatcher);
       if (body.action === "setProjectBudgetCompletion") return setProjectBudgetCompletion(db, await deps.authenticate(token), body);
       if (isProjectPurchaseMutation(body.action)) {
@@ -358,6 +373,7 @@ export function createFinanceServices(deps: {
           : body.action === "approveProjectBudget" ? "project_budget.approved"
           : body.action === "returnProjectBudget" || body.action === "withdrawProjectBudget" || body.action === "requestProjectBudgetChanges" ? "project_budget.returned" : null;
         if (event) await dispatchEvent(result, event);
+        if(result.departmentPackageId)await dispatchEvent({...result,id:result.departmentPackageId},"department_package.returned");
         return result;
       }
       const current = await context(token);

@@ -166,6 +166,17 @@ export async function composeFinanceMail(
   const person = await recipient(db, claimed.recipientMemberId);
   if (!person?.email) return { safeError: "recipient_email_missing" };
   const from = fromAddress(env);
+  if(claimed.eventType.startsWith("department_package.")){
+    const packet=(await db.query<{name:string;active:boolean}>(`select department.name,finance.project_budget_verified_member(member.id,member.google_sub,member.email) and
+      case when $3='department_package.submitted' then package.status='finance_pending' and coalesce((finance.capability_flags(member.id)->>'approveBudget')::boolean,false)
+      when $3='department_package.approved' then package.status='approved' and(exists(select 1 from project_management.department_members dm where dm.department_id=package.department_id and dm.member_id=member.id and dm.is_lead) or exists(select 1 from finance.department_budget_package_members included join project_management.projects project on project.id=included.project_id where included.package_id=package.id and included.candidate_version_id is not null and member.id=any(project.lead_ids)))
+      when $3='department_package.returned' then package.status in('returned','withdrawn') and(exists(select 1 from project_management.department_members dm where dm.department_id=package.department_id and dm.member_id=member.id and dm.is_lead) or exists(select 1 from finance.department_budget_package_members included join project_management.projects project on project.id=included.project_id where included.package_id=package.id and included.candidate_version_id is not null and member.id=any(project.lead_ids))) else false end as active
+      from finance.department_budget_packages package join project_management.departments department on department.id=package.department_id join identity.members member on member.id=$2::uuid where package.id=$1::uuid`,[claimed.entityId,claimed.recipientMemberId,claimed.eventType])).rows[0];
+    if(!packet?.active)return{safeError:"recipient_inactive"};
+    const update=claimed.eventType==="department_package.submitted"?"is waiting for Head of Finance approval":claimed.eventType==="department_package.approved"?"was approved":"was returned for changes";
+    const body=paragraph([`The department budget for ${packet.name} ${update}.`,"Sign in to review the department submission."]);
+    return{message:{from,to:person.email,subject:`Department budget ${update}`,...body,idempotencyKey:claimed.providerIdempotencyKey}};
+  }
   if (claimed.eventType.startsWith("project_budget.")) {
     if (typeof claimed.payload.versionId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(claimed.payload.versionId)) return { safeError: "compose_failed" };
     const row = (await db.query<{ project_name: string; active: boolean }>(

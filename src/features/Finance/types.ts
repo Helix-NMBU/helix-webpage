@@ -678,6 +678,7 @@ export type BudgetImportPreview = {
 };
 
 export type FinanceMutationResult = {
+  departmentPackageId?: string;
   ok: true;
   viewVersion: number;
   id?: string;
@@ -707,5 +708,5 @@ export type FinanceRecoveryView = {
   uploadNextCursor: string | null;
 };
 
-export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget", "projectPurchaseContext", "fundingApplications", "fundingApplication", "fundingApplicationBudgetContext", "projectFundingProposals"] as const;
+export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget", "projectPurchaseContext", "fundingApplications", "fundingApplication", "fundingApplicationBudgetContext", "projectFundingProposals", "departmentBudgetPreview", "departmentBudgetPackages", "departmentBudgetPackage", "departmentHomeBudget"] as const;
 export type FinanceReadAction = (typeof FINANCE_READ_ACTIONS)[number];
