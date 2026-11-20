@@ -37,6 +37,7 @@ type LineExportRow = {
   amount_ore: string;
   unbudgeted: boolean;
   system_code: string;
+  budget_department:string|null; project_name:string|null;
   budget_item_ref: string | null;
   effective_plan_ore: string | null;
   actual_ore: string | null;
@@ -97,6 +98,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
   const lines = (await db.query<LineExportRow>(
     `select l.purchase_id, l.public_ref, l.description, l.quantity::text as quantity, l.amount_ore::text as amount_ore,
             l.unbudgeted, s.code as system_code, i.public_ref as budget_item_ref,
+            coalesce(owner.name,physical_department.name) as budget_department,project.name as project_name,
             case
               when i.id is null then null
               when i.status = 'cancelled' or i.protected then '0'
@@ -108,6 +110,9 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      join finance.seasons season on season.id = p.season_id
      join finance.systems s on s.id = l.system_id
      left join finance.effective_budget_entries i on i.id = l.budget_item_id
+     join identity.departments physical_department on physical_department.department_key=s.department_key
+     left join project_management.departments owner on owner.id=case when i.source='project' then i.responsible_department_id when l.unbudgeted then p.responsible_department_id end
+     left join project_management.projects project on project.id=case when i.source='project' then i.project_id when l.unbudgeted then p.project_id end
      where season.code = $1
      order by l.public_ref`,
     [seasonCode],
@@ -166,6 +171,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
       record.quantity = line.quantity;
       record.line_amount_nok = money(line.amount_ore);
       record.system_code = line.system_code;
+      record.budget_department=line.budget_department??"";record.project_name=line.project_name??"";
       record.budget_item_ref = line.budget_item_ref ?? "";
       record.budget_status = status;
       record.budget_status_basis = "current";

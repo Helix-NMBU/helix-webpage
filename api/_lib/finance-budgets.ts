@@ -1,6 +1,7 @@
+import {allocatedSystemCatalog} from "../../src/features/Finance/department-allocation.js";
 import { buildBudgetHierarchy, type BudgetHierarchyUnallocated } from "../../src/features/Finance/budget-hierarchy.js";
 import { hasVisibleApprovedFinances } from "../../src/features/Finance/finance-calculations.js";
-import { REGISTERED_ACTUAL_ORE, REGISTERED_PURCHASE_COUNT, OPEN_APPROVED_COMMITMENT_ORE, type EffectiveFinancePresence } from "./finance-effective-read.js";
+import { OPEN_APPROVED_COMMITMENT_ORE, type EffectiveFinancePresence } from "./finance-effective-read.js";
 import { loadBudgetEntryInvoiceReferences } from "./finance-invoices.js";
 import type { WorkspaceIdentity } from "./member-cv-service.js";
 import { createHash } from "node:crypto";
@@ -188,6 +189,7 @@ export async function performBudgetMutation(db: CvDatabase, caller: BudgetCaller
 
 type HierarchyRow = {
   department_key: string;
+  allocation_department_key:string; allocation_department_name:string; allocation_sort_order:number;
   department_name: string;
   sort_order: number;
   system_id: string;
@@ -237,7 +239,7 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
   let rows: HierarchyRow[];
   try {
     rows = (await db.query<HierarchyRow>(
-      `select d.department_key,d.name as department_name,d.sort_order,
+      `select d.department_key,d.name as department_name,d.sort_order,allocation.department_key as allocation_department_key,allocated_department.name as allocation_department_name,allocated_department.sort_order as allocation_sort_order,
         sys.id as system_id,sys.code as system_code,sys.name as system_name,sys.active as system_active,
         i.id as item_id,i.public_ref,i.description,i.category,i.planned_ore::text as planned_ore,
         case when $2::boolean or i.approved_version_id is not null or i.legacy_budget_status='approved'
@@ -249,13 +251,14 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
         (i.approved_version_id is not null or i.legacy_budget_status='approved') as approved,
         part.purpose as earmark_purpose,part.amount_ore::text as earmark_amount_ore,part.conditions as earmark_conditions,
         fund.source_name as earmark_source,fund.status as earmark_funding_status,
-        ${REGISTERED_ACTUAL_ORE}::text as actual_ore,${REGISTERED_PURCHASE_COUNT}::integer as purchase_count,
-        ${OPEN_APPROVED_COMMITMENT_ORE}::text as commitment_ore
+        allocation.actual_ore::text as actual_ore,allocation.purchase_count,allocation.commitment_ore::text as commitment_ore
        from finance.systems sys join identity.departments d on d.department_key=sys.department_key
        left join finance.effective_budget_entries i on i.system_id=sys.id and i.budget_id=$1::uuid
          and ($2::boolean or i.approved_version_id is not null or i.legacy_budget_status='approved' or i.protected
            or exists(select 1 from finance.registered_allocation_facts actual where actual.budget_item_id=i.id)
            or ${OPEN_APPROVED_COMMITMENT_ORE}>0)
+       left join finance.department_entry_financials allocation on allocation.entry_id=i.id
+       left join identity.departments allocated_department on allocated_department.department_key=allocation.department_key
        left join finance.budget_items anchor on anchor.id=i.id
        left join finance.project_budget_version_entries ve on ve.version_id=i.approved_version_id and ve.entry_id=i.id
        left join project_management.projects project on project.id=i.project_id
@@ -266,7 +269,7 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
   } catch (error) { throw mapBudgetError(error); }
   const items: PublicBudgetItem[] = [];
   const unallocated: BudgetHierarchyUnallocated[] = [];
-  const retainedActuals: { systemId: string; actualNok: string; commitmentNok: string }[] = [];
+  const retainedActuals: { systemId: string; actualNok: string; commitmentNok: string; allocationDepartmentKey:string }[] = [];
   const privateFinance = caller.capabilities.purchaseRegister && caller.capabilities.filesAndRefunds;
   const systems = new Map<string, Parameters<typeof buildBudgetHierarchy>[0]["systems"][number]>();
   const evidence = identity && privateFinance ? await loadBudgetEntryInvoiceReferences(db, identity, rows.flatMap(row => row.item_id && !row.protected ? [row.item_id] : [])) : new Map();
@@ -276,17 +279,17 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
     if (!row.item_id || !row.public_ref || !row.description || !row.category || !row.priority || !row.reuse_status || !row.status) continue;
     const actual = ore(row.actual_ore), effective = ore(row.planned_ore);
     if (row.protected) {
-      unallocated.push({ id: row.item_id, publicRef: row.public_ref, systemId: row.system_id, actualNok: formatOre(actual),
+      unallocated.push({ id: row.item_id, publicRef: row.public_ref, systemId: row.system_id, allocationDepartmentKey:row.allocation_department_key, actualNok: formatOre(actual),
         note: row.note, revision: Number(row.revision), commitmentNok: formatOre(ore(row.commitment_ore)) });
       continue;
     }
     if (!row.approved && !caller.capabilities.draftBudgetItems) {
-      retainedActuals.push({ systemId: row.system_id, actualNok: formatOre(actual), commitmentNok: formatOre(ore(row.commitment_ore)) });
+      retainedActuals.push({ systemId: row.system_id, allocationDepartmentKey:row.allocation_department_key, actualNok: formatOre(actual), commitmentNok: formatOre(ore(row.commitment_ore)) });
       continue;
     }
     const showEarmark = caller.capabilities.financing || row.earmark_funding_status === "secured" || row.earmark_funding_status === "received";
     const item: PublicBudgetItem = {
-      id: row.item_id, publicRef: row.public_ref, systemId: row.system_id, systemCode: row.system_code,
+      id: row.item_id, publicRef: row.public_ref, systemId: row.system_id, allocationDepartmentKey:row.allocation_department_key, systemCode: row.system_code,
       description: row.description, category: row.category, plannedNok: formatOre(ore(row.stored_planned_ore)), effectivePlanNok: formatOre(effective),
       actualNok: formatOre(actual), differenceNok: formatOre(effective-actual), priority: row.priority, ordinaryPriority: row.ordinary_priority,
       approved: row.approved, source: row.source, reuseStatus: row.reuse_status, expectedPurchaseDate: row.expected_purchase_date,
@@ -302,7 +305,9 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
     if (caller.capabilities.financing) Object.assign(item, { earmarkSourceName: row.earmark_source, earmarkConditions: row.earmark_conditions });
     items.push(item);
   }
-  const hierarchy = buildBudgetHierarchy({ systems: [...systems.values()], items, unallocated, includePrivateUnallocated: caller.capabilities.draftBudgetItems, retainedActuals });
+  const departments=rows.map(row=>({departmentKey:row.allocation_department_key,departmentName:row.allocation_department_name,sortOrder:Number(row.allocation_sort_order)}));
+  const catalog=allocatedSystemCatalog([...systems.values()],departments,[...items,...unallocated,...retainedActuals].map(item=>({systemId:item.systemId,departmentKey:item.allocationDepartmentKey!})));
+  const hierarchy = buildBudgetHierarchy({ systems: catalog, items, unallocated, includePrivateUnallocated: caller.capabilities.draftBudgetItems, retainedActuals });
   let earmarkChoices: BudgetEarmarkChoice[] | undefined;
   if (caller.capabilities.financing && caller.seasonCode) {
     try {

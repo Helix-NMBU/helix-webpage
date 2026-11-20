@@ -1,6 +1,10 @@
 begin;
 alter table finance.project_budget_decisions drop constraint project_budget_decisions_actor_member_id_request_id_action_key;
 alter table finance.project_budget_decisions add constraint project_budget_decision_once_per_project unique(actor_member_id,request_id,action,project_budget_id);
+create function finance.budget_nok(amount_ore numeric) returns text
+language sql immutable strict security invoker set search_path=pg_catalog as $$
+ select case when amount_ore<0 then '-' else '' end||trunc(abs(amount_ore)/100)::text||'.'||lpad(trunc(mod(abs(amount_ore),100))::text,2,'0')
+$$;
 create function finance.budget_department_key(department uuid) returns text
 language sql stable security invoker set search_path=pg_catalog as $$
  select i.department_key from project_management.departments d join identity.departments i
@@ -18,6 +22,24 @@ select a.*,case when e.source='project' or (a.unbudgeted and a.project_id is not
  then finance.budget_department_key(a.responsible_department_id) else sys.department_key end as department_key
 from finance.registered_allocation_facts a join finance.effective_budget_entries e on e.id=a.budget_item_id
 join finance.systems sys on sys.id=a.system_id;
+
+-- All read totals use these per-entry accounting partitions. Protected anchors may
+-- hold incurred costs from several projects; each allocation belongs to one group.
+create view finance.department_entry_financials as
+select e.id as entry_id,e.season_id,e.system_id,plan.department_key,e.planned_ore,
+ coalesce((select sum(a.amount_ore) from finance.department_actual_allocation a where a.budget_item_id=e.id),0) as actual_ore,
+ (select count(distinct a.purchase_id)::integer from finance.department_actual_allocation a where a.budget_item_id=e.id) as purchase_count,
+ finance.budget_item_open_commitment_ore(e.id) as commitment_ore
+from finance.effective_budget_entries e join finance.department_plan_allocation plan on plan.entry_id=e.id where not e.protected
+union all
+select e.id,e.season_id,e.system_id,partition.department_key,0::bigint,partition.actual_ore,partition.purchase_count,
+ case when partition.department_key=sys.department_key then finance.budget_item_open_commitment_ore(e.id) else 0 end
+from finance.effective_budget_entries e join finance.systems sys on sys.id=e.system_id
+cross join lateral(
+ select actual.department_key,sum(actual.amount_ore) as actual_ore,count(distinct actual.purchase_id)::integer as purchase_count
+ from finance.department_actual_allocation actual where actual.budget_item_id=e.id group by actual.department_key
+ union all select sys.department_key,0::numeric,0 where not exists(select 1 from finance.department_actual_allocation actual where actual.budget_item_id=e.id and actual.department_key=sys.department_key)
+) partition where e.protected;
 
 create table finance.department_budget_packages(
  id uuid primary key default gen_random_uuid(),department_id uuid not null references project_management.departments(id),season_id uuid not null references finance.seasons(id),
@@ -68,13 +90,23 @@ create function finance.department_budget_plan_version(target_version uuid) retu
 language sql stable security invoker set search_path=pg_catalog as $$
 select jsonb_build_object('id',v.id,'versionNumber',v.version_number,'revision',v.revision,'status',v.status,'submittedAt',v.submitted_at,
  'departmentApprovedBy',v.department_approved_by,'departmentApprovedAt',v.department_approved_at,'approvedBy',v.approved_by,'approvedAt',v.approved_at,
- 'totalNok',(coalesce((select sum(ve.planned_ore) from finance.project_budget_version_entries ve where ve.version_id=v.id and not ve.removed and ve.status<>'cancelled'),0)::numeric/100)::numeric(20,2)::text,
+ 'totalNok',finance.budget_nok(coalesce((select sum(ve.planned_ore) from finance.project_budget_version_entries ve where ve.version_id=v.id and not ve.removed and ve.status<>'cancelled'),0)),
  'entries',coalesce((select jsonb_agg(jsonb_build_object('entryId',ve.entry_id,'budgetItemId',pe.budget_item_id,'publicRef',anchor.public_ref,'systemId',ve.system_id,'systemName',sys.name,'systemCode',sys.code,'description',ve.description,'category',ve.category,
- 'plannedNok',(ve.planned_ore::numeric/100)::numeric(20,2)::text,'ordinaryPriority',ve.ordinary_priority,
+ 'plannedNok',finance.budget_nok(ve.planned_ore),'ordinaryPriority',ve.ordinary_priority,
  'priority',case when exists(select 1 from finance.budget_obligations o join finance.funding_applications a on a.id=o.application_id where o.entry_id=ve.entry_id and o.released_at is null and a.awarded_at is not null) then 'P0' else ve.ordinary_priority end,
  'reuseStatus',ve.reuse_status,'expectedPurchaseDate',ve.expected_purchase_date,'ownerMemberId',ve.owner_member_id,'ownerEmail',ve.owner_email,'status',ve.status,'note',ve.note,'earmarkId',ve.earmark_id,'removed',ve.removed) order by ve.entry_id)
  from finance.project_budget_version_entries ve join finance.project_budget_entries pe on pe.id=ve.entry_id join finance.systems sys on sys.id=ve.system_id left join finance.budget_items anchor on anchor.id=pe.budget_item_id where ve.version_id=v.id),'[]'::jsonb))
 from finance.project_budget_versions v where v.id=target_version
+$$;
+
+create function finance.department_budget_legacy_entries(department uuid,included_headers uuid[]) returns jsonb
+language sql stable security invoker set search_path=pg_catalog as $$
+select coalesce(jsonb_agg(jsonb_build_object('entryId',e.id,'publicRef',e.public_ref,'description',e.description,'systemId',e.system_id,'systemName',sys.name,
+ 'plannedNok',finance.budget_nok(a.planned_ore),'proposedNok',finance.budget_nok(case when replacement.project_id is null then a.planned_ore else 0 end),'replacementProjectId',replacement.project_id) order by e.public_ref,e.id),'[]'::jsonb)
+from finance.department_plan_allocation a join finance.effective_budget_entries e on e.id=a.entry_id join finance.systems sys on sys.id=a.system_id
+join project_management.departments department on department.id=$1 join finance.seasons season on season.code=department.season and season.id=a.season_id
+left join lateral(select h.project_id from finance.project_budget_entries pe join finance.project_budgets h on h.id=pe.project_budget_id where pe.id=e.id and h.id=any(included_headers)) replacement on true
+where a.department_key=finance.budget_department_key($1) and a.legacy and not e.protected and e.legacy_budget_status='approved'
 $$;
 
 create function finance.department_budget_snapshot(department uuid) returns jsonb
@@ -99,18 +131,13 @@ begin
   old_total:=old_total+old_amount;new_total:=new_total+new_amount;
   projects:=projects||jsonb_build_array(jsonb_build_object('projectId',r.id,'projectName',r.name,'projectLeadIds',to_jsonb(r.lead_ids),
    'projectBudgetId',r.header_id,'responsibleDepartmentId',r.responsible_department_id,'responsibleDepartmentName',r.owner_name,'readiness',readiness,'included',ready,
-   'approvedVersion',old_version,'proposedVersion',new_version,'approvedTotalNok',old_amount::numeric(20,2)::text,'proposedTotalNok',new_amount::numeric(20,2)::text,'deltaNok',(new_amount-old_amount)::numeric(20,2)::text));
+   'approvedVersion',old_version,'proposedVersion',new_version,'approvedTotalNok',finance.budget_nok((old_amount)*100),'proposedTotalNok',finance.budget_nok((new_amount)*100),'deltaNok',finance.budget_nok((new_amount-old_amount)*100)));
  end loop;
- select coalesce(jsonb_agg(jsonb_build_object('entryId',e.id,'publicRef',e.public_ref,'description',e.description,'systemId',e.system_id,'systemName',sys.name,
- 'plannedNok',(a.planned_ore::numeric/100)::numeric(20,2)::text,'proposedNok',(case when replacement.project_id is null then a.planned_ore else 0 end::numeric/100)::numeric(20,2)::text,'replacementProjectId',replacement.project_id) order by e.public_ref),'[]'::jsonb),coalesce(sum(a.planned_ore),0)::numeric/100,
- coalesce(sum(case when replacement.project_id is null then a.planned_ore else 0 end),0)::numeric/100 into legacy_rows,legacy_total,proposed_legacy
- from finance.department_plan_allocation a join finance.effective_budget_entries e on e.id=a.entry_id join finance.systems sys on sys.id=a.system_id
- left join lateral(select h.project_id from finance.project_budget_entries pe join finance.project_budgets h on h.id=pe.project_budget_id
- join finance.project_budget_versions v on v.id=h.pending_version_id where pe.id=e.id and h.responsible_department_id=d.id and v.status in('department_pending','finance_pending')) replacement on true
- where a.season_id=s.id and a.department_key=finance.budget_department_key(d.id) and a.legacy and not e.protected and e.legacy_budget_status='approved';
+ legacy_rows:=finance.department_budget_legacy_entries(d.id,array(select (project->>'projectBudgetId')::uuid from jsonb_array_elements(projects) project where (project->>'included')::boolean));
+ select coalesce(sum((entry->>'plannedNok')::numeric),0),coalesce(sum((entry->>'proposedNok')::numeric),0) into legacy_total,proposed_legacy from jsonb_array_elements(legacy_rows) entry;
  return jsonb_build_object('departmentId',d.id,'departmentName',d.name,'departmentKey',finance.budget_department_key(d.id),'seasonId',s.id,'seasonCode',s.code,
- 'projects',projects,'legacyEntries',legacy_rows,'legacyTotalNok',legacy_total::numeric(20,2)::text,'proposedLegacyTotalNok',proposed_legacy::numeric(20,2)::text,
- 'approvedTotalNok',(old_total+legacy_total)::numeric(20,2)::text,'proposedTotalNok',(new_total+proposed_legacy)::numeric(20,2)::text,'deltaNok',(new_total+proposed_legacy-old_total-legacy_total)::numeric(20,2)::text);
+ 'projects',projects,'legacyEntries',legacy_rows,'legacyTotalNok',finance.budget_nok((legacy_total)*100),'proposedLegacyTotalNok',finance.budget_nok((proposed_legacy)*100),
+ 'approvedTotalNok',finance.budget_nok((old_total+legacy_total)*100),'proposedTotalNok',finance.budget_nok((new_total+proposed_legacy)*100),'deltaNok',finance.budget_nok((new_total+proposed_legacy-old_total-legacy_total)*100));
 end $$;
 
 create function finance.lock_department_budget_actor(actor uuid) returns void
@@ -132,7 +159,7 @@ begin
   if not exists(select 1 from finance.project_budgets h where h.id=m.project_budget_id and h.pending_version_id=m.candidate_version_id) then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001';end if;
   update finance.project_budget_versions set status='draft',submitted_at=null,submitted_snapshot=null,department_approved_by=null,department_approved_at=null,approved_by=null,approved_at=null,revision=revision+1 where id=m.candidate_version_id;
   update finance.project_budgets set revision=revision+1,updated_by_member_id=actor,updated_at=clock_timestamp() where id=m.project_budget_id;
-  insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,reason,snapshot,request_id) values(m.project_budget_id,m.candidate_version_id,action,actor,reason,jsonb_build_object('packageId',p.id,'stageAfter','draft'),request);
+  insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,reason,snapshot,request_id,created_at) values(m.project_budget_id,m.candidate_version_id,action,actor,reason,jsonb_build_object('packageId',p.id,'stageAfter','draft'),request,clock_timestamp());
  end loop;
  update finance.department_budget_packages set status=case when action='withdrawDepartmentBudgetPackage' then 'withdrawn' else 'returned' end,revision=revision+1,decided_by=actor,decided_at=clock_timestamp(),reason=btrim($4) where id=p.id;
  insert into finance.department_budget_package_decisions(package_id,action,actor_member_id,reason,request_id) values(p.id,action,actor,btrim(reason),request);
@@ -160,7 +187,11 @@ begin
  end if;
  perform id from finance.project_budgets where id=any(headers) order by id for update;
  -- Never acquire another header after this point. Recheck discovered scope below.
- perform project.id from project_management.projects project join finance.project_budgets header on header.project_id=project.id where header.id=any(headers) order by project.id for share of project;
+ if action='sendDepartmentBudgetPackage' then
+  perform project.id from project_management.projects project join project_management.departments department on department.id=(body->>'departmentId')::uuid where project.season=department.season and department.name=any(project.departments) order by project.id for share of project;
+ else
+  perform project.id from project_management.projects project join finance.department_budget_package_members member on member.project_id=project.id where member.package_id=p.id order by project.id for share of project;
+ end if;
  perform finance.lock_department_budget_actor(actor);
  scope:=finance.department_budget_scope(actor,sub,email,case when action='sendDepartmentBudgetPackage' then (body->>'departmentId')::uuid else p.department_id end);
  perform 1 from finance.seasons where id=(scope->>'seasonId')::uuid and status<>'closed' for share;
@@ -189,7 +220,7 @@ begin
     select * into v from finance.project_budget_versions where id=(r."proposedVersion"->>'id')::uuid;
     if v.status not in('department_pending','finance_pending') or v.submitted_snapshot is distinct from finance.project_budget_snapshot(v.id) then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001';end if;
     update finance.project_budget_versions set status='finance_pending',department_approved_by=actor,department_approved_at=clock_timestamp(),revision=revision+1 where id=v.id;
-    insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,snapshot,request_id) values(r."projectBudgetId",v.id,action,actor,jsonb_build_object('packageId',p.id,'before',v.submitted_snapshot,'after',v.submitted_snapshot),request);
+    insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,snapshot,request_id,created_at) values(r."projectBudgetId",v.id,action,actor,jsonb_build_object('packageId',p.id,'before',v.submitted_snapshot,'after',v.submitted_snapshot),request,clock_timestamp());
     update finance.project_budgets set revision=revision+1,updated_by_member_id=actor,updated_at=clock_timestamp() where id=r."projectBudgetId";
    end if;
   end loop;
@@ -202,7 +233,7 @@ begin
    perform finance.department_budget_reset_package(p.id,actor,action,reason,request);event:='department_package.returned';
   else
    for r in select member.*,project.season as current_season,project.departments,header.responsible_department_id,header.approved_version_id,header.pending_version_id
-   from finance.department_budget_package_members member join project_management.projects project on project.id=member.project_id left join finance.project_budgets header on header.id=member.project_budget_id where member.package_id=p.id order by member.project_id loop
+   from finance.department_budget_package_members member join project_management.projects project on project.id=member.project_id left join finance.project_budgets header on header.project_id=member.project_id and header.season_id=p.season_id where member.package_id=p.id order by member.project_id loop
     if r.current_season<>r.project_season or not exists(select 1 from project_management.departments where id=p.department_id and name=any(r.departments)) or r.responsible_department_id is distinct from r.owner_department_id then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001';end if;
     if r.owner_department_id=p.department_id and r.approved_version_id is distinct from r.baseline_version_id then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001';end if;
     if r.candidate_version_id is not null then
@@ -212,9 +243,14 @@ begin
      for material in select old.entry_id,to_jsonb(old)||jsonb_build_object('removed',true) as proposed from finance.project_budget_version_entries old where old.version_id=r.baseline_version_id and not exists(select 1 from finance.project_budget_version_entries proposed where proposed.version_id=v.id and proposed.entry_id=old.entry_id) loop perform finance.assert_project_budget_entry_obligation(material.entry_id,material.proposed);end loop;
     end if;
    end loop;
+   -- Pin every remaining legacy baseline anchor as well as candidate anchors.
+   -- A different department may retire a physical legacy plan into its own project.
+   perform anchor.id from finance.budget_items anchor where anchor.id in(
+    select entry.budget_item_id from finance.project_budget_entries entry join finance.department_budget_package_members member on member.project_budget_id=entry.project_budget_id where member.package_id=p.id and member.candidate_version_id is not null
+    union select (entry->>'entryId')::uuid from jsonb_array_elements(p.snapshot->'legacyEntries') entry
+   ) order by anchor.id for update;
+   if finance.department_budget_legacy_entries(p.department_id,array(select project_budget_id from finance.department_budget_package_members where package_id=p.id and candidate_version_id is not null)) is distinct from p.snapshot->'legacyEntries' then raise exception 'finance:PROJECT_CONFLICT' using errcode='40001';end if;
    if exists(select 1 from finance.department_budget_package_members where package_id=p.id and candidate_version_id is not null) then
-   -- Lock the complete sorted anchor union before touching any legacy ledger.
-   perform anchor.id from finance.budget_items anchor join finance.project_budget_entries entry on entry.budget_item_id=anchor.id join finance.department_budget_package_members member on member.project_budget_id=entry.project_budget_id and member.candidate_version_id is not null where member.package_id=p.id order by anchor.id for update of anchor;
    select * into legacy from finance.budgets where season_id=p.season_id for update;
    if not found then
     insert into finance.budgets(season_id,public_ref,status,created_by_member_id,updated_by_member_id) values(p.season_id,'B-'||(scope->>'seasonCode'),'draft',actor,actor) on conflict do nothing;
@@ -241,7 +277,7 @@ begin
     end loop;
     update finance.project_budget_versions set status='approved',approved_by=actor,approved_at=clock_timestamp(),revision=revision+1 where id=r.candidate_version_id;
     update finance.project_budgets set approved_version_id=r.candidate_version_id,pending_version_id=null,revision=revision+1,updated_by_member_id=actor,updated_at=clock_timestamp() where id=r.project_budget_id;
-    insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,snapshot,request_id) values(r.project_budget_id,r.candidate_version_id,action,actor,jsonb_build_object('packageId',p.id,'after',finance.project_budget_snapshot(r.candidate_version_id)),request);
+    insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,snapshot,request_id,created_at) values(r.project_budget_id,r.candidate_version_id,action,actor,jsonb_build_object('packageId',p.id,'after',finance.project_budget_snapshot(r.candidate_version_id)),request,clock_timestamp());
    end loop;
    end if;
    update finance.department_budget_packages set status='approved',revision=revision+1,decided_by=actor,decided_at=clock_timestamp() where id=p.id;event:='department_package.approved';
@@ -281,13 +317,13 @@ declare active_package uuid;owner_department uuid;headers uuid[];result jsonb;ex
 begin
  if action in('approveDepartmentBudget','approveProjectBudget') then raise exception 'FINANCE|invalid|Submit and approve the complete department budget package instead.' using errcode='23514';end if;
  if action not in('returnProjectBudget','withdrawProjectBudget','requestProjectBudgetChanges') then return finance.mutate_project_budget_before_packages(actor,sub,email,request,payload_hash,body);end if;
+ perform pg_advisory_xact_lock(hashtextextended(actor::text||':'||request::text,0));
  select responsible_department_id into owner_department from finance.project_budgets where id=(body->>'projectBudgetId')::uuid;
  if owner_department is not null then perform pg_advisory_xact_lock(hashtextextended('department-package:'||owner_department::text,0));end if;
  select package.id into active_package from finance.department_budget_packages package join finance.department_budget_package_members member on member.package_id=package.id
  join finance.project_budgets header on header.id=member.project_budget_id and header.pending_version_id=member.candidate_version_id
  where header.id=(body->>'projectBudgetId')::uuid and package.status='finance_pending';
  if active_package is null then return finance.mutate_project_budget_before_packages(actor,sub,email,request,payload_hash,body);end if;
- perform pg_advisory_xact_lock(hashtextextended(actor::text||':'||request::text,0));
  select coalesce(array_agg(project_budget_id order by project_budget_id),'{}') into headers from finance.department_budget_package_members where package_id=active_package and project_budget_id is not null;
  perform id from finance.project_budgets where id=any(headers) order by id for update;
  perform 1 from finance.department_budget_packages where id=active_package for update;
@@ -300,9 +336,9 @@ begin
  return result;
 end $$;
 
-revoke all on finance.department_plan_allocation,finance.department_actual_allocation,finance.department_budget_packages,finance.department_budget_package_members,finance.department_budget_package_decisions from public;
+revoke all on finance.department_plan_allocation,finance.department_actual_allocation,finance.department_entry_financials,finance.department_budget_packages,finance.department_budget_package_members,finance.department_budget_package_decisions from public;
 do $$ declare routine record;role_name text;begin
- for routine in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='finance' and p.proname in('budget_department_key','department_budget_scope','department_budget_plan_version','department_budget_snapshot','lock_department_budget_actor','department_budget_reset_package','mutate_department_budget_package','mutate_project_budget','mutate_project_budget_before_packages','immutable_department_budget_package') loop execute format('revoke all on function %s from public',routine.signature);end loop;
- foreach role_name in array array['anon','authenticated','anonymous'] loop if exists(select 1 from pg_roles where rolname=role_name) then execute format('revoke all on finance.department_plan_allocation,finance.department_actual_allocation,finance.department_budget_packages,finance.department_budget_package_members,finance.department_budget_package_decisions from %I',role_name);end if;end loop;
+ for routine in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='finance' and p.proname in('budget_nok','budget_department_key','department_budget_scope','department_budget_plan_version','department_budget_snapshot','department_budget_legacy_entries','lock_department_budget_actor','department_budget_reset_package','mutate_department_budget_package','mutate_project_budget','mutate_project_budget_before_packages','immutable_department_budget_package') loop execute format('revoke all on function %s from public',routine.signature);end loop;
+ foreach role_name in array array['anon','authenticated','anonymous'] loop if exists(select 1 from pg_roles where rolname=role_name) then execute format('revoke all on finance.department_plan_allocation,finance.department_actual_allocation,finance.department_entry_financials,finance.department_budget_packages,finance.department_budget_package_members,finance.department_budget_package_decisions from %I',role_name);end if;end loop;
 end $$;
 commit;

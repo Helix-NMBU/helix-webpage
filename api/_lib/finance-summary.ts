@@ -1,4 +1,5 @@
-import { REGISTERED_ACTUAL_ORE, OPEN_APPROVED_COMMITMENT_ORE } from "./finance-effective-read.js";
+import {allocatedSystemCatalog} from "../../src/features/Finance/department-allocation.js";
+import { OPEN_APPROVED_COMMITMENT_ORE } from "./finance-effective-read.js";
 import {
   buildDepartmentSummaries,
   calculateScenarios,
@@ -24,6 +25,7 @@ type Query = CvDatabase["query"];
 
 type ItemRow = {
   id: string;
+  department_key:string; department_name:string; sort_order:number;
   priority: EffectiveBudgetItemPriority;
   status: BudgetItemStatus;
   planned_ore: string;
@@ -65,18 +67,20 @@ async function loadFacts(query: Query, seasonCode: string, includeDraftItems: bo
   }>(
     `select
       coalesce((select jsonb_agg(to_jsonb(items) order by items.id) from (
-       select i.id, i.priority, i.status, i.planned_ore::text as planned_ore, i.protected,
+       select i.id, allocation.department_key,allocated_department.name as department_name,allocated_department.sort_order, i.priority, i.status, allocation.planned_ore::text as planned_ore, i.protected,
               i.earmark_id, part.amount_ore::text as earmark_amount_ore,
               fund.id as funding_id, fund.status as funding_status, fund.confidence as funding_confidence,
               fund.amount_ore::text as funding_amount_ore, i.system_id,
-              ${REGISTERED_ACTUAL_ORE}::text as actual_ore,
-              (${OPEN_APPROVED_COMMITMENT_ORE})::text as commitment_ore,
+              allocation.actual_ore::text as actual_ore,
+              allocation.commitment_ore::text as commitment_ore,
               coalesce((select jsonb_agg(jsonb_build_object('partId',recorded_earmark_id,'amountOre',amount_ore::text)) from (
                 select actual.recorded_earmark_id,sum(actual.amount_ore) as amount_ore
                 from finance.registered_allocation_facts actual join finance.funding_parts recorded_part on recorded_part.id=actual.recorded_earmark_id
                 where actual.budget_item_id=i.id
                 group by actual.recorded_earmark_id) recorded),'[]'::jsonb) as restricted_actual
        from finance.effective_budget_entries i
+       join finance.department_entry_financials allocation on allocation.entry_id=i.id
+       join identity.departments allocated_department on allocated_department.department_key=allocation.department_key
        join finance.seasons s on s.id = i.season_id
        left join finance.funding_parts part on part.id = i.earmark_id
        left join finance.funding fund on fund.id = part.funding_id
@@ -137,22 +141,9 @@ function toItemFact(row: ItemRow): BudgetItemFact {
 }
 
 function departmentFacts(systems: SystemRow[], items: ItemRow[]): OverviewSystemFact[] {
-  const bySystem = new Map<string, BudgetItemFact[]>();
-  for (const row of items) {
-    const list = bySystem.get(row.system_id) ?? [];
-    list.push(toItemFact(row));
-    bySystem.set(row.system_id, list);
-  }
-  return systems.map((system) => ({
-    id: system.id,
-    code: system.code,
-    name: system.name,
-    active: system.active === true,
-    departmentKey: system.department_key,
-    departmentName: system.department_name,
-    sortOrder: Number(system.sort_order),
-    items: bySystem.get(system.id) ?? [],
-  }));
+  const physical=systems.map(system=>({id:system.id,code:system.code,name:system.name,active:system.active,departmentKey:system.department_key,departmentName:system.department_name,sortOrder:Number(system.sort_order)}));
+  const departments=[...systems.map(system=>({departmentKey:system.department_key,departmentName:system.department_name,sortOrder:Number(system.sort_order)})),...items.map(item=>({departmentKey:item.department_key,departmentName:item.department_name,sortOrder:Number(item.sort_order)}))];
+  return allocatedSystemCatalog(physical,departments,items.map(item=>({systemId:item.system_id,departmentKey:item.department_key}))).map(system=>({...system,items:items.filter(item=>item.system_id===system.id&&item.department_key===system.departmentKey).map(toItemFact)}));
 }
 
 function publicScenario(scenario: ReturnType<typeof calculateScenarios>[number]): FundingScenario {

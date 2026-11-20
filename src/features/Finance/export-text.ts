@@ -39,6 +39,8 @@ export const FINANCE_EXPORT_COLUMNS = [
   "document_backend",
   "invoice_transfer_status",
   "invoice_viewer_url",
+  "budget_department",
+  "project_name",
 ] as const;
 
 export type FinanceExportColumn = (typeof FINANCE_EXPORT_COLUMNS)[number];
