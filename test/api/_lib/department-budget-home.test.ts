@@ -117,6 +117,6 @@ it("preserves integer precision and does not derive ownership from the physical 
 
 it("rejects invalid department IDs and never disguises a missing allocation projection as zero", async () => {
   await expect(loadDepartmentHomeBudget(db, projectBudgetIdentity("lead"), "not-a-department")).rejects.toMatchObject({ status: 400 });
-  await db.exec("drop view finance.department_plan_allocation");
+  await db.exec("drop view finance.department_plan_allocation cascade");
   await expect(allocation()).rejects.toMatchObject({ status: 503 });
 });

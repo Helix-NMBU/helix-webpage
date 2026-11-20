@@ -93,7 +93,7 @@ describe.skipIf(!url)("canonical Finance approval/actual atomicity on PostgreSQL
   },15000);
   it("fails migration on an unexpected owning clause and rolls back the new projection",async()=>{
     const client=await pool.connect();await client.query("begin");
-    try{await client.query("drop view finance.department_actual_allocation; drop view finance.registered_allocation_facts");const altered=originalCore.replace("if current_budget.status <> 'approved' then","if current_budget.status is distinct from 'approved' then");expect(altered).not.toBe(originalCore);await client.query(altered);
+    try{await client.query("drop view finance.registered_allocation_facts cascade");const altered=originalCore.replace("if current_budget.status <> 'approved' then","if current_budget.status is distinct from 'approved' then");expect(altered).not.toBe(originalCore);await client.query(altered);
       await expect(client.query(migration.replace(/^begin;\n/,"").replace(/commit;\s*$/,""))).rejects.toMatchObject({code:"P0001",message:"073 expected exactly one purchase eligibility clause 0; found 0"});
     }finally{await client.query("rollback");client.release();}
     expect((await pool.query("select count(*)::integer as count from finance.registered_allocation_facts")).rows[0].count).toBeGreaterThan(0);
