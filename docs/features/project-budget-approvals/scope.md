@@ -1,8 +1,8 @@
 # Project budgets, approvals and purchases
 
 Feature: `project-budget-approvals`
-Status: `ready-for-prepare`
-Updated: 19 November 2026
+Status: `draft amendment`
+Updated: 20 November 2026
 Tracker: Linear, Helix member Platform, `P-HELIX-4`
 Linear scope: [Project budgets, approvals and purchases](https://linear.app/helixnmbu/document/project-budgets-approvals-and-purchases-draft-scope-992741c7eff0), document `9dd33fe4-7434-4a84-a693-9fd815ef2deb`.
 Related work: [Finance, HELIX-34](https://linear.app/helixnmbu/issue/HELIX-34/finance-member-budgets-purchases-approvals-and-financing) and [Partner deals, HELIX-63](https://linear.app/helixnmbu/issue/HELIX-63/sponsor-pipeline-and-seasonal-partner-deals).
@@ -120,7 +120,7 @@ These observations come from the current working tree, which contains unrelated 
 
 ## Preparation details and operational inputs
 
-No blocking product questions remain. D1 through D10 record the user's explicit decisions. The following details belong in the reviewable Prepare specification; they are not additional user decisions already approved in this chat.
+Revision 1 was approved against D1 through D10. The department-submission clarification below adds confirmed decisions and one allocation question. Its complete delivery amendment is being prepared before publication. The following details belong in the reviewable Prepare specification; they are not additional user decisions already approved in this chat.
 
 - Use project and department entry points for scoped drafting and first approval, and Finance for the overview/final queue. Exact navigation, filters, read access, role-to-assignment resolution, return-for-correction controls, reasons and approval notifications are preparation details. Do not give a project lead organization-wide Financials access merely to use their own budget.
 - Work with one current budget for a project in a season and its revisions as the preparation default inferred from the requested singular project budget. If multiple independent budgets per project are needed, bring that scope change back to the user. Define stable entry identity, one pending revision, approved snapshots, comparison baselines, concurrency and edits after submission in the specification.
@@ -152,3 +152,17 @@ Scope used Define to distinguish assigned project leads, project budgets, revisi
 The user confirmed D1 through D10 in the interview, then requested Prepare and explicitly approved specification revision 1 and its nine-task plan on 19 November 2026 by selecting "Approve and publish in Linear". The approved [specification](spec.md) and [ticket plan](tickets.md) are now published as [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking) and nine children, HELIX-76 through HELIX-84, with verified native blockers. Publication details, the exact approval and approved draft hashes are in publication.json.
 
 First eligible work is HELIX-76, contracts and migration groundwork, and HELIX-77, removing the NOK 5,000 rule. Continue with `$deliver HELIX-75` when implementation is requested. Publication approval has not started implementation and does not authorize release; no application, live database or Drive changes were made in Prepare.
+
+
+## Department submission clarification, 20 November 2026
+
+The user clarified that Finance receives the whole allocated department budget, grouped by project. Each project shows its entries and subtotal, and the department shows the combined total. New, changed and removed entries must be easy to distinguish. Removed entries remain in the comparison rather than disappearing. Before submission, the department lead sees all relevant projects, including those without a budget or still drafting, so they can follow up with project leads.
+
+- D11: Finance approves all included project changes together as one fixed department package. The user explicitly chose this over separate project decisions in a grouped view.
+- D12: A department lead may submit while some projects have no budget or are still drafting. Show readiness for every project and its last approved amount where available. Clearly identify which changes are included.
+- D13: Finance review groups entries under their project, with project subtotals, a department total and explicit New, Changed and Removed labels with previous/proposed values.
+- D14: The department lead's pre-submission view includes projects that have not started a budget, rather than listing only existing budget headers.
+
+Open allocation decision: for a project spanning departments, should its full budget count under the responsible budget department or should entries be split by their system's department? The current canonical Finance hierarchy groups entries by system department. The saved Mechanical-owned project includes an Electronics entry, so this affects real totals and is not only presentation.
+
+The draft amendment is in `department-submission-amendment.md`. Existing PBA-08 canonical facts, historical evidence and refresh work can continue. The new department package lifecycle and final feature acceptance must use the amended approved contract. Revision 1 implementation evidence remains historical evidence and does not prove the new package behavior.

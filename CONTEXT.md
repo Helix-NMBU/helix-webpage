@@ -30,7 +30,13 @@ _Avoid_: using "role" without saying whether it means an organizational position
 A member assigned to lead a particular project. This assignment is distinct from the platform-wide Project Manager role.
 
 **Project budget**:
-A project's planned purchases and their budgeted amounts and priorities. Its approval passes through the responsible department lead and then Head of Finance.
+A project's planned purchases and their budgeted amounts and priorities. Its project lead submits it for department review; Head of Finance approves its included changes as part of the department budget submission.
+
+**Department budget**:
+A department's allocated planned purchases, grouped by project with project subtotals and a combined department total.
+
+**Department budget submission**:
+The department budget sent by a department lead for one Head of Finance decision. It identifies the project changes included and the projects that are unfinished.
 
 **Budget revision**:
 A proposed change to a budget that has already been approved. The revised contents require department approval and Finance approval again.
