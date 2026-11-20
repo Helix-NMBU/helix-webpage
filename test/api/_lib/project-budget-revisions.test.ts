@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
+import { composeFinanceMail } from "../../../api/_lib/finance-mail.js";
 import { applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity, seedProjectBudgetLegacy, setupProjectBudgetBase, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
 import type { ProjectBudgetDetail } from "../../../src/features/Finance/project-budget-types.js";
 let pg: PGlite, db: ProjectBudgetTestDatabase, services: ReturnType<typeof createFinanceServices>;
@@ -147,4 +148,30 @@ describe("approved project budget revisions and candidate-only imports", () => {
     const current = await services.projectBudget("head", budget.id);
     expect(current.approvedVersionId).toBe(budget.approvedVersionId); expect(current.pendingStage).toBe("finance_pending");
   });
+});
+
+
+it("composes purchase current-budget status from approved revisions while retaining recorded line details", async () => {
+  let budget = await draft(true);
+  budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: "800.00" } });
+  budget = await approve(budget);
+  const composeLine = async () => {
+    const result = await composeFinanceMail(db, {}, { eventType: "purchase_registered", entity: "purchase", entityId: f.purchase, recipientMemberId: f.finance, providerIdempotencyKey: "synthetic-current-budget", payload: {} });
+    expect("message" in result).toBe(true);
+    if (!("message" in result)) throw new Error("Expected a registration message");
+    return result.message.text.split("\n").find(line => line.startsWith("2026-0100-L1:"));
+  };
+  expect(await composeLine()).toContain("budget over_budget (current)");
+  // The historical anchor still carries its old 10,000 NOK plan.
+  expect((await db.query<{ planned: string }>("select planned_ore::text as planned from finance.budget_items where id=$1::uuid", [f.entry])).rows[0].planned).toBe("1000000");
+  budget = await write("finance", budget, "requestProjectBudgetChanges", { reason: "Increase the remaining plan" });
+  budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: "2000.00" } });
+  expect(await composeLine()).toContain("budget over_budget (current)");
+  budget = await approve(budget);
+  expect(await composeLine()).toContain("budget within (current)");
+  budget = await write("finance", budget, "requestProjectBudgetChanges", { reason: "No further planned purchases" });
+  budget = await write("lead", budget, "removeProjectBudgetEntry", { entryId: f.entry });
+  await approve(budget);
+  expect(await composeLine()).toContain("budget over_budget (current)");
+  expect(await composeLine()).toContain("Steel; quantity 1; NOK 1200.00");
 });

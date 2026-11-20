@@ -252,15 +252,11 @@ async function composeRegistration(db: CvDatabase, purchaseId: string): Promise<
   const lines = (await db.query<LineRow>(
     `select l.public_ref, l.description, l.quantity::text as quantity, l.amount_ore::text as amount_ore,
             l.unbudgeted, s.code as system_code,
-            case
-              when i.id is null then null
-              when i.status = 'cancelled' or i.protected then '0'
-              else i.planned_ore::text
-            end as effective_plan_ore,
+            i.planned_ore::text as effective_plan_ore,
             case when i.id is null then null else finance.item_registered_actual_ore(i.id)::text end as actual_ore
      from finance.purchase_lines l
      join finance.systems s on s.id = l.system_id
-     left join finance.budget_items i on i.id = l.budget_item_id
+     left join finance.effective_budget_entries i on i.id = l.budget_item_id
      where l.purchase_id = $1::uuid
      order by l.public_ref`,
     [purchaseId],
