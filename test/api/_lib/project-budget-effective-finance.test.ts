@@ -76,6 +76,15 @@ describe("canonical effective Finance reads", () => {
     expect(scenarios[0]).toMatchObject({ needNok: "2500.00", restrictedCoverNok: "1700.00", generalNeedNok: "800.00" });
     expect(scenarios[1]).toMatchObject({ needNok: "15300.00", restrictedCoverNok: "10000.00", generalNeedNok: "5300.00" });
   });
+  it.each(["add", "remove"] as const)("counts the effective approved %s of a funding link in deletion feedback", async change => {
+    const part=await fund("A"), fundingId=(await db.query<{id:string}>("select funding_id as id from finance.funding_parts where id=$1::uuid",[part])).rows[0].id;
+    if(change==="remove")await db.query("update finance.budget_items set priority='EM',earmark_id=$1::uuid where id=$2::uuid",[part,f.entry]);
+    let b=await approve(await draft(change==="remove"));const id=b.approvedVersion!.entries[0].entryId;
+    b=await write(b,"requestProjectBudgetChanges",{reason:"Update restricted funding link"});b=await write(b,"saveProjectBudgetEntry",{entry:{...input,entryId:id,earmarkId:change==="add"?part:null}});await approve(b);
+    const records=await loadFundingRecords(db.query.bind(db),"S27",osloToday(),true);expect(records.parts.find(p=>p.id===part)?.linkedItems).toHaveLength(change==="add"?1:0);
+    const result=await mutate("head",{action:"deleteFunding",fundingId,expectedRevision:0});
+    expect(result.warnings).toEqual(change==="add"?[{message:"This funding still pays for 1 budget item that is not cancelled."}]:[]);
+  });
   it("makes awarded P0 mandatory without creating cash or making legacy EM mandatory", async () => {
     let b = await draft(false); b = await write(b, "saveProjectBudgetEntry", { entry: { ...input, entryId: b.pendingVersion!.entries[0].entryId, ordinaryPriority: "P4", plannedNok: "100" } }); b = await approve(b);
     const before = await loadFundingScenarios(db.query.bind(db), "S27", true);

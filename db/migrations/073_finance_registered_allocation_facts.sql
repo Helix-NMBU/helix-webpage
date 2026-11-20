@@ -139,5 +139,28 @@ end;$new$;
   matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
   if matches<>1 then raise exception '073 expected exactly one request decision lock clause; found %',matches; end if;
   execute replace(definition,needle,replacement);
+
+end $migration$;
+
+-- Funding mutation feedback must count the same current links as funding reads.
+-- Keep its existing draft-visibility and soft-delete behavior.
+do $migration$
+declare definition text; needle text; replacement text; matches integer;
+begin
+  definition:=pg_get_functiondef('finance.apply_funding_change(uuid,uuid,text,jsonb,boolean)'::regprocedure);
+  needle:=$old$  from finance.budget_items i
+  join finance.budgets b on b.id = i.budget_id
+  join finance.funding_parts p on p.id = i.earmark_id
+  where p.funding_id = target_funding
+    and i.status <> 'cancelled'
+    and (p_include_draft or b.status <> 'draft');$old$;
+  replacement:=$new$  from finance.effective_budget_entries i
+  join finance.funding_parts p on p.id = i.earmark_id
+  where p.funding_id = target_funding
+    and i.status <> 'cancelled'
+    and (p_include_draft or i.approved_version_id is not null or i.legacy_budget_status='approved');$new$;
+  matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
+  if matches<>1 then raise exception '073 expected exactly one funding active-link counter; found %',matches; end if;
+  execute replace(definition,needle,replacement);
 end $migration$;
 commit;
