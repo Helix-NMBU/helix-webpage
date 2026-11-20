@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { loadDepartmentHomeBudget } from "../../../api/_lib/finance-department-home.js";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
-import { projectBudgetFixture as f, projectBudgetIdentity, setupProjectBudgetBase, seedProjectBudgetLegacy, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
+import { applyProjectBudgetMigrations, submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage, projectBudgetFixture as f, projectBudgetIdentity, setupProjectBudgetBase, seedProjectBudgetLegacy, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
 
-let pg: PGlite, db: ProjectBudgetTestDatabase;
+let pg: PGlite, db: ProjectBudgetTestDatabase, services: ReturnType<typeof createFinanceServices>;
 const allocation = async (role: ProjectBudgetFixtureRole = "lead", departmentId: string = f.department) => loadDepartmentHomeBudget(db, projectBudgetIdentity(role), departmentId);
 const migrations = new URL("../../../db/migrations/", import.meta.url);
 
@@ -15,41 +15,32 @@ beforeAll(async () => {
   db = { exec: sql => pg.exec(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
   await setupProjectBudgetBase(db);
   await seedProjectBudgetLegacy(db);
-  // This suite verifies the safe reader against fixed allocation facts. The real
-  // 074 allocation view and package lifecycle have their own integration tests.
-  for (const name of readdirSync(migrations).filter(name => /^0(6[6-9]|7[0-3])_.*\.sql$/.test(name)).sort()) {
-    await pg.exec(readFileSync(new URL(name, migrations), "utf8"));
-  }
+  await applyProjectBudgetMigrations(db);
   const currentSeason = readFileSync(new URL("041_project_current_season.sql", migrations), "utf8")
     .match(/create or replace function project_management\.current_season\([\s\S]*?\$\$;/)?.[0];
   if (!currentSeason) throw new Error("Missing real current-season function");
   await pg.exec(currentSeason);
   await db.query("insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','\"S27\"','Test current season',$1::uuid)", [f.head]);
   await db.query("insert into project_management.department_members values($1::uuid,$2::uuid,false)", [f.department, f.lead]);
-  const services = createFinanceServices({ db, authenticate: async role => projectBudgetIdentity(role as ProjectBudgetFixtureRole) });
-  for (const [projectId, departmentId, systemId] of [[f.project, f.department, f.system], [f.electronicProject, f.electronicDepartment, f.electronicSystem]]) {
+  services = createFinanceServices({ db, authenticate: async role => projectBudgetIdentity(role as ProjectBudgetFixtureRole) });
+  // Real approved plans feed 074's canonical view. Physical Electronics costs
+  // in Frame belong to its Mechanical responsible department; legacy stays separate.
+  await db.query("update project_management.projects set departments=array['Mechanical & Production','Electronics'] where id=$1::uuid", [f.project]);
+  await db.query("update finance.budget_items set planned_ore=case when id=$1::uuid then 5000 else 0 end where not protected", [f.entry]);
+  for (const [projectId, departmentId, entries] of [
+    [f.project, f.department, [[f.system, "123.45"], [f.electronicSystem, "67.89"]]],
+    [f.electronicProject, f.electronicDepartment, [[f.electronicSystem, "300.00"]]],
+  ] as const) {
     const created = await services.mutate("lead", { action: "createProjectBudget", requestId: randomUUID(), projectId, responsibleDepartmentId: departmentId });
     let budget = await services.projectBudget("lead", created.id!);
-    const action = async (role: ProjectBudgetFixtureRole, name: string, fields = {}) => {
-      await services.mutate(role, { action: name, requestId: randomUUID(), projectBudgetId: budget.id, expectedRevision: budget.revision, ...fields });
+    const action = async (name: string, fields = {}) => {
+      await services.mutate("lead", { action: name, requestId: randomUUID(), projectBudgetId: budget.id, expectedRevision: budget.revision, ...fields });
       budget = await services.projectBudget("lead", budget.id);
     };
-    await action("lead", "saveProjectBudgetEntry", { entry: { systemId, description: "Private item details", category: "material", plannedNok: "200.00", ordinaryPriority: "P1", reuseStatus: "new", status: "planned", note: "PRIVATE DRAFT NOTE" } });
-    await action("lead", "submitProjectBudget");
-    await action(departmentId === f.department ? "departmentLead" : "otherDepartmentLead", "approveDepartmentBudget");
-    await action("head", "approveProjectBudget");
-  }
-  await pg.exec(`create table finance.department_plan_allocation (
-    entry_id uuid primary key,season_id uuid not null,system_id uuid not null,department_key text not null,
-    project_id uuid,planned_ore bigint not null,legacy boolean not null
-  )`);
-  for (const [system, department, project, amount, legacy] of [
-    [f.system, "mechanical-production", f.project, "12345", false],
-    [f.electronicSystem, "mechanical-production", f.project, "6789", false],
-    [f.system, "mechanical-production", null, "5000", true],
-    [f.electronicSystem, "electrical", f.electronicProject, "30000", false],
-  ] as const) {
-    await db.query("insert into finance.department_plan_allocation values($1::uuid,$2::uuid,$3::uuid,$4,$5::uuid,$6::bigint,$7)", [randomUUID(), f.season, system, department, project, amount, legacy]);
+    for (const [systemId, plannedNok] of entries) await action("saveProjectBudgetEntry", { entry: { systemId, description: "Private item details", category: "material", plannedNok, ordinaryPriority: "P1", reuseStatus: "new", status: "planned", note: "PRIVATE DRAFT NOTE" } });
+    await action("submitProjectBudget");
+    budget = (await submitProjectBudgetDepartmentPackage(services, budget, departmentId === f.department ? "departmentLead" : "otherDepartmentLead")).budget;
+    await approveProjectBudgetDepartmentPackage(services, budget);
   }
 }, 30000);
 beforeEach(() => pg.exec("begin"));
@@ -65,10 +56,15 @@ it("shows the approved responsible-department total and projects to an ordinary 
 });
 
 it("returns an explicit aggregate allowlist without entries, invoices, funding, drafts or extra query fields", async () => {
+  const approved = (await services.projectBudgets("lead", f.project)).budgets[0];
+  await services.mutate("lead", { action: "requestProjectBudgetChanges", requestId: randomUUID(), projectBudgetId: approved.id, expectedRevision: approved.revision, reason: "Private candidate quote" });
+  const candidate = await services.projectBudget("lead", approved.id);
+  await services.mutate("lead", { action: "saveProjectBudgetEntry", requestId: randomUUID(), projectBudgetId: candidate.id, expectedRevision: candidate.revision, entry: { ...candidate.pendingVersion!.entries[0], description: "PRIVATE UNAPPROVED ENTRY", plannedNok: "9000.00" } });
   const summary = await allocation();
+  expect(summary.approvedTotalNok).toBe("241.34");
   expect(Object.keys(summary).sort()).toEqual(["approvedTotalNok", "departmentId", "departmentName", "legacyTotalNok", "projects", "seasonCode", "seasonId", "viewVersion"].sort());
   expect(Object.keys(summary.projects[0]).sort()).toEqual(["projectId", "projectName", "approvedTotalNok"].sort());
-  for (const privateValue of ["Private item details", "PRIVATE DRAFT NOTE", "invoice", "earmark", "funding", "approvedVersion", "pendingVersion", "ownerEmail"]) expect(JSON.stringify(summary)).not.toContain(privateValue);
+  for (const privateValue of ["Private item details", "PRIVATE DRAFT NOTE", "PRIVATE UNAPPROVED ENTRY", "9000.00", "invoice", "earmark", "funding", "approvedVersion", "pendingVersion", "ownerEmail"]) expect(JSON.stringify(summary)).not.toContain(privateValue);
 });
 
 it.each(["otherDepartmentLead", "finance", "head", "outsider"] as const)("does not grant widget access from another department, Finance, a title or administrator role: %s", async role => {
@@ -106,12 +102,21 @@ it("returns an honest empty allocation before the department has a configured Fi
 });
 
 it("preserves integer precision and does not derive ownership from the physical system", async () => {
-  await db.query("update finance.department_plan_allocation set planned_ore=9007199254740993 where project_id=$1::uuid and system_id=$2::uuid", [f.project, f.system]);
+  const budget = (await services.projectBudgets("lead", f.project)).budgets[0];
+  await services.mutate("lead", { action: "requestProjectBudgetChanges", requestId: randomUUID(), projectBudgetId: budget.id, expectedRevision: budget.revision, reason: "A precise large supplier quote" });
+  const candidate = await services.projectBudget("lead", budget.id);
+  const entry = candidate.pendingVersion!.entries.find(entry => entry.systemId === f.system)!;
+  await services.mutate("lead", { action: "saveProjectBudgetEntry", requestId: randomUUID(), projectBudgetId: candidate.id, expectedRevision: candidate.revision, entry: { ...entry, plannedNok: "90071992547409.93" } });
+  const updated = await services.projectBudget("lead", budget.id);
+  await services.mutate("lead", { action: "submitProjectBudget", requestId: randomUUID(), projectBudgetId: updated.id, expectedRevision: updated.revision });
+  const submitted = await services.projectBudget("lead", updated.id);
+  const sent = await submitProjectBudgetDepartmentPackage(services, submitted);
+  await approveProjectBudgetDepartmentPackage(services, sent.budget);
   expect(await allocation()).toMatchObject({ approvedTotalNok: "90071992547527.82", projects: [{ approvedTotalNok: "90071992547477.82" }] });
 });
 
 it("rejects invalid department IDs and never disguises a missing allocation projection as zero", async () => {
   await expect(loadDepartmentHomeBudget(db, projectBudgetIdentity("lead"), "not-a-department")).rejects.toMatchObject({ status: 400 });
-  await db.exec("drop table finance.department_plan_allocation");
+  await db.exec("drop view finance.department_plan_allocation");
   await expect(allocation()).rejects.toMatchObject({ status: 503 });
 });

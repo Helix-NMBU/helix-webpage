@@ -19,6 +19,7 @@ import type {
 } from "../../../src/features/Finance/project-budget-types.js";
 import {
   applyProjectBudgetMigrations,
+  submitProjectBudgetDepartmentPackage,
   projectBudgetFixture as f,
   projectBudgetIdentity,
   seedProjectBudgetLegacy,
@@ -126,12 +127,15 @@ async function snapshot() {
   ).rows;
 }
 async function approve() {
-  for (const [role, action] of [
-    ["lead", "submitProjectBudget"],
-    ["departmentLead", "approveDepartmentBudget"],
-    ["head", "approveProjectBudget"],
-  ] as const)
-    expect((await mutate(action, {}, role)).status).toBe(200);
+  expect((await mutate("submitProjectBudget")).status).toBe(200);
+  budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget;
+  expect((await approvePackage()).status).toBe(200);
+}
+async function approvePackage() {
+  const packet = (await services.departmentBudgetPackages("head", budget.responsibleDepartmentId)).packages.find(packet => packet.status === "finance_pending")!;
+  const result = await call("head", { action: "approveDepartmentBudgetPackage", packageId: packet.id, expectedRevision: packet.revision });
+  if (result.status === 200) budget = await services.projectBudget("lead", budget.id);
+  return result;
 }
 beforeAll(async () => {
   pg = new PGlite();
@@ -423,11 +427,9 @@ describe("scoped project CSV import and retired department endpoints", () => {
       "system_id;description;planned_nok;priority;earmark_id\nSYS-FR;Frame;10;P2;FE-009\nSYS-LV;Linkage;10;P2;FE-009";
     expect((await apply(split, await preview(split))).status).toBe(200);
     expect((await mutate("submitProjectBudget")).status).toBe(200);
-    expect(
-      (await mutate("approveDepartmentBudget", {}, "departmentLead")).status,
-    ).toBe(200);
+    budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget;
     const before = await snapshot();
-    expect((await mutate("approveProjectBudget", {}, "head")).status).toBe(400);
+    expect((await approvePackage()).status).toBe(400);
     expect(await snapshot()).toEqual(before);
     expect(budget.approvedVersionId).toBeNull();
     expect(

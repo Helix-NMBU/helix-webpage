@@ -14,7 +14,7 @@ import { osloToday, addCalendarDays } from "../../../src/features/Finance/money.
 import type { ProjectBudgetDetail } from "../../../src/features/Finance/project-budget-types.js";
 import type { PublicBudgets } from "../../../src/features/Finance/types.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
-import { applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity, seedProjectBudgetLegacy, setupProjectBudgetBase, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
+import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage, applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity, seedProjectBudgetLegacy, setupProjectBudgetBase, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
 let pg: PGlite, db: ProjectBudgetTestDatabase, services: ReturnType<typeof createFinanceServices>;
 const storage = createMemoryFinanceStorage();
 const mutate = (role: ProjectBudgetFixtureRole, body: Record<string, unknown>) => services.mutate(role, { requestId: randomUUID(), ...body });
@@ -22,7 +22,7 @@ const input = { systemId: f.system, description: "Approved frame", category: "ma
 async function safe<T>(fn: () => Promise<T>) { await pg.exec("savepoint expected_error"); try { const result = await fn(); await pg.exec("release savepoint expected_error"); return result; } catch (error) { await pg.exec("rollback to savepoint expected_error; release savepoint expected_error"); throw error; } }
 async function write(b: ProjectBudgetDetail, action: string, fields = {}, role: ProjectBudgetFixtureRole = "lead") { await mutate(role, { action, projectBudgetId: b.id, expectedRevision: b.revision, ...fields }); return services.projectBudget("lead", b.id); }
 async function draft(adopt = true) { const created = await mutate("lead", { action: "createProjectBudget", projectId: f.project, responsibleDepartmentId: f.department }); let b = await services.projectBudget("lead", created.id!); b = await write(b, adopt ? "adoptProjectBudgetEntries" : "saveProjectBudgetEntry", adopt ? { entries: [{ budgetItemId: f.entry, ordinaryPriority: "P2" }] } : { entry: input }); return b; }
-async function approve(b: ProjectBudgetDetail) { b = await write(b, "submitProjectBudget"); b = await write(b, "approveDepartmentBudget", {}, "departmentLead"); return write(b, "approveProjectBudget", {}, "head"); }
+async function approve(b: ProjectBudgetDetail) { b = await write(b, "submitProjectBudget"); b = (await submitProjectBudgetDepartmentPackage(services, b)).budget; return approveProjectBudgetDepartmentPackage(services, b); }
 const budgets = async () => await services.budgets("head") as PublicBudgets;
 const items = (b: PublicBudgets) => b.departments.flatMap(d => d.systems.flatMap(s => s.items));
 const plan = (b: PublicBudgets) => b.departments.reduce((n, d) => n + Number(d.plannedNok), 0);

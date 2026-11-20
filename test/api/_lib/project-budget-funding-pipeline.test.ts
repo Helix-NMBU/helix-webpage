@@ -54,7 +54,11 @@ it("keeps real Won effects separate from awards and gives HOF no pipeline or org
  const classified=await marketing.saveFundingApplication('test',{action:'saveFundingApplication',requestId:randomUUID(),dealId,dealExpectedRevision:0,expectedRevision:0,seasonId:id(20),purchaseConditions:'Purchase the research material'});
  const department=(await db.query<{id:string}>("select id from project_management.departments where name='Mechanical & Production' and season='S27'")).rows[0].id;
  let saved=await lead.mutate('test',{action:'createProjectBudget',requestId:randomUUID(),projectId:id(90),responsibleDepartmentId:department});
- for(const [actor,action,fields] of [[0,'saveProjectBudgetEntry',{entry:{systemId:id(91),description:'Research material',category:'material',plannedNok:'1000',ordinaryPriority:'P2',reuseStatus:'new',status:'planned'}}],[0,'submitProjectBudget',{}],[2,'approveDepartmentBudget',{}],[1,'approveProjectBudget',{}]] as const) saved=await financeService(actor).mutate('test',{action,requestId:randomUUID(),projectBudgetId:saved.id,expectedRevision:saved.revision,...fields});
+ for(const [actor,action,fields] of [[0,'saveProjectBudgetEntry',{entry:{systemId:id(91),description:'Research material',category:'material',plannedNok:'1000',ordinaryPriority:'P2',reuseStatus:'new',status:'planned'}}],[0,'submitProjectBudget',{}]] as const) saved=await financeService(actor).mutate('test',{action,requestId:randomUUID(),projectBudgetId:saved.id,expectedRevision:saved.revision,...fields});
+ const departmentLead=financeService(2), preview=await departmentLead.departmentBudgetPreview('test',department);
+ await departmentLead.mutate('test',{action:'sendDepartmentBudgetPackage',requestId:randomUUID(),departmentId:department,previewToken:preview.previewToken});
+ const packet=(await head.departmentBudgetPackages('test',department)).packages.find(packet=>packet.status==='finance_pending'&&packet.snapshot.projects.some(project=>project.projectBudgetId===saved.id&&project.included))!;
+ await head.mutate('test',{action:'approveDepartmentBudgetPackage',requestId:randomUUID(),packageId:packet.id,expectedRevision:packet.revision});
  let budget=await head.projectBudget('test',saved.id!); let app=await head.fundingApplication('test',classified.id); const entryId=budget.approvedVersion!.entries[0].entryId;
  await head.mutate('test',{action:'linkFundingApplicationEntry',requestId:randomUUID(),applicationId:app.id,expectedRevision:app.revision,entryId,expectedBudgetRevision:budget.revision});
  await marketing.confirmWon('test',dealId,0,true);

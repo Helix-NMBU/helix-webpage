@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
 import { composeFinanceMail } from "../../../api/_lib/finance-mail.js";
-import { applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity, seedProjectBudgetLegacy, setupProjectBudgetBase, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
+import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage, applyProjectBudgetMigrations, projectBudgetFixture as f, projectBudgetIdentity, seedProjectBudgetLegacy, setupProjectBudgetBase, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
 import type { ProjectBudgetDetail } from "../../../src/features/Finance/project-budget-types.js";
 let pg: PGlite, db: ProjectBudgetTestDatabase, services: ReturnType<typeof createFinanceServices>;
 const entry = { systemId: f.system, description: "Frame tubes", category: "material", plannedNok: "6000.00", ordinaryPriority: "P1", reuseStatus: "new", status: "planned", note: "Supplier quote", expectedPurchaseDate: "2027-01-15", ownerEmail: "buyer@example.test" };
@@ -23,7 +23,7 @@ async function draft(adopt = false) {
   return budget;
 }
 async function approve(budget: ProjectBudgetDetail) {
-  budget = await write("lead", budget, "submitProjectBudget"); budget = await write("departmentLead", budget, "approveDepartmentBudget"); return write("head", budget, "approveProjectBudget");
+  budget = await write("lead", budget, "submitProjectBudget"); budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget; return approveProjectBudgetDepartmentPackage(services, budget);
 }
 async function award(entryId: string) {
   const dealId = randomUUID(), applicationId = randomUUID();
@@ -81,7 +81,7 @@ describe("approved project budget revisions and candidate-only imports", () => {
       budget = await write(role, budget, "requestProjectBudgetChanges", { reason: "Refresh quote" });
       if (previousId) expect(budget.pendingVersionId).toBe(previousId);
       expect(budget.pendingVersion).toMatchObject({ status: "draft", departmentApprovedBy: null, approvedBy: null });
-      budget = await write("lead", budget, "submitProjectBudget"); budget = await write("departmentLead", budget, "approveDepartmentBudget");
+      budget = await write("lead", budget, "submitProjectBudget"); budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget;
     }
     await expect(safe(() => write("outsider", budget, "requestProjectBudgetChanges", { reason: "Not assigned" }))).rejects.toMatchObject({ status: 403 });
     await expect(safe(() => write("finance", budget, "saveProjectBudgetEntry", { entry }))).rejects.toMatchObject({ status: 403 });
@@ -133,8 +133,8 @@ describe("approved project budget revisions and candidate-only imports", () => {
   it("rejects a reduction prepared before an obligation becomes active", async () => {
     let budget = await approve(await draft(true)); budget = await write("lead", budget, "requestProjectBudgetChanges", { reason: "Lower quote" });
     budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: "9000" } });
-    budget = await write("lead", budget, "submitProjectBudget"); budget = await write("departmentLead", budget, "approveDepartmentBudget"); await award(f.entry);
-    await expect(safe(() => write("head", budget, "approveProjectBudget"))).rejects.toMatchObject({ status: 400 });
+    budget = await write("lead", budget, "submitProjectBudget"); budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget; await award(f.entry);
+    await expect(safe(() => approveProjectBudgetDepartmentPackage(services, budget))).rejects.toMatchObject({ status: 400 });
     expect((await services.projectBudget("head", budget.id)).approvedTotalNok).toBe("10000.00");
   });
   it("rechecks obligations awarded after preparation during final promotion", async () => {
@@ -142,9 +142,9 @@ describe("approved project budget revisions and candidate-only imports", () => {
     budget = await write("lead", budget, "removeProjectBudgetEntry", { entryId: f.entry });
     await db.query("delete from finance.project_budget_version_entries where version_id=$1::uuid and entry_id=$2::uuid", [budget.pendingVersionId, f.entry]);
     budget = await write("lead", budget, "saveProjectBudgetEntry", { entry });
-    budget = await write("lead", budget, "submitProjectBudget"); budget = await write("departmentLead", budget, "approveDepartmentBudget");
+    budget = await write("lead", budget, "submitProjectBudget"); budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget;
     await award(f.entry);
-    await expect(safe(() => write("head", budget, "approveProjectBudget"))).rejects.toMatchObject({ status: 400 });
+    await expect(safe(() => approveProjectBudgetDepartmentPackage(services, budget))).rejects.toMatchObject({ status: 400 });
     const current = await services.projectBudget("head", budget.id);
     expect(current.approvedVersionId).toBe(budget.approvedVersionId); expect(current.pendingStage).toBe("finance_pending");
   });
