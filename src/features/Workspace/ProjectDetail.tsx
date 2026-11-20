@@ -404,12 +404,12 @@ export function ProjectDetail({
           ))}
         </TabsList>
         <TabsContent value={tab} className="mt-4 md:min-h-0 md:overflow-hidden">
-          <div className="grid min-w-0 gap-6 md:h-full md:min-h-0 md:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
+          <div className={`grid min-w-0 gap-6 md:h-full md:min-h-0 ${tab === "budget" ? "md:auto-rows-max md:overflow-y-auto xl:auto-rows-auto xl:grid-cols-[minmax(0,1fr)_21rem] xl:overflow-hidden" : "md:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_21rem]"}`}>
             <div
               tabIndex={0}
               role="region"
               aria-label="Project content"
-              className={`min-w-0 md:min-h-0 md:overscroll-y-contain md:pb-2 md:pr-2 ${tab === "tasks" && params.get("view") === "board" ? "md:flex md:flex-col md:overflow-hidden" : "md:overflow-y-auto"}`}
+              className={`min-w-0 md:overscroll-y-contain md:pb-2 md:pr-2 ${tab === "budget" ? "xl:min-h-0 xl:overflow-y-auto" : "md:min-h-0"} ${tab === "budget" ? "" : tab === "tasks" && params.get("view") === "board" ? "md:flex md:flex-col md:overflow-hidden" : "md:overflow-y-auto"}`}
             >
               {tab === "overview" ? (
                 <section aria-label="Project overview" className="mx-auto max-w-4xl space-y-8 py-4">
@@ -484,6 +484,7 @@ export function ProjectDetail({
               )}
             </div>
             <ProjectSidebar
+              stackOnNarrow={tab === "budget"}
               project={project}
               directory={directory}
               workspace={workspace}

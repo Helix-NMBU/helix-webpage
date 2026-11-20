@@ -1,3 +1,4 @@
+import { hasVisibleApprovedFinances } from "./finance-calculations";
 import { ProjectBudgetsPanel } from "./ProjectBudgetsPanel";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@libs/components/ui/collapsible";
 import { useEffect } from "react";
@@ -36,13 +37,15 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     void session.loadPage("budgets");
   }, [page, session.access, session.budgets, session.capabilities?.registerActual, session.loadPage]);
   const overviewReady = page === "overview" && Boolean(session.overview) && (
-    (session.overview?.departments.length ?? 0) > 0
+    (session.overview && hasVisibleApprovedFinances(session.overview))
+    || (session.overview?.departments.length ?? 0) > 0
     || (session.overview?.publicEarmarks.length ?? 0) > 0
     || session.overview?.budgetStatus !== "absent"
     || Boolean(session.overview?.scenarios?.length)
   );
   const budgetsReady = page === "budgets" && Boolean(session.budgets) && (
-    (session.budgets?.departments.length ?? 0) > 0
+    (session.budgets && hasVisibleApprovedFinances(session.budgets))
+    || (session.budgets?.departments.length ?? 0) > 0
     || session.budgets?.budgetStatus !== "absent"
     || Boolean(session.capabilities?.createBudget)
   );

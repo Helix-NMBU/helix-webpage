@@ -1,3 +1,4 @@
+import { hasVisibleApprovedFinances } from "../Finance/finance-calculations";
 import { MEMBER_ACCESS_CHANGED } from "./member-access-api";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
@@ -68,7 +69,7 @@ function errorStatus(error: unknown): number {
 }
 
 function visibleBudgets(budgets: PublicBudgets | null, capabilities: FinanceCapabilitySet): PublicBudgets | null {
-  if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems) return budgets;
+  if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems || hasVisibleApprovedFinances(budgets)) return budgets;
   return { ...budgets, departments: [], choices: { systems: [], items: [] }, earmarkChoices: [] };
 }
 

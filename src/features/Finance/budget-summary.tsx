@@ -36,6 +36,7 @@ export function ScenarioList({ scenarios }: { scenarios: readonly FundingScenari
   if (scenarios.length === 0) return null;
   return (
     <section aria-label="Funding scenarios" className="space-y-3">
+      <p className="text-sm text-muted-foreground">Scenario need includes actual costs and remaining approved commitments or eligible approved plan. Mandatory P0 plan remains in every scenario. Restricted funding coverage is shown separately.</p>
       {scenarios.map((scenario) => (
         <article key={scenario.key} className="space-y-1">
           <h2 className="text-lg font-medium">{scenario.label}</h2>

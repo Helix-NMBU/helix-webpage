@@ -1,3 +1,5 @@
+import { InvoiceEvidence } from "./InvoiceEvidence";
+import { budgetPlanLabel } from "./budget-plan-label";
 import { useState } from "react";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Label } from "@libs/components/ui/label";
@@ -15,19 +17,18 @@ import type { PublicSystemBudget } from "./types";
 const moneyText = (value: string) =>
   value.startsWith("-") ? `${value} Over plan` : value;
 export function BudgetsBoard() {
-  const { budgets } = useFinanceAccess();
+  const session = useFinanceAccess();
+  const {budgets}=session;
+  const [evidenceDenied,setEvidenceDenied]=useState(false);
   const [showCancelled, setShowCancelled] = useState(false);
-  if (!budgets) return null;
+  if (!budgets || evidenceDenied) return null;
   return (
     <div className="space-y-8">
       <p className="text-sm text-muted-foreground">
         {budgets.seasonCode
           ? `Season ${budgets.seasonCode}`
           : "No current season"}
-        {budgets.budgetStatus === "approved" && budgets.approvedOn
-          ? ` · Approved ${budgets.approvedOn}`
-          : ""}
-        {budgets.budgetStatus === "draft" ? " · Draft" : ""}
+        {` · ${budgetPlanLabel(budgets)}`}
       </p>
       <p className="text-sm text-muted-foreground">
         Season budget history is read-only. Make plan changes in the project's
@@ -81,6 +82,8 @@ export function BudgetsBoard() {
                   key={system.id}
                   system={system}
                   showCancelled={showCancelled}
+                  onEvidenceChanged={()=>session.loadPage("budgets")}
+                  onAccessEnded={()=>{setEvidenceDenied(true);session.retry();}}
                 />
               ))}
             </section>
@@ -112,9 +115,13 @@ function AmountLine({
 function SystemBudget({
   system,
   showCancelled,
+  onEvidenceChanged,
+  onAccessEnded,
 }: {
   system: PublicSystemBudget;
   showCancelled: boolean;
+  onEvidenceChanged:()=>Promise<void>;
+  onAccessEnded:()=>void;
 }) {
   const items = system.items.filter(
     (item) => showCancelled || item.status !== "cancelled",
@@ -154,6 +161,7 @@ function SystemBudget({
             <TableHead>Actual</TableHead>
             <TableHead>Difference</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Fulfillment</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -166,6 +174,8 @@ function SystemBudget({
                   {item.earmarkPurpose ? ` · ${item.earmarkPurpose}` : ""}
                   {item.earmarkAmountNok ? ` · ${item.earmarkAmountNok}` : ""}
                 </span>
+                {item.projectName ? <span className="block text-muted-foreground">{item.projectName} · {item.approvedVersionId ? "Approved project plan" : "Legacy plan awaiting project approval"}</span> : item.source==="legacy" ? <span className="block text-muted-foreground">Unmapped legacy plan</span> : null}
+                {item.invoices?.length ? <ul className="mt-2 space-y-2">{item.invoices.map(invoice=><li key={invoice.documentId}><InvoiceEvidence invoice={invoice} onChanged={onEvidenceChanged} onAccessEnded={onAccessEnded}/></li>)}</ul> : null}
                 {item.status === "cancelled" ? (
                   <span className="block">
                     Stored plan {item.plannedNok}. Effective plan{" "}
@@ -179,6 +189,7 @@ function SystemBudget({
               <TableCell>{item.actualNok}</TableCell>
               <TableCell>{moneyText(item.differenceNok)}</TableCell>
               <TableCell>{item.status}</TableCell>
+              <TableCell>{item.completion==="complete"?"Complete":item.completion==="partial"?"Partially purchased":item.completion==="not_purchased"?"Not purchased":"Fulfillment not recorded"}</TableCell>
             </TableRow>
           ))}
         </TableBody>

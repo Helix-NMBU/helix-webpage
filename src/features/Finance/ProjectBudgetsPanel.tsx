@@ -1,3 +1,7 @@
+import { Link, useInRouterContext } from "react-router-dom";
+import type {MouseEvent,ReactNode} from "react";
+import { departmentPath } from "../Workspace/types";
+import { matchesProjectBudget, projectBudgetFilterChoices, type ProjectBudgetStageFilter } from "./project-budget-views";
 import { InvoiceEvidence } from "./InvoiceEvidence";
 import { FundingBudgetProposals } from "./FundingBudgetProposals";
 import { ProjectBudgetComparison } from "./ProjectBudgetComparison";
@@ -62,6 +66,12 @@ import {
   type ProjectBudgetSystemChoice,
   type ProjectBudgetWorkspaceView,
 } from "./project-budget-repository";
+
+function BudgetWorkspaceLink({href,children,onClick}:{href:string;children:ReactNode;onClick:(event:MouseEvent<HTMLAnchorElement>)=>void}) {
+  const routed=useInRouterContext();
+  const props={onClick,className:"underline underline-offset-4"};
+  return routed ? <Link to={href} {...props}>{children}</Link> : <a href={href} {...props}>{children}</a>;
+}
 
 const money = (value: string) => {
   const [whole, fraction = "00"] = value.split(".");
@@ -575,7 +585,8 @@ export function ProjectBudgetsPanel({
     | "requestProjectBudgetChanges"
     | null
   >(null);
-  const [stage, setStage] = useState("all");
+  const [stage, setStage] = useState<ProjectBudgetStageFilter>("all");
+  const [projectFilter,setProjectFilter]=useState("all"),[departmentFilter,setDepartmentFilter]=useState("all");
   const [importOpen, setImportOpen] = useState(false);
   const [proposalDirty, setProposalDirty] = useState(false);
   const [versionView, setVersionView] = useState("proposed");
@@ -728,6 +739,7 @@ export function ProjectBudgetsPanel({
     setImportOpen(false);
     setProposalDirty(false);
     setVersionView("proposed");
+    setStage("all");setProjectFilter("all");setDepartmentFilter("all");
     dirty.current = false;
     selected.current = null;
     version.current = null;
@@ -864,11 +876,9 @@ export function ProjectBudgetsPanel({
           (budget) => budget.projectId === scope.projectId,
         ),
     ) ?? [];
-  const matching =
-    workspace?.budgets.filter(
-      (budget) =>
-        stage === "all" || (budget.pendingStage ?? "approved") === stage,
-    ) ?? [];
+  const filterChoices=projectBudgetFilterChoices(workspace?.budgets??[]);
+  const matching = workspace?.budgets.filter(budget=>matchesProjectBudget(budget,{stage,projectId:projectFilter,departmentId:departmentFilter}))??[];
+  const detailVisible=detail && (dirty.current||matching.some(budget=>budget.id===detail.id));
   const canEdit = Boolean(
     detail?.capabilities.canDraft &&
     candidate?.status === "draft" &&
@@ -966,14 +976,27 @@ export function ProjectBudgetsPanel({
       ) : (
         <>
           {!projectId && (
-            <div className="max-w-sm space-y-2">
-              <Label htmlFor="budget-stage-filter">Approval stage</Label>
-              <Select value={stage} onValueChange={setStage}>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2"><Label htmlFor="budget-project-filter">Project</Label>
+                <Select value={projectFilter} onValueChange={setProjectFilter} disabled={busy||dirty.current}>
+                  <SelectTrigger id="budget-project-filter" className="w-full"><SelectValue/></SelectTrigger>
+                  <SelectContent><SelectItem value="all">All projects</SelectItem>{filterChoices.projects.map(project=><SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              {!departmentId && <div className="space-y-2"><Label htmlFor="budget-department-filter">Responsible department</Label>
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter} disabled={busy||dirty.current}>
+                  <SelectTrigger id="budget-department-filter" className="w-full"><SelectValue/></SelectTrigger>
+                  <SelectContent><SelectItem value="all">All departments</SelectItem>{filterChoices.departments.map(department=><SelectItem key={department.id} value={department.id}>{department.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>}
+              <div className="space-y-2"><Label htmlFor="budget-stage-filter">Approval stage</Label>
+              <Select value={stage} onValueChange={value=>setStage(value as ProjectBudgetStageFilter)} disabled={busy||dirty.current}>
                 <SelectTrigger id="budget-stage-filter" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stages</SelectItem>
+                  <SelectItem value="submitted">All submitted budgets</SelectItem>
                   {Object.entries(PROJECT_BUDGET_STAGE_LABELS).map(
                     ([value, label]) => (
                       <SelectItem key={value} value={value}>
@@ -983,9 +1006,10 @@ export function ProjectBudgetsPanel({
                   )}
                 </SelectContent>
               </Select>
+              </div>
             </div>
           )}
-          <Table>
+          <Table aria-label="Project budget list">
             <TableHeader>
               <TableRow>
                 <TableHead>Project</TableHead>
@@ -1009,13 +1033,10 @@ export function ProjectBudgetsPanel({
                   </TableCell>
                   <TableCell>{budget.responsibleDepartmentName}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {
-                        PROJECT_BUDGET_STAGE_LABELS[
-                          budget.pendingStage ?? "approved"
-                        ]
-                      }
-                    </Badge>
+                    <div className="flex flex-wrap gap-2">
+                      {budget.approvedVersionId && <Badge variant="outline">Approved</Badge>}
+                      {budget.pendingStage && <Badge variant="secondary">{PROJECT_BUDGET_STAGE_LABELS[budget.pendingStage]}</Badge>}
+                    </div>
                     {budget.approvedVersionId && budget.pendingVersionId && (
                       <span className="ml-2 text-xs text-muted-foreground">
                         Approved version remains available
@@ -1049,12 +1070,12 @@ export function ProjectBudgetsPanel({
           </Table>
           {matching.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              No budgets match this stage.
+              No budgets match these filters.
             </p>
           )}
         </>
       )}
-      {detail && displayed && (
+      {detailVisible && detail && displayed && (
         <section
           aria-label={`${detail.projectName} budget details`}
           className="space-y-4 rounded-xl border p-4 sm:p-6"
@@ -1066,9 +1087,15 @@ export function ProjectBudgetsPanel({
                 {detail.responsibleDepartmentName} · {detail.seasonCode} ·
                 Version {displayed.versionNumber}
               </p>
-              <Badge variant="secondary">
-                {PROJECT_BUDGET_STAGE_LABELS[displayed.status]}
-              </Badge>
+              <Badge variant="secondary">{PROJECT_BUDGET_STAGE_LABELS[displayed.status]}</Badge>
+              <p className="text-sm text-muted-foreground">
+                {detail.approvedVersionId ? `Approved plan: ${money(detail.approvedTotalNok)}` : "No approved project plan"}
+                {detail.pendingTotalNok!==null ? ` · Proposed plan: ${money(detail.pendingTotalNok)}` : ""}
+              </p>
+              <div className="flex flex-wrap gap-3 text-sm">
+                <BudgetWorkspaceLink href={`/projects/${detail.projectId}?tab=budget`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the open form","Save or cancel your current form before leaving this budget.",{variant:"warning",href:null});}}} >Open project budget</BudgetWorkspaceLink>
+                <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the open form","Save or cancel your current form before leaving this budget.",{variant:"warning",href:null});}}} >Open department budgets</BudgetWorkspaceLink>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {detail.approvedVersion &&
@@ -1209,6 +1236,8 @@ export function ProjectBudgetsPanel({
               systems={workspace?.systems ?? []}
             />
           )}
+          {viewingCandidate && <p className="text-sm text-muted-foreground">Proposed amounts await both approvals. Actual costs and invoice history remain visible.</p>}
+          <p className="text-sm text-muted-foreground">Completion records fulfillment. Invoice payment is tracked separately.</p>
           <Table>
             <TableHeader>
               <TableRow>
@@ -1217,6 +1246,8 @@ export function ProjectBudgetsPanel({
                 <TableHead>Priority</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead className="text-right">Planned</TableHead>
+                <TableHead className="text-right">Actual</TableHead>
+                <TableHead>Fulfillment</TableHead>
                 {canEdit && (
                   <TableHead>
                     <span className="sr-only">Actions</span>
@@ -1249,6 +1280,8 @@ export function ProjectBudgetsPanel({
                   <TableCell className="text-right whitespace-nowrap">
                     {money(item.plannedNok)}
                   </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">{money(item.actualNok)}</TableCell>
+                  <TableCell>{item.completion==="complete" ? "Complete" : item.completion==="partial" ? "Partially purchased" : "Not purchased"}</TableCell>
                   {canEdit && (
                     <TableCell>
                       <div className="flex gap-1">

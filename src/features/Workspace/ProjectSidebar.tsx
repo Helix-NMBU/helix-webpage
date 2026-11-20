@@ -58,7 +58,9 @@ export function ProjectSidebar({
   canCreate,
   busy,
   onCreateMilestone,
+  stackOnNarrow = false,
 }: {
+  stackOnNarrow?: boolean;
   project: WorkspaceProject;
   directory: WorkspaceDirectory;
   workspace: ProjectWorkspace | null;
@@ -102,7 +104,7 @@ export function ProjectSidebar({
     <aside
       tabIndex={0}
       aria-label="Project details"
-      className="min-w-0 space-y-3 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:pb-2 md:pr-2"
+      className={`min-w-0 space-y-3 md:pb-2 md:pr-2 ${stackOnNarrow ? "xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain" : "md:min-h-0 md:overflow-y-auto md:overscroll-y-contain"}`}
     >
       <Widget
         title="Properties"
