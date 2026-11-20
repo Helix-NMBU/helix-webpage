@@ -143,7 +143,7 @@ async function resetFinance() {
     alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
-      finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects,
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects,
       finance.upload_final_candidates,
       finance.allocations,
       finance.purchase_lines,
@@ -194,11 +194,12 @@ describe("finance schema privacy", () => {
     expect(tables.rows.length).toBeGreaterThanOrEqual(20);
     expect(tables.rows.every((row) => row.rls && !row.forced)).toBe(true);
     for (const role of ["anon", "authenticated", "anonymous", "public"]) {
-      const privilege = await sql<{ allowed: boolean }>(
-        "select has_table_privilege($1, 'finance.member_grants', 'select') as allowed",
-        [role],
-      );
-      expect(privilege.rows[0]?.allowed, role).toBe(false);
+      for (const table of ["member_grants", "department_budget_packages", "department_budget_package_members", "department_budget_package_decisions"]) {
+        const privilege = await sql<{ allowed: boolean }>(
+          "select has_table_privilege($1, $2, 'SELECT,INSERT,UPDATE,DELETE') as allowed", [role, `finance.${table}`],
+        );
+        expect(privilege.rows[0]?.allowed, `${role}: ${table}`).toBe(false);
+      }
     }
     const version = await sql<{ version: string }>("select version::text as version from finance.view_versions");
     expect(version.rows).toEqual([{ version: "0" }]);

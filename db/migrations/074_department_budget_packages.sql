@@ -370,6 +370,9 @@ begin
  return result;
 end $$;
 
+alter table finance.department_budget_packages enable row level security;
+alter table finance.department_budget_package_members enable row level security;
+alter table finance.department_budget_package_decisions enable row level security;
 revoke all on finance.department_plan_allocation,finance.department_actual_allocation,finance.department_entry_financials,finance.department_budget_packages,finance.department_budget_package_members,finance.department_budget_package_decisions from public;
 do $$ declare routine record;role_name text;begin
  for routine in select p.oid::regprocedure as signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='finance' and p.proname in('budget_nok','budget_department_key','department_budget_scope','department_budget_plan_version','department_budget_snapshot','department_budget_legacy_entries','lock_department_budget_actor','department_budget_reset_package','mutate_department_budget_package','mutate_project_budget','mutate_project_budget_before_packages','immutable_department_budget_package') loop execute format('revoke all on function %s from public',routine.signature);end loop;
