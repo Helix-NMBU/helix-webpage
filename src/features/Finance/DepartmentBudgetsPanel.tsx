@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@libs/components/ui/table";
+import { MEMBER_ACCESS_CHANGED } from "../MemberPlatform/member-access-api";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { DepartmentProjectBudgetReview } from "./DepartmentProjectBudgetReview";
@@ -519,6 +520,8 @@ export function DepartmentBudgetsPanel({
     };
     window.addEventListener("focus", onFocus);
     window.addEventListener("helix-workspace-updated", onFocus);
+    const onAccessChanged = () => void load();
+    window.addEventListener(MEMBER_ACCESS_CHANGED, onAccessChanged);
     const timer = window.setInterval(onFocus, 30000);
     return () => {
       alive.current = false;
@@ -528,6 +531,7 @@ export function DepartmentBudgetsPanel({
       stop?.();
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("helix-workspace-updated", onFocus);
+      window.removeEventListener(MEMBER_ACCESS_CHANGED, onAccessChanged);
       window.clearInterval(timer);
     };
   }, [clearPrivate, load, repository]);

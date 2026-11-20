@@ -95,7 +95,7 @@ const capabilities = (departmentId: string): DepartmentBudgetCapabilities => {
   return {
     canSubmit: lead,
     canApproveFinance: access.head,
-    canReturn: access.finance,
+    canReturn: access.head,
     canWithdraw: lead,
   };
 };

@@ -190,6 +190,16 @@ describe("local department budget packages", () => {
     expect(JSON.stringify(packet.snapshot)).not.toContain("actualNok");
     expect(JSON.stringify(packet.snapshot)).not.toContain("invoices");
     selectLocalBudgetRole("finance");
+    expect((await repo.detail(packet.id)).capabilities.canReturn).toBe(false);
+    await expect(
+      repo.mutate({
+        action: "returnDepartmentBudgetPackage",
+        packageId: packet.id,
+        expectedRevision: packet.revision,
+        requestId: crypto.randomUUID(),
+        reason: "A package decision needs Head of Finance",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
     await expect(
       repo.mutate({
         action: "approveDepartmentBudgetPackage",
@@ -320,7 +330,7 @@ describe("local department budget packages", () => {
         repo = createLocalDepartmentBudgetRepository();
       selectLocalBudgetRole(
         action === "returnDepartmentBudgetPackage"
-          ? "finance"
+          ? "head_of_finance"
           : "department_lead",
       );
       const request = {

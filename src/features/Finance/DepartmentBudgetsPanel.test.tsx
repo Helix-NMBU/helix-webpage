@@ -372,10 +372,12 @@ describe("department package interface", () => {
       }),
     );
     detail.capabilities.canApproveFinance = false;
+    detail.capabilities.canReturn = false;
     await act(async () => window.dispatchEvent(new Event("focus")));
     expect(container.textContent).not.toContain(
       "Approve whole department budget",
     );
+    expect(container.textContent).not.toContain("Return department package");
   });
   it("keeps dirty return input and its original revision while live actuals refresh", async () => {
     await show();
@@ -415,27 +417,61 @@ describe("department package interface", () => {
       ).value,
     ).toBe("Keep this supplier explanation");
   });
-  it("clears private package, preview and reason after denial and ignores a concurrent late preview", async () => {
+  it.each(["focus", "helix-member-access-changed"])(
+    "clears private package, preview and reason after %s denial and ignores a concurrent late preview",
+    async (eventName) => {
+      await show();
+      await click("Review package");
+      const pending = deferred<DepartmentBudgetPreview>();
+      vi.mocked(repo.preview).mockReturnValueOnce(pending.promise);
+      await click("Preview department submission");
+      vi.mocked(repo.queue).mockRejectedValue(
+        Object.assign(new Error("Revoked"), { status: 403 }),
+      );
+      await act(async () => window.dispatchEvent(new Event(eventName)));
+      expect(container.textContent).not.toContain("Frame project");
+      await act(async () => {
+        pending.resolve(preview);
+        await pending.promise;
+      });
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(container.textContent).not.toContain("Frame project");
+      const calls = vi.mocked(repo.queue).mock.calls.length;
+      await act(async () => window.dispatchEvent(new Event(eventName)));
+      expect(repo.queue).toHaveBeenCalledTimes(calls);
+    },
+  );
+  it("clears revoked private data during an outstanding decision and ignores its late success", async () => {
     await show();
     await click("Review package");
-    const pending = deferred<DepartmentBudgetPreview>();
-    vi.mocked(repo.preview).mockReturnValueOnce(pending.promise);
-    await click("Preview department submission");
+    const pending = deferred<FinanceMutationResult>();
+    vi.mocked(repo.mutate).mockReturnValueOnce(pending.promise);
+    await click("Approve whole department budget");
     vi.mocked(repo.queue).mockRejectedValue(
       Object.assign(new Error("Revoked"), { status: 403 }),
     );
-    await act(async () => window.dispatchEvent(new Event("focus")));
+    await act(async () =>
+      window.dispatchEvent(new Event("helix-member-access-changed")),
+    );
     expect(container.textContent).not.toContain("Frame project");
     await act(async () => {
-      pending.resolve(preview);
+      pending.resolve({
+        ok: true,
+        id: "packet",
+        viewVersion: 13,
+        warnings: [],
+        errors: [],
+      });
       await pending.promise;
     });
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(container.textContent).not.toContain("Frame project");
-    const calls = vi.mocked(repo.queue).mock.calls.length;
-    await act(async () => window.dispatchEvent(new Event("focus")));
-    expect(repo.queue).toHaveBeenCalledTimes(calls);
+    expect(container.textContent).toBe("");
+    expect(
+      notify.mock.calls.some(
+        ([title]) => title === "Department budget approved",
+      ),
+    ).toBe(false);
   });
+
   it("invalidates late writes and recovery closures after the department or session changes", async () => {
     await show();
     await click("Review package");
