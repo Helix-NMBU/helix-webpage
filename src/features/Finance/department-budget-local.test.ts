@@ -706,6 +706,33 @@ describe("local department budget packages", () => {
     ).toBe("P0");
   });
 
+  it("rejects new budget ownership selected for a previously No-budget project after submission", async () => {
+    const { a, b } = await two(),
+      sent = await sendLocalDepartmentCandidates(departmentId);
+    selectLocalBudgetRole("project_lead");
+    const projects = createLocalProjectBudgetRepository(),
+      created = await projects.mutate({
+        action: "createProjectBudget",
+        projectId: project(201),
+        responsibleDepartmentId: departmentId,
+        requestId: crypto.randomUUID(),
+      });
+    expect((await projects.detail(created.id)).pendingStage).toBe("draft");
+    const before = localStorage.getItem(KEY);
+    selectLocalBudgetRole("head_of_finance");
+    await expect(
+      createLocalDepartmentBudgetRepository().mutate({
+        action: "approveDepartmentBudgetPackage",
+        packageId: sent.id!,
+        expectedRevision: sent.revision!,
+        requestId: crypto.randomUUID(),
+      }),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(localStorage.getItem(KEY)).toBe(before);
+    for (const id of [a.id, b.id, created.id])
+      expect((await projects.detail(id)).approvedVersion).toBeNull();
+  });
+
   it("requires current scoped authority and both local gates, including on replay", async () => {
     await two();
     const sent = await sendLocalDepartmentCandidates(departmentId),

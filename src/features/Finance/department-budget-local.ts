@@ -294,7 +294,9 @@ function validatePackage(
     );
   for (const project of packet.snapshot.projects) {
     const budget = state.budgets.find(
-        (budget) => budget.id === project.projectBudgetId,
+        (budget) =>
+          budget.projectId === project.projectId &&
+          budget.seasonId === packet.snapshot.seasonId,
       ),
       currentProject = access.workspace.projects.find(
         (item) => item.id === project.projectId,
@@ -305,6 +307,8 @@ function validatePackage(
       owner = budget?.responsibleDepartmentId ?? null;
     if (
       !currentProject ||
+      (project.projectBudgetId !== null &&
+        budget?.id !== project.projectBudgetId) ||
       currentProject.season !== packet.snapshot.seasonCode ||
       (budget && budget.seasonCode !== packet.snapshot.seasonCode) ||
       (owner && !departments.some((department) => department.id === owner)) ||
