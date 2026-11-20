@@ -1,3 +1,4 @@
+import { invoiceEvidenceMessage } from "./InvoiceEvidence";
 import { ProjectPurchaseLauncher } from "./ProjectPurchaseLauncher";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
@@ -386,8 +387,8 @@ export function PurchasesBoard() {
       });
       if (!saved.publicRef) throw new Error("Your purchase may have been saved, but its reference is unavailable. Try again.");
       purchaseRequests.finish();
-      const details = [`Reference: ${saved.publicRef}.`, ...saved.warnings.map((warning) => warning.message)].join(" ");
-      notify("Purchase registered", details, { id: "purchase-saved", variant: saved.warnings.length ? "warning" : "success" });
+      const details = [`Reference: ${saved.publicRef}.`, ...saved.warnings.map((warning) => warning.message), invoiceEvidenceMessage(saved.invoiceEvidence)].filter(Boolean).join(" ");
+      notify("Purchase registered", details, { id: "purchase-saved", variant: saved.warnings.length || saved.invoiceEvidence?.needsAttention ? "warning" : "success" });
       setPurchase(emptyPurchase(session.today ?? "", purchase.buyerName));
       updateUploads(() => []);
       await session.loadPage("purchases", purchaseLoadOptions(selectedId));

@@ -190,6 +190,15 @@ describe("PurchasesPage", () => {
     expect(notify).toHaveBeenCalledWith("Purchase registered", "Reference: 2026-0042.", expect.any(Object));
   });
 
+  it.each([
+    [{pending:1,transferring:0,stored:0,needsAttention:0},"Invoice evidence is awaiting confirmed Drive storage.","success"],
+    [{pending:0,transferring:0,stored:0,needsAttention:1},"Some invoice transfers need attention.","warning"],
+  ] as const)("reports saved generic purchases honestly with invoice evidence %j",async(invoiceEvidence,description,variant)=>{
+    session.mutate.mockImplementation(async(body:{action:string})=>body.action==="registerPurchase"?{ok:true,id:"purchase",publicRef:"2026-0042",warnings:[],errors:[],invoiceEvidence}:{ok:true,warnings:[],errors:[]});
+    await act(async()=>root.render(<PurchasesBoard/>));await act(async()=>{container.querySelector("form")?.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));});
+    expect(notify).toHaveBeenCalledWith("Purchase registered",`Reference: 2026-0042. ${description}`,expect.objectContaining({variant}));
+  });
+
   it("removes an upload before authorization returns and ignores its late completion", async () => {
     const authorization = defer<{ id: string; uploadUrl: string }>();
     session.mutate.mockImplementation(async (body: { action: string }) => body.action === "authorizeUpload" ? authorization.promise : { ok: true, warnings: [], errors: [] });
