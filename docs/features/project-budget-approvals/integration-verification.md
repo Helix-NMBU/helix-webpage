@@ -1,6 +1,6 @@
 # Project budget verification
 
-Approved specification: revision 2, decisions D1–D16. Current product code after live UI review: `cd7725b974f69369b5069e41484ee7ddcdf49f4a`, reviewed against `b05c5a457a378a76aaba7535ab6c0664505cf089`. Local implementation acceptance is complete. PR-only CI and merge readiness are recorded separately below and in delivery.md.
+Approved specification: revision 2, decisions D1–D16. Published product code after live UI review: `cd7725b974f69369b5069e41484ee7ddcdf49f4a`, reviewed against `b05c5a457a378a76aaba7535ab6c0664505cf089`. Local implementation acceptance is complete. PR-only CI and merge readiness are recorded separately below and in delivery.md.
 
 ## Final local evidence
 

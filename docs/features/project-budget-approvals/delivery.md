@@ -7,7 +7,7 @@ Started: 19 November 2026 after the user explicitly invoked Deliver.
 Base: remote `main`, `b05c5a457a378a76aaba7535ab6c0664505cf089`, reverified live.
 Integration branch: `codex/project-budget-approvals`.
 Integration worktree: `/Users/henrik.noteless/.codex/worktrees/project-budget-approvals/helix-webpage`.
-PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. Current product codecd7725b includes the requested live-review UI refinements and has passed affected local checks and independent correctness, Standards and Spec reviews. Earlier whole-feature acceptance remains recorded below. Publication checkpoints and live CI authority are recorded at the end.
+PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. Published product codecd7725b includes the requested live-review UI refinements and has passed affected local checks and independent correctness, Standards and Spec reviews. Earlier whole-feature acceptance remains recorded below. Publication checkpoints and live CI authority are recorded at the end.
 
 ## Reconciliation
 
@@ -426,3 +426,14 @@ Follow-upcd7725b keeps summary figures in two columns untilxl and gives project 
 Local browser verified Enter expands and Space collapses Review changes, pointer invoice reveal, entry edit/import opening, Escape restoring focus to Import CSV, and the existing approved total10,500.75 split9,750.75/750 beneath Go to. CSS768 has document width768, content/widget width451, readable amounts and local table scrolling. Temporary responsive override was reset, extra QA tab closed and the user's original project tab left open with the simpler layout. No purchase, invoice, approval or saved project entry was changed during this follow-up. Screenshots outside Git: project-budget-before-simplification.jpg, project-budget-simplified-desktop.jpg, project-budget-simplified-768.jpg, department-budget-sidebar.jpg and department-budget-sidebar-768.jpg in the existing visualization directory.
 
 PR #144 is being updated under existing Deliver authorization. Its previous ce4f9e1 checks remain historical and do not establish the new UI head. Re-run actual-head verify and Finance PostgreSQL checks, then restore ready status and record exact results in HELIX-84. Parent remains open; PR stays unmerged and no deployment is authorized.
+
+
+## Regular project member inspection — local testing aid
+
+The user asked to inspect the project as an assigned member rather than its lead. Local commit `22f083ca1c03b42843916efe78d2658b323da7b4` adds the reversible `memberRole=project_member` selector, with `memberRole=default` restoring the original local account. It is restricted to the existing DEV/member-local/loopback path and reduces the fixture's admin, lead, Finance and partner authority. The projected workspace shows another fixture lead without persisting synthetic assignments. Valid assigned-task status changes persist while original project/department/management fields stay intact. Existing production budget authorization is unchanged: ordinary project members cannot read project budget details. The scoped empty state now explains that access is required rather than claiming a budget is missing.
+
+Browser opened Chassis & assembly as Alex Example with only Team Member, Sam as the displayed lead and read-only project properties. Assigned Alex tasks have status controls; Sam's task control is disabled. Budget shows access required, with no private Draft entries. No task or financial record was changed in the browser. The original tab remains open on Tasks for the user. Screenshot `project-regular-member-view.jpg` is saved outside Git in the existing visualization directory.
+
+Verification: 173 tests pass across eight relevant files, client TypeScript and repository lint pass, isolated frontend build passes at 9.20MB with 11 source functions. Bounded independent correctness review cleared exact22f083c for isolation, persistence and permission accuracy. Test URLs use the current loopback app at port5293, project00000000-0000-4000-8000-000000000100, with the selector above. Use an explicit default selector on a full navigation to return to the original lead/admin fixture; no saved lead assignment needs repair.
+
+This aid is committed locally for the requested inspection and has not been pushed. Published PR #144 remains at77f1b8483100dcf791e7271ca3a21c04a4f719cd with its passing checks and non-draft/unmerged state. This inspection does not authorize new ordinary-member access to private project budgets, merge or deployment. No tracker task was reopened because the published PR is unchanged.
