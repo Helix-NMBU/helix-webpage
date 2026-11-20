@@ -5,6 +5,7 @@ import { FinanceError } from "./finance-error.js";
 import { formatOre } from "./finance-money.js";
 import { listProjectBudgetScopes, loadProjectBudgetScope, projectBudgetError } from "./finance-project-budget-foundation.js";
 import { prepareProjectBudgetImport } from "./finance-project-budget-import.js";
+import { canReadProjectBudgetDraft } from "../../src/features/Finance/project-budget-visibility.js";
 import { normalizeManualItem } from "../../src/features/Finance/budget-domain.js";
 import type { ProjectBudgetDetail, ProjectBudgetEntry, ProjectBudgetMutationResult, ProjectBudgetScope, ProjectBudgetSummary, ProjectBudgetVersion, ProjectBudgetWorkspace } from "../../src/features/Finance/project-budget-types.js";
 
@@ -101,17 +102,20 @@ function summary(row: SummaryRow): ProjectBudgetSummary {
     responsibleDepartmentId: row.responsible_department_id, responsibleDepartmentName: row.department_name, revision: row.revision,
     approvedVersionId: row.approved_version_id, pendingVersionId: row.pending_version_id, pendingStage: row.pending_stage,
     actualNok: formatOre(BigInt(row.actual_ore ?? "0")), unbudgetedNok: formatOre(BigInt(row.unbudgeted_ore ?? "0")),
-    approvedTotalNok: formatOre(BigInt(row.approved_total_ore ?? "0")), pendingTotalNok: row.pending_total_ore === null ? null : formatOre(BigInt(row.pending_total_ore)), capabilities: row.capabilities };
+    approvedTotalNok: formatOre(BigInt(row.approved_total_ore ?? "0")), pendingTotalNok: row.pending_total_ore === null || (row.pending_stage === "draft" && !canReadProjectBudgetDraft(row.capabilities)) ? null : formatOre(BigInt(row.pending_total_ore)), capabilities: row.capabilities };
+}
+function draftVisibilitySql(capabilities: string): string {
+  return `(coalesce((${capabilities}->>'canDraft')::boolean,false) or coalesce((${capabilities}->>'canReviewDepartment')::boolean,false))`;
 }
 const SUMMARY_FIELDS = `h.id,h.project_id,p.name as project_name,h.season_id,s.code as season_code,h.responsible_department_id,d.name as department_name,
  coalesce((select sum(a.amount_ore) from finance.registered_allocation_facts a where a.project_id=h.project_id and a.season_id=h.season_id),0)::text as actual_ore,
  coalesce((select sum(a.amount_ore) from finance.registered_allocation_facts a where a.project_id=h.project_id and a.season_id=h.season_id and a.unbudgeted),0)::text as unbudgeted_ore,
  h.revision,h.approved_version_id,h.pending_version_id,pending.status as pending_stage,
  coalesce((select sum(e.planned_ore) from finance.project_budget_version_entries e where e.version_id=h.approved_version_id and not e.removed and e.status<>'cancelled'),0)::text as approved_total_ore,
- case when h.pending_version_id is not null then coalesce((select sum(e.planned_ore) from finance.project_budget_version_entries e where e.version_id=h.pending_version_id and not e.removed and e.status<>'cancelled'),0)::text else null end as pending_total_ore`;
+ case when h.pending_version_id is not null and (pending.status<>'draft' or ${draftVisibilitySql("scope->'capabilities'")}) then coalesce((select sum(e.planned_ore) from finance.project_budget_version_entries e where e.version_id=h.pending_version_id and not e.removed and e.status<>'cancelled'),0)::text else null end as pending_total_ore`;
 const SUMMARY_JOINS = `join project_management.projects p on p.id=h.project_id join finance.seasons s on s.id=h.season_id
  join project_management.departments d on d.id=h.responsible_department_id left join finance.project_budget_versions pending on pending.id=h.pending_version_id`;
-const VISIBLE = `(coalesce((scope->'capabilities'->>'canDraft')::boolean,false) or coalesce((scope->'capabilities'->>'canReviewDepartment')::boolean,false)
+const VISIBLE = `(${draftVisibilitySql("scope->'capabilities'")}
   or h.approved_version_id is not null or pending.status in ('department_pending','finance_pending'))`;
 
 export async function loadProjectBudgetWorkspace(db: CvDatabase, identity: WorkspaceIdentity, projectId?: string, departmentId?: string): Promise<ProjectBudgetWorkspace> {
@@ -170,16 +174,22 @@ export async function loadProjectBudgetDetail(db: CvDatabase, identity: Workspac
              (select count(distinct purchase.id)::integer from finance.allocations a join finance.purchase_lines pl on pl.id=a.line_id join finance.purchases purchase on purchase.id=pl.purchase_id where a.budget_item_id=pe.id and purchase.status='registered') as purchase_count,
              coalesce(pc.complete,false) as complete from finance.project_budget_version_entries ve join finance.project_budget_entries pe on pe.id=ve.entry_id
              left join finance.budget_items i on i.id=pe.budget_item_id left join finance.project_budget_completion pc on pc.entry_id=pe.id where ve.version_id=v.id) erow),'[]'::jsonb) as entries
-           from finance.project_budget_versions v where v.project_budget_id=row.id) vrow),'[]'::jsonb) as versions,
-         coalesce((select jsonb_agg(jsonb_build_object('id',decision.id,'versionId',decision.version_id,'action',decision.action,'actorMemberId',decision.actor_member_id,'reason',decision.reason,'createdAt',decision.created_at,'snapshot',decision.snapshot) order by decision.created_at,decision.id)
+           from finance.project_budget_versions v where v.project_budget_id=row.id and (v.status<>'draft' or ${draftVisibilitySql("row.capabilities")})) vrow),'[]'::jsonb) as versions,
+         coalesce((select jsonb_agg(jsonb_build_object('id',decision.id,'versionId',decision.version_id,'action',decision.action,'actorMemberId',decision.actor_member_id,'reason',decision.reason,'createdAt',decision.created_at,'snapshot',case when ${draftVisibilitySql("row.capabilities")} then decision.snapshot else '{}'::jsonb end) order by decision.created_at,decision.id)
            from finance.project_budget_decisions decision where decision.project_budget_id=row.id),'[]'::jsonb) as decisions
        from (select ${SUMMARY_FIELDS},authorized.scope->'capabilities' as capabilities from finance.project_budgets h ${SUMMARY_JOINS} join authorized on authorized.id=h.id where ${VISIBLE}) row`,
       [identity.userId, identity.googleSub, identity.email, projectBudgetId],
     )).rows[0];
     if (!result) throw new FinanceError(404, "This project budget is no longer available.");
-    const evidence = await loadBudgetEntryInvoiceReferences(db, identity, result.versions.flatMap(v => v.entries.map(e => e.budget_item_id).filter((id): id is string => !!id)));
-    const detail = { ...summary(result.header), approvedVersion: version(result.versions.find(v => v.id === result.header.approved_version_id) ?? null),
-      pendingVersion: version(result.versions.find(v => v.id === result.header.pending_version_id) ?? null), historyVersions: result.versions.filter(v => v.status === "approved").sort((a, b) => a.version_number - b.version_number).map(v => version(v)!), decisions: result.decisions };
+    // Keep the wire projection allowlisted even if a future query adds private authoring fields.
+    const canReadDraft = canReadProjectBudgetDraft(result.header.capabilities);
+    const visibleVersions = result.versions.filter(v => v.status !== "draft" || canReadDraft);
+    const decisions = result.decisions.map(decision => ({ id: decision.id, versionId: decision.versionId, action: decision.action,
+      actorMemberId: decision.actorMemberId, reason: decision.reason, createdAt: decision.createdAt,
+      snapshot: canReadDraft ? decision.snapshot : {} }));
+    const evidence = await loadBudgetEntryInvoiceReferences(db, identity, visibleVersions.flatMap(v => v.entries.map(e => e.budget_item_id).filter((id): id is string => !!id)));
+    const detail = { ...summary(result.header), approvedVersion: version(visibleVersions.find(v => v.id === result.header.approved_version_id) ?? null),
+      pendingVersion: version(visibleVersions.find(v => v.id === result.header.pending_version_id) ?? null), historyVersions: visibleVersions.filter(v => v.status === "approved").sort((a, b) => a.version_number - b.version_number).map(v => version(v)!), decisions };
     for (const v of [detail.approvedVersion, detail.pendingVersion, ...detail.historyVersions]) for (const e of v?.entries ?? []) e.invoices = e.budgetItemId ? evidence.get(e.budgetItemId) ?? [] : [];
     return detail;
   } catch (error) { throw projectBudgetError(error); }

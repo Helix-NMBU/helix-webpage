@@ -162,7 +162,8 @@ export async function loadFundingApplicationBudgetContext(db: CvDatabase, identi
              'ownerEmail',case when h.approved_version_id is not null then current_entry.owner_email else anchor.owner_email end,'status',e.status,'note',e.note,'earmarkId',e.earmark_id) as entry
          from finance.effective_budget_entries e join headers h on h.id=e.project_budget_id join finance.budget_items anchor on anchor.id=e.id
          left join finance.project_budget_version_entries current_entry on current_entry.version_id=h.approved_version_id and current_entry.entry_id=e.id
-         left join finance.project_budget_version_entries pending on pending.version_id=h.pending_version_id and pending.entry_id=e.id
+         left join finance.project_budget_versions submitted on submitted.id=h.pending_version_id and submitted.status in ('department_pending','finance_pending')
+         left join finance.project_budget_version_entries pending on pending.version_id=submitted.id and pending.entry_id=e.id
          where e.status<>'cancelled' and (h.approved_version_id is not null or (e.source='legacy' and e.legacy_budget_status='approved'))
            and coalesce(e.ordinary_priority,pending.ordinary_priority) is not null
        ), pending_choices as (
