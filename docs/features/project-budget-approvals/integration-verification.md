@@ -1,6 +1,6 @@
 # Project budget verification
 
-Approved specification: revision 2, decisions D1–D16. Final product code: `36b41f869379c767b552a62438265a8928fd16c5`, reviewed against `b05c5a457a378a76aaba7535ab6c0664505cf089`. Local implementation acceptance is complete. PR-only CI and merge readiness are recorded separately below and in delivery.md.
+Approved specification: revision 2, decisions D1–D16. Current product code after live UI review: `cd7725b974f69369b5069e41484ee7ddcdf49f4a`, reviewed against `b05c5a457a378a76aaba7535ab6c0664505cf089`. Local implementation acceptance is complete. PR-only CI and merge readiness are recorded separately below and in delivery.md.
 
 ## Final local evidence
 
@@ -61,3 +61,10 @@ These inputs do not prevent local implementation or an accurately described unme
 ## PR evidence
 
 Single [PR #144](https://github.com/Helix-NMBU/helix-webpage/pull/144), base main atb05c5a4, final reviewed product36b41f8. Documentation-only publication does not change product review applicability. GitHub's live head/check/merge state and the [HELIX-84 verification closure](https://linear.app/helixnmbu/issue/HELIX-84/pba-09-rehearse-migration-and-verify-the-integrated-feature) record the exact final CI outcome after this publication checkpoint. Required verify must pass with strict current-base freshness; the real Finance PostgreSQL job must also pass without skipped race coverage. The PR remains unmerged, and HELIX-75 remains open until merge.
+
+
+## Live UI review addendum
+
+Direct user feedback moved the department widget below Go to and simplified the project Budget view. The original Apps Script Finance.html at current source681a153 informed its table-first hierarchy, on-demand forms and hidden removed rows. Roote880b99 andcd7725b preserve the approved workflow while keeping secondary detail behind shared Radix disclosures. Hidden contents stay mounted, active forms lock closing and existing current-authority clearing remains. No API or database behavior changed.
+
+Current correctness, Standards and Spec reviews all clear productcd7725b. The affected suite passes72 tests/9 files, client types and lint pass; the current frontend build is run in the isolated compiler. Browser checks cover editor/import/invoices, Enter/Space, Escape/focus restoration, vertical sidebar order and readable CSS768 with no document overflow. Screenshots are outside Git and recorded in delivery.md. The earlier full PostgreSQL and whole-feature evidence still applies to unchanged backend source. Final PR-head CI and readiness must be read from GitHub and the HELIX-84 follow-up evidence, rather than the earlier ce4f9e1 result.
