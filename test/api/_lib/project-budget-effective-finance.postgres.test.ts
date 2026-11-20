@@ -4,7 +4,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
 import type { ProjectBudgetDetail } from "../../../src/features/Finance/project-budget-types.js";
-import { osloToday } from "../../../src/features/Finance/money.js";
+import { osloToday, addCalendarDays } from "../../../src/features/Finance/money.js";
 import { createPostgresTestPool } from "./postgres-test-pool.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
 import { projectBudgetFixture as f, projectBudgetIdentity, setupProjectBudgetBase, seedProjectBudgetLegacy, type ProjectBudgetFixtureRole, type ProjectBudgetTestDatabase } from "./project-budget-test-db.js";
@@ -41,6 +41,7 @@ describe.skipIf(!url)("canonical Finance approval/actual atomicity on PostgreSQL
     originalCore=(await pool.query<{definition:string}>("select pg_get_functiondef('finance.register_purchase_before_project_tracking(uuid,uuid,text,jsonb)'::regprocedure) as definition")).rows[0].definition;
     await db.exec(migration); await db.query("insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','\"S27\"','Test',$1::uuid)",[f.head]);
     await db.query("update finance.budgets set status='draft',approved_by_member_id=null,approved_on=null where id=$1::uuid",[f.legacyBudget]);
+    await db.query("insert into finance.reference_counters(counter_key,configured_next,last_issued,updated_by_member_id) values('request:S27',2,1,$1::uuid)",[f.head]);
     services=createFinanceServices({db,financeStorage:storage,authenticate:async token=>projectBudgetIdentity(token as ProjectBudgetFixtureRole)});
   },30000);
   afterAll(async()=>{try{await close?.();if(admin)await admin.query(`drop database if exists ${databaseName}`);}finally{if(admin)await admin.end();}});
@@ -64,6 +65,30 @@ describe.skipIf(!url)("canonical Finance approval/actual atomicity on PostgreSQL
       expect((await pool.query("select approved_version_id from finance.purchase_lines where purchase_id=$1::uuid",[registered.id])).rows).toEqual([{approved_version_id:candidate}]);
       expect((await pool.query("select approved_version_id,planned_ore::text from finance.effective_budget_entries where id=$1::uuid",[entry])).rows).toEqual([{approved_version_id:candidate,planned_ore:"200000"}]);
     }finally{await blocker.query("rollback");blocker.release();await Promise.allSettled([promotion,...(registration?[registration]:[])]);}
+  },15000);
+  it("rechecks canonical request eligibility after waiting for a removal promotion's anchor locks",async()=>{
+    let b=await approved(); const entry=b.approvedVersion!.entries[0].entryId;
+    const request={supplierName:"Supplier",justification:"Materials for the frame",plannedDate:addCalendarDays(osloToday(),3),lines:[{budgetItemId:entry,description:"Frame material",estimatedNok:"1000"}]};
+    const saved=await mutate("head",{action:"saveRequest",request}); await mutate("head",{action:"submitRequest",requestRecordId:saved.id,expectedRevision:saved.revision,request});
+    const revision=(await pool.query<{id:string}>("select submitted_revision_id as id from finance.requests where id=$1::uuid",[saved.id])).rows[0].id;
+    b=await write(b,"requestProjectBudgetChanges",{reason:"No material needed"});b=await write(b,"removeProjectBudgetEntry",{entryId:entry});b=await write(b,"submitProjectBudget");b=await write(b,"approveDepartmentBudget",{},"departmentLead");
+    const ledger=await pool.connect(); await ledger.query("begin");await ledger.query("select id from finance.budgets where id=$1::uuid for update",[f.legacyBudget]);
+    const promotion=write(b,"approveProjectBudget",{},"head").then(value=>({ok:true,value}),error=>({ok:false,error}));let decision:Promise<unknown>|undefined;
+    try{await waitForBlocked("mutate_project_budget");decision=mutate("head",{action:"decideRequest",requestRecordId:saved.id,revisionId:revision,decision:"approved",reason:"Material approved",approvedOreByLine:{}}).then(value=>({ok:true,value}),error=>({ok:false,error}));await waitForBlocked("apply_request_change");
+      await ledger.query("commit");expect(await promotion).toMatchObject({ok:true});expect(await decision).toMatchObject({ok:false,error:{status:409}});
+      expect((await pool.query("select status from finance.requests where id=$1::uuid",[saved.id])).rows).toEqual([{status:"submitted"}]);expect((await pool.query("select id from finance.request_decisions where revision_id=$1::uuid",[revision])).rows).toEqual([]);
+    }finally{await ledger.query("rollback");ledger.release();await Promise.allSettled([promotion,...(decision?[decision]:[])]);}
+  },15000);
+  it("validates saved request lines freshly after all anchor waits",async()=>{
+    let b=await approved();const entry=b.approvedVersion!.entries[0].entryId;
+    const request={supplierName:"Supplier",justification:"Materials for the frame",plannedDate:addCalendarDays(osloToday(),3),lines:[{budgetItemId:entry,description:"Frame material",estimatedNok:"1000"}]};
+    const saved=await mutate("head",{action:"saveRequest",request});
+    b=await write(b,"requestProjectBudgetChanges",{reason:"No material needed"});b=await write(b,"removeProjectBudgetEntry",{entryId:entry});b=await write(b,"submitProjectBudget");b=await write(b,"approveDepartmentBudget",{},"departmentLead");
+    const ledger=await pool.connect();await ledger.query("begin");await ledger.query("select id from finance.budgets where id=$1::uuid for update",[f.legacyBudget]);
+    const promotion=write(b,"approveProjectBudget",{},"head").then(value=>({ok:true,value}),error=>({ok:false,error}));let saving:Promise<unknown>|undefined;
+    try{await waitForBlocked("mutate_project_budget");saving=mutate("head",{action:"saveRequest",requestRecordId:saved.id,expectedRevision:saved.revision,request:{...request,supplierName:"Changed supplier"}}).then(value=>({ok:true,value}),error=>({ok:false,error}));await waitForBlocked("apply_request_change");await ledger.query("commit");expect(await promotion).toMatchObject({ok:true});expect(await saving).toMatchObject({ok:false,error:{status:400}});
+      expect((await pool.query("select status,supplier_name from finance.requests where id=$1::uuid",[saved.id])).rows).toEqual([{status:"draft",supplier_name:"Supplier"}]);
+    }finally{await ledger.query("rollback");ledger.release();await Promise.allSettled([promotion,...(saving?[saving]:[])]);}
   },15000);
   it("fails migration on an unexpected owning clause and rolls back the new projection",async()=>{
     const client=await pool.connect();await client.query("begin");

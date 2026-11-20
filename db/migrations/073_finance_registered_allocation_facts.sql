@@ -82,14 +82,26 @@ begin
       and i.budget_id = p_budget_id
       and i.status <> 'cancelled'
     for share;$old$;
-  replacement:=$new$    from finance.budget_items anchor join finance.effective_budget_entries i on i.id=anchor.id
-    where i.id = item_id
-      and i.budget_id = p_budget_id
-      and i.status <> 'cancelled' and i.protected is not true
-      and (i.approved_version_id is not null or i.legacy_budget_status='approved')
-    for share of anchor;$new$;
+  replacement:=$new$    from finance.budget_items i
+    where i.id = item_id and i.budget_id = p_budget_id
+    for share of i;$new$;
   matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
   if matches<>1 then raise exception '073 expected exactly one request item lock clause; found %',matches; end if;
+  definition:=replace(definition,needle,replacement);
+  needle:=$old$  end loop;
+end;$old$;
+  replacement:=$new$  end loop;
+  -- A promotion can change its header pointer without changing the locked anchor
+  -- tuple. Read canonical eligibility in a NEW statement after all waits finish.
+  if exists(select 1 from jsonb_array_elements(p_lines) elem
+    left join finance.effective_budget_entries current_entry on current_entry.id=(elem->>'budgetItemId')::uuid
+    where current_entry.id is null or current_entry.budget_id<>p_budget_id or current_entry.status='cancelled'
+      or current_entry.protected or (current_entry.approved_version_id is null and current_entry.legacy_budget_status<>'approved')) then
+    raise exception 'FINANCE|invalid|Choose valid budget lines with positive estimates.|lines';
+  end if;
+end;$new$;
+  matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
+  if matches<>1 then raise exception '073 expected exactly one request post-lock validation clause; found %',matches; end if;
   execute replace(definition,needle,replacement);
 
   definition:=pg_get_functiondef('finance.apply_request_change(uuid,uuid,text,jsonb,date)'::regprocedure);
@@ -101,13 +113,29 @@ begin
   matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
   if matches<>1 then raise exception '073 expected exactly one submitted request item clause; found %',matches; end if;
   definition:=replace(definition,needle,replacement);
-  needle:=$old$        select i.id, i.status
-        from finance.request_lines l
-        join finance.budget_items i on i.id = l.budget_item_id$old$;
-  replacement:=$new$        select i.id, effective.status
+  needle:=$old$      for line_rec in
+        select i.id, i.status
         from finance.request_lines l
         join finance.budget_items i on i.id = l.budget_item_id
-        join finance.effective_budget_entries effective on effective.id=i.id$new$;
+        where l.revision_id = revision_id
+        order by i.id
+        for share of i
+      loop
+        if line_rec.status = 'cancelled' then
+          raise exception 'FINANCE|conflict|A budget line on this request was cancelled. Ask the requester to revise it.';
+        end if;
+      end loop;$old$;
+  replacement:=$new$      perform i.id from finance.request_lines l
+        join finance.budget_items i on i.id=l.budget_item_id
+        where l.revision_id=revision_id order by i.id for share of i;
+      -- Do not project effective status in the locking statement: an unchanged
+      -- anchor can resume with a pre-promotion joined status after a lock wait.
+      if exists(select 1 from finance.request_lines l
+        left join finance.effective_budget_entries current_entry on current_entry.id=l.budget_item_id
+        where l.revision_id=revision_id and (current_entry.id is null or current_entry.status='cancelled'
+          or current_entry.protected or (current_entry.approved_version_id is null and current_entry.legacy_budget_status<>'approved'))) then
+        raise exception 'FINANCE|conflict|A budget line on this request was cancelled or is no longer approved. Ask the requester to revise it.';
+      end if;$new$;
   matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
   if matches<>1 then raise exception '073 expected exactly one request decision lock clause; found %',matches; end if;
   execute replace(definition,needle,replacement);
