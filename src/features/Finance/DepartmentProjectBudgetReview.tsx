@@ -1,3 +1,9 @@
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@libs/components/ui/collapsible";
+import { Button } from "@libs/components/ui/button";
 import { Badge } from "@libs/components/ui/badge";
 import {
   Table,
@@ -102,32 +108,53 @@ export function DepartmentProjectBudgetReview({
             {comparison.entries.map((change) => {
               const entry = change.after ?? change.before!,
                 actual = live.get(change.entryId);
+              const fields =
+                change.changes.length > 0 ? (
+                  <dl className="mt-3 space-y-2 text-xs">
+                    {change.changes.map((field) => (
+                      <div key={field.field}>
+                        <dt className="font-medium">
+                          {PROJECT_BUDGET_FIELD_LABELS[field.field]}
+                        </dt>
+                        <dd className="mt-1 break-words">
+                          <span className="text-muted-foreground">
+                            Previous:
+                          </span>{" "}
+                          {value(field.field, field.before)}
+                          <br />
+                          <span className="text-muted-foreground">
+                            Package:
+                          </span>{" "}
+                          {value(field.field, field.after)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : null;
               return (
                 <TableRow key={change.entryId}>
                   <TableCell className="max-w-sm whitespace-normal">
                     <span className="font-medium">{entry.description}</span>
-                    {change.changes.length > 0 ? (
-                      <dl className="mt-3 space-y-2 text-xs">
-                        {change.changes.map((field) => (
-                          <div key={field.field}>
-                            <dt className="font-medium">
-                              {PROJECT_BUDGET_FIELD_LABELS[field.field]}
-                            </dt>
-                            <dd className="mt-1 break-words">
-                              <span className="text-muted-foreground">
-                                Previous:
-                              </span>{" "}
-                              {value(field.field, field.before)}
-                              <br />
-                              <span className="text-muted-foreground">
-                                Package:
-                              </span>{" "}
-                              {value(field.field, field.after)}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : null}
+                    {fields &&
+                    (change.kind === "added" || change.kind === "removed") ? (
+                      <Collapsible className="mt-2">
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto whitespace-normal px-0 text-xs"
+                            aria-label={`View ${change.kind === "added" ? "new" : "removed"} entry details for ${entry.description}`}
+                          >
+                            View {change.kind === "added" ? "new" : "removed"}{" "}
+                            entry details
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>{fields}</CollapsibleContent>
+                      </Collapsible>
+                    ) : (
+                      fields
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{label[change.kind]}</Badge>
@@ -147,9 +174,26 @@ export function DepartmentProjectBudgetReview({
                     ) : null}
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
-                    {change.after
-                      ? projectBudgetMoney(change.after.plannedNok)
-                      : "Removed"}
+                    {change.after ? (
+                      change.after.status === "cancelled" ? (
+                        <>
+                          <span>Cancelled</span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            Stored {projectBudgetMoney(change.after.plannedNok)}
+                          </span>
+                        </>
+                      ) : (
+                        projectBudgetMoney(change.after.plannedNok)
+                      )
+                    ) : (
+                      <>
+                        <span>Removed</span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          Previous{" "}
+                          {projectBudgetMoney(change.before!.plannedNok)}
+                        </span>
+                      </>
+                    )}
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     {actual

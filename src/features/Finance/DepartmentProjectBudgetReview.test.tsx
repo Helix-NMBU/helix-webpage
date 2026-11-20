@@ -175,6 +175,11 @@ it("compares a first submission without inventing an approved version", async ()
   );
   expect(container.textContent).toContain("No approved budget");
   expect(container.textContent).toContain("New");
+  await act(async () => {
+    [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "View new entry details")!
+      .click();
+  });
   expect(container.textContent).toContain("Previous: None");
   expect(container.textContent).toContain("NOK 100.00");
 });
@@ -214,4 +219,54 @@ it("shows a newly awarded live P0 priority without rewriting the submitted plan 
     ),
   ).toBe(false);
   expect(JSON.stringify({ approved, proposed })).toBe(pinned);
+});
+
+it("keeps New and Removed rows compact while native disclosures retain full fields and focus", async () => {
+  const approved = version(
+      [entry("Removed control", { note: "Keep historical specification" })],
+      "100.00",
+    ),
+    proposed = version(
+      [
+        entry("New control", {
+          entryId: "new",
+          plannedNok: "500.00",
+          category: "component",
+        }),
+      ],
+      "500.00",
+    );
+  await act(async () =>
+    root.render(
+      <DepartmentProjectBudgetReview
+        approved={approved}
+        proposed={proposed}
+        systems={systems}
+        evidence={[]}
+      />,
+    ),
+  );
+  const rows = [...container.querySelectorAll("tbody tr")],
+    removed = rows.find((row) => row.textContent?.includes("Removed control"))!,
+    added = rows.find((row) => row.textContent?.includes("New control"))!;
+  expect(removed.textContent).toContain("Previous NOK 100.00");
+  expect(added.children[4].textContent).toContain("NOK 500.00");
+  expect(removed.querySelector("dl")).toBeNull();
+  expect(added.querySelector("dl")).toBeNull();
+  for (const row of [removed, added]) {
+    const trigger = row.querySelector("button")!;
+    expect(trigger.tagName).toBe("BUTTON");
+    expect(trigger.getAttribute("type")).toBe("button");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    trigger.focus();
+    await act(async () => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(row.querySelector("dl")?.textContent).toContain("Previous:");
+    expect(row.querySelector("dl")?.textContent).toContain("Package:");
+    expect(document.activeElement).toBe(trigger);
+    await act(async () => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(row.querySelector("dl")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  }
 });
