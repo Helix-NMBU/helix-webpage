@@ -7,7 +7,7 @@ Started: 19 November 2026 after the user explicitly invoked Deliver.
 Base: remote `main`, `b05c5a457a378a76aaba7535ab6c0664505cf089`, reverified live.
 Integration branch: `codex/project-budget-approvals`.
 Integration worktree: `/Users/henrik.noteless/.codex/worktrees/project-budget-approvals/helix-webpage`.
-PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. Published product codecd7725b includes the requested live-review UI refinements and has passed affected local checks and independent correctness, Standards and Spec reviews. Earlier whole-feature acceptance remains recorded below. Publication checkpoints and live CI authority are recorded at the end.
+PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. D17 approved-only project budget access is implemented, independently reviewed and locally verified at productcf17e12 plus fixture54fa2ea. The previous77f1b84 checks are historical. Final publication/check authority is GitHub and HELIX-84, as recorded at the end.
 
 ## Reconciliation
 
@@ -20,7 +20,7 @@ The current remote base has 11 API functions. The original working tree's two ex
 | Ticket | Tracker | State | Worker/worktree/branch | Evidence |
 | --- | --- | --- | --- | --- |
 | PBA-01 | HELIX-76 | closed on feature branch | `/root/pba_01_contracts`; `/Users/henrik.noteless/.codex/worktrees/pba-01-contracts/helix-webpage`; `codex/pba-01-contracts`; base `93d2e4774a381e55dc01621a5407f5a2bd4efa93` | Worker `5d9e052a733f039166be4a96882b388ccc6fdac2`; integrated `1cadc34`; 17 integrated foundation tests incl3 PG; all3 typechecks; Done in Linear. |
-| PBA-02 | HELIX-78 | closed on feature branch | reused agent `/root/pba_01_contracts`; `/private/tmp/helix-pba-02-approval`; `codex/pba-02-approval`; base `4cac50ffe33d32142e04c9ce3c8e631b11d53393` | Integrated through78e6c74;42 server +80 UI +15 follow-up cases; all3 typechecks/lint/source11; Done readback verified. |
+| PBA-02 | HELIX-78 | reopened for D17 member read | reused agent `/root/pba_01_contracts`; `/private/tmp/helix-pba-02-approval`; `codex/pba-02-approval`; base `4cac50ffe33d32142e04c9ce3c8e631b11d53393` | Integrated through78e6c74;42 server +80 UI +15 follow-up cases; all3 typechecks/lint/source11; Done readback verified. |
 | PBA-03 | HELIX-79 | closed on feature branch | reused `/root/pba_01_contracts`; `/private/tmp/helix-pba-03-revisions`; `codex/pba-03-revisions`; base78e6c74 | Verified PBA-02 prerequisite; owns069 revision/import core and review UI. |
 | PBA-04 | HELIX-77 | closed on feature branch | `/root/pba_04_threshold`; original `/private/tmp/helix-pba-04-threshold`, repair `/private/tmp/helix-pba-04-repair`; branches `codex/pba-04-threshold` and `codex/pba-04-cleanup` | Policy `56415c5` -> `dada27b`; teardown `0be6671` -> `4cac50f`; 104 initial tests, then clean exact PostgreSQL CI selection 27/27; Done again. |
 | PBA-05 | HELIX-80 | closed again after reviewed repair | reused `/root/pba_04_threshold`; `/private/tmp/helix-pba-05-purchases`; `codex/pba-05-purchases`; base78e6c74 | Verified PBA-02 prerequisite; owns070 purchase/completion routines and purchase UI. |
@@ -39,13 +39,13 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 - Docker has no running daemon. Installed PostgreSQL17 for tests and started an isolated temporary cluster at `/private/tmp/helix-pba-postgres.J3mOMS/data`, bound only to 127.0.0.1:55475. Test URL is `postgresql://postgres@127.0.0.1:55475/postgres`; use unique disposable test databases. No production data is present; no login background service was enabled. Server path pointer: `/private/tmp/helix-pba-postgres-path`.
 - Drive destination/service identity/narrow OAuth scope/reader ACL and real entry-to-project mapping remain release inputs. No live DB or Drive writes are authorized merely for validation. Local fixtures and isolated databases are permitted.
 - Baseline npm run build passed, 9.00 MB static output and 11 source functions. The later local compiler baseline passed 11 generated functions; final code compilation remains required. Log: `/private/tmp/helix-pba-baseline-build.log`.
-- Final complete correctness, Standards and Spec reviews all clear final product36b41f8. PBA-01 through08 and10 are closed on the feature branch; PBA-09 awaits final PR CI/readiness readback. Parent HELIX-75 stays open until merge. Earlier checkpoints below remain historical.
+- Current correctness review clears54fa2ea and Standards/Spec clear final productcf17e12, including D17. HELIX-78 and HELIX-84 are reopened for the member-read amendment and final PR checks; other children remain closed. Parent HELIX-75 stays open until merge. Earlier checkpoints below remain historical.
 
 ## Next action
 
-The complete approved revision2/D16 feature is implemented, independently reviewed and locally verified at product36b41f8. PR #144 is published and attached to this chat. Finish current-head required verify and Finance PostgreSQL CI, inspect current base freshness/conflicts/review requirements, mark ready after passing and close HELIX-84 with exact run evidence. GitHub and the final tracker closure are authoritative for state after the documentation publication checkpoint. Preserve the open parent and unmerged PR.
+Publish the verified D17 code and this evidence to existing PR #144. Transaction-safe dispatch, all local checks and independent reviews are complete at54fa2ea. Required verify and Finance PostgreSQL CI must pass on the publication head before restoring ready status and closing HELIX-78/HELIX-84. Keep the parent open and the PR unmerged. Previous passing77f1b84 checks do not establish D17 acceptance.
 
-Deliver authorizes ordinary feature push, PR creation and ticket updates. Merge, production migration and deployment remain separate. Real Drive folder/identity/narrow scope/reader ACL acceptance and the operator-approved mapping manifest remain release inputs. No worker implementation or user scope decision is pending.
+Deliver authorizes ordinary feature push, PR creation and ticket updates. Merge, production migration and deployment remain separate. Real Drive folder/identity/narrow scope/reader ACL acceptance and the operator-approved mapping manifest remain release inputs. The D17 read-dispatch repair is integrated and reviewed. No user scope decision is pending.
 
 ## PBA-04 integration, 19 November 2026
 
@@ -428,7 +428,7 @@ Local browser verified Enter expands and Space collapses Review changes, pointer
 PR #144 is being updated under existing Deliver authorization. Its previous ce4f9e1 checks remain historical and do not establish the new UI head. Re-run actual-head verify and Finance PostgreSQL checks, then restore ready status and record exact results in HELIX-84. Parent remains open; PR stays unmerged and no deployment is authorized.
 
 
-## Regular project member inspection — local testing aid
+## Historical regular project member inspection before D17
 
 The user asked to inspect the project as an assigned member rather than its lead. Local commit `22f083ca1c03b42843916efe78d2658b323da7b4` adds the reversible `memberRole=project_member` selector, with `memberRole=default` restoring the original local account. It is restricted to the existing DEV/member-local/loopback path and reduces the fixture's admin, lead, Finance and partner authority. The projected workspace shows another fixture lead without persisting synthetic assignments. Valid assigned-task status changes persist while original project/department/management fields stay intact. Existing production budget authorization is unchanged: ordinary project members cannot read project budget details. The scoped empty state now explains that access is required rather than claiming a budget is missing.
 
@@ -437,3 +437,45 @@ Browser opened Chassis & assembly as Alex Example with only Team Member, Sam as 
 Verification: 173 tests pass across eight relevant files, client TypeScript and repository lint pass, isolated frontend build passes at 9.20MB with 11 source functions. Bounded independent correctness review cleared exact22f083c for isolation, persistence and permission accuracy. Test URLs use the current loopback app at port5293, project00000000-0000-4000-8000-000000000100, with the selector above. Use an explicit default selector on a full navigation to return to the original lead/admin fixture; no saved lead assignment needs repair.
 
 This aid is committed locally for the requested inspection and has not been pushed. Published PR #144 remains at77f1b8483100dcf791e7271ca3a21c04a4f719cd with its passing checks and non-draft/unmerged state. This inspection does not authorize new ordinary-member access to private project budgets, merge or deployment. No tracker task was reopened because the published PR is unchanged.
+
+
+## D17 approved project budget access for members
+
+The user directly instructed: "A member should still be able to see the allocated project budget, just not be able to request changes". This addendum extends existing PBA-02 and PBA-09. Linear HELIX-78 and HELIX-84 were reopened with the exact requirement; the other eight tasks remain closed. No new approval or issue is needed. The previous local persona inspection and denied-budget behavior above are historical and superseded. The reversible loopback-only member persona is included in this publication.
+
+Root d792d49 and6f34477 add explicit allowlisted approved-only projections, local assignment authority and the read-only Budget UI. Backend original2cbcc9744410b952e73ff1e0a121c328ec47cb91 integrated as06a86b897ba55d7caff6cac821a0dc79c37ab4dc. Its separate member reader checks current verified Google identity, active project access, a task assignment to the same project/season, and associated department membership with member or lead access. This does not broaden finance.project_budget_scope or any mutation, upload, purchase, evidence or funding permission. Only the current approved pointer and active public entries are returned, with exact planned/actual totals, priority and completion. Pending versions, private notes/owners, invoice identifiers/links, funding context and reviewer history remain excluded. The approved version revision is used so private draft edits do not alter member-visible metadata.
+
+The UI omits Request changes, editing, secondary actions, version selection and private funding/history/evidence. A downgrade from privileged access clears private detail and dirty editor, import, reason, funding and purchase state before a safe refresh. An unpublished project returns an approved-budget empty state. Revoked membership denies the next read. Existing known mutation nonces cannot be replayed by the ordinary member.
+
+The integrated D17 selection passes27 tests across four files, including real PostgreSQL approved-pointer promotion and next-read revocation. Root UI/local selection passes36 tests across five files. All three TypeScript checks and repository lint pass at06a86b8. Isolated local Vercel build passes with9.20MB static output,11 source functions and11 generated functions. The full suite exposed one retained denied-reader check returning503 instead of403 inside an explicit transaction. This is an error-driven fallback regression, not an accepted result. The backend worker is repairing dispatch before final verification/publication.
+
+Correctness, Standards and Spec reviews independently cleared06a86b8 with no actionable findings before that retained-test discovery. Affected review must be rebound after the dispatch repair.
+
+Local browser showed Alex Example as Team Member, Sam as lead, approved allocation9,750.75 and spent8,500. The three approved entries are visible. The saved private draft100,749.25, its private description/note and all privileged controls are absent. No financial record was changed during this browser check. The user tab remains on the project Budget view at loopback port5293. Screenshot `project-member-approved-budget.jpg` is outside Git in the existing visualization directory. CUA completion was issued.
+
+Current worker `/root/pba_01_contracts` owns the bounded dispatch repair in `/private/tmp/helix-pba-member-approved-read-backend`, branch `codex/pba-member-approved-read-backend`. Root alone integrates and updates tickets/PR. Current PR head77f1b84 remains historical pending D17 publication. No merge, deployment, production migration or Drive write occurred.
+
+
+### D17 dispatch repair and integrated review
+
+Backend original82e043ff3c04fab1d1efe8c2b08176cec469c24e integrated ascf17e124491497c4c7d91b271c546e5ec43ccb7d. A nonthrowing metadata probe now selects the private or approved-only member reader directly. Both readers recheck current authority themselves. Revocation between the probe and private read denies403 without attempting a member fallback. An unrelated department lead receives403 without aborting an existing transaction. Root fixture commit54fa2ea45ed8af3b9ef58f42f0cd08b22e575afb only adds the canonical synthetic member-read authority tables to the retained approval test. It does not weaken permission assertions.
+
+The integrated focused selection passes39 tests across five files with real PostgreSQL enabled. This includes retained approval sequencing, private Draft boundaries, member access, raw transaction health and probe-to-private-read revocation. Log `/private/tmp/helix-member-approved-final-targeted.log`. All three TypeScript checks and repository lint pass on final integrated code. Lint retains the repository's JS/JSX-only coverage.
+
+Complete correctness review is rebound to54fa2ea. Standards and Spec reviews clear final productcf17e12, and the fixture-only delta has no product effect. All three reports retain prior coverage of unchanged feature code and have no remaining actionable findings. Full-suite and final local generated-build results follow before publication.
+
+
+Final local generated build succeeds after the dispatch repair, using explicitly verified existing projectprj_ZJlpmtshfaXvXnu0qQmQ2SPcE574 and npmci in the isolated compiler. Static output9.20MB/10MB,11 source functions and11 generated functions. No TypeScript diagnostic. Log `/private/tmp/helix-member-approved-final-vercel-build.log`. No deployment occurred. The concurrent full run passed2371 tests but hit one5-second local-API startup timeout. That test passes12/12 separately after the build. A complete full-suite recheck is running alone with all PostgreSQL cases enabled, without changing assertions/timeouts. This running checkpoint is superseded by its final outcome below.
+
+
+### D17 final local acceptance and publication checkpoint
+
+The complete root suite passes245 files and2,372 tests, with only the optional ATTIO_IMPORT_SNAPSHOT skipped. All Finance and partner PostgreSQL cases ran. The three deployment guards also pass. Log `/private/tmp/helix-member-approved-final-full-serial-check.log`. This supersedes the concurrent-run startup timeout above; that test also separately passes12/12 without assertion or timeout changes.
+
+Final evidence covers the actual074 member reader, approved-pointer promotion and next-read revocation, transaction health, direct mutation/evidence/replay denials, private Draft/submitted candidates, current-role overlap and dirty privileged-to-member teardown. Types, lint, local generated deployment build, exact-money/static/function guards, browser and all three independent review reports pass as recorded above. Final reviewed integration54fa2ea contains unchanged productcf17e12 plus the fixture bootstrap. Subsequent publication documentation has no product effect.
+
+This publication includes the earlier local-only member inspection aid22f083c and its strict DEV/member-local/loopback isolation. Its earlier not-pushed statement is superseded. Ordinary production access is provided by the separately authenticated approved-only reader, not by the development persona.
+
+Existing PR #144 is the only feature PR. Publish this verified batch under Deliver authorization, keep it draft while new-head CI runs, require both verify and finance-postgres, then inspect exact remote head/base, strict freshness, conflicts, review requirements, auto-merge and draft state. Restore ready status only after passing. GitHub's current PR state and the final HELIX-84 closure hold exact final head/run evidence after this documentation checkpoint. HELIX-78 records D17 slice closure; parent HELIX-75 stays open until merge. No new code change is planned unless CI exposes a defect.
+
+The PR remains unmerged. Production mapping and Drive identity/folder/narrow-scope/reader-ACL acceptance remain release inputs. Merge, live migration and deployment need separate authorization. No deployment or live financial write was performed.
