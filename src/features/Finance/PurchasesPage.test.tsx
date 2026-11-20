@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FinanceCapabilitySet, PublicBudgets, PurchasesView } from "./types";
 
 const notify = vi.hoisted(() => vi.fn());
+const localGate=vi.hoisted(()=>({local:false}));
+vi.mock("../MemberPlatform/local-mode",()=>({isLocalMemberMode:()=>localGate.local}));
 const session = vi.hoisted(() => ({
   capabilities: {
     registerActual: true,
@@ -33,7 +35,7 @@ vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => notif
 
 // This suite covers the retained request/legacy form. Project purchase behavior
 // and authorization are covered separately by the project purchase suites.
-vi.mock("./ProjectPurchaseLauncher", () => ({ ProjectPurchaseLauncher: () => null }));
+vi.mock("./ProjectPurchaseLauncher", () => ({ ProjectPurchaseLauncher: () => <div>Project purchase launcher</div> }));
 import { PurchasesBoard } from "./PurchasesPage";
 
 describe("PurchasesPage", () => {
@@ -43,6 +45,8 @@ describe("PurchasesPage", () => {
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     notify.mockReset();
+    localGate.local=false;
+    session.budgets={viewVersion:1,seasonCode:"S27",budgetStatus:"approved",approvedOn:"2026-10-01",revision:1,departments:[],choices:{systems:[],items:[]}};
     session.capabilities = { registerActual: true, purchaseRegister: false } as FinanceCapabilitySet;
     session.purchases = { ownRequests: [], viewVersion: 1 };
     session.mutate.mockReset();
@@ -123,6 +127,15 @@ describe("PurchasesPage", () => {
     expect(container.textContent).toContain("Line amount is the total in NOK");
     expect(container.textContent).not.toContain("Purchase register");
     expect(container.textContent).not.toContain("Finance tools");
+  });
+
+  it.each([false,true])("enables canonical active-system registration with a Draft ledger and project approval=%s",async(projectBudgets)=>{
+    session.budgets={...session.budgets,budgetStatus:"draft",approvedOn:null,approvedPresence:{legacyBudget:false,projectBudgets},choices:{systems:[{id:"system",code:"SYS",name:"System",departmentKey:"mechanical",active:true,unbudgetedItemId:null,unbudgetedPublicRef:null}],items:[]}};
+    await act(async()=>root.render(<PurchasesBoard/>));
+    const register=[...container.querySelectorAll("button")].find(button=>button.textContent==="Register purchase")!;expect(register.disabled).toBe(false);
+  });
+  it("uses the existing scoped project launcher for local registration without exposing unsupported generic upload actions",async()=>{
+    localGate.local=true;await act(async()=>root.render(<PurchasesBoard/>));expect(container.textContent).toContain("Project purchase launcher");expect(container.textContent).not.toContain("Other purchases and optional approvals");expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 
   it("keeps different upload IDs for files with the same name", async () => {

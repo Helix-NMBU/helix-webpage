@@ -1,3 +1,4 @@
+import type { LocalRecordedPurchase } from "./local-finance-projection";
 import type { LocalInvoiceFact } from "./invoice-local";
 import {
   isLocalMemberMode,
@@ -29,6 +30,7 @@ type State = {
   requests: Record<string, unknown>;
 };
 type LocalPurchases = {
+  records?: Record<string,LocalRecordedPurchase>;
   evidence?: Record<string, LocalInvoiceFact>;
   uploads: Record<
     string,
@@ -245,6 +247,10 @@ export function createLocalProjectPurchaseRepository(): ProjectPurchaseRepositor
         purchases.evidence![uploadId] = {documentId:uploadId,purchaseId:id,purchaseRef:publicRef,originalName:purchases.uploads[uploadId].name,projectId:change.projectId,backend:"google_drive",transferStatus:"needs_attention",transferRevision:0,canRetry:true,viewerUrl:null,attempts:0,updatedAt:new Date().toISOString(),safeError:"configuration_missing"};
         purchases.uploads[uploadId].purchaseId = id;
       });
+      purchases.records ??= {};
+      purchases.records[id] = {id,publicRef,projectId:change.projectId,responsibleDepartmentId:change.responsibleDepartmentId,requesterMemberId:actor,purchase:change.purchase,
+        approval:purchase.lines.flatMap(line=>{const entry=budget?.approvedVersion?.entries.find(item=>item.entryId===line.budgetItemId);return entry?[{entryId:entry.entryId,approvedVersionId:budget!.approvedVersionId,earmarkId:entry.earmarkId??null}]:[];}),
+        reviewFacts:checked.warnings.map((warning,index)=>({id:`${id}-review-${index+1}`,kind:warning.message.toLowerCase().includes("unbudgeted")?"unbudgeted" as const:"budget_overrun" as const,reviewStatus:"open" as const,facts:{message:warning.message},reason:null,actorMemberId:null,reviewedAt:null}))};
       purchases.requests[key] = { fingerprint, result };
       save(value, purchases);
       return result;

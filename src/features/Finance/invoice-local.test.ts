@@ -94,6 +94,11 @@ describe("local invoice recovery fixture", () => {
       localInvoiceRecovery(page.invoiceNextCursor!).invoiceTransfers,
     ).toHaveLength(2);
   });
+  it("reports missing retained private bytes honestly after current authorization",async()=>{
+    localStorage.setItem("helix-project-budgets-local-v1",JSON.stringify({version:1,budgets:[{projectId:"project",approvedVersion:{entries:[{invoices:[{documentId:"old",backend:"private_storage",originalName:"Old.pdf"}]}]}}]}));
+    await expect(createLocalInvoiceEvidenceApi().open("old")).rejects.toMatchObject({status:503,message:"This historical file is unavailable. Ask Finance for the retained invoice."});
+    gates.finance=false;gates.project="another-project";await expect(createLocalInvoiceEvidenceApi().open("old")).rejects.toMatchObject({status:403});
+  });
   it("requires both local mode and signed-in status plus current Finance fixture access", () => {
     gates.local = false;
     expect(() => localInvoiceRecovery()).toThrow(/Sign in/);

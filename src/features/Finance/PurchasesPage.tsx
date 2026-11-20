@@ -1,3 +1,4 @@
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { invoiceEvidenceMessage } from "./InvoiceEvidence";
 import { ProjectPurchaseLauncher } from "./ProjectPurchaseLauncher";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
@@ -178,7 +179,8 @@ export function PurchasesBoard() {
   const canDecide = Boolean(session.capabilities?.decideRequests);
   const canRegister = Boolean(session.capabilities?.registerActual);
   const canExport = Boolean(session.capabilities?.purchaseRegister);
-  const budgetsLoaded = session.budgets?.budgetStatus === "approved";
+  const canRegisterOther = canRegister && !isLocalMemberMode();
+  const budgetsLoaded = Boolean(session.budgets && session.budgets.choices.systems.some(system=>system.active));
   const systems = budgetChoices.systems.filter((row) => row.active);
   const choices = purchases.choices?.items ?? [];
   const register = purchases.register ?? [];
@@ -544,7 +546,7 @@ export function PurchasesBoard() {
   return (
     <div className="space-y-10">
       {canRegister && <ProjectPurchaseLauncher onChanged={() => session.loadPage("purchases", purchaseLoadOptions(selectedId))} onDirtyChange={projectDirty} />}
-      {canRegister ? (
+      {canRegisterOther ? (
         <form className="rounded-lg border p-6" onSubmit={registerPurchase}>
           <fieldset className="space-y-6" disabled={saving}>
           <div>
@@ -552,7 +554,7 @@ export function PurchasesBoard() {
             <p className="text-sm text-muted-foreground">Line amount is the total in NOK including VAT; quantity is descriptive only.</p>
           </div>
           {!budgetsLoaded ? (
-            <p className="text-sm text-muted-foreground">Use project purchases above to record incurred costs before a season budget is approved.</p>
+            <p className="text-sm text-muted-foreground">Load an available system before registering a purchase. Project purchases above can also record incurred costs without an approved plan.</p>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Buyer name" value={purchase.buyerName} onChange={(value) => setPurchase((current) => ({ ...current, buyerName: value }))} />

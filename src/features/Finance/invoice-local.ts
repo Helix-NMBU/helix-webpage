@@ -1,3 +1,4 @@
+import { localInvoiceReference } from "./local-invoice-reference";
 import {
   isLocalMemberMode,
   localMemberSignedIn,
@@ -71,7 +72,7 @@ function facts(state: LocalState) {
         }
   return result;
 }
-async function allowed(row: LocalInvoiceFact, write: boolean) {
+async function allowed(row: {projectId:string}, write: boolean) {
   guard();
   if (localMemberHasFinancials()) return;
   const workspace = await createLocalProjectBudgetRepository().load({
@@ -109,7 +110,13 @@ export function createLocalInvoiceEvidenceApi(): InvoiceEvidenceActions {
   return {
     async open(documentId) {
       const row = facts(read())[documentId];
-      if (!row) fail("Invoice access is no longer available.", 403);
+      if (!row) {
+        for(const budget of budgets().budgets)for(const version of [budget.approvedVersion,budget.pendingVersion,...(budget.historyVersions??[])])for(const entry of version?.entries??[]) {
+          const retained=entry.invoices?.find(reference=>reference.documentId===documentId&&localInvoiceReference(reference,false).backend==="private_storage");
+          if(retained){await allowed({projectId:budget.projectId},false);fail("This historical file is unavailable. Ask Finance for the retained invoice.",503);}
+        }
+        fail("Invoice access is no longer available.",403);
+      }
       await allowed(row, false);
       fail(
         "The purchase is saved. Its invoice is not yet confirmed in Drive. Ask Finance to check the transfer.",

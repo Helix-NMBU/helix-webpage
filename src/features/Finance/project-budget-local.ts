@@ -1,3 +1,4 @@
+import { localInvoiceReference } from "./local-invoice-reference";
 import { assertLocalFundingEntry } from "./funding-application-local";
 import { planLocalProjectBudgetImport } from "./project-budget-import-model";
 import { canonicalDepartment } from "../ProjectManagement/departments";
@@ -212,7 +213,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
       if (!budget || !scope)
         fail("You do not have access to this project budget.");
       const detail=structuredClone({ ...budget, capabilities: scope.capabilities });
-      for(const version of [detail.approvedVersion,detail.pendingVersion,...(detail.historyVersions??[])])for(const entry of version?.entries??[])for(const invoice of entry.invoices??[])invoice.canRetry=scope.capabilities.canRegisterPurchase && invoice.backend==='google_drive' && invoice.transferStatus!=='stored';
+      for(const version of [detail.approvedVersion,detail.pendingVersion,...(detail.historyVersions??[])])for(const entry of version?.entries??[])for(const invoice of entry.invoices??[])Object.assign(invoice,localInvoiceReference(invoice,scope.capabilities.canRegisterPurchase));
       return detail;
     },
     async mutate(change: ProjectBudgetMutation) {

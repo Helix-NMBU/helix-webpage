@@ -191,4 +191,16 @@ describe("dedicated local project purchase fixtures", () => {
     gate.local = false;
     expect(() => createLocalProjectPurchaseRepository()).toThrow();
   });
+  it("normalizes pre-Drive private invoice facts without inventing confirmed Drive evidence",async()=>{
+    const budget=await approved();const key="helix-project-budgets-local-v1",state=JSON.parse(localStorage.getItem(key)!);state.budgets[0].approvedVersion.entries[0].invoices=[{documentId:"old-private",purchaseId:"purchase",purchaseRef:"2026-0001",originalName:"Older invoice.pdf",backend:"private_storage",transferStatus:"pending",viewerUrl:null}];localStorage.setItem(key,JSON.stringify(state));
+    const loaded=await createLocalProjectBudgetRepository().detail(budget.id);expect(loaded.approvedVersion!.entries[0].invoices?.[0]).toMatchObject({documentId:"old-private",backend:"private_storage",transferStatus:"stored",viewerUrl:null,canRetry:false});
+    expect(JSON.parse(localStorage.getItem(key)!).budgets[0].approvedVersion.entries[0].invoices[0].transferStatus).toBe("pending");
+  });
+
+  it("recomputes recoverable invoice capability when the authorized fixture role changes",async()=>{
+    const budget=await approved(),key="helix-project-budgets-local-v1",state=JSON.parse(localStorage.getItem(key)!);state.budgets[0].approvedVersion.entries[0].invoices=[{documentId:"attention",purchaseId:"purchase",purchaseRef:"2026-0001",originalName:"Invoice.pdf",backend:"google_drive",transferStatus:"needs_attention",transferRevision:4,canRetry:false,viewerUrl:null}];localStorage.setItem(key,JSON.stringify(state));
+    role("project_lead");expect((await createLocalProjectBudgetRepository().detail(budget.id)).approvedVersion!.entries[0].invoices?.[0].canRetry).toBe(false);
+    role("finance");expect((await createLocalProjectBudgetRepository().detail(budget.id)).approvedVersion!.entries[0].invoices?.[0].canRetry).toBe(true);
+  });
+
 });
