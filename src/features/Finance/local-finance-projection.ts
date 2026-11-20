@@ -1,3 +1,7 @@
+import {
+  allocatedSystemCatalog,
+  financeAllocationDepartment,
+} from "./department-allocation";
 import { differenceOre, effectivePlanOre } from "./budget-domain";
 import {
   buildBudgetHierarchy,
@@ -58,6 +62,12 @@ export interface LocalFinanceProjectionInput {
   seasonCode: string | null;
   today: string;
   systems: BudgetHierarchySystem[];
+  departments?: Array<{
+    id: string;
+    departmentKey: string;
+    departmentName: string;
+    sortOrder: number;
+  }>;
   budgets: ProjectBudgetDetail[];
   purchases: LocalRecordedPurchase[];
   invoices: ProjectBudgetInvoiceReference[];
@@ -86,6 +96,28 @@ export function localPurchaseObligations(
 }
 /** Build canonical read facts, then use exactly the same hierarchy/scenario presenters as the server. */
 export function projectLocalFinance(input: LocalFinanceProjectionInput) {
+  const departmentsById = new Map(
+    (input.departments ?? []).map((department) => [department.id, department]),
+  );
+  const allocatedKey = (
+    systemId: string,
+    source: "legacy" | "project",
+    projectId: string | null,
+    responsibleDepartmentId: string | null,
+    unbudgeted = false,
+  ) => {
+    const physical = input.systems.find((system) => system.id === systemId);
+    if (!physical)
+      throw new Error(
+        "The physical system is missing from the financial catalog.",
+      );
+    if (!input.departments) return physical.departmentKey;
+    return financeAllocationDepartment(
+      { source, projectId, responsibleDepartmentId, unbudgeted },
+      physical,
+      departmentsById,
+    ).departmentKey;
+  };
   const registered = input.purchases.filter(
     (p) => !p.status || p.status === "registered",
   );
@@ -234,26 +266,47 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
     }
   }
   for (const item of items.values()) {
+    item.allocationDepartmentKey = allocatedKey(
+      item.systemId,
+      item.source ?? "legacy",
+      item.projectId ?? null,
+      item.responsibleDepartmentId ?? null,
+    );
     if (activeObligation(item.id)) item.priority = "P0";
     item.commitmentNok = commitment(item.id, item.commitmentNok);
   }
-  const unbudgeted = new Map<string, bigint>();
+  const unbudgeted = new Map<
+    string,
+    { systemId: string; allocationDepartmentKey: string; actualOre: bigint }
+  >();
   for (const purchase of registered)
     for (const line of normalized.get(purchase.id)!.lines)
       if (
         line.unbudgeted ||
         !line.budgetItemId ||
         !items.has(line.budgetItemId)
-      )
-        unbudgeted.set(
-          line.systemId,
-          (unbudgeted.get(line.systemId) ?? 0n) + line.amountOre,
-        );
-  const unallocated = [...unbudgeted].map(([systemId, amount]) => ({
-    id: `unallocated:${systemId}`,
-    publicRef: `UNALLOCATED-${input.systems.find((s) => s.id === systemId)?.code ?? systemId}`,
-    systemId,
-    actualNok: formatOre(amount),
+      ) {
+        const allocationDepartmentKey = allocatedKey(
+            line.systemId,
+            "project",
+            purchase.projectId,
+            purchase.responsibleDepartmentId,
+            true,
+          ),
+          key = `${line.systemId}:${allocationDepartmentKey}`,
+          previous = unbudgeted.get(key);
+        unbudgeted.set(key, {
+          systemId: line.systemId,
+          allocationDepartmentKey,
+          actualOre: (previous?.actualOre ?? 0n) + line.amountOre,
+        });
+      }
+  const unallocated = [...unbudgeted.values()].map((row) => ({
+    id: `unallocated:${row.systemId}`,
+    publicRef: `UNALLOCATED-${input.systems.find((system) => system.id === row.systemId)?.code ?? row.systemId}`,
+    systemId: row.systemId,
+    allocationDepartmentKey: row.allocationDepartmentKey,
+    actualNok: formatOre(row.actualOre),
     note: null,
     revision: 0,
   }));
@@ -331,7 +384,7 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
   }));
   for (const row of unallocated)
     facts.push({
-      id: row.id,
+      id: `${row.id}:${row.allocationDepartmentKey}`,
       priority: "P1",
       status: "active",
       plannedOre: 0n,
@@ -343,20 +396,47 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
       funding: null,
       restrictedActual: [],
     });
+  const catalog = allocatedSystemCatalog(
+    input.systems,
+    (input.departments ?? input.systems).map(
+      ({ departmentKey, departmentName, sortOrder }) => ({
+        departmentKey,
+        departmentName,
+        sortOrder,
+      }),
+    ),
+    [
+      ...[...items.values()].map((item) => ({
+        systemId: item.systemId,
+        departmentKey: item.allocationDepartmentKey!,
+      })),
+      ...unallocated.map((row) => ({
+        systemId: row.systemId,
+        departmentKey: row.allocationDepartmentKey,
+      })),
+    ],
+  );
   const hierarchy = buildBudgetHierarchy({
-    systems: input.systems,
+    systems: catalog,
     items: [...items.values()],
     unallocated,
     includePrivateUnallocated: true,
   });
   const departments = buildDepartmentSummaries(
-    input.systems.map((system) => ({
+    catalog.map((system) => ({
       ...system,
-      items: facts.filter(
-        (item) =>
-          items.get(item.id)?.systemId === system.id ||
-          unallocated.some((u) => u.id === item.id && u.systemId === system.id),
-      ),
+      items: facts.filter((item) => {
+        const entry = items.get(item.id);
+        return entry
+          ? entry.systemId === system.id &&
+              entry.allocationDepartmentKey === system.departmentKey
+          : unallocated.some(
+              (row) =>
+                `${row.id}:${row.allocationDepartmentKey}` === item.id &&
+                row.systemId === system.id &&
+                row.allocationDepartmentKey === system.departmentKey,
+            );
+      }),
     })),
   );
   const computations = calculateScenarios(

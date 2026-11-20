@@ -19,6 +19,7 @@ import { localInvoiceReference } from "./local-invoice-reference";
 import { formatOre, osloToday, parseIsoDate } from "./money";
 import { hasVisibleApprovedFinances, nokToOre } from "./finance-calculations";
 import type { ProjectWorkspace } from "../ProjectManagement/types";
+import type { DepartmentHomeBudget } from "./department-budget-types";
 import type { SeasonFinancialSummary } from "../ProjectManagement/season-financials-types";
 import type {
   ProjectBudgetDetail,
@@ -232,6 +233,12 @@ function readFacts(bankVersion: number): LocalFinanceProjectionInput {
       code: `SYS-${index + 1}`,
       name: department.name,
       active: true,
+      departmentName: department.name,
+      departmentKey: departmentKey(department.name),
+      sortOrder: index,
+    })),
+    departments: workspace.departments.map((department, index) => ({
+      id: department.id,
       departmentName: department.name,
       departmentKey: departmentKey(department.name),
       sortOrder: index,
@@ -498,4 +505,60 @@ export function mutateLocalPurchase(
   localStorage.setItem(PURCHASES, JSON.stringify(state));
   localStorage.setItem(BUDGETS, JSON.stringify(budgets));
   return result;
+}
+
+/** Ordinary department members receive an explicit approved aggregate, never private packet facts. */
+export function loadLocalDepartmentHomeBudget(
+  departmentId: string,
+): DepartmentHomeBudget {
+  if (!isLocalMemberMode() || !localMemberSignedIn())
+    throw Object.assign(new Error("Sign in to continue."), { status: 401 });
+  const workspace = saved<ProjectWorkspace>(
+      "helix-member-local-projects-v1",
+      initialLocalWorkspace(),
+    ),
+    department = workspace.departments.find((item) => item.id === departmentId);
+  if (
+    !department ||
+    ![
+      ...department.memberIds,
+      ...(department.leadIds ?? (department.leadId ? [department.leadId] : [])),
+    ].includes(workspace.viewerId)
+  )
+    throw Object.assign(new Error("Department membership is required."), {
+      status: 403,
+    });
+  const facts = readFacts(0),
+    projected = projectLocalFinance(facts),
+    key = departmentKey(department.name),
+    allocation = projected.budgets.departments.find(
+      (item) => item.departmentKey === key,
+    );
+  return {
+    viewVersion: facts.viewVersion,
+    seasonId: "a1111111-1111-4111-8111-111111111111",
+    seasonCode: workspace.season,
+    departmentId,
+    departmentName: department.name,
+    approvedTotalNok: allocation?.plannedNok ?? "0.00",
+    legacyTotalNok: formatOre(
+      projected.items
+        .filter(
+          (item) =>
+            item.source === "legacy" && item.allocationDepartmentKey === key,
+        )
+        .reduce((sum, item) => sum + nokToOre(item.effectivePlanNok), 0n),
+    ),
+    projects: facts.budgets
+      .filter(
+        (budget) =>
+          budget.responsibleDepartmentId === departmentId &&
+          budget.approvedVersionId !== null,
+      )
+      .map((budget) => ({
+        projectId: budget.projectId,
+        projectName: budget.projectName,
+        approvedTotalNok: budget.approvedTotalNok,
+      })),
+  };
 }

@@ -227,6 +227,81 @@ describe("canonical local Finance projection", () => {
     expect(JSON.stringify(view)).not.toContain("99999.00");
     expect(view.purchases.register[0].totalNok).toBe("3500.00"); // Quantity is not multiplied into line totals.
   });
+  it("allocates complete project plans and actuals to their owners while retaining physical system identity once in choices", () => {
+    const a = budget([
+        entry("00000000-0000-4000-8000-000000000100", {
+          actualNok: "40.00",
+          plannedNok: "100.00",
+        }),
+      ]),
+      c = budget([
+        entry("00000000-0000-4000-8000-000000000101", { actualNok: "60.00" }),
+      ]);
+    a.responsibleDepartmentId = "owner-a";
+    c.responsibleDepartmentId = "owner-c";
+    c.id = "header-c";
+    c.projectId = "project-c";
+    const data = input([a, c]);
+    data.departments = [
+      {
+        id: "owner-a",
+        departmentKey: "a",
+        departmentName: "Owner A",
+        sortOrder: 0,
+      },
+      {
+        id: "physical",
+        departmentKey: "mechanical",
+        departmentName: "Mechanical",
+        sortOrder: 1,
+      },
+      {
+        id: "owner-c",
+        departmentKey: "c",
+        departmentName: "Owner C",
+        sortOrder: 2,
+      },
+    ];
+    data.legacy = {
+      budgetStatus: "approved",
+      approvedOn: "2026-01-01",
+      items: [legacy({ id: "legacy" })],
+    };
+    data.purchases = [
+      purchase("unbudgeted", null, "25.00", {
+        responsibleDepartmentId: "owner-a",
+      }),
+    ];
+    const view = projectLocalFinance(data),
+      byKey = new Map(
+        view.budgets.departments.map((department) => [
+          department.departmentKey,
+          department,
+        ]),
+      );
+    expect(byKey.get("a")).toMatchObject({
+      plannedNok: "100.00",
+      actualNok: "65.00",
+      unbudgetedNok: "25.00",
+    });
+    expect(byKey.get("mechanical")).toMatchObject({
+      plannedNok: "300.00",
+      actualNok: "50.00",
+    });
+    expect(byKey.get("c")).toMatchObject({
+      plannedNok: "200.00",
+      actualNok: "60.00",
+    });
+    expect(view.budgets.choices.systems.map((system) => system.id)).toEqual([
+      systemId,
+    ]);
+    expect(
+      [...byKey.values()]
+        .flatMap((department) => department.systems)
+        .every((system) => system.id === systemId),
+    ).toBe(true);
+  });
+
   it("keeps genuine legacy approval until first project approval, then replaces the same stable anchor", () => {
     const b = budget([
       entry("00000000-0000-4000-8000-000000000100", { actualNok: "50.00" }),
