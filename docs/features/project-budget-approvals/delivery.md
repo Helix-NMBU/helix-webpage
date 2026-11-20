@@ -7,7 +7,7 @@ Started: 19 November 2026 after the user explicitly invoked Deliver.
 Base: remote `main`, `b05c5a457a378a76aaba7535ab6c0664505cf089`, reverified live.
 Integration branch: `codex/project-budget-approvals`.
 Integration worktree: `/Users/henrik.noteless/.codex/worktrees/project-budget-approvals/helix-webpage`.
-PR: none. No matching existing feature PR, branch or active worktree was found before setup.
+PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. Final product code36b41f8 has passed local verification and independent correctness, Standards and Spec reviews. Publication checkpoints and live CI authority are recorded at the end.
 
 ## Reconciliation
 
@@ -27,8 +27,8 @@ The current remote base has 11 API functions. The original working tree's two ex
 | PBA-06 | HELIX-81 | closed on feature branch | reused `/root/pba_04_threshold`; `/private/tmp/helix-pba-06-drive-invoices`; `codex/pba-06-drive-invoices`; basedb25e84 | PBA-05 verified;071 Drive transfer/evidence/recovery assigned. |
 | PBA-07 | HELIX-82 | closed again after reviewed repair | reused `/root/pba_01_contracts`; `/private/tmp/helix-pba-07-obligations`; `codex/pba-07-obligations`; base990e0de | PBA-03 verified;072 funding applications, awarded obligations, limited HOF review assigned. |
 | PBA-08 | HELIX-83 | closed on feature branch | `/root/pba_01_contracts` backend: `/private/tmp/helix-pba-08-effective-finance`, `codex/pba-08-effective-finance`; `/root/pba_04_threshold` UI: `/private/tmp/helix-pba-08-budget-views`, `codex/pba-08-budget-views`; base2924d8d | Both06/07 prerequisites verified; shared contracts first. |
-| PBA-10 | HELIX-85 | running | backend /root/pba_01_contracts in /private/tmp/helix-pba10-department-packages; main UI /root/pba_04_threshold in /private/tmp/helix-pba10-department-ui; widget /root/pba_10_home_widget in /private/tmp/helix-pba10-home-widget; root reader in /private/tmp/helix-pba10-home-reader | Base31059fa for core/UI; widget/reader base original d8fe3fb shared contract. |
-| PBA-09 | HELIX-84 | blocked | unassigned | Needs integrated PBA-04, PBA-08 and PBA-10. |
+| PBA-10 | HELIX-85 | closed on feature branch | backend /root/pba_01_contracts in /private/tmp/helix-pba10-department-packages; main UI /root/pba_04_threshold in /private/tmp/helix-pba10-department-ui; widget /root/pba_10_home_widget in /private/tmp/helix-pba10-home-widget; root reader in /private/tmp/helix-pba10-home-reader | Base31059fa for core/UI; widget/reader base original d8fe3fb shared contract. |
+| PBA-09 | HELIX-84 | final PR CI in progress | root integration coordinator | Dependencies integrated/verified; local V01–V09 and independent reviews pass. Closure requires final exact-head PR checks and readiness readback. |
 
 Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy, 068 approvals, 069 revisions/import, 070 purchases, 071 Drive evidence, 072 award obligations, 073 totals if needed. The actual remote base already includes tracked 065_finance_historical_purchases.sql; preserve it and load it in feature test bootstrap. The older original checkout's untracked copy must not replace it. Workers may leave reserved numbers unused, but must coordinate new migrations and contracts.
 
@@ -39,13 +39,13 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 - Docker has no running daemon. Installed PostgreSQL17 for tests and started an isolated temporary cluster at `/private/tmp/helix-pba-postgres.J3mOMS/data`, bound only to 127.0.0.1:55475. Test URL is `postgresql://postgres@127.0.0.1:55475/postgres`; use unique disposable test databases. No production data is present; no login background service was enabled. Server path pointer: `/private/tmp/helix-pba-postgres-path`.
 - Drive destination/service identity/narrow OAuth scope/reader ACL and real entry-to-project mapping remain release inputs. No live DB or Drive writes are authorized merely for validation. Local fixtures and isolated databases are permitted.
 - Baseline npm run build passed, 9.00 MB static output and 11 source functions. The later local compiler baseline passed 11 generated functions; final code compilation remains required. Log: `/private/tmp/helix-pba-baseline-build.log`.
-- Final full-feature review has not started. Fresh early completed-slice/backend reviews found and cleared the repairs recorded below. No PR exists. PBA-01 through07 are closed on the feature branch,08 runs,09 remains blocked by08. The parent stays open.
+- Final complete correctness, Standards and Spec reviews all clear final product36b41f8. PBA-01 through08 and10 are closed on the feature branch; PBA-09 awaits final PR CI/readiness readback. Parent HELIX-75 stays open until merge. Earlier checkpoints below remain historical.
 
 ## Next action
 
-PBA-08 reusable facts/projections and all bounded review repairs are integrated and verified at code 1309f12. HELIX-83 is Done; HELIX-85 is now eligible. Revision 2 is approved and published, with the subsequent directly requested department homepage widget included as D16. PBA-10 is running in its isolated core/UI worktrees, with the shared contract published before dependent widget work. Deliver whole-department package approval, grouped project/entry diffs, missing/Draft readiness, full responsible-department allocation and the department homepage allocation/project-breakdown widget for ordinary authorized department members. PBA-09 remains blocked until this amended behavior passes. No feature push, PR, merge or deployment exists.
+The complete approved revision2/D16 feature is implemented, independently reviewed and locally verified at product36b41f8. PR #144 is published and attached to this chat. Finish current-head required verify and Finance PostgreSQL CI, inspect current base freshness/conflicts/review requirements, mark ready after passing and close HELIX-84 with exact run evidence. GitHub and the final tracker closure are authoritative for state after the documentation publication checkpoint. Preserve the open parent and unmerged PR.
 
-The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver. Merging and deployment remain unauthorized. GitHub authentication and unchanged remotemainb05c5a4 were verified with network-enabled read access. No feature remote branch or PR exists. Both source and generated Vercel function counts passed11/11 on earlier root slices; final compilation must bind to final feature code and use isolated dependencies.
+Deliver authorizes ordinary feature push, PR creation and ticket updates. Merge, production migration and deployment remain separate. Real Drive folder/identity/narrow scope/reader ACL acceptance and the operator-approved mapping manifest remain release inputs. No worker implementation or user scope decision is pending.
 
 ## PBA-04 integration, 19 November 2026
 
