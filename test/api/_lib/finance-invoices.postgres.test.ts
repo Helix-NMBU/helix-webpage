@@ -1001,4 +1001,103 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
       invoice.release();
     }
   });
+  it("continues a slow explicit recovery retry through bounded invocations using the stored purchase identity", async () => {
+    const { documents, result } = await register({ budgetMs: 30000 }),
+      id = documents[0],
+      fake = driveFixture();
+    const retried = await mutateInvoice(
+      db,
+      finance,
+      {
+        action: "retryInvoiceTransfer",
+        documentId: id,
+        expectedRevision: (await job(id)).revision,
+        requestId: randomUUID(),
+      },
+      { drive: fake.drive, storage, budgetMs: 5500 },
+    );
+    expect(retried).toMatchObject({
+      id,
+      purchaseId: result.id,
+      invoiceEvidence: {
+        pending: 1,
+        transferring: 0,
+        stored: 0,
+        needsAttention: 0,
+      },
+    });
+    const resumed = await mutateInvoice(
+      db,
+      finance,
+      {
+        action: "continueInvoiceTransfers",
+        purchaseId: retried.purchaseId,
+        requestId: randomUUID(),
+      },
+      { drive: fake.drive, storage, budgetMs: 30000 },
+    );
+    expect(resumed.invoiceEvidence?.stored).toBe(1);
+    expect(fake.drive.generateId).toHaveBeenCalledTimes(1);
+    expect((await job(id)).status).toBe("stored");
+  });
+  it("preserves one actual and every job during a provider outage", async () => {
+    const fake = driveFixture();
+    fake.drive.generateId = vi.fn(async () => {
+      throw new InvoiceTransferError("provider_unavailable");
+    });
+    const saved = await register({
+      drive: fake.drive,
+      count: 2,
+      budgetMs: 30000,
+    });
+    expect(saved.result.invoiceEvidence?.needsAttention).toBe(2);
+    expect(
+      (
+        await db.query<{ status: string }>(
+          "select status from finance.purchases where id=$1::uuid",
+          [saved.result.id],
+        )
+      ).rows[0].status,
+    ).toBe("registered");
+    for (const id of saved.documents) {
+      expect((await job(id)).drive_file_id).toBeNull();
+      expect(
+        (
+          await db.query<{ last_error: string }>(
+            "select last_error from finance.invoice_transfers where document_id=$1::uuid",
+            [id],
+          )
+        ).rows[0].last_error,
+      ).toBe("provider_unavailable");
+    }
+  });
+  it("reconciles a409-style create conflict only after matching the reserved ID and exact evidence", async () => {
+    const { documents } = await register(),
+      id = documents[0],
+      fake = driveFixture();
+    fake.drive.begin = vi.fn(async (source) => {
+      fake.files.set(source.fileId, {
+        id: source.fileId,
+        driveId: source.driveId,
+        parents: [source.folderId],
+        mimeType: source.contentType,
+        size: String(source.byteSize),
+        sha256Checksum: source.sha256,
+      });
+      throw new InvoiceTransferError("transfer_uncertain");
+    });
+    await transferInvoice(
+      db,
+      finance,
+      id,
+      { drive: fake.drive, storage },
+      null,
+      false,
+      Date.now() + 30000,
+    );
+    expect((await job(id)).status).toBe("stored");
+    expect(fake.drive.upload).not.toHaveBeenCalled();
+    expect(fake.drive.verify).toHaveBeenCalledOnce();
+    expect(fake.files.size).toBe(1);
+  });
 });

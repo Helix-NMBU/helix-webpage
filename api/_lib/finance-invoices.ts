@@ -578,19 +578,21 @@ export async function mutateInvoice(
 ): Promise<FinanceMutationResult> {
   if (body.action === "downloadDocument")
     return openInvoice(db, deps.storage, identity, body.documentId);
-  if (body.action === "continueInvoiceTransfers")
+  if (body.action === "continueInvoiceTransfers") {
+    const invoiceEvidence = await dispatchPurchaseInvoices(
+      db,
+      identity,
+      String(body.purchaseId),
+      deps,
+    );
     return {
       ok: true,
       viewVersion: await viewVersion(db),
-      invoiceEvidence: await dispatchPurchaseInvoices(
-        db,
-        identity,
-        String(body.purchaseId),
-        deps,
-      ),
+      invoiceEvidence,
       warnings: [],
       errors: [],
     };
+  }
   const id = await access(db, identity, body.documentId, true);
   if (
     typeof body.expectedRevision !== "number" ||
@@ -610,7 +612,7 @@ export async function mutateInvoice(
     deps,
     body.expectedRevision,
     true,
-    Date.now() + 15_000,
+    Date.now() + (deps.budgetMs ?? 15_000),
     body.requestId,
   );
   const row = (
@@ -623,6 +625,7 @@ export async function mutateInvoice(
     ok: true,
     viewVersion: await viewVersion(db),
     id,
+    purchaseId: row.purchase_id,
     invoiceEvidence: await invoiceSummary(db, identity, row.purchase_id),
     warnings: [],
     errors: [],

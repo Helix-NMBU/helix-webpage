@@ -107,6 +107,7 @@ export function createFinanceApi(owner: { current: string | null }) {
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not save the budget change.", response.status, body.errors ?? []);
     const result = body as FinanceMutationResult;
     if (action.action === "registerPurchase") continuation.start(result);
+    else if (action.action === "retryInvoiceTransfer" && result.purchaseId) continuation.start({...result,id:result.purchaseId});
     return result;
   }
   return {

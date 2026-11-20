@@ -167,6 +167,7 @@ export function createLocalInvoiceEvidenceApi(): InvoiceEvidenceActions {
       const result: FinanceMutationResult = {
         ok: true,
         id: documentId,
+        purchaseId: row.purchaseId,
         viewVersion: value.version,
         warnings: [],
         errors: [],

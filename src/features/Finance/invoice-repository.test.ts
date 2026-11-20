@@ -4,7 +4,7 @@ import { createInvoiceEvidenceApi } from "./invoice-repository";
 import { createFinanceApi } from "./repository";
 const auth = vi.hoisted(() => ({
   token: vi.fn(async (_owner: { current: string | null }) => "member-token"),
-  watch: vi.fn(() => () => undefined),
+  watch: vi.fn((_onEnd: () => void, _client?: unknown, _owner?: {current:string|null}) => () => undefined),
   local: false,
   signedIn: true,
   localApi: vi.fn(() => ({ open: vi.fn(), retry: vi.fn() })),
@@ -66,12 +66,15 @@ describe("current member invoice authorization", () => {
     });
     expect(auth.token.mock.calls[0][0]).toBe(auth.token.mock.calls[1][0]);
     const end = vi.fn();
-    api.watchSession!(end);
+    const stop = api.watchSession!(end);
     expect(auth.watch).toHaveBeenCalledWith(
-      end,
+      expect.any(Function),
       undefined,
       auth.token.mock.calls[0][0],
     );
+    auth.watch.mock.calls[0][0]();
+    expect(end).toHaveBeenCalledOnce();
+    stop();
   });
   it.each([401, 403, 409])(
     "retains HTTP %s for clearing views and stale revision recovery",

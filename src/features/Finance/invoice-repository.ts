@@ -1,3 +1,4 @@
+import { createInvoiceContinuation } from "./invoice-continuation";
 import { memberSessionToken, watchMemberSession } from "../MemberCV/session";
 import {
   isLocalMemberMode,
@@ -14,7 +15,10 @@ export interface InvoiceEvidenceActions {
     expectedRevision: number,
     requestId: string,
   ): Promise<FinanceMutationResult>;
-  watchSession?(onEnd: () => void, onInvoices?: (result: FinanceMutationResult) => void): () => void;
+  watchSession?(
+    onEnd: () => void,
+    onInvoices?: (result: FinanceMutationResult) => void,
+  ): () => void;
 }
 export class InvoiceEvidenceError extends Error {
   constructor(
@@ -30,10 +34,12 @@ export function createInvoiceEvidenceApi(): InvoiceEvidenceActions {
   const owner = { current: null as string | null };
   async function mutate(
     change: Record<string, unknown>,
+    signal?: AbortSignal,
   ): Promise<FinanceMutationResult> {
     const token = await memberSessionToken(owner);
     const response = await fetch("/api/finance", {
       method: "POST",
+      signal,
       cache: "no-store",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -51,6 +57,9 @@ export function createInvoiceEvidenceApi(): InvoiceEvidenceActions {
       );
     return body as FinanceMutationResult;
   }
+  const continuation = createInvoiceContinuation(owner, (change, signal) =>
+    mutate(change, signal),
+  );
   return {
     open: (documentId) =>
       mutate({
@@ -58,13 +67,31 @@ export function createInvoiceEvidenceApi(): InvoiceEvidenceActions {
         documentId,
         requestId: crypto.randomUUID(),
       }),
-    retry: (documentId, expectedRevision, requestId) =>
-      mutate({
+    async retry(documentId, expectedRevision, requestId) {
+      const result = await mutate({
         action: "retryInvoiceTransfer",
         documentId,
         expectedRevision,
         requestId,
-      }),
-    watchSession: (onEnd) => watchMemberSession(onEnd, undefined, owner),
+      });
+      if (result.purchaseId)
+        continuation.start({ ...result, id: result.purchaseId });
+      return result;
+    },
+    watchSession: (onEnd, onInvoices) => {
+      const end = () => {
+        continuation.stop();
+        onEnd();
+      };
+      const stop = watchMemberSession(end, undefined, owner);
+      const dispose = continuation.watch({
+        updated: (result) => onInvoices?.(result),
+        accessEnded: end,
+      });
+      return () => {
+        dispose();
+        stop();
+      };
+    },
   };
 }
