@@ -38,7 +38,7 @@ function purchaseError(error: unknown): FinanceError {
   return projectBudgetError(error);
 }
 export function isProjectPurchaseMutation(action: unknown): boolean {
-  return typeof action === "string" && Object.hasOwn(ACTIONS, action);
+  return typeof action === "string" && Object.prototype.hasOwnProperty.call(ACTIONS, action);
 }
 
 /** A scoped read: project leads can inspect the plan, but registration still needs the registering capability. */
