@@ -133,7 +133,7 @@ export function DepartmentProjectBudgetReview({
                 ) : null;
               return (
                 <TableRow key={change.entryId}>
-                  <TableCell className="max-w-sm whitespace-normal">
+                  <TableCell className="min-w-56 max-w-sm whitespace-normal">
                     <span className="font-medium">{entry.description}</span>
                     {fields &&
                     (change.kind === "added" || change.kind === "removed") ? (
