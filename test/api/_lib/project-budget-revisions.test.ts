@@ -43,6 +43,9 @@ describe("approved project budget revisions and candidate-only imports", () => {
   it("keeps approved plan, identities and purchased evidence while a revision changes then removes its old entry", async () => {
     let budget = await approve(await draft(true)); const original = budget.approvedVersion!;
     budget = await write("finance", budget, "requestProjectBudgetChanges", { reason: "Update the plan" });
+    expect(budget.pendingVersion).toBeNull();
+    expect(budget.pendingTotalNok).toBeNull();
+    budget = await services.projectBudget("lead", budget.id);
     expect(budget.approvedVersion?.id).toBe(original.id); expect(budget.pendingVersion).toMatchObject({ versionNumber: 2, status: "draft", entries: [{ entryId: f.entry, actualNok: "1200.00" }] });
     budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: f.entry, plannedNok: "11000" } });
     expect((await db.query<{ planned: string }>("select planned_ore::text as planned from finance.effective_budget_entries where id=$1::uuid", [f.entry])).rows).toEqual([{ planned: "1000000" }]);
@@ -80,6 +83,11 @@ describe("approved project budget revisions and candidate-only imports", () => {
       const previousId = budget.pendingVersionId;
       budget = await write(role, budget, "requestProjectBudgetChanges", { reason: "Refresh quote" });
       if (previousId) expect(budget.pendingVersionId).toBe(previousId);
+      if (role === "finance") {
+        expect(budget.pendingVersion).toBeNull();
+        expect(budget.pendingTotalNok).toBeNull();
+        budget = await services.projectBudget("lead", budget.id);
+      }
       expect(budget.pendingVersion).toMatchObject({ status: "draft", departmentApprovedBy: null, approvedBy: null });
       budget = await write("lead", budget, "submitProjectBudget"); budget = (await submitProjectBudgetDepartmentPackage(services, budget)).budget;
     }
