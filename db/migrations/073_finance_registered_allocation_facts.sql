@@ -145,9 +145,8 @@ end $migration$;
 -- Funding mutation feedback must count the same current links as funding reads.
 -- Keep its existing draft-visibility and soft-delete behavior.
 do $migration$
-declare definition text; needle text; replacement text; matches integer;
+declare definition text; needle text; replacement text; matches integer; candidate regprocedure; candidate_definition text; total_matches integer:=0;
 begin
-  definition:=pg_get_functiondef('finance.apply_funding_change(uuid,uuid,text,jsonb,boolean)'::regprocedure);
   needle:=$old$  from finance.budget_items i
   join finance.budgets b on b.id = i.budget_id
   join finance.funding_parts p on p.id = i.earmark_id
@@ -159,8 +158,17 @@ begin
   where p.funding_id = target_funding
     and i.status <> 'cancelled'
     and (p_include_draft or i.approved_version_id is not null or i.legacy_budget_status='approved');$new$;
-  matches:=(length(definition)-length(replace(definition,needle,'')))/length(needle);
-  if matches<>1 then raise exception '073 expected exactly one funding active-link counter; found %',matches; end if;
+  -- Main's042 wrapper keeps the counter in its unserialized implementation.
+  -- Inspect both known signatures and require one owner across the complete chain.
+  foreach candidate in array array[to_regprocedure('finance.apply_funding_change_unserialized(uuid,uuid,text,jsonb,boolean)'),to_regprocedure('finance.apply_funding_change(uuid,uuid,text,jsonb,boolean)')] loop
+    if candidate is not null then
+      candidate_definition:=pg_get_functiondef(candidate);
+      matches:=(length(candidate_definition)-length(replace(candidate_definition,needle,'')))/length(needle);
+      total_matches:=total_matches+matches;
+      if matches=1 then definition:=candidate_definition;end if;
+    end if;
+  end loop;
+  if total_matches<>1 then raise exception '073 expected exactly one funding active-link counter; found %',total_matches;end if;
   execute replace(definition,needle,replacement);
 end $migration$;
 commit;
