@@ -869,6 +869,7 @@ export function PurchasesBoard() {
       {canExport ? <FinanceRecoveryPanel /> : null}
       {session.capabilities?.purchaseRegister ? (
         <PurchaseRegister
+          onAccessEnded={session.retry}
           register={register}
           unpaidCount={purchases.unpaidCount ?? register.filter((row) => row.unpaid).length}
           unpaidOnly={unpaidOnly}
