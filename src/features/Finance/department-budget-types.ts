@@ -42,7 +42,7 @@ export interface DepartmentBudgetPackageQueue {
 }
 /** Ordinary current department members receive only this approved aggregate. */
 export interface DepartmentHomeBudget {
-  viewVersion:number; seasonId:string; seasonCode:string; departmentId:string; departmentName:string;
+  viewVersion:number; seasonId:string|null; seasonCode:string; departmentId:string; departmentName:string;
   approvedTotalNok:string; legacyTotalNok:string;
   projects:{projectId:string;projectName:string;approvedTotalNok:string}[];
 }
