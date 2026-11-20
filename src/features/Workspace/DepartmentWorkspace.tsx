@@ -1,4 +1,5 @@
 import { ProjectBudgetsPanel } from "../Finance/ProjectBudgetsPanel";
+import { DepartmentBudgetWidget } from "./DepartmentBudgetWidget";
 import { departmentMemberIds } from "../ProjectManagement/permissions";
 import {
   useCallback,
@@ -433,6 +434,7 @@ export function DepartmentWorkspace({
                   </button>
                 ) : null}
               </div>
+              {home && <DepartmentBudgetWidget key={`${data.viewerId}:${department.id}`} departmentId={department.id} viewerId={data.viewerId} />}
               <section
                 aria-labelledby="department-resources-title"
                 className="space-y-4"
