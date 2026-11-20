@@ -1,3 +1,4 @@
+import { setupMemberReadAuthority } from "./project-budget-member-read-fixture.js";
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +30,7 @@ beforeAll(async () => {
   pg = new PGlite();
   db = { exec: sql => pg.exec(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
   await setupProjectBudgetBase(db); await seedProjectBudgetLegacy(db); await applyProjectBudgetMigrations(db);
+  await setupMemberReadAuthority(db);
   services = createFinanceServices({ db, authenticate: async token => projectBudgetIdentity(token as ProjectBudgetFixtureRole) });
 }, 30_000);
 beforeEach(async () => { await pg.exec("begin"); });
