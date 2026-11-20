@@ -1195,7 +1195,7 @@ export function ProjectBudgetsPanel({
             </div>}
             {!projectId && secondaryActions}
           </div>
-          {projectId && <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 sm:grid-cols-3">
+          {projectId && <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 xl:grid-cols-3">
             <div><dt className="text-xs text-muted-foreground">{viewingCandidate ? "Proposed budget" : "Budget"}</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(displayed.totalNok)}</dd></div>
             <div><dt className="text-xs text-muted-foreground">Spent</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.actualNok ?? formatOre(displayed.entries.reduce((total, item) => total + canonicalNokOre(item.actualNok), 0n)))}</dd></div>
             {viewingCandidate && detail.approvedVersion && <div><dt className="text-xs text-muted-foreground">Approved budget</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.approvedTotalNok)}</dd></div>}
@@ -1273,7 +1273,7 @@ export function ProjectBudgetsPanel({
             <TableBody>
               {entries.map((item) => (
                 <TableRow key={item.entryId}>
-                  <TableCell className="max-w-sm whitespace-normal">
+                  <TableCell className={projectId ? "min-w-48 max-w-sm whitespace-normal" : "max-w-sm whitespace-normal"}>
                     <span className="font-medium">{item.description}</span>
                     {projectId && <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>{workspace?.systems?.find(system => system.id === item.systemId)?.name ?? "System"}</span>
