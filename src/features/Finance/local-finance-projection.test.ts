@@ -293,7 +293,11 @@ describe("canonical local Finance projection", () => {
     expect(view.budgets.choices.items.map((i) => i.id)).toEqual([
       "00000000-0000-4000-8000-000000000104",
     ]);
-    expect(view.items.find(item=>item.id==="00000000-0000-4000-8000-000000000104")).toMatchObject({actualNok:"0.00",completion:"partial"});
+    expect(
+      view.items.find(
+        (item) => item.id === "00000000-0000-4000-8000-000000000104",
+      ),
+    ).toMatchObject({ actualNok: "0.00", completion: "partial" });
     expect(
       view.items.find((i) => i.id === "00000000-0000-4000-8000-000000000103"),
     ).toMatchObject({
@@ -325,6 +329,63 @@ describe("canonical local Finance projection", () => {
       actualNok: "85.25",
     });
   });
+  it.each([
+    "prospect",
+    "applied",
+    "rejected",
+    "deleted",
+    "secured",
+    "received",
+  ] as const)("publishes earmarks only for available funding: %s", (status) => {
+    const data = input();
+    data.funding = [
+      {
+        id: "fund",
+        publicRef: "fund",
+        sourceName: "Grant",
+        ownerName: "Owner",
+        fundingType: "grant",
+        amountNok: "500.00",
+        status,
+        confidence: null,
+        expectedDate: null,
+        receivedDate: null,
+        ownerEmail: null,
+        reportingRequired: false,
+        agreementLink: null,
+        note: null,
+        revision: 0,
+        earmarkedNok: "0.00",
+        unrestrictedNok: "500.00",
+        linkedItemCount: 0,
+      },
+    ];
+    data.parts = [
+      {
+        id: "part",
+        publicRef: "part",
+        fundingId: "fund",
+        purpose: "Restricted grant",
+        amountNok: "100.00",
+        spendBy: "2026-04-01",
+        conditions: null,
+        revision: 0,
+        usedNok: "0.00",
+        leftNok: "100.00",
+        mustReturnNok: "0.00",
+        overdue: false,
+        systemName: null,
+        linkedItems: [],
+      },
+    ];
+    const view = projectLocalFinance(data);
+    expect(view.overview.publicEarmarks.map((part) => part.id)).toEqual(
+      status === "secured" || status === "received" ? ["part"] : [],
+    );
+    expect(view.financing.parts).toHaveLength(1);
+    expect(view.financing.funding[0].status).toBe(status);
+  });
+
   it("separates historical funding coverage from current links and deadline-aware usage", () => {
     const b = budget([
       entry("00000000-0000-4000-8000-000000000100", {

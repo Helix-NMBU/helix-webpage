@@ -33,6 +33,9 @@ async function registration(
   itemId: string | null,
   amountNok = "60.00",
   paymentMethod: PurchaseInput["paymentMethod"] = "team_account",
+  documentKind: PurchaseInput["documentKind"] = paymentMethod === "invoice"
+    ? "invoice"
+    : "receipt",
 ) {
   const repo = createLocalProjectPurchaseRepository(),
     context = await repo.load(binding),
@@ -50,9 +53,12 @@ async function registration(
       paymentMethod,
       refundPhone: paymentMethod === "outlay" ? "12345678" : null,
       purchaseDate: osloToday(),
-      invoiceDueDate: paymentMethod === "invoice" ? osloToday() : null,
+      invoiceDueDate:
+        paymentMethod === "invoice" || documentKind === "invoice"
+          ? osloToday()
+          : null,
       justification: "Materials for the project",
-      documentKind: paymentMethod === "invoice" ? "invoice" : "receipt",
+      documentKind,
       uploadIds: [uploadId],
       lines: [
         {
@@ -331,6 +337,61 @@ describe("canonical local Finance repository", () => {
     gates.finance = false;
     await expect(client.mutate(review)).rejects.toMatchObject({ status: 403 });
   });
+
+  it.each([
+    ["team_account", "receipt", false, false],
+    ["team_account", "invoice", true, false],
+    ["invoice", "receipt", true, false],
+    ["invoice", "invoice", true, false],
+    ["outlay", "receipt", false, true],
+    ["outlay", "invoice", true, true],
+  ] as const)(
+    "retains database payment obligations for %s with %s evidence",
+    async (paymentMethod, documentKind, hasInvoice, hasRefund) => {
+      fundingRole("head_of_finance");
+      await registration(null, "35.00", paymentMethod, documentKind);
+      const client = api();
+      let row = (await client.purchases()).register![0];
+      expect(!!row.invoice).toBe(hasInvoice);
+      expect(!!row.reimbursement).toBe(hasRefund);
+      expect(row.unpaid).toBe(hasInvoice || hasRefund);
+      expect((await client.purchases()).unpaidCount).toBe(
+        hasInvoice || hasRefund ? 1 : 0,
+      );
+      const mark = async (action: string) => {
+        await client.mutate({
+          action,
+          requestId: crypto.randomUUID(),
+          purchaseId: row.id,
+          expectedRevision: row.revision,
+          paidOn: osloToday(),
+        });
+        row = (await client.purchases()).register![0];
+      };
+      if (hasInvoice) {
+        await mark("markInvoicePaid");
+        expect(row.invoice?.paid).toBe(true);
+        expect(row.unpaid).toBe(hasRefund);
+      }
+      if (hasRefund) {
+        await mark("markRefundPaid");
+        expect(row.reimbursement?.paid).toBe(true);
+      }
+      expect(row.unpaid).toBe(false);
+      expect((await client.purchases(undefined, true)).register).toEqual([]);
+      expect(
+        (await client.overview()).departments.reduce(
+          (sum, dep) => sum + Number(dep.actualNok),
+          0,
+        ),
+      ).toBe(35);
+      if (hasInvoice) {
+        await mark("unmarkInvoicePaid");
+        expect(row.unpaid).toBe(true);
+        expect(row.reimbursement?.paid ?? false).toBe(hasRefund);
+      }
+    },
+  );
 
   it("retains an editor's original revision when global evidence freshness advances", async () => {
     const { budgets, budget } = await fundingFixture();

@@ -73,6 +73,17 @@ export interface LocalFinanceProjectionInput {
 }
 const sum = (values: readonly string[]) =>
   values.reduce((total, value) => total + nokToOre(value), 0n);
+/** Mirror the independent obligation rows created by migration 070. */
+export function localPurchaseObligations(
+  purchase: Pick<PurchaseInput, "documentKind" | "paymentMethod">,
+) {
+  return {
+    invoice:
+      purchase.documentKind === "invoice" ||
+      purchase.paymentMethod === "invoice",
+    reimbursement: purchase.paymentMethod === "outlay",
+  };
+}
 /** Build canonical read facts, then use exactly the same hierarchy/scenario presenters as the server. */
 export function projectLocalFinance(input: LocalFinanceProjectionInput) {
   const registered = input.purchases.filter(
@@ -445,17 +456,25 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
     approvedPresence,
     hasRecordedActuals,
   };
-  const publicEarmarks = parts.map((part) => ({
-    id: part.id,
-    publicRef: part.publicRef,
-    purpose: part.purpose,
-    amountNok: part.amountNok,
-    usedNok: part.usedNok,
-    leftNok: part.leftNok,
-    mustReturnNok: part.mustReturnNok,
-    spendBy: part.spendBy,
-    systemName: part.systemName,
-  }));
+  const publicEarmarks = parts
+    .filter((part) =>
+      funding.some(
+        (record) =>
+          record.id === part.fundingId &&
+          (record.status === "secured" || record.status === "received"),
+      ),
+    )
+    .map((part) => ({
+      id: part.id,
+      publicRef: part.publicRef,
+      purpose: part.purpose,
+      amountNok: part.amountNok,
+      usedNok: part.usedNok,
+      leftNok: part.leftNok,
+      mustReturnNok: part.mustReturnNok,
+      spendBy: part.spendBy,
+      systemName: part.systemName,
+    }));
   const overview = presentFinanceOverview({
     ...basis,
     departments,
@@ -476,21 +495,20 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
   });
   const register: FinancePurchaseSummary[] = input.purchases.map((record) => {
     const purchase = normalized.get(record.id)!,
-      invoice =
-        record.purchase.paymentMethod === "invoice"
-          ? {
-              dueDate: record.purchase.invoiceDueDate ?? null,
-              paid: record.invoicePaid === true,
-              paidOn: record.invoicePaidOn ?? null,
-            }
-          : null,
-      reimbursement =
-        record.purchase.paymentMethod === "outlay"
-          ? {
-              paid: record.refundPaid === true,
-              paidOn: record.refundPaidOn ?? null,
-            }
-          : null;
+      obligations = localPurchaseObligations(purchase),
+      invoice = obligations.invoice
+        ? {
+            dueDate: record.purchase.invoiceDueDate ?? null,
+            paid: record.invoicePaid === true,
+            paidOn: record.invoicePaidOn ?? null,
+          }
+        : null,
+      reimbursement = obligations.reimbursement
+        ? {
+            paid: record.refundPaid === true,
+            paidOn: record.refundPaidOn ?? null,
+          }
+        : null;
     return {
       id: record.id,
       publicRef: record.publicRef,

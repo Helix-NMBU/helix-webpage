@@ -11,6 +11,7 @@ import { localSponsorFunding } from "../PartnerDeals/local-fixture";
 import { canonicalDepartment } from "../ProjectManagement/departments";
 import {
   projectLocalFinance,
+  localPurchaseObligations,
   type LocalFinanceProjectionInput,
   type LocalRecordedPurchase,
 } from "./local-finance-projection";
@@ -438,7 +439,8 @@ export function mutateLocalPurchase(
   } else {
     const invoice = String(action.action).includes("Invoice"),
       marking = String(action.action).startsWith("mark");
-    if (current.purchase.paymentMethod !== (invoice ? "invoice" : "outlay"))
+    const obligations = localPurchaseObligations(current.purchase);
+    if (!(invoice ? obligations.invoice : obligations.reimbursement))
       fail("This purchase has no matching payment obligation.");
     if (
       ((invoice ? current.invoicePaid : current.refundPaid) ?? false) ===
