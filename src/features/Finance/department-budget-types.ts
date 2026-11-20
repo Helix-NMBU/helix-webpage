@@ -14,11 +14,11 @@ export interface DepartmentBudgetProject {
   approvedVersion:DepartmentBudgetPlanVersion|null; proposedVersion:DepartmentBudgetPlanVersion|null;
   approvedTotalNok:string; proposedTotalNok:string; deltaNok:string;
 }
-export interface DepartmentBudgetLegacyEntry { entryId:string; publicRef:string; description:string; systemId:string; systemName:string; plannedNok:string }
+export interface DepartmentBudgetLegacyEntry { entryId:string; publicRef:string; description:string; systemId:string; systemName:string; plannedNok:string; proposedNok:string; replacementProjectId:string|null }
 export interface DepartmentBudgetSnapshot {
   departmentId:string; departmentName:string; departmentKey:string; seasonId:string; seasonCode:string;
   projects:DepartmentBudgetProject[]; legacyEntries:DepartmentBudgetLegacyEntry[];
-  approvedTotalNok:string; proposedTotalNok:string; deltaNok:string; legacyTotalNok:string;
+  approvedTotalNok:string; proposedTotalNok:string; deltaNok:string; legacyTotalNok:string; proposedLegacyTotalNok:string;
 }
 export interface DepartmentBudgetCapabilities { canSubmit:boolean; canApproveFinance:boolean; canReturn:boolean; canWithdraw:boolean }
 export interface DepartmentBudgetPreview extends DepartmentBudgetSnapshot {

@@ -5,10 +5,10 @@ import type { BudgetChoices, PublicBudgetItem, PublicDepartmentBudget, PublicSys
 
 export interface BudgetHierarchySystem {
   id: string; code: string; name: string; active: boolean;
-  departmentKey: string; departmentName: string; sortOrder: number;
+  departmentKey: string; departmentName: string; sortOrder: number; physicalDepartmentKey?: string;
 }
 export interface BudgetHierarchyUnallocated extends UnallocatedBudgetItem {
-  systemId: string; commitmentNok?: string;
+  systemId: string; commitmentNok?: string; allocationDepartmentKey?: string;
 }
 /** Present already authorized, canonical effective rows. Candidate versions are never inputs. */
 export function buildBudgetHierarchy(input: {
@@ -17,12 +17,13 @@ export function buildBudgetHierarchy(input: {
   unallocated: readonly BudgetHierarchyUnallocated[];
   includePrivateUnallocated: boolean;
   /** Aggregate-only actuals from unpublished legacy rows; no private entry metadata. */
-  retainedActuals?: readonly { systemId: string; actualNok: string; commitmentNok?: string }[];
+  retainedActuals?: readonly { systemId: string; actualNok: string; commitmentNok?: string; allocationDepartmentKey?: string }[];
 }): { departments: PublicDepartmentBudget[]; choices: BudgetChoices } {
   const seen = new Set<string>();
   for (const entry of [...input.items, ...input.unallocated]) {
-    if (seen.has(entry.id)) throw new Error("A stable budget entry must occur once in the effective hierarchy.");
-    seen.add(entry.id);
+    const identity = "allocationDepartmentKey" in entry && entry.allocationDepartmentKey ? `${entry.id}:${entry.allocationDepartmentKey}` : entry.id;
+    if (seen.has(identity)) throw new Error("A stable budget entry must occur once in the effective hierarchy.");
+    seen.add(identity);
   }
   const departments = new Map<string, PublicDepartmentBudget & { sortOrder: number }>();
   const choices: BudgetChoices = { systems: [], items: [] };
@@ -31,9 +32,10 @@ export function buildBudgetHierarchy(input: {
     { departmentKey: b.departmentKey, name: b.departmentName, sortOrder: b.sortOrder },
   ) || compareNb(a.name, b.name) || compareNb(a.code, b.code));
   for (const catalog of ordered) {
-    const items = input.items.filter(item => item.systemId === catalog.id).sort((a, b) => compareNb(a.publicRef, b.publicRef));
-    const unallocated = input.unallocated.find(item => item.systemId === catalog.id);
-    const retained = input.retainedActuals?.filter(entry => entry.systemId === catalog.id) ?? [];
+    const matches = (item: {systemId:string;allocationDepartmentKey?:string}) => item.systemId === catalog.id && (item.allocationDepartmentKey ?? input.systems.find(system=>system.id===item.systemId)?.departmentKey) === catalog.departmentKey;
+    const items = input.items.filter(matches).sort((a, b) => compareNb(a.publicRef, b.publicRef));
+    const unallocated = input.unallocated.find(matches);
+    const retained = input.retainedActuals?.filter(matches) ?? [];
     if (!catalog.active && !items.length && !unallocated && !retained.length) continue;
     const planned = items.reduce((total, item) => total + nokToOre(item.effectivePlanNok), 0n);
     const unbudgeted = nokToOre(unallocated?.actualNok ?? "0.00");
@@ -55,7 +57,7 @@ export function buildBudgetHierarchy(input: {
       departments.set(catalog.departmentKey, department);
     }
     department.systems.push(system);
-    if (catalog.active) choices.systems.push({ id: catalog.id, code: catalog.code, name: catalog.name, departmentKey: catalog.departmentKey, active: catalog.active,
+    if (catalog.active && !choices.systems.some(system=>system.id===catalog.id)) choices.systems.push({ id: catalog.id, code: catalog.code, name: catalog.name, departmentKey: catalog.physicalDepartmentKey ?? catalog.departmentKey, active: catalog.active,
       unbudgetedItemId: system.unbudgetedItemId, unbudgetedPublicRef: system.unbudgetedPublicRef });
     for (const item of items) if (item.approved === true && item.status !== "cancelled") choices.items.push({ id: item.id, publicRef: item.publicRef, description: item.description, systemId: item.systemId, status: item.status });
   }

@@ -1,3 +1,4 @@
+import type {BudgetHierarchySystem} from "./budget-hierarchy.js";
 /** Resolve accounting ownership without changing the physical system identity.
  * A mapped legacy entry remains legacy until its genuine project replacement is approved.
  */
@@ -8,4 +9,16 @@ export function financeAllocationDepartment<T>(input:{source:"legacy"|"project";
     return owner;
   }
   return physical;
+}
+
+/** Keep physical systems once in choices and partition their totals by accounting owner. */
+export function allocatedSystemCatalog(systems:readonly BudgetHierarchySystem[],departments:readonly {departmentKey:string;departmentName:string;sortOrder:number}[],partitions:readonly {systemId:string;departmentKey:string}[]):BudgetHierarchySystem[] {
+  const output=systems.map(system=>({...system,physicalDepartmentKey:system.physicalDepartmentKey??system.departmentKey}));
+  for(const partition of partitions){
+    if(output.some(system=>system.id===partition.systemId&&system.departmentKey===partition.departmentKey))continue;
+    const physical=systems.find(system=>system.id===partition.systemId),department=departments.find(department=>department.departmentKey===partition.departmentKey);
+    if(!physical||!department)throw new Error("The financial allocation catalog is incomplete.");
+    output.push({...physical,...department,physicalDepartmentKey:physical.physicalDepartmentKey??physical.departmentKey});
+  }
+  return output;
 }

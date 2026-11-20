@@ -121,6 +121,8 @@ export type PublicOverview = {
 };
 
 export type PublicBudgetItem = {
+  /** Accounting department; systemId retains physical identity. */
+  allocationDepartmentKey?: string;
   id: string;
   publicRef: string;
   systemId: string;
