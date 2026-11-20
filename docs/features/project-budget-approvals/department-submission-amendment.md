@@ -1,7 +1,7 @@
 # Department budget submission amendment
 
 Feature: `project-budget-approvals`, parent HELIX-75.
-Status: draft amendment incorporated into specification revision 2. Not yet published or implemented.
+Status: approved specification revision 2. PBA-10 published as HELIX-85; implementation awaits verified PBA-08.
 Date: 20 November 2026.
 Source: the user's department-budget clarification and explicit answers D11 through D14 in scope.md.
 
@@ -32,4 +32,4 @@ Extend PBA-09's verification matrix and blockers so it follows PBA-04, PBA-08 an
 
 Dependency change: PBA-08 -> PBA-10 -> PBA-09. PBA-04 remains a prerequisite of PBA-09.
 
-No merge, production migration, Drive setup or deployment is included. Existing real-service and operator mapping release gates remain open. Publication and implementation of this amendment will be requested against the complete revised specification and ticket draft against the complete specification revision 2 and task plan.
+No merge, production migration, Drive setup or deployment is included. Existing real-service and operator mapping release gates remain open. The user approved publication and continued implementation against the complete specification revision 2 and task plan with "Approve, publish and continue delivery".

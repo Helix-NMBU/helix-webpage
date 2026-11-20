@@ -2,7 +2,7 @@
 
 ## Parent and requirements
 
-Parent: HELIX-75, `project-budget-approvals`, specification revision 2, pending complete-plan approval.
+Parent: HELIX-75, `project-budget-approvals`, approved specification revision 2.
 Requirements: F-01, F-02, F-03, F-04, F-05, F-12, F-13, F-14, F-15.
 Source: scope.md decisions D11 through D15 and the department-submission contract in spec.md.
 Tracker target: HELIX / Helix member Platform / existing Finance milestone. One new child; reuse the existing parent and nine published children.
@@ -43,4 +43,4 @@ Pin candidate IDs/content hashes and baseline pointers with a package revision. 
 
 ## Status
 
-Draft, awaiting complete revision 2 plan approval. No new Linear issue or package implementation yet.
+Approved on 20 November 2026 with "Approve, publish and continue delivery". Published as [HELIX-85](https://linear.app/helixnmbu/issue/HELIX-85/pba-10-submit-and-approve-department-budget-packages). Implementation is blocked by verified PBA-08.

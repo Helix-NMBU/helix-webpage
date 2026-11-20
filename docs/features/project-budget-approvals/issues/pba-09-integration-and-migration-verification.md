@@ -3,10 +3,10 @@
 ## Parent and requirements
 
 Feature: `project-budget-approvals`, specification revision 2.
-Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), specification revision 2, amendment pending approval. Read the complete approved specification before implementation.
+Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), approved specification revision 2. Read the complete approved specification before implementation.
 Requirements: F-01, F-02, F-03, F-04, F-05, F-06, F-07, F-08, F-09, F-10, F-11, F-12, F-13, F-14, F-15.
 Tracker: Linear HELIX, project P-HELIX-4, existing Finance milestone.
-Source: scope.md decisions D1-D15. Revision 1 was published on 19 November 2026; revision 2 amendment approval is pending. Deliver is already active.
+Source: scope.md decisions D1-D15. Revision 1 was published on 19 November 2026; revision 2 was approved on 20 November 2026 with "Approve, publish and continue delivery". Deliver is already active.
 
 ## What to build
 
@@ -25,7 +25,7 @@ Verify the complete project-budget workflow and safe adoption of existing financ
 
 ## Blocked by
 
-HELIX-77, HELIX-83 and PBA-10, whose Linear identifier will be recorded after amendment approval. These must be integrated and their contracts available before scheduling this ticket.
+HELIX-77, HELIX-83 and PBA-10 / HELIX-85. These must be integrated and their contracts available before scheduling this ticket.
 
 ## Shared contracts and change areas
 
@@ -43,5 +43,5 @@ Specification cases: V-01, V-02, V-03, V-04, V-05, V-06, V-07, V-08, V-09.
 
 ## Status
 
-Existing HELIX-84 is published and Backlog. Its revision 2 scope and added PBA-10 blocker await complete amendment approval. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
+Existing HELIX-84 is published and Backlog. Its revision 2 scope and added PBA-10 / HELIX-85 blocker were approved on 20 November 2026; publication and native blocker readback are verified. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
 

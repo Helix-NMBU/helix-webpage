@@ -1,6 +1,6 @@
 # Project budget delivery record
 
-Feature: `project-budget-approvals`, approved specification revision 1.
+Feature: `project-budget-approvals`, approved specification revision 2. Original revision 1 evidence is retained below.
 Repository: `Helix-NMBU/helix-webpage`.
 Tracker parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking).
 Started: 19 November 2026 after the user explicitly invoked Deliver.
@@ -27,7 +27,8 @@ The current remote base has 11 API functions. The original working tree's two ex
 | PBA-06 | HELIX-81 | closed on feature branch | reused `/root/pba_04_threshold`; `/private/tmp/helix-pba-06-drive-invoices`; `codex/pba-06-drive-invoices`; basedb25e84 | PBA-05 verified;071 Drive transfer/evidence/recovery assigned. |
 | PBA-07 | HELIX-82 | closed again after reviewed repair | reused `/root/pba_01_contracts`; `/private/tmp/helix-pba-07-obligations`; `codex/pba-07-obligations`; base990e0de | PBA-03 verified;072 funding applications, awarded obligations, limited HOF review assigned. |
 | PBA-08 | HELIX-83 | running | `/root/pba_01_contracts` backend: `/private/tmp/helix-pba-08-effective-finance`, `codex/pba-08-effective-finance`; `/root/pba_04_threshold` UI: `/private/tmp/helix-pba-08-budget-views`, `codex/pba-08-budget-views`; base2924d8d | Both06/07 prerequisites verified; shared contracts first. |
-| PBA-09 | HELIX-84 | blocked | unassigned | Needs integrated PBA-04 and PBA-08. |
+| PBA-10 | HELIX-85 | blocked, approved amendment | unassigned | Needs verified PBA-08; department package lifecycle, grouped review/readiness and responsible-department allocation. |
+| PBA-09 | HELIX-84 | blocked | unassigned | Needs integrated PBA-04, PBA-08 and PBA-10. |
 
 Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy, 068 approvals, 069 revisions/import, 070 purchases, 071 Drive evidence, 072 award obligations, 073 totals if needed. The actual remote base already includes tracked 065_finance_historical_purchases.sql; preserve it and load it in feature test bootstrap. The older original checkout's untracked copy must not replace it. Workers may leave reserved numbers unused, but must coordinate new migrations and contracts.
 
@@ -42,7 +43,7 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 
 ## Next action
 
-The user clarified department-wide submission during resumed delivery. Finance must decide the included project changes together as one fixed department package, with grouped projects, entry changes, project subtotals and department totals. Missing or Draft project budgets remain visible and do not block submission. Scope decisions D11 through D14 are confirmed; attribution of multi-department project costs is being clarified. The concrete amendment draft is `department-submission-amendment.md`. Finish reusable PBA-08 facts/projections while preparing the complete amended specification and PBA-10 ticket; do not implement the new packet lifecycle or claim final feature readiness against revision 1 alone. PBA-09 remains blocked. No feature push or PR exists.
+Revision 2 is approved and published, adding PBA-10 / HELIX-85 and the native PBA-10 blocker on HELIX-84. Finish PBA-08's bounded local obligation/public-earmark fixes and independent checks, then close its original reusable-foundation acceptance. Start PBA-10 from that verified integration commit in isolated backend/UI worktrees. It implements whole-department package approval, grouped project/entry diffs, missing/Draft readiness and full-project allocation to the responsible budget department. PBA-09 follows both slices. No feature push or PR exists; no merge or deployment is authorized.
 
 The user authorized ordinary feature push, PR creation and ticket updates by invoking Deliver. Merging and deployment remain unauthorized. GitHub authentication and unchanged remotemainb05c5a4 were verified with network-enabled read access. No feature remote branch or PR exists. Both source and generated Vercel function counts passed11/11 on earlier root slices; final compilation must bind to final feature code and use isolated dependencies.
 
@@ -287,3 +288,22 @@ Scope/Prepare amendment drafting is active. One final allocation question concer
 Inspected worker f483b6f and integrated it as 91169b5. Root integrated selection passed 96/96 in seven files for canonical mixed-data reads, scenarios, Season privacy/widget behavior, hierarchy and existing notifications/exports. Log `/private/tmp/helix-pba08-canonical-integrated.log`. Worker reports additional real PostgreSQL and broad checks; root has not yet integrated/verified that test follow-up. Its initial connection issue was caused by root restarting PostgreSQL without the reserved port options. Root stopped only its own cluster and restarted with explicit `-h 127.0.0.1 -p 55475`; pg_isready verified the intended listener. Use these options on future restarts.
 
 The root mail reader fix eefa815 was independently reviewed with no actionable defect. It does not replace final complete-feature review against the amended approved specification.
+
+
+## Revision 2 approval and publication
+
+The user answered all three clarification questions: one fixed department package approval, allow unfinished projects with their last approved amounts, and full-project budget allocation to its responsible department including cross-department systems. D11 through D15 are settled. The user then approved the complete spec revision 2, updated plan, new PBA-10 and extended PBA-09 with "Approve, publish and continue delivery". Exact draft hashes and the actual answer are preserved in amendment-publication.json; original publication.json remains unchanged.
+
+Rechecked Linear before creation: exactly nine existing children and no PBA-10. Created only HELIX-85 in the same Finance milestone, under HELIX-75 with ready-for-agent, no assignee/date/estimate. Native blockers are HELIX-83 -> HELIX-85 -> HELIX-84, with HELIX-77/83 still blocking HELIX-84. Updated HELIX-75 to the approved complete spec and HELIX-84's matrix/dependencies. Readbacks verify ten children, unchanged seven Done issues, HELIX-83 In Progress, HELIX-84/85 Backlog and parent open/unlabelled. HELIX-83 explicitly records that its system-department grouping is a reusable transition; PBA-10 owns the new responsible-department aggregation and package approval. New packet production work has not started before its prerequisite is verified.
+
+## PBA-08 integrated verification and review repairs
+
+Integrated backend test follow-up da24910 as 116ca1b; root 60/60 in four files passed with real PostgreSQL enabled, including both promotion/purchase orders and fail-fast migration mismatch. Integrated local UI/projection c1ce267 as a2f06b9; dependency equivalents were not duplicated. Root 67/67 in seven local/UI/Season files passed. All three root typechecks, repository lint and source function guard passed at 3ed2487. The generated 11 count is still an earlier compiler output, not final feature compilation.
+
+Independent canonical backend review at 116ca1b found two actionable defects. First, optional request validation could resume an anchor lock wait with an old joined effective status after a removal promotion. Actual PostgreSQL negative control reproduced erroneous success. Repair 5b7134c, integrated as 13af90b, locks every ordered anchor then rechecks canonical eligibility in a fresh statement, without acquiring headers late. Both decision and draft-save races now fail safely and preserve request input. Second, funding mutation feedback still counted raw anchor links after approved relinking. Repair e462f4d, integrated as 3ed2487, uses effective current links while preserving the existing draft/soft-delete/warning policy. Supported new-link and unlink negative controls were reproduced. Root combined 59/59 in five files passed with real PostgreSQL. Both fixes were independently cleared at their original hashes. Logs: `/private/tmp/helix-pba08-canonical-followup-integrated.log`, `/private/tmp/helix-pba08-local-integrated.log`, `/private/tmp/helix-pba08-review-repairs-integrated.log`.
+
+Root IAB verified Finance approved total 8900.75, Frame actual 8500/Partial, Drill P0, historical private invoice controls and truthful unavailable-file recovery, and the newer Drive invoice needs-attention state. Submitted-only filtering removes old details when there are no matching candidates. Overview scenarios show Now need 8750.25, Realistic/Optimistic 9150.25, zero counted funding and mandatory P0 remaining plan. The register retains three expenses totaling 8500; an invoice retry advanced its attempt count to 2 without duplicating an expense or clearing a dirty void reason. The synthetic draft reason was cleared without submitting a void. Season Overview shows the same 8900.75/8500 aggregate, no invoice or application detail, and an absent dated bank snapshot. Local money flow remains explicitly unavailable, not fabricated.
+
+Screenshots outside the repository: `finance-canonical-scenarios.jpg` and `finance-register-dirty-invoice-refresh.jpg` in the existing visualization directory. CUA completion summaries were issued. These views still use the pre-PBA-10 system-department split and do not prove the new whole-department workflow.
+
+A separate independent local-projection pass found two bounded gaps still assigned to worker04: invoice obligations must follow documentKind invoice OR paymentMethod invoice, including coexistence with outlay reimbursement; Overview's public earmarks must include only secured/received funding, matching the server. PBA-08 remains open until those repairs, their checks and integrated browser confirmation pass. Final full-feature Standards/Spec/correctness review remains required after PBA-10/PBA-09.

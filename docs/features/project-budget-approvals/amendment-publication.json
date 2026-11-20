@@ -1,6 +1,6 @@
 {
   "revision": 2,
-  "status": "draft_awaiting_approval",
+  "status": "approved_published_verified",
   "parent": "HELIX-75",
   "new_child": "PBA-10",
   "changed_existing_child": "HELIX-84",
@@ -11,6 +11,80 @@
     "issues/pba-10-department-budget-packages.md": "a13b95a38dff922b4d29c90a3fe0ebf0709347e5de1849a8a1d6a744f8853d59",
     "issues/pba-09-integration-and-migration-verification.md": "5c6d9c9e38e3902a49356e2551698cb3875bcaa28d259adfee6b0c6d6b8deead"
   },
-  "approval": null,
-  "publication": null
+  "approval": {
+    "date": "2026-11-20",
+    "answer": "Approve, publish and continue delivery",
+    "questionReference": "call_c0495d31e75742dfb50caf8ff29b82e6"
+  },
+  "publication": {
+    "newIssue": {
+      "id": "HELIX-85",
+      "uuid": "59208f2b-ebed-4d31-829f-c7ad3b072dbd",
+      "url": "https://linear.app/helixnmbu/issue/HELIX-85/pba-10-submit-and-approve-department-budget-packages"
+    },
+    "readbackVerified": true,
+    "readbacks": [
+      {
+        "id": "HELIX-75",
+        "uuid": "6c5f6546-f279-400e-95a9-489eb64ea248",
+        "updatedAt": "2026-11-20T12:41:02.767Z",
+        "status": "Backlog",
+        "parentId": null,
+        "milestone": {
+          "id": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+          "name": "Finance"
+        },
+        "labels": [],
+        "blockedBy": [],
+        "blocks": []
+      },
+      {
+        "id": "HELIX-84",
+        "uuid": "ea44edf0-a14d-4e12-a3e7-24e86d97cc66",
+        "updatedAt": "2026-11-20T12:41:10.132Z",
+        "status": "Backlog",
+        "parentId": "HELIX-75",
+        "milestone": {
+          "id": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+          "name": "Finance"
+        },
+        "labels": [
+          "ready-for-agent"
+        ],
+        "blockedBy": [
+          "HELIX-85",
+          "HELIX-77",
+          "HELIX-83"
+        ],
+        "blocks": []
+      },
+      {
+        "id": "HELIX-85",
+        "uuid": "59208f2b-ebed-4d31-829f-c7ad3b072dbd",
+        "updatedAt": "2026-11-20T12:38:30.569Z",
+        "status": "Backlog",
+        "parentId": "HELIX-75",
+        "milestone": {
+          "id": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+          "name": "Finance"
+        },
+        "labels": [
+          "ready-for-agent"
+        ],
+        "blockedBy": [
+          "HELIX-83"
+        ],
+        "blocks": [
+          "HELIX-84"
+        ]
+      }
+    ],
+    "childCount": 10
+  },
+  "publishedDocumentHashes": {
+    "spec.md": "dbabd53024eb72a85d23fa0a79f6e8c9b482029a8ec0a46b5130af223f6252f5",
+    "tickets.md": "986037b3f00c6aca85a5141e0ff35eac1ee99169cf43e6617630d8b393268054",
+    "issues/pba-10-department-budget-packages.md": "31a0c9ddc6ee3267fefc1ca84a81507d4daed09cf4af60a6decdeac9167a98ab",
+    "issues/pba-09-integration-and-migration-verification.md": "3194198c312440fd0bf4950b0a55cfc6aa397439f96f78503975bec32ba379ec"
+  }
 }

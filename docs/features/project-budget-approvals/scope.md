@@ -120,7 +120,7 @@ These observations come from the current working tree, which contains unrelated 
 
 ## Preparation details and operational inputs
 
-Revision 1 was approved against D1 through D10. The department-submission clarification below adds confirmed decisions D11 through D15. Its complete delivery amendment is being prepared before publication. The following details belong in the reviewable Prepare specification; they are not additional user decisions already approved in this chat.
+Revision 1 was approved against D1 through D10. The department-submission clarification below adds confirmed decisions D11 through D15. Its complete revision 2 amendment was approved and published on 20 November 2026. The following details belong in the reviewable Prepare specification; they are not additional user decisions already approved in this chat.
 
 - Use project and department entry points for scoped drafting and first approval, and Finance for the overview/final queue. Exact navigation, filters, read access, role-to-assignment resolution, return-for-correction controls, reasons and approval notifications are preparation details. Do not give a project lead organization-wide Financials access merely to use their own budget.
 - Work with one current budget for a project in a season and its revisions as the preparation default inferred from the requested singular project budget. If multiple independent budgets per project are needed, bring that scope change back to the user. Define stable entry identity, one pending revision, approved snapshots, comparison baselines, concurrency and edits after submission in the specification.

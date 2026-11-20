@@ -2,7 +2,7 @@
 
 Feature: `project-budget-approvals`
 Revision: 2
-Status: draft amendment for approval; revision 1 remains the published historical contract
+Status: approved revision 2, published in Linear
 Prepared: 19 November 2026; amended: 20 November 2026
 Tracker: Linear, team `HELIX`, project `P-HELIX-4`, existing Finance milestone `eb62b788-596a-4920-ab8d-cfda9aa53cc0`
 Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), related to HELIX-34 and HELIX-63.
@@ -13,7 +13,7 @@ Ticket plan: [tickets.md](tickets.md). Individual drafts are in [issues/](issues
 
 Revision 1 and the original nine task drafts were approved on 19 November 2026 with "Approve and publish in Linear". Their original hashes and publication readbacks remain in publication.json. The user subsequently invoked Deliver, authorizing ordinary isolated implementation, ticket updates, feature push and one unmerged PR. Merging, production migration, Drive setup and deployment remain separate release actions.
 
-On 20 November the user clarified department-wide submissions and explicitly confirmed one atomic package approval, allowing unfinished projects, and full-project allocation to the responsible budget department. Revision 2 incorporates those decisions as the concrete amendment below. Approval is pending for this revised specification, the added PBA-10 ticket and the extended PBA-09 verification/dependency. Reuse HELIX-75 and all existing issues; publish only the additional child and update affected descriptions/blockers after approval. Preserve the original publication record and completed revision 1 evidence.
+On 20 November the user clarified department-wide submissions and explicitly confirmed one atomic package approval, allowing unfinished projects, and full-project allocation to the responsible budget department. Revision 2 incorporates those decisions as the concrete amendment below. The user approved this complete specification revision 2, the added PBA-10 ticket and the extended PBA-09 verification/dependency by selecting "Approve, publish and continue delivery". The exact draft hashes and publication evidence are recorded in amendment-publication.json. Reuse HELIX-75 and all existing issues; publish only the additional child and update affected descriptions/blockers. Preserve the original publication record and completed revision 1 evidence.
 
 ## Sources and verified context
 
@@ -60,7 +60,7 @@ Excluded: general accounting, bank transfers/reconciliation, invoice generation,
 
 ## Proposed contracts for approval
 
-These make the scope executable. The department-package amendment becomes the delivery contract after revision 2 approval; the unchanged requirements retain revision 1 approval.
+These make the scope executable. The department-package amendment is the approved revision 2 delivery contract; unchanged requirements retain their original approval.
 
 ### Versions and transitions
 
@@ -174,8 +174,8 @@ Code completion means all F-01 through F-15 behavior implemented, applicable che
 | PBA-06 | [HELIX-81](https://linear.app/helixnmbu/issue/HELIX-81/pba-06-store-uploaded-invoices-in-shared-drive-with-recovery) | Store uploaded invoices in shared Drive with recovery | F-04, F-08, F-09, F-14 | PBA-05 |
 | PBA-07 | [HELIX-82](https://linear.app/helixnmbu/issue/HELIX-82/pba-07-apply-and-release-awarded-funding-obligations) | Apply and release awarded funding obligations | F-04, F-10, F-11, F-14 | PBA-03 |
 | PBA-08 | [HELIX-83](https://linear.app/helixnmbu/issue/HELIX-83/pba-08-show-purchased-budgets-and-consistent-financial-totals) | Show purchased budgets and consistent financial totals | F-05, F-09, F-12, F-13, F-14 | PBA-06, PBA-07 |
-| PBA-10 | pending approval | Submit and approve department budget packages | F-01 through F-05, F-12 through F-15 | PBA-08 |
+| PBA-10 | [HELIX-85](https://linear.app/helixnmbu/issue/HELIX-85/pba-10-submit-and-approve-department-budget-packages) | Submit and approve department budget packages | F-01 through F-05, F-12 through F-15 | PBA-08 |
 | PBA-09 | [HELIX-84](https://linear.app/helixnmbu/issue/HELIX-84/pba-09-rehearse-migration-and-verify-the-integrated-feature) | Rehearse migration and verify the integrated feature | F-01 through F-15 | PBA-04, PBA-08, PBA-10 |
 
-Published parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking). The original nine children have been created with native blockers; their readback verification is recorded in publication.json. PBA-10 and the revised PBA-09 blocker await revision 2 approval. No implementation or service changes were made during preparation.
+Published parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking). The original nine children have been created with native blockers; their readback verification is recorded in publication.json. PBA-10 is HELIX-85; the amendment publication/readback is recorded in amendment-publication.json. No implementation or service changes were made during preparation.
 

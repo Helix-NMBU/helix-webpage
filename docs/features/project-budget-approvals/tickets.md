@@ -2,7 +2,7 @@
 
 Feature: `project-budget-approvals`
 Specification: [spec.md](spec.md), revision 2
-Status: draft amendment for approval. Revision 1 and its original nine children remain published.
+Status: revision 2 approved on 20 November 2026 with "Approve, publish and continue delivery"; published in Linear. Revision 1 evidence remains preserved.
 Tracker: Linear, HELIX / Helix member Platform / existing Finance milestone
 Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking)
 
@@ -20,7 +20,7 @@ The user approved revision 1 and nine tasks on 19 November 2026, then invoked De
 | PBA-06 | [HELIX-81](https://linear.app/helixnmbu/issue/HELIX-81/pba-06-store-uploaded-invoices-in-shared-drive-with-recovery) | [Store uploaded invoices in shared Drive with recovery](issues/pba-06-drive-invoices.md) | F-04, F-08, F-09, F-14 | PBA-05 |
 | PBA-07 | [HELIX-82](https://linear.app/helixnmbu/issue/HELIX-82/pba-07-apply-and-release-awarded-funding-obligations) | [Apply and release awarded funding obligations](issues/pba-07-funding-obligations.md) | F-04, F-10, F-11, F-14 | PBA-03 |
 | PBA-08 | [HELIX-83](https://linear.app/helixnmbu/issue/HELIX-83/pba-08-show-purchased-budgets-and-consistent-financial-totals) | [Show purchased budgets and consistent financial totals](issues/pba-08-budget-overviews-and-totals.md) | F-05, F-09, F-12, F-13, F-14 | PBA-06, PBA-07 |
-| PBA-10 | pending approval | [Submit and approve department budget packages](issues/pba-10-department-budget-packages.md) | F-01 through F-05, F-12 through F-15 | PBA-08 |
+| PBA-10 | [HELIX-85](https://linear.app/helixnmbu/issue/HELIX-85/pba-10-submit-and-approve-department-budget-packages) | [Submit and approve department budget packages](issues/pba-10-department-budget-packages.md) | F-01 through F-05, F-12 through F-15 | PBA-08 |
 | PBA-09 | [HELIX-84](https://linear.app/helixnmbu/issue/HELIX-84/pba-09-rehearse-migration-and-verify-the-integrated-feature) | [Rehearse migration and verify the integrated feature](issues/pba-09-integration-and-migration-verification.md) | F-01 through F-15 | PBA-04, PBA-08, PBA-10 |
 
 ## Dependency graph
@@ -57,4 +57,6 @@ Real Drive identity/folder/narrow scope/readers ACL, approved live entry mapping
 
 ## Approval and publication delta
 
-Approve spec revision 2, PBA-10 and the PBA-09 extension together. Then update the existing HELIX-75 specification, create exactly one new child in its Finance milestone, preserve the existing children and completion evidence, and add the native PBA-10 -> PBA-09 blocker. Read back content, parent, milestone, label and dependencies. Keep publication.json's revision 1 record; save the amendment's approval/hash/readbacks separately. Continue the already requested Deliver workflow after approval.
+The user approved spec revision 2, PBA-10 and the PBA-09 extension together. Update the existing HELIX-75 specification, create exactly one new child in its Finance milestone, preserve the existing children and completion evidence, and add the native PBA-10 -> PBA-09 blocker. Read back content, parent, milestone, label and dependencies. Keep publication.json's revision 1 record; save the amendment's approval/hash/readbacks separately. Continue the already requested Deliver workflow after approval.
+
+Publication verified: HELIX-85 is the tenth child of HELIX-75 in the existing Finance milestone, blocked by HELIX-83 and blocking HELIX-84. The original seven completed children retain Done status; HELIX-83 remains In Progress and HELIX-84 Backlog. Parent remains open. Amendment approval, original draft hashes and readbacks are in amendment-publication.json.
