@@ -97,6 +97,7 @@ beforeEach(() => {
   onAccessLost.mockReset();
   onDirtyChange.mockReset();
   endSession = undefined;
+  window.history.replaceState({}, "", "/");
   const scope = projectBudgetDevelopmentFixture("department_lead")!.scopes[0];
   context = {
     scope,
@@ -178,6 +179,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("project purchase controls", () => {
+  it("lists the explicit prepared invoice and submits it through ordinary upload/check/register handlers only after submit", async () => {
+    window.history.replaceState({}, "", "/departments/management/purchases?invoiceFixture=prepared");
+    await render(); await click("Register a purchase");
+    expect(document.body.textContent).toContain("purchase-order-3.pdf");
+    expect(repository.upload).not.toHaveBeenCalled();
+    expect(repository.mutate).not.toHaveBeenCalled();
+    await submitTwice();
+    expect(repository.upload).toHaveBeenCalledOnce();
+    expect(vi.mocked(repository.upload).mock.calls[0][1]).toMatchObject({ name: "purchase-order-3.pdf", type: "application/pdf", size: 620 });
+    expect(vi.mocked(repository.mutate).mock.calls.map(([change]) => change.action)).toEqual(["checkProjectPurchase", "registerProjectPurchase"]);
+    const registered = vi.mocked(repository.mutate).mock.calls[1][0];
+    expect(registered.action).toBe("registerProjectPurchase");
+    if (registered.action === "registerProjectPurchase") expect(registered.purchase.uploadIds).toHaveLength(1);
+  });
+  it("removes the prepared file normally and still accepts a manually selected attachment", async () => {
+    window.history.replaceState({}, "", "/departments/management/purchases?invoiceFixture=prepared");
+    await render(); await click("Register a purchase");
+    await act(async () => (document.querySelector('button[aria-label="Remove purchase-order-3.pdf"]') as HTMLButtonElement).click());
+    expect(document.body.textContent).not.toContain("purchase-order-3.pdf");
+    await render({ ...budget, revision: 11 });
+    expect(document.body.textContent).not.toContain("purchase-order-3.pdf");
+    await act(async () => {
+      const files = document.getElementById("project-purchase-files") as HTMLInputElement;
+      Object.defineProperty(files, "files", { value: [new File(["%PDF-1.4"], "manual.pdf", { type: "application/pdf" })] });
+      files.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("manual.pdf");
+    expect(repository.upload).not.toHaveBeenCalled();
+    expect(repository.mutate).not.toHaveBeenCalled();
+  });
   it.each([401, 403].flatMap(status => ["upload", "check", "register"].map(phase => ({ status, phase }))))(
     "clears private registration state on $phase denial $status and restores a usable focus target",
     async ({ status, phase }) => {

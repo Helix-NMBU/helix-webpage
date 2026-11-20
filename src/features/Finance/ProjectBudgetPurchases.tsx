@@ -1,3 +1,4 @@
+import { preparedPurchaseInvoiceFiles } from "./prepared-invoice-fixture";
 import { invoiceEvidenceMessage } from "./InvoiceEvidence";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
@@ -79,7 +80,7 @@ function PurchaseForm({
     uploadIds: [],
   }));
   const [files, setFiles] = useState<Array<{ file: File; uploadId?: string }>>(
-    [],
+    preparedPurchaseInvoiceFiles,
   );
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
