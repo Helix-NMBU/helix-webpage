@@ -8,7 +8,8 @@ import { CvRequestError } from "../MemberCV/repository";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { financeRoutes } from "../Finance/routes";
 import { getDepartmentIcon } from "../Workspace/department-icons";
-import { nokToOre } from "../Finance/finance-calculations";
+import { hasVisibleApprovedFinances, nokToOre } from "../Finance/finance-calculations";
+import { budgetPlanLabel } from "../Finance/budget-plan-label";
 import { loadSeasonFinancialSummary, SeasonFinancialRequestError } from "./season-financials-repository";
 import type { SeasonFinancialDepartment, SeasonFinancialSummary, SeasonMoneyFlow } from "./season-financials-types";
 
@@ -126,9 +127,11 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
     return () => { active.current = false; generation.current++; inFlight.current = null; if (pending.current) { window.clearTimeout(pending.current.timer); pending.current.controller.abort(); pending.current = null; } window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
   }, [userId, refresh]);
   const mismatch = !!summary?.seasonCode && summary.seasonCode !== season;
-  const visible = summary && !mismatch && (summary.budgetStatus === "approved" || summary.budgetStatus === "draft");
-  const budgetDetail = mismatch ? `Finance is set to ${summary.seasonCode}, not ${season}.` : summary?.budgetStatus === "draft-hidden" ? "Draft budget is restricted." : summary?.budgetStatus === "absent" ? "No season budget yet." : summary?.budgetStatus === "draft" ? "Draft budget" : "Approved budget";
-  const budgetDisplay = stale && summary?.budgetStatus === "absent" && !mismatch ? "Last checked: no season budget." : budgetDetail;
+  const effectiveFinances = summary && hasVisibleApprovedFinances(summary);
+  const hasApprovedPlan = summary && (summary.budgetStatus === "approved" || summary.approvedPresence?.legacyBudget || summary.approvedPresence?.projectBudgets);
+  const visible = summary && !mismatch && (effectiveFinances || summary.budgetStatus === "draft");
+  const budgetDetail = mismatch ? `Finance is set to ${summary.seasonCode}, not ${season}.` : effectiveFinances ? budgetPlanLabel({ ...summary, approvedOn: null }) : summary?.budgetStatus === "draft-hidden" ? "Draft budget is restricted." : summary?.budgetStatus === "absent" ? "No season budget yet." : summary?.budgetStatus === "draft" ? "Draft budget" : "Approved budget";
+  const budgetDisplay = stale && summary?.budgetStatus === "absent" && !effectiveFinances && !mismatch ? "Last checked: no season budget." : budgetDetail;
   const bank = summary?.bank;
   const snapshot = bank?.status === "available" ? bank.snapshot : null;
   const flow = summary?.moneyFlow;
@@ -155,7 +158,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
         <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] md:gap-8">
           <div className="flex flex-col gap-4">
             <CardHeader className="px-0"><CardTitle className="text-base font-medium">Budget and spending</CardTitle><CardDescription>Season and department spending against allocated budgets.</CardDescription></CardHeader>
-            {(!summary || summary.budgetStatus !== "approved" || mismatch || stale) && <p className="text-sm text-muted-foreground">{summary ? (summary.budgetStatus === "approved" && !mismatch ? "Last loaded values." : budgetDisplay) : "Unavailable"}{stale && summary && summary.budgetStatus !== "approved" && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</p>}
+            {(!summary || !hasApprovedPlan || summary.approvedPresence?.projectBudgets || mismatch || stale) && <p className="text-sm text-muted-foreground">{summary ? (stale && visible ? "Last loaded values." : budgetDisplay) : "Unavailable"}{stale && summary && !visible && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</p>}
             <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
               <div className="flex flex-col items-center gap-5">
                 {visible && summary.plannedNok !== null && summary.actualNok !== null && <BudgetRing planned={summary.plannedNok} actual={summary.actualNok} />}
