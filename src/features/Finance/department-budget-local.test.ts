@@ -12,6 +12,11 @@ import {
   selectLocalBudgetRole,
   sendLocalDepartmentCandidates,
 } from "./department-budget.test-support";
+import {
+  fundingFixture,
+  fundingRole,
+} from "./funding-application.test-support";
+import { createLocalInvoiceEvidenceApi } from "./invoice-local";
 import { osloToday } from "./money";
 const gates = vi.hoisted(() => ({ local: true, signedIn: true }));
 vi.mock("../MemberPlatform/local-mode", () => ({
@@ -156,6 +161,13 @@ describe("local department budget packages", () => {
       "other_department",
     ]);
     expect(preview.proposedTotalNok).toBe("300.00");
+    expect(
+      preview.projects.find((row) => row.projectId === project(201)),
+    ).toMatchObject({
+      readiness: "no_budget",
+      responsibleDepartmentId: null,
+      responsibleDepartmentName: null,
+    });
     expect(JSON.stringify(preview)).not.toContain("99999");
     expect(JSON.stringify(preview)).not.toContain("Private proposal 202");
     expect(
@@ -531,6 +543,157 @@ describe("local department budget packages", () => {
         createdAt: "2026-11-01T12:00:00Z",
       }),
     );
+  });
+
+  it("authorizes pre-header invoice evidence through the current owner while retaining its original purchase department", async () => {
+    seed();
+    selectLocalBudgetRole("department_lead");
+    const repo = createLocalProjectPurchaseRepository(),
+      binding = {
+        projectId: project(100),
+        responsibleDepartmentId: departmentId,
+      },
+      context = await repo.load(binding),
+      documentId = await repo.upload(
+        binding,
+        new File(["%PDF-1.4"], "Before header.pdf", {
+          type: "application/pdf",
+        }),
+      );
+    const result = await repo.mutate({
+      action: "registerProjectPurchase",
+      ...binding,
+      requestId: crypto.randomUUID(),
+      purchase: {
+        buyerName: "Buyer",
+        supplierName: "Supplier",
+        paymentMethod: "team_account",
+        purchaseDate: osloToday(),
+        justification: "Incurred before budget creation",
+        documentKind: "receipt",
+        uploadIds: [documentId],
+        lines: [
+          {
+            systemId: context.systems[0].id,
+            unbudgeted: true,
+            description: "Emergency materials",
+            quantity: "1",
+            amountNok: "75.00",
+          },
+        ],
+      },
+    });
+    await draft(project(100), "100.00", false, electrical);
+    const invoices = createLocalInvoiceEvidenceApi();
+    await expect(invoices.open(documentId)).rejects.toMatchObject({
+      status: 409,
+    });
+    selectLocalBudgetRole("department_lead");
+    await expect(
+      invoices.retry(documentId, 0, crypto.randomUUID()),
+    ).rejects.toMatchObject({ status: 403 });
+    const workspace = JSON.parse(
+        localStorage.getItem("helix-member-local-projects-v1")!,
+      ),
+      owner = workspace.departments.find(
+        (department: { id: string }) => department.id === electrical,
+      );
+    owner.leadId = workspace.viewerId;
+    owner.leadIds = [workspace.viewerId];
+    owner.memberIds = [...new Set([...owner.memberIds, workspace.viewerId])];
+    localStorage.setItem(
+      "helix-member-local-projects-v1",
+      JSON.stringify(workspace),
+    );
+    const retried = await invoices.retry(documentId, 0, crypto.randomUUID());
+    expect(retried).toMatchObject({
+      ok: true,
+      id: documentId,
+      invoiceEvidence: { needsAttention: 1 },
+    });
+    await expect(invoices.open(documentId)).rejects.toMatchObject({
+      status: 409,
+    });
+    const purchases = JSON.parse(
+      localStorage.getItem("helix-project-purchases-local-v1")!,
+    );
+    expect(purchases.records[result.id!].responsibleDepartmentId).toBe(
+      departmentId,
+    );
+    expect(purchases.evidence[documentId].projectId).toBe(project(100));
+    expect(Object.keys(purchases.records)).toHaveLength(1);
+  });
+
+  it("refreshes a compatible awarded P0 obligation while the submitted priority and package plan stay immutable", async () => {
+    const {
+      repository: funding,
+      budgets,
+      budget,
+      app,
+    } = await fundingFixture();
+    selectLocalBudgetRole("project_lead");
+    let current = await budgets.detail(budget.id);
+    await budgets.mutate({
+      action: "requestProjectBudgetChanges",
+      projectBudgetId: current.id,
+      expectedRevision: current.revision,
+      requestId: crypto.randomUUID(),
+      reason: "Updated supplier quote",
+    });
+    current = await budgets.detail(current.id);
+    await budgets.mutate({
+      action: "saveProjectBudgetEntry",
+      projectBudgetId: current.id,
+      expectedRevision: current.revision,
+      requestId: crypto.randomUUID(),
+      entry: { ...current.pendingVersion!.entries[0], plannedNok: "1200.00" },
+    });
+    current = await budgets.detail(current.id);
+    await budgets.mutate({
+      action: "submitProjectBudget",
+      projectBudgetId: current.id,
+      expectedRevision: current.revision,
+      requestId: crypto.randomUUID(),
+    });
+    const sent = await sendLocalDepartmentCandidates(departmentId),
+      packets = createLocalDepartmentBudgetRepository(),
+      before = await packets.detail(sent.id!),
+      snapshot = JSON.stringify(before.snapshot);
+    fundingRole("head_of_finance");
+    current = await budgets.detail(budget.id);
+    const linked = await funding.mutate({
+      action: "linkFundingApplicationEntry",
+      applicationId: app.id,
+      expectedRevision: app.revision,
+      requestId: crypto.randomUUID(),
+      entryId: current.approvedVersion!.entries[0].entryId,
+      expectedBudgetRevision: current.revision,
+    });
+    await funding.mutate({
+      action: "recordFundingAward",
+      applicationId: app.id,
+      expectedRevision: linked.revision,
+      requestId: crypto.randomUUID(),
+      awardDate: osloToday(),
+      awardReference: "Award during review",
+    });
+    const live = await packets.detail(before.id);
+    expect(JSON.stringify(live.snapshot)).toBe(snapshot);
+    expect(live.evidence[0].priority).toBe("P0");
+    expect(
+      live.snapshot.projects.find(
+        (project) => project.projectBudgetId === budget.id,
+      )!.proposedVersion!.entries[0].priority,
+    ).toBe("P2");
+    await packets.mutate({
+      action: "approveDepartmentBudgetPackage",
+      packageId: live.id,
+      expectedRevision: before.revision,
+      requestId: crypto.randomUUID(),
+    });
+    expect(
+      (await budgets.detail(budget.id)).approvedVersion!.entries[0].priority,
+    ).toBe("P0");
   });
 
   it("requires current scoped authority and both local gates, including on replay", async () => {

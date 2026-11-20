@@ -178,3 +178,40 @@ it("compares a first submission without inventing an approved version", async ()
   expect(container.textContent).toContain("Previous: None");
   expect(container.textContent).toContain("NOK 100.00");
 });
+
+it("shows a newly awarded live P0 priority without rewriting the submitted plan or change comparison", async () => {
+  const approved = version([entry("Frame")], "100.00"),
+    proposed = version([entry("Frame", { plannedNok: "120.00" })], "120.00"),
+    pinned = JSON.stringify({ approved, proposed });
+  await act(async () =>
+    root.render(
+      <DepartmentProjectBudgetReview
+        approved={approved}
+        proposed={proposed}
+        systems={systems}
+        evidence={[entry("Frame")]}
+      />,
+    ),
+  );
+  await act(async () =>
+    root.render(
+      <DepartmentProjectBudgetReview
+        approved={approved}
+        proposed={proposed}
+        systems={systems}
+        evidence={[entry("Frame", { priority: "P0" })]}
+      />,
+    ),
+  );
+  expect(container.textContent).toContain("Current priority");
+  expect(
+    container.querySelector("tbody tr")?.children[3].textContent,
+  ).toContain("P0");
+  expect(container.textContent).toContain("Submitted priority P2");
+  expect(
+    [...container.querySelectorAll("dt")].some(
+      (node) => node.textContent === "Effective priority",
+    ),
+  ).toBe(false);
+  expect(JSON.stringify({ approved, proposed })).toBe(pinned);
+});

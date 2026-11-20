@@ -34,6 +34,7 @@ vi.mock("./project-budget-repository", async (original) => ({
 }));
 vi.mock("../MemberPlatform/FinanceAccess", () => ({
   useFinanceAccess: () => session,
+  useOptionalFinanceAccess:()=>session,
   FinanceGate: ({ children, page }: { children: ReactNode; page: string }) => {
     access.pages.push(page);
     return access.allowed ? children : <p>Finance access required</p>;
@@ -110,11 +111,11 @@ describe("project budget entry points", () => {
       ),
     );
     expect(
-      container.querySelector('[aria-label="Project budget approvals"]')
+      container.querySelector('[aria-label="Project budgets"]')
         ?.textContent,
     ).toContain("Sent to approval (Department lead)");
     expect(container.textContent).toContain("Season budget");
-    expect(container.textContent).not.toContain("Approve and send to Finance");
+    expect(container.textContent).not.toContain("Review department submission");
     expect(access.pages).toContain("budgets");
     access.allowed = false;
     await act(async () =>
@@ -162,8 +163,8 @@ describe("project budget entry points", () => {
       ),
     );
     expect(
-      container.querySelector('[aria-label="Budget approvals"]')?.textContent,
+      container.querySelector('[aria-label="Project budgets"]')?.textContent,
     ).toContain("Frame tubes");
-    expect(container.textContent).toContain("Approve and send to Finance");
+    expect(container.textContent).toContain("Review department submission");
   });
 });

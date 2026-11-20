@@ -92,7 +92,7 @@ export function DepartmentProjectBudgetReview({
               <TableHead>Entry</TableHead>
               <TableHead>Change</TableHead>
               <TableHead>System</TableHead>
-              <TableHead>Priority</TableHead>
+              <TableHead>Current priority</TableHead>
               <TableHead className="text-right">Package plan</TableHead>
               <TableHead className="text-right">Current actual</TableHead>
               <TableHead>Fulfillment and invoices</TableHead>
@@ -138,7 +138,14 @@ export function DepartmentProjectBudgetReview({
                       entry.systemName ??
                       entry.systemId}
                   </TableCell>
-                  <TableCell>{entry.priority}</TableCell>
+                  <TableCell>
+                    {actual?.priority ?? entry.priority}
+                    {actual && actual.priority !== entry.priority ? (
+                      <span className="mt-1 block whitespace-nowrap text-xs text-muted-foreground">
+                        Submitted priority {entry.priority}
+                      </span>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     {change.after
                       ? projectBudgetMoney(change.after.plannedNok)

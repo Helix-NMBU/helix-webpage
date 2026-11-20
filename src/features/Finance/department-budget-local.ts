@@ -140,9 +140,7 @@ function snapshot(
         associated = access.workspace.departments.filter((department) =>
           project.departments.includes(department.name),
         ),
-        owner =
-          budget?.responsibleDepartmentId ??
-          (associated.length === 1 ? associated[0].id : null),
+        owner = budget?.responsibleDepartmentId ?? null,
         owned = owner === departmentId;
       const candidate = budget?.pendingVersion,
         included =
@@ -166,12 +164,14 @@ function snapshot(
           access.workspace.departments.find(
             (department) => department.id === owner,
           )?.name ?? null,
-        readiness: !owner
-          ? "unallocated"
-          : !owned
-            ? "other_department"
-            : !budget
-              ? "no_budget"
+        readiness: !budget
+          ? associated.length === 1
+            ? "no_budget"
+            : "unallocated"
+          : !owner
+            ? "unallocated"
+            : !owned
+              ? "other_department"
               : (candidate?.status ?? "approved"),
         included,
         approvedVersion: approved,
@@ -302,13 +302,12 @@ function validatePackage(
       departments = access.workspace.departments.filter((department) =>
         currentProject?.departments.includes(department.name),
       ),
-      owner =
-        budget?.responsibleDepartmentId ??
-        (departments.length === 1 ? departments[0].id : null);
+      owner = budget?.responsibleDepartmentId ?? null;
     if (
       !currentProject ||
       currentProject.season !== packet.snapshot.seasonCode ||
       (budget && budget.seasonCode !== packet.snapshot.seasonCode) ||
+      (owner && !departments.some((department) => department.id === owner)) ||
       owner !== project.responsibleDepartmentId
     )
       fail(

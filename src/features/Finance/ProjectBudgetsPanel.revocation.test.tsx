@@ -1,3 +1,4 @@
+import { approveLocalDepartmentCandidates } from "./department-budget.test-support";
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -20,10 +21,7 @@ it.each(["header", "unbudgeted"])("clears enclosing private budget data after %s
   const system = (await repository.load()).systems!.find(item => item.departmentName === "Mechanical & Production")!;
   result = await repository.mutate({ action: "saveProjectBudgetEntry", requestId: crypto.randomUUID(), projectBudgetId: result.id, expectedRevision: result.revision,
     entry: { systemId: system.id, description: "Private material description", category: "material", plannedNok: "20", ordinaryPriority: "P2", reuseStatus: "new", status: "planned" } });
-  for (const [viewer, action] of [["project_lead", "submitProjectBudget"], ["department_lead", "approveDepartmentBudget"], ["head_of_finance", "approveProjectBudget"]] as const) {
-    role(viewer);
-    result = await repository.mutate({ action, requestId: crypto.randomUUID(), projectBudgetId: result.id, expectedRevision: result.revision });
-  }
+  await repository.mutate({action:"submitProjectBudget",projectBudgetId:result.id,expectedRevision:result.revision,requestId:crypto.randomUUID()});await approveLocalDepartmentCandidates("00000000-0000-4000-8000-000000000300");
   role("finance");
   await act(async () => root.render(<ProjectBudgetsPanel repository={repository} />));
   expect(container.textContent).toContain("Private material description");
