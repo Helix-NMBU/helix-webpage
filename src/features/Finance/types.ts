@@ -672,6 +672,8 @@ export type FinanceMutationResult = {
   downloadUrl?: string;
   viewerUrl?: string;
   invoiceEvidence?: InvoiceEvidenceSummary;
+  /** Stored owning purchase for invoice recovery continuation; id remains the app document ID. */
+  purchaseId?: string;
   exportFile?: FinanceExportFile;
   recovery?: FinanceRecoverySummary;
   importPreview?: BudgetImportPreview;

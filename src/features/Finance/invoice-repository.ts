@@ -14,7 +14,7 @@ export interface InvoiceEvidenceActions {
     expectedRevision: number,
     requestId: string,
   ): Promise<FinanceMutationResult>;
-  watchSession?(onEnd: () => void): () => void;
+  watchSession?(onEnd: () => void, onInvoices?: (result: FinanceMutationResult) => void): () => void;
 }
 export class InvoiceEvidenceError extends Error {
   constructor(
