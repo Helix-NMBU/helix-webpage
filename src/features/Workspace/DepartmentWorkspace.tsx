@@ -363,7 +363,7 @@ export function DepartmentWorkspace({
         </TabsList>
         {canReviewBudgets&&<TabsContent value="budgets" className="mt-7 space-y-8"><DepartmentBudgetsPanel departmentId={department.id}/><ProjectBudgetsPanel departmentId={department.id} title="Project budgets" /></TabsContent>}
         <TabsContent value="overview" className="mt-7">
-          <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 xl:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
             <div className="min-w-0 space-y-10">
               <div className="space-y-5">
                 <div className="flex items-center gap-4">
