@@ -1,3 +1,4 @@
+import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage } from "./project-budget-test-db.js";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -634,19 +635,10 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
       },
     });
     detail = await services.projectBudget("lead", detail.id);
-    for (const [role, action] of [
-      ["lead", "submitProjectBudget"],
-      ["departmentLead", "approveDepartmentBudget"],
-      ["head", "approveProjectBudget"],
-    ] as const) {
-      await services.mutate(role, {
-        action,
-        projectBudgetId: detail.id,
-        expectedRevision: detail.revision,
-        requestId: randomUUID(),
-      });
-      detail = await services.projectBudget("lead", detail.id);
-    }
+    await services.mutate("lead",{action:"submitProjectBudget",projectBudgetId:detail.id,expectedRevision:detail.revision,requestId:randomUUID()});
+    detail = await services.projectBudget("lead",detail.id);
+    detail = (await submitProjectBudgetDepartmentPackage(services,detail)).budget;
+    detail = await approveProjectBudgetDepartmentPackage(services,detail);
     const entry = detail.approvedVersion!.entries[0],
       fake = driveFixture();
     const saved = await register({
@@ -869,19 +861,10 @@ describe.skipIf(!url)("durable invoice evidence on PostgreSQL", () => {
         },
       });
       detail = await services.projectBudget("lead", headerId);
-      for (const [role, action] of [
-        ["lead", "submitProjectBudget"],
-        ["departmentLead", "approveDepartmentBudget"],
-        ["head", "approveProjectBudget"],
-      ] as const) {
-        await services.mutate(role, {
-          action,
-          projectBudgetId: headerId,
-          expectedRevision: detail.revision,
-          requestId: randomUUID(),
-        });
-        detail = await services.projectBudget("lead", headerId);
-      }
+      await services.mutate("lead",{action:"submitProjectBudget",projectBudgetId:detail.id,expectedRevision:detail.revision,requestId:randomUUID()});
+      detail = await services.projectBudget("lead",detail.id);
+      detail = (await submitProjectBudgetDepartmentPackage(services,detail)).budget;
+      detail = await approveProjectBudgetDepartmentPackage(services,detail);
       items.push(detail.approvedVersion!.entries[0].budgetItemId!);
     }
     expect(projectA < projectB && headerA > headerB).toBe(true);

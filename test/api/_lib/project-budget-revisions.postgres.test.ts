@@ -1,3 +1,5 @@
+import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage } from "./project-budget-test-db.js";
+import { departmentPackageDecisionBody } from "./project-budget-package-test-actions.js";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -10,6 +12,8 @@ let admin: pg.Client, pool: pg.Pool, close: (() => Promise<void>) | undefined, d
 const entry = { systemId: f.system, description: "Frame tubes", category: "material", plannedNok: "10000", ordinaryPriority: "P1", reuseStatus: "new", status: "planned" };
 const mutate = (role: ProjectBudgetFixtureRole, body: Record<string, unknown>) => services.mutate(role, { requestId: randomUUID(), ...body });
 async function write(role: ProjectBudgetFixtureRole, budget: ProjectBudgetDetail, action: string, fields: Record<string, unknown> = {}) {
+  if (action === "sendDepartmentBudgetPackage") return (await submitProjectBudgetDepartmentPackage(services, budget, role)).budget;
+  if (action === "approveDepartmentBudgetPackage") return approveProjectBudgetDepartmentPackage(services, budget);
   await mutate(role, { action, projectBudgetId: budget.id, expectedRevision: budget.revision, ...fields }); return services.projectBudget(role, budget.id);
 }
 async function approved() {
@@ -17,7 +21,7 @@ async function approved() {
   await db.query("insert into project_management.projects values($1::uuid,'S27','Frame revision race',array[$2::uuid],array['Mechanical & Production'],1)", [projectId, f.lead]);
   const created = await mutate("lead", { action: "createProjectBudget", projectId, responsibleDepartmentId: f.department });
   let budget = await services.projectBudget("lead", created.id!);
-  for (const [role, action, fields] of [["lead", "saveProjectBudgetEntry", { entry }], ["lead", "submitProjectBudget", {}], ["departmentLead", "approveDepartmentBudget", {}], ["head", "approveProjectBudget", {}]] as const) budget = await write(role, budget, action, fields);
+  for (const [role, action, fields] of [["lead", "saveProjectBudgetEntry", { entry }], ["lead", "submitProjectBudget", {}], ["departmentLead", "sendDepartmentBudgetPackage", {}], ["head", "approveDepartmentBudgetPackage", {}]] as const) budget = await write(role, budget, action, fields);
   return budget;
 }
 describe.skipIf(!url)("project revisions and imports on independent PostgreSQL connections", () => {
@@ -60,9 +64,9 @@ describe.skipIf(!url)("project revisions and imports on independent PostgreSQL c
     let budget = await approved(); const old = budget.approvedVersionId;
     budget = await write("lead", budget, "requestProjectBudgetChanges", { reason: "More material" });
     budget = await write("lead", budget, "saveProjectBudgetEntry", { entry: { ...entry, entryId: budget.pendingVersion!.entries[0].entryId, plannedNok: "15000" } });
-    budget = await write("lead", budget, "submitProjectBudget"); budget = await write("departmentLead", budget, "approveDepartmentBudget");
+    budget = await write("lead", budget, "submitProjectBudget"); budget = await write("departmentLead", budget, "sendDepartmentBudgetPackage");
     const outcomes = await Promise.allSettled([
-      mutate("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision }),
+      mutate("head", await departmentPackageDecisionBody(services, budget)),
       mutate("head", { action: "returnProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision, reason: "Clarify quantity" }),
     ]);
     expect(outcomes.filter(r => r.status === "fulfilled")).toHaveLength(1);

@@ -1,3 +1,4 @@
+import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage } from "./project-budget-test-db.js";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -67,19 +68,10 @@ async function approved(count = 1): Promise<ProjectBudgetDetail> {
     });
     budget = await services.projectBudget("lead", budget.id);
   }
-  for (const [role, action, extra] of [
-    ["lead", "submitProjectBudget", {}],
-    ["departmentLead", "approveDepartmentBudget", {}],
-    ["head", "approveProjectBudget", {}],
-  ] as const) {
-    await change(role, {
-      action,
-      projectBudgetId: budget.id,
-      expectedRevision: budget.revision,
-      ...extra,
-    });
-    budget = await services.projectBudget("lead", budget.id);
-  }
+  await change("lead", { action: "submitProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision });
+  budget = await services.projectBudget("lead",budget.id);
+  budget = (await submitProjectBudgetDepartmentPackage(services,budget)).budget;
+  budget = await approveProjectBudgetDepartmentPackage(services,budget);
   return budget;
 }
 async function upload(

@@ -1,3 +1,5 @@
+import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage } from "./project-budget-test-db.js";
+import { departmentPackageDecisionBody } from "./project-budget-package-test-actions.js";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -80,6 +82,8 @@ async function write(
   action: string,
   fields: Record<string, unknown> = {},
 ) {
+  if (action === "sendDepartmentBudgetPackage") return (await submitProjectBudgetDepartmentPackage(services,budget,role)).budget;
+  if (action === "approveDepartmentBudgetPackage") return approveProjectBudgetDepartmentPackage(services,budget);
   await change(role, {
     action,
     projectBudgetId: budget.id,
@@ -103,8 +107,8 @@ async function approved() {
   for (const [role, action, extra] of [
     ["lead", "saveProjectBudgetEntry", { entry }],
     ["lead", "submitProjectBudget", {}],
-    ["departmentLead", "approveDepartmentBudget", {}],
-    ["head", "approveProjectBudget", {}],
+    ["departmentLead", "sendDepartmentBudgetPackage", {}],
+    ["head", "approveDepartmentBudgetPackage", {}],
   ] as const)
     budget = await write(budget, role, action, extra);
   return budget;
@@ -291,13 +295,13 @@ describe.skipIf(!url)(
           await blockedBy(actorGate, operation === "register" ? "register_purchase" : "void_registered_purchase");
           budget = await write(budget, "lead", "adoptProjectBudgetEntries", { entries: [{ budgetItemId: itemId }] });
           budget = await write(budget, "lead", "submitProjectBudget");
-          budget = await write(budget, "departmentLead", "approveDepartmentBudget");
+          budget = await write(budget, "departmentLead", "sendDepartmentBudgetPackage");
           await ledgerGate.query("begin");
           await ledgerGate.query("select b.id from finance.budgets b join finance.seasons s on s.id=b.season_id where s.code='S27' for update of b");
           await actorGate.query("commit");
           await blockedBy(ledgerGate, operation === "register" ? "register_purchase" : "void_registered_purchase");
-          approvalWork = outcome(change("head", { action: "approveProjectBudget", projectBudgetId: budget.id, expectedRevision: budget.revision }, service(database(approvalConnection))));
-          await expect.poll(async () => Number((await pool.query("select count(*) from pg_stat_activity where datname=current_database() and $1::integer=any(pg_blocking_pids(pid)) and position('mutate_project_budget' in query)>0", [purchasePid])).rows[0].count), { timeout: 5000 }).toBeGreaterThan(0);
+          approvalWork = outcome(change("head", await departmentPackageDecisionBody(services,budget), service(database(approvalConnection))));
+          await expect.poll(async () => Number((await pool.query("select count(*) from pg_stat_activity where datname=current_database() and $1::integer=any(pg_blocking_pids(pid)) and position('mutate_department_budget_package' in query)>0", [purchasePid])).rows[0].count), { timeout: 5000 }).toBeGreaterThan(0);
           await ledgerGate.query("commit");
           const purchaseResult = await purchaseWork, approvalResult = await approvalWork;
           expect(failures.slice(failureStart).map(error => error.code)).not.toContain("40P01");
@@ -349,16 +353,11 @@ describe.skipIf(!url)(
         budget = await write(
           budget,
           "departmentLead",
-          "approveDepartmentBudget",
+          "sendDepartmentBudgetPackage",
         );
         const v2 = budget.pendingVersionId!,
           registerBody = await registration(budget, "60"),
-          promoteBody = {
-            action: "approveProjectBudget",
-            requestId: randomUUID(),
-            projectBudgetId: budget.id,
-            expectedRevision: budget.revision,
-          };
+          promoteBody = await departmentPackageDecisionBody(services,budget);
         const earlierIds = [draftPurchase.id!, pendingPurchase.id!];
         const earlierDocuments = await documentSnapshot(earlierIds);
         expect(earlierDocuments).toHaveLength(2);
@@ -383,15 +382,13 @@ describe.skipIf(!url)(
             );
             racingId = registered.id!;
             const promotion = outcome(services.mutate("head", promoteBody));
-            await blockedBy(client, "finance.mutate_project_budget");
+            await blockedBy(client, "finance.mutate_department_budget_package");
             expect(
               (await services.projectBudget("lead", budget.id))
                 .approvedVersionId,
             ).toBe(v1);
             await client.query("commit");
-            expect(await promotion, JSON.stringify(failures)).toMatchObject({
-              error: { status: 409 },
-            });
+            expect(await promotion, JSON.stringify(failures)).toHaveProperty("value");
             const original = (
               await db.query(
                 "select facts,review_status from finance.exception_reviews where purchase_id=$1::uuid and kind='budget_overrun'",
@@ -414,7 +411,7 @@ describe.skipIf(!url)(
               },
             ]);
             budget = await services.projectBudget("lead", budget.id);
-            budget = await write(budget, "head", "approveProjectBudget");
+            expect(budget.approvedVersionId).toBe(v2);
             expect(
               (
                 await db.query(
@@ -517,7 +514,7 @@ describe.skipIf(!url)(
         entry: { ...entry, entryId, plannedNok: "300" },
       });
       budget = await write(budget, "lead", "submitProjectBudget");
-      budget = await write(budget, "departmentLead", "approveDepartmentBudget");
+      budget = await write(budget, "departmentLead", "sendDepartmentBudgetPackage");
       const v2 = budget.pendingVersionId!,
         authorized = await change("finance", {
           action: "authorizeUpload",
@@ -569,11 +566,7 @@ describe.skipIf(!url)(
         await client.query("begin");
         await change(
           "head",
-          {
-            action: "approveProjectBudget",
-            projectBudgetId: budget.id,
-            expectedRevision: budget.revision,
-          },
+          await departmentPackageDecisionBody(services,budget),
           held,
         );
         const pending = outcome(services.mutate("finance", body));
@@ -809,8 +802,8 @@ describe.skipIf(!url)(
       budget = await services.projectBudget("lead", budget.id);
       for (const [role, action] of [
         ["lead", "submitProjectBudget"],
-        ["departmentLead", "approveDepartmentBudget"],
-        ["head", "approveProjectBudget"],
+        ["departmentLead", "sendDepartmentBudgetPackage"],
+        ["head", "approveDepartmentBudgetPackage"],
       ] as const)
         budget = await write(budget, role, action);
       expect(budget.approvedVersion!.entries[0]).toMatchObject({
@@ -821,10 +814,10 @@ describe.skipIf(!url)(
         completion: "partial",
       });
       expect(
-        budget.decisions.filter((d) => d.action === "approveDepartmentBudget"),
+        budget.decisions.filter((d) => d.action === "sendDepartmentBudgetPackage"),
       ).toHaveLength(1);
       expect(
-        budget.decisions.filter((d) => d.action === "approveProjectBudget"),
+        budget.decisions.filter((d) => d.action === "approveDepartmentBudgetPackage"),
       ).toHaveLength(1);
       expect(
         (
