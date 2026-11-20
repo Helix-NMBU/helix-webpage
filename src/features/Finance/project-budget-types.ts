@@ -16,6 +16,8 @@ export type InvoiceTransferStatus = "pending" | "transferring" | "stored" | "nee
 export type InvoiceStorageBackend = "private_storage" | "google_drive";
 
 export interface ProjectBudgetCapabilities {
+  /** Public approved allocation only, with no authoring, evidence or review authority. */
+  approvedOnly?: boolean;
   canRead: boolean;
   canDraft: boolean;
   canReviewDepartment: boolean;
