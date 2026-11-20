@@ -2,9 +2,10 @@ import type {BudgetHierarchySystem} from "./budget-hierarchy.js";
 /** Resolve accounting ownership without changing the physical system identity.
  * A mapped legacy entry remains legacy until its genuine project replacement is approved.
  */
-export function financeAllocationDepartment<T>(input:{source:"legacy"|"project";projectId:string|null;responsibleDepartmentId:string|null;unbudgeted:boolean},physical:T,responsible:ReadonlyMap<string,T>):T {
-  if(input.projectId && input.responsibleDepartmentId && (input.source==="project"||input.unbudgeted)) {
-    const owner=responsible.get(input.responsibleDepartmentId);
+export function financeAllocationDepartment<T>(input:{source:"legacy"|"project";projectId:string|null;responsibleDepartmentId:string|null;currentResponsibleDepartmentId?:string|null;unbudgeted:boolean},physical:T,responsible:ReadonlyMap<string,T>):T {
+  const departmentId=input.currentResponsibleDepartmentId??input.responsibleDepartmentId;
+  if(input.projectId && departmentId && (input.source==="project"||input.unbudgeted)) {
+    const owner=responsible.get(departmentId);
     if(!owner)throw new Error("The responsible budget department is missing from the financial catalog.");
     return owner;
   }

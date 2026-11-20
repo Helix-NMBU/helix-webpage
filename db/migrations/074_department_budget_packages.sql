@@ -19,9 +19,23 @@ select e.id as entry_id,e.season_id,e.system_id,
 from finance.effective_budget_entries e join finance.systems sys on sys.id=e.system_id;
 create view finance.department_actual_allocation as
 select a.*,case when e.source='project' or (a.unbudgeted and a.project_id is not null)
- then finance.budget_department_key(a.responsible_department_id) else sys.department_key end as department_key
+ then finance.budget_department_key(coalesce(current_header.responsible_department_id,a.responsible_department_id)) else sys.department_key end as department_key
 from finance.registered_allocation_facts a join finance.effective_budget_entries e on e.id=a.budget_item_id
-join finance.systems sys on sys.id=a.system_id;
+join finance.systems sys on sys.id=a.system_id
+left join finance.project_budgets current_header on current_header.project_id=a.project_id and current_header.season_id=a.season_id;
+
+-- Recorded purchase authority remains historical. Current scoped evidence follows
+-- the selected project owner, with the recorded department as headerless fallback.
+create or replace function finance.invoice_document_scope(document uuid) returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+ select case when p.project_id is not null then jsonb_build_object('projectId',p.project_id,'departmentId',coalesce(current_header.responsible_department_id,p.responsible_department_id))
+ else (select case when count(*)>0 and count(distinct e.project_id)=1 and bool_and(e.project_id is not null)
+   then jsonb_build_object('projectId',min(e.project_id::text),'departmentId',min(h.responsible_department_id::text)) end
+   from finance.purchase_lines l left join finance.allocations a on a.line_id=l.id
+   left join finance.effective_budget_entries e on e.id=a.budget_item_id
+   left join finance.project_budgets h on h.id=e.project_budget_id where l.purchase_id=p.id) end
+ from finance.documents d join finance.purchases p on p.id=d.purchase_id
+ left join finance.project_budgets current_header on current_header.project_id=p.project_id and current_header.season_id=p.season_id where d.id=document
+$$;
 
 -- All read totals use these per-entry accounting partitions. Protected anchors may
 -- hold incurred costs from several projects; each allocation belongs to one group.
@@ -40,6 +54,16 @@ cross join lateral(
  from finance.department_actual_allocation actual where actual.budget_item_id=e.id group by actual.department_key
  union all select sys.department_key,0::numeric,0 where not exists(select 1 from finance.department_actual_allocation actual where actual.budget_item_id=e.id and actual.department_key=sys.department_key)
 ) partition where e.protected;
+
+-- Compatibility anchors retain historical system/funding facts. New materialized
+-- rows must compare against the effective plan rather than those old anchor fields.
+create or replace function finance.enforce_earmark_system() returns trigger
+language plpgsql security invoker set search_path=pg_catalog as $$
+begin
+ if new.earmark_id is null or new.status='cancelled' then return new;end if;
+ if exists(select 1 from finance.effective_budget_entries other where other.earmark_id=new.earmark_id and other.id<>new.id and other.status<>'cancelled' and other.system_id<>new.system_id) then
+  raise exception 'An earmarked part can only link items in one system' using errcode='23514';end if;return new;
+end $$;
 
 create table finance.department_budget_packages(
  id uuid primary key default gen_random_uuid(),department_id uuid not null references project_management.departments(id),season_id uuid not null references finance.seasons(id),
@@ -265,9 +289,21 @@ begin
    ) links where earmark_id is not null group by earmark_id having count(distinct system_id)>1) then raise exception 'finance:PROJECT_EARMARK_MISMATCH' using errcode='23514';end if;
    select coalesce(max(substring(i.public_ref from '([0-9]+)$')::bigint),0)+1 into ref_next from finance.budget_items i where i.budget_id=legacy.id and i.public_ref~('^BI-'||(scope->>'seasonCode')||'-[0-9]+$');
    insert into finance.reference_counters(counter_key,configured_next,updated_by_member_id) values('budget_item:'||(scope->>'seasonCode'),ref_next,actor) on conflict(counter_key) do nothing;
+   if exists(select 1 from finance.project_budget_version_entries ve join finance.department_budget_package_members member on member.candidate_version_id=ve.version_id
+    join finance.project_budget_entries entry on entry.id=ve.entry_id left join finance.funding_parts part on part.id=ve.earmark_id left join finance.funding funding on funding.id=part.funding_id
+    where member.package_id=p.id and not ve.removed and ve.earmark_id is not null and not(
+     funding.season_id=p.season_id and(funding.status<>'deleted'
+      or exists(select 1 from finance.project_budget_version_entries old where old.version_id=member.baseline_version_id and old.entry_id=ve.entry_id and old.earmark_id=ve.earmark_id)
+      or(member.baseline_version_id is null and exists(select 1 from finance.budget_items old where old.id=entry.budget_item_id and old.earmark_id=ve.earmark_id))))) then
+    raise exception 'finance:PROJECT_EARMARK_MISMATCH' using errcode='23514';end if;
+   -- Publish all pointers within this still-uncommitted transaction before
+   -- materializing new anchors. Trigger checks then see the validated final union.
+   update finance.project_budget_versions version set status='approved',approved_by=actor,approved_at=clock_timestamp(),revision=version.revision+1
+   from finance.department_budget_package_members member where member.package_id=p.id and member.candidate_version_id=version.id;
+   update finance.project_budgets header set approved_version_id=member.candidate_version_id,pending_version_id=null,revision=header.revision+1,updated_by_member_id=actor,updated_at=clock_timestamp()
+   from finance.department_budget_package_members member where member.package_id=p.id and member.candidate_version_id is not null and member.project_budget_id=header.id;
    for r in select * from finance.department_budget_package_members where package_id=p.id and candidate_version_id is not null order by project_budget_id loop
     for material in select pe.budget_item_id,ve.* from finance.project_budget_entries pe join finance.project_budget_version_entries ve on ve.entry_id=pe.id where ve.version_id=r.candidate_version_id and not ve.removed order by ve.entry_id loop
-     if material.earmark_id is not null and not exists(select 1 from finance.funding_parts part join finance.funding funding on funding.id=part.funding_id where part.id=material.earmark_id and funding.season_id=p.season_id and(funding.status<>'deleted' or exists(select 1 from finance.project_budget_version_entries old where old.version_id=r.baseline_version_id and old.entry_id=material.entry_id and old.earmark_id=material.earmark_id) or(r.baseline_version_id is null and exists(select 1 from finance.budget_items old where old.id=material.budget_item_id and old.earmark_id=material.earmark_id)))) then raise exception 'finance:PROJECT_EARMARK_MISMATCH' using errcode='23514';end if;
      if material.budget_item_id is null then
       loop reference:=finance.budget_item_reference(scope->>'seasonCode',finance.issue_budget_item_ordinal(actor,scope->>'seasonCode'));exit when not exists(select 1 from finance.budget_items where public_ref=reference);end loop;
       insert into finance.budget_items(id,budget_id,system_id,public_ref,description,category,planned_ore,priority,reuse_status,expected_purchase_date,owner_member_id,owner_email,status,note,earmark_id,created_by_member_id,updated_by_member_id)
@@ -275,8 +311,6 @@ begin
       update finance.project_budget_entries set budget_item_id=id where id=material.entry_id;
      end if;
     end loop;
-    update finance.project_budget_versions set status='approved',approved_by=actor,approved_at=clock_timestamp(),revision=revision+1 where id=r.candidate_version_id;
-    update finance.project_budgets set approved_version_id=r.candidate_version_id,pending_version_id=null,revision=revision+1,updated_by_member_id=actor,updated_at=clock_timestamp() where id=r.project_budget_id;
     insert into finance.project_budget_decisions(project_budget_id,version_id,action,actor_member_id,snapshot,request_id,created_at) values(r.project_budget_id,r.candidate_version_id,action,actor,jsonb_build_object('packageId',p.id,'after',finance.project_budget_snapshot(r.candidate_version_id)),request,clock_timestamp());
    end loop;
    end if;

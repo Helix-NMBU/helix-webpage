@@ -37,7 +37,7 @@ type LineExportRow = {
   amount_ore: string;
   unbudgeted: boolean;
   system_code: string;
-  budget_department:string|null; project_name:string|null;
+  budget_department:string|null; project_name:string|null; purchase_department:string|null;
   budget_item_ref: string | null;
   effective_plan_ore: string | null;
   actual_ore: string | null;
@@ -98,7 +98,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
   const lines = (await db.query<LineExportRow>(
     `select l.purchase_id, l.public_ref, l.description, l.quantity::text as quantity, l.amount_ore::text as amount_ore,
             l.unbudgeted, s.code as system_code, i.public_ref as budget_item_ref,
-            coalesce(owner.name,physical_department.name) as budget_department,project.name as project_name,
+            coalesce(owner.name,physical_department.name) as budget_department,project.name as project_name,recorded_department.name as purchase_department,
             case
               when i.id is null then null
               when i.status = 'cancelled' or i.protected then '0'
@@ -111,7 +111,9 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      join finance.systems s on s.id = l.system_id
      left join finance.effective_budget_entries i on i.id = l.budget_item_id
      join identity.departments physical_department on physical_department.department_key=s.department_key
-     left join project_management.departments owner on owner.id=case when i.source='project' then i.responsible_department_id when l.unbudgeted then p.responsible_department_id end
+     left join finance.project_budgets current_header on current_header.project_id=p.project_id and current_header.season_id=p.season_id
+     left join project_management.departments recorded_department on recorded_department.id=p.responsible_department_id
+     left join project_management.departments owner on owner.id=case when i.source='project' then i.responsible_department_id when l.unbudgeted then coalesce(current_header.responsible_department_id,p.responsible_department_id) end
      left join project_management.projects project on project.id=case when i.source='project' then i.project_id when l.unbudgeted then p.project_id end
      where season.code = $1
      order by l.public_ref`,
@@ -171,7 +173,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
       record.quantity = line.quantity;
       record.line_amount_nok = money(line.amount_ore);
       record.system_code = line.system_code;
-      record.budget_department=line.budget_department??"";record.project_name=line.project_name??"";
+      record.budget_department=line.budget_department??"";record.project_name=line.project_name??"";record.purchase_department=line.purchase_department??"";
       record.budget_item_ref = line.budget_item_ref ?? "";
       record.budget_status = status;
       record.budget_status_basis = "current";

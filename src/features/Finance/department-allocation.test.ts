@@ -24,3 +24,8 @@ it("partitions one physical system between accounting departments without duplic
  expect(result.departments.map(d=>[d.departmentKey,d.actualNok])).toEqual([["mechanical","25.00"],["electrical","10.00"]]);
  expect(result.choices.systems).toHaveLength(1);expect(result.choices.systems[0]).toMatchObject({id:"shared",departmentKey:"electrical"});
 });
+
+it("uses selected current budget ownership after an incurred cost was recorded elsewhere",()=>{
+ const recorded={departmentKey:"old"},selected={departmentKey:"new"};
+ expect(financeAllocationDepartment({source:"legacy",projectId:"project",responsibleDepartmentId:"old",currentResponsibleDepartmentId:"new",unbudgeted:true},recorded,new Map([["old",recorded],["new",selected]]))).toBe(selected);
+});
