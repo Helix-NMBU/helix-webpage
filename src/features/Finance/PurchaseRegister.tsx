@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { watchMemberSession } from "../MemberCV/session";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InvoiceEvidence } from "./InvoiceEvidence";
 import type { InvoiceEvidenceActions } from "./invoice-repository";
 import { Button } from "@libs/components/ui/button";
@@ -22,7 +23,8 @@ const EXCEPTION_LABELS: Record<ExceptionKind, string> = {
 
 function useStableIds() {
   const pending = useRef(new Map<string, { fingerprint: string; id: string }>());
-  return {
+  return useMemo(() => ({
+    clear() { pending.current.clear(); },
     idFor(key: string, fingerprint: string) {
       const current = pending.current.get(key);
       if (current?.fingerprint === fingerprint) return current.id;
@@ -33,7 +35,7 @@ function useStableIds() {
     finish(key: string) {
       pending.current.delete(key);
     },
-  };
+  }), []);
 }
 
 function paymentState(row: FinancePurchaseSummary): string {
@@ -52,6 +54,7 @@ export function PurchaseRegister({
   onToggleUnpaid,
   onMutate,
   onChanged,
+  onAccessEnded,
 }: {
   register: FinancePurchaseSummary[];
   unpaidCount: number;
@@ -61,6 +64,7 @@ export function PurchaseRegister({
   onToggleUnpaid: (unpaidOnly: boolean) => void;
   onMutate: (action: FinanceMutation) => Promise<FinanceMutationResult>;
   onChanged: () => Promise<void>;
+  onAccessEnded?: () => void;
 }) {
   const notify = useNotify();
   const requests = useStableIds();
@@ -70,24 +74,79 @@ export function PurchaseRegister({
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
 
+  const active = useRef(false), epoch = useRef(0), working = useRef(false), accessEnded = useRef(false);
+  const [denied, setDenied] = useState(false);
+  const callbacks = useRef({ onChanged, onAccessEnded });
+  callbacks.current = { onChanged, onAccessEnded };
+  const clearPrivateAccess = useCallback(() => {
+    if (accessEnded.current) return;
+    accessEnded.current = true;
+    epoch.current++;
+    working.current = false;
+    requests.clear();
+    setBusy(null);
+    setVoidReasons({});
+    setReviewReasons({});
+    setPaidOn({});
+    setConfirmVoidId(null);
+    setDenied(true);
+    if (callbacks.current.onAccessEnded) callbacks.current.onAccessEnded();
+    else void callbacks.current.onChanged().catch(() => undefined);
+  }, [requests]);
+  useEffect(() => {
+    active.current = true;
+    const stop = watchMemberSession(() => { if (active.current) clearPrivateAccess(); });
+    return () => { active.current = false; epoch.current++; stop(); };
+  }, [clearPrivateAccess]);
+
+  async function refresh(operation: number) {
+    if (!active.current || accessEnded.current || epoch.current !== operation) return;
+    try {
+      await callbacks.current.onChanged();
+    } catch (error) {
+      if (!active.current || accessEnded.current || epoch.current !== operation) return;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+        notify("Finance access ended", "Your purchase register access is no longer available.", { variant: "error", href: null });
+        return;
+      }
+      notify("Could not refresh purchase register", error instanceof Error ? error.message : "Please try again.", {
+        variant: "error", href: null,
+        action: { label: "Refresh", onClick: () => { if (active.current && !accessEnded.current && epoch.current === operation) void refresh(operation); } },
+      });
+    }
+  }
+
   async function run(key: string, fingerprint: string, action: FinanceMutation, success: string, failure: string) {
+    if (!active.current || accessEnded.current || working.current) return false;
+    working.current = true;
+    const operation = ++epoch.current;
     setBusy(key);
     try {
       const saved = await onMutate({ ...action, requestId: requests.idFor(key, fingerprint) });
+      if (!active.current || accessEnded.current || operation !== epoch.current) return false;
       requests.finish(key);
       notify(success, saved.id ? "The purchase register was updated." : "Saved.", { id: key, variant: "success" });
-      await onChanged();
+      await refresh(operation);
       return true;
     } catch (error) {
+      if (!active.current || accessEnded.current || operation !== epoch.current) return false;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+        notify("Finance access ended", "Your purchase register access is no longer available.", { id: key, variant: "error", href: null });
+        return false;
+      }
       const message = error instanceof Error ? error.message : "Please try again.";
       notify(failure, message, {
         id: key,
         variant: "error",
-        action: { label: "Try again", onClick: () => { void run(key, fingerprint, action, success, failure); } },
+        action: { label: "Try again", onClick: () => { if (active.current && !accessEnded.current && operation === epoch.current) void run(key, fingerprint, action, success, failure); } },
       });
       return false;
     } finally {
-      setBusy(null);
+      if (active.current && operation === epoch.current) { working.current = false; setBusy(null); }
     }
   }
 
@@ -110,6 +169,7 @@ export function PurchaseRegister({
     [onMutate],
   );
 
+  if (denied) return null;
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -173,6 +233,7 @@ export function PurchaseRegister({
                         }}
                         actions={invoiceActions}
                         onChanged={onChanged}
+                        onAccessEnded={clearPrivateAccess}
                       />
                     </li>
                   ))}

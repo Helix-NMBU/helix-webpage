@@ -57,7 +57,7 @@ async function click(text: string) {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   notify.mockReset();
-  changed.mockClear();
+  changed.mockReset().mockResolvedValue(undefined);
   ended.mockClear();
   clicked = [];
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
@@ -142,6 +142,54 @@ describe("provider-aware invoice evidence", () => {
       expect(notify.mock.calls[notify.mock.calls.length - 1][2].action).toBeUndefined();
     },
   );
+  it.each([401, 403])("clears a denied evidence refresh and cannot revive it from later metadata: %s", async status => {
+    changed.mockRejectedValue(Object.assign(new Error("Authority changed"), { status }));
+    await render();
+    await click("Retry invoice transfer");
+    expect(ended).toHaveBeenCalledOnce();
+    expect(container.textContent).not.toContain("Invoice.pdf");
+    expect(notify).toHaveBeenLastCalledWith("Invoice access ended", expect.any(String), expect.not.objectContaining({ action: expect.anything() }));
+    invoice = { ...invoice, transferStatus: "stored", transferRevision: 4 };
+    await render();
+    expect(container.textContent).not.toContain("Invoice.pdf");
+    expect(clicked).toHaveLength(0);
+  });
+  it.each([401, 403])("clears direct retry denial without leaving a retry action: %s", async status => {
+    actions.retry = vi.fn(async () => { throw Object.assign(new Error("Access ended"), { status }); });
+    await render();
+    await click("Retry invoice transfer");
+    expect(ended).toHaveBeenCalledOnce();
+    expect(container.textContent).not.toContain("Invoice.pdf");
+    expect(notify.mock.calls[notify.mock.calls.length - 1][2].action).toBeUndefined();
+  });
+  it("keeps its transfer subscription through metadata refresh and handles terminal updates with current callbacks", async () => {
+    const stop = vi.fn();
+    let update: Parameters<NonNullable<InvoiceEvidenceActions["watchSession"]>>[1];
+    let end: (() => void) | undefined;
+    actions.watchSession = vi.fn((onEnd, onInvoices) => { end = onEnd; update = onInvoices; return stop; });
+    await render();
+    invoice = { ...invoice, transferStatus: "transferring", transferRevision: 4 };
+    await render();
+    expect(actions.watchSession).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
+    await act(async () => update!({ ...result, invoiceEvidence: { pending: 0, transferring: 0, stored: 1, needsAttention: 0 } }));
+    expect(changed).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledWith("Invoice evidence updated", "Invoice evidence is confirmed in Drive.", expect.anything());
+    await act(async () => end!());
+    await act(async () => update!({ ...result, invoiceEvidence: { pending: 0, transferring: 0, stored: 1, needsAttention: 0 } }));
+    expect(changed).toHaveBeenCalledOnce();
+    expect(container.textContent).not.toContain("Invoice.pdf");
+  });
+  it("does not lose an authority denial when only transfer metadata changes during the request", async () => {
+    invoice.transferStatus = "stored";
+    const pending = defer<{ viewerUrl: string }>();
+    actions.open = vi.fn(() => pending.promise);
+    await render(); await click("Open invoice");
+    invoice = { ...invoice, transferRevision: 4 }; await render();
+    await act(async () => pending.reject(Object.assign(new Error("Revoked"), { status: 403 })));
+    expect(ended).toHaveBeenCalledOnce();
+    expect(container.textContent).not.toContain("Invoice.pdf");
+  });
   it.each(["pending", "transferring", "needs_attention"] as const)(
     "never exposes a viewer or private fallback for %s evidence",
     async (status) => {

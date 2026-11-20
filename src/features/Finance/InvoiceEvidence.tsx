@@ -2,7 +2,7 @@ import {
   isLocalMemberMode,
   localMemberSignedIn,
 } from "../MemberPlatform/local-mode";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Badge } from "@libs/components/ui/badge";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -82,8 +82,14 @@ export function InvoiceEvidence({
       invoice.canRetry,
     ],
   );
+  const lifetime = useMemo(() => Symbol("invoice-subscription"), [actions, invoice.documentId]);
+  const currentLifetime = useRef(lifetime);
+  currentLifetime.current = lifetime;
+  const refreshLatest = useRef(refresh);
+  refreshLatest.current = refresh;
   const currentScope = useRef(scope);
   currentScope.current = scope;
+  const accessEnded = useRef(false);
   const active = useRef(false),
     epoch = useRef(0),
     working = useRef(false),
@@ -93,25 +99,47 @@ export function InvoiceEvidence({
   const callbacks = useRef({ onChanged, onAccessEnded });
   callbacks.current = { onChanged, onAccessEnded };
   const notify = useNotify();
-  useEffect(() => {
-    active.current = true;
+  const notifyLatest = useRef(notify);
+  notifyLatest.current = notify;
+  const clearPrivateAccess = useCallback(() => {
+    if (accessEnded.current) return;
+    accessEnded.current = true;
     epoch.current++;
     working.current = false;
+    pending.current = null;
     setBusy(false);
-    setDenied(false);
-    const stop = actions.watchSession?.(() => {
-      epoch.current++;
-      working.current = false;
-      setBusy(false);
-      setDenied(true);
-      callbacks.current.onAccessEnded?.();
-    });
+    setDenied(true);
+    callbacks.current.onAccessEnded?.();
+  }, []);
+  useEffect(() => {
+    active.current = true;
+    const stop = actions.watchSession?.(
+      () => {
+        if (active.current && currentLifetime.current === lifetime) clearPrivateAccess();
+      },
+      (result) => {
+        if (!active.current || accessEnded.current || currentLifetime.current !== lifetime) return;
+        const evidence = result.invoiceEvidence;
+        if (evidence && evidence.pending + evidence.transferring === 0) {
+          notifyLatest.current("Invoice evidence updated", invoiceEvidenceMessage(evidence), {
+            id: `invoice-evidence:${invoice.documentId}`, variant: evidence.needsAttention ? "warning" : "success", href: null,
+          });
+        }
+        void refreshLatest.current(epoch.current);
+      },
+    );
     return () => {
       active.current = false;
       epoch.current++;
       stop?.();
     };
-  }, [actions, scope]);
+  }, [actions, lifetime, invoice.documentId, clearPrivateAccess]);
+  // Metadata changes invalidate foreground operations without cancelling their background transfer.
+  useEffect(() => {
+    epoch.current++;
+    working.current = false;
+    setBusy(false);
+  }, [scope]);
   const drive = invoice.backend === "google_drive",
     ready = invoice.transferStatus === "stored";
   const canRetry =
@@ -132,11 +160,17 @@ export function InvoiceEvidence({
     try {
       await callbacks.current.onChanged?.();
     } catch (error) {
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (active.current && currentLifetime.current === lifetime && (status === 401 || status === 403)) {
+        clearPrivateAccess();
+        notify("Invoice access ended", "Your invoice access is no longer available.", { variant: "error", href: null });
+        return;
+      }
       if (
         active.current &&
         currentScope.current === scope &&
         epoch.current === operation
-      )
+      ) {
         notify(
           "Could not refresh invoice evidence",
           error instanceof Error ? error.message : "Please refresh the budget.",
@@ -156,6 +190,7 @@ export function InvoiceEvidence({
             },
           },
         );
+      }
     }
   }
   async function run(mode: "open" | "retry") {
@@ -163,7 +198,7 @@ export function InvoiceEvidence({
       working.current ||
       !active.current ||
       currentScope.current !== scope ||
-      denied ||
+      accessEnded.current || denied ||
       (mode === "open" && !ready) ||
       (mode === "retry" && !canRetry)
     )
@@ -219,23 +254,10 @@ export function InvoiceEvidence({
         await refresh(operation);
       }
     } catch (error) {
-      if (
-        !active.current ||
-        currentScope.current !== scope ||
-        epoch.current !== operation
-      )
-        return;
-      const status =
-        error && typeof error === "object" && "status" in error
-          ? Number(error.status)
-          : 0;
-      if (status === 401 || status === 403) {
-        epoch.current++;
-        setDenied(true);
-        working.current = false;
-        setBusy(false);
-        callbacks.current.onAccessEnded?.();
-      }
+      if (!active.current || currentLifetime.current !== lifetime) return;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) clearPrivateAccess();
+      else if (currentScope.current !== scope || epoch.current !== operation) return;
       notify(
         mode === "open"
           ? "Could not open invoice"

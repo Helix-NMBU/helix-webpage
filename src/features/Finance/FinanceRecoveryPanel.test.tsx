@@ -4,11 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FinanceRecoveryPanel } from "./FinanceRecoveryPanel";
 
-const mocks = vi.hoisted(() => ({ recovery: vi.fn(), mutate: vi.fn(), notify: vi.fn(), retry: vi.fn(), allowed: true }));
+const mocks = vi.hoisted(() => ({ recovery: vi.fn(), mutate: vi.fn(), notify: vi.fn(), retry: vi.fn(), allowed: true, viewVersion: 1, endSession: undefined as undefined | (() => void) }));
+vi.mock("../MemberCV/session", () => ({ watchMemberSession: (end: () => void) => { mocks.endSession = end; return () => undefined; } }));
 vi.mock("./repository", async (original) => ({ ...await original<typeof import("./repository")>(), createFinanceApi: () => ({ recovery: mocks.recovery }) }));
 vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => mocks.notify }));
 vi.mock("../MemberPlatform/FinanceAccess", () => ({ useFinanceAccess: () => ({
-  access: "allowed", capabilities: { purchaseRegister: mocks.allowed }, mutate: mocks.mutate, retry: mocks.retry,
+  access: "allowed", viewVersion: mocks.viewVersion, capabilities: { purchaseRegister: mocks.allowed }, mutate: mocks.mutate, retry: mocks.retry,
 }) }));
 
 let container: HTMLDivElement;
@@ -16,6 +17,8 @@ let root: Root;
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   mocks.allowed = true;
+  mocks.viewVersion = 1;
+  mocks.endSession = undefined;
   mocks.notify.mockReset();
   mocks.retry.mockReset();
   mocks.mutate.mockReset().mockResolvedValue({ recovery: { message: "Recorded" } });
@@ -146,4 +149,98 @@ it("does not revive old recovery actions after changing invoice pages", async ()
   const retry = mocks.notify.mock.calls.find(call => call[0] === "Could not update recovery")![2].action.onClick;
   await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Next invoices")!.click());
   await act(async () => retry()); expect(mocks.mutate).toHaveBeenCalledOnce();
+});
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+};
+async function clickRecovery(label: string) {
+  const target = [...container.querySelectorAll("button")].find(button => button.textContent === label);
+  expect(target).toBeTruthy();
+  await act(async () => target!.click());
+}
+it.each([401, 403].flatMap(status => ["read", "mutation"].map(phase => ({ status, phase }))))("clears and latches recovery access on $phase denial $status", async ({ status, phase }) => {
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  const error = Object.assign(new Error("Current Finance grant revoked"), { status });
+  if (phase === "read") {
+    mocks.recovery.mockRejectedValueOnce(error);
+    await clickRecovery("Refresh recovery");
+  } else {
+    mocks.mutate.mockRejectedValueOnce(error);
+    await clickRecovery("Recorded as not sent");
+  }
+  expect(container.textContent).not.toContain("delivery-1");
+  expect(container.textContent).not.toContain("upload-1");
+  expect(mocks.retry).toHaveBeenCalledOnce();
+  const last = mocks.notify.mock.calls[mocks.notify.mock.calls.length - 1];
+  expect(last[0]).toBe("Finance access ended");
+  expect(last[2].action).toBeUndefined();
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  expect(container.textContent).not.toContain("delivery-1");
+});
+it("rejects an old recovery read after a concurrent mutation denial", async () => {
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  const old = deferred<unknown>();
+  mocks.recovery.mockReturnValueOnce(old.promise);
+  await clickRecovery("Refresh recovery");
+  mocks.mutate.mockRejectedValueOnce(Object.assign(new Error("Revoked"), { status: 403 }));
+  await clickRecovery("Recorded as not sent");
+  await act(async () => old.resolve({ deliveries: [{ id: "PRIVATE_OLD" }], uploads: [] }));
+  expect(container.textContent).not.toContain("PRIVATE_OLD");
+  expect(container.textContent).not.toContain("delivery-1");
+  expect(mocks.retry).toHaveBeenCalledOnce();
+});
+it("drops late reconciliation success when a later read ends authority", async () => {
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  const old = deferred<unknown>();
+  mocks.mutate.mockReturnValueOnce(old.promise);
+  await clickRecovery("Recorded as not sent");
+  // A session-ending event invalidates both reads and writes regardless of the pending operation.
+  await act(async () => mocks.endSession!());
+  await act(async () => old.resolve({ recovery: { message: "Old success" } }));
+  expect(container.textContent).not.toContain("delivery-1");
+  expect(mocks.notify).not.toHaveBeenCalledWith("Recovery updated", expect.anything(), expect.anything());
+  expect(mocks.retry).toHaveBeenCalledOnce();
+});
+it.each([400, 409, null])("retains safe recovery rows on a recoverable refresh error: %s", async status => {
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  mocks.recovery.mockRejectedValueOnce(Object.assign(new Error("Try again"), status ? { status } : {}));
+  await clickRecovery("Refresh recovery");
+  expect(container.textContent).toContain("delivery-1");
+  expect(container.textContent).toContain("upload-1");
+  expect(mocks.retry).not.toHaveBeenCalled();
+});
+it.each(["configuration_missing", "provider_permission", "provider_unavailable", "provider_mismatch", "source_unavailable", "source_mismatch", "transfer_uncertain", "private?access_token=secret"])("uses plain safe invoice recovery explanations for %s", async safeError => {
+  mocks.recovery.mockResolvedValue({ deliveries: [], uploads: [], invoiceTransfers: [{ documentId: "doc", purchaseRef: "PUR-1", originalName: "Invoice.pdf", backend: "google_drive", transferStatus: "needs_attention", transferRevision: 1, canRetry: true, attempts: 1, updatedAt: "2026-11-20", safeError }] });
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  expect(container.textContent).toContain("Needs attention");
+  expect(container.textContent).not.toContain(safeError);
+  expect(container.textContent).toMatch(/Finance|Google Drive|transfer result/);
+});
+
+it("refreshes current recovery facts after a background invoice version update", async () => {
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  mocks.recovery.mockResolvedValueOnce({ deliveries: [], uploads: [], invoiceTransfers: [{ documentId: "confirmed", purchaseRef: "PUR-1", originalName: "Invoice.pdf", backend: "google_drive", transferStatus: "stored", transferRevision: 2, canRetry: false, attempts: 1, updatedAt: "2026-11-20", safeError: null }] });
+  mocks.viewVersion = 2;
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  expect(mocks.recovery).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toContain("Stored in Drive");
+  expect(container.textContent).not.toContain("delivery-1");
+  expect(container.textContent).not.toContain("Retry invoice transfer");
+});
+
+it("treats an overlapping older read's authority denial as invalidation, even after a newer page response", async () => {
+  await act(async () => root.render(<FinanceRecoveryPanel />));
+  const old = deferred<unknown>();
+  mocks.recovery.mockReturnValueOnce(old.promise);
+  await clickRecovery("Refresh recovery");
+  mocks.recovery.mockResolvedValueOnce({ deliveries: [], uploads: [{ id: "NEW_PRIVATE", owner: "Member", status: "pending", commitState: "uncertain", referenced: false, candidateCount: 0, createdAt: "2026-11-20", expiresAt: "2026-11-21" }] });
+  await clickRecovery("Refresh recovery");
+  expect(container.textContent).toContain("NEW_PRIVATE");
+  await act(async () => old.reject(Object.assign(new Error("Revoked"), { status: 403 })));
+  expect(container.textContent).not.toContain("NEW_PRIVATE");
+  expect(mocks.retry).toHaveBeenCalledOnce();
 });
