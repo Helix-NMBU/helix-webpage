@@ -1,22 +1,32 @@
 # Project budget verification
 
-Approved specification: revision 2, decisions D1–D16. This record distinguishes executable fixture evidence from configured-service acceptance. The final reviewed commit and PR checks will be added after package integration.
+Approved specification: revision 2, decisions D1–D16. Final product code: `36b41f869379c767b552a62438265a8928fd16c5`, reviewed against `b05c5a457a378a76aaba7535ab6c0664505cf089`. Local implementation acceptance is complete. PR-only CI and merge readiness are recorded separately below and in delivery.md.
 
-## Current evidence
+## Final local evidence
 
-| Case | Evidence | Remaining acceptance |
+| Case | Verified behavior | Evidence |
 | --- | --- | --- |
-| V-01 — scoped roles | Real identity/linkage, project author, current department lead, Finance and explicit Head of Finance tests; actual074 department Home reader tests use ordinary membership with no broad Finance grant. Bounded reader/widget review found no actionable findings at f1b8fd4, wiring checked at3ba1b1b. | Final package/UI changes and complete review. |
-| V-02 — whole package | Initial074 lifecycle suite passes12 cases on integration, including two projects, unfinished projects, direct approval denial, replay and whole-package reset. Existing PostgreSQL approval regression passes5 cases using real packages. | Final package race hardening, stale legacy transition, two-project browser walkthrough. |
-| V-03 — revisions | Existing revision/import and purchase tests now use genuine package actions. Five PostgreSQL suites pass35 cases; purchases retain their recorded approved version in both promotion orders, unchanged plans survive actual/header changes, optional requests recheck after anchor waits. | Final owner-view and package hardening integration, grouped browser diff. |
-| V-04 — threshold removal | PBA-04/05 verified the retired threshold across SQL, forms, mail, export and pre-budget actual registration. Existing incurred-cost and review provenance regressions remain. | Final full-suite/CI confirmation. |
-| V-05 — partial fulfillment | PBA-05/08 tests and local browser evidence cover partial actuals, explicit complete/reopen, linked void, immutable exception facts and independent invoice/outlay obligations. Local invoice payment predicate matches documentKind invoice OR paymentMethod invoice. | Final integrated regression confirmation. |
-| V-06 — invoice storage | Durable invoice PostgreSQL suite passes21 cases after package fixture conversion. Earlier Drive fault and private staging tests cover confirmation, retry, uncertain create reconciliation, exact bytes, revocation and cleanup. Local recovery retains dirty reason input and does not duplicate purchases. | Real configured Drive credential/folder/narrow scope/reader ACL and authorized small/large/multiple-file acceptance remain release gates. No live writes were performed. |
-| V-07 — funding/P0 | Funding fixtures use real package approvals. Award/release, multiple obligations, rejected removal, proposal adoption and current approved ordinary priority were verified in PBA-07/08. Real042 wrapper plus073 owner repair passes4 migration/pipeline cases at95950dc. | Final package whole-union and owner-view checks, complete review. |
-| V-08 — totals/mapping | Synthetic PostgreSQL migration rehearsal passes through066–074: dry run changes no Finance table; duplicate mapping remains visible; real adoption/reviews switch legacy10,000 to project12,000 once; unmatched5,000 stays legacy; all original historical rows survive; registered actual2,000 excludes void. Home exact-money and cross-system ownership tests use actual074. | Final canonical Finance/Season owner read adapter and cross-department transition validation. |
-| V-09 — rendered UI/CI | Earlier project, purchase, invoice, funding, Finance and Season interfaces inspected locally. Department Home atf1b8fd4 showsNOK8,900.75 for Mechanical & Production under its project, including an Electronics system. CSS768 has no document overflow; normal project link works. Screenshots saved outside repository. | Package readiness/send/return/approve walkthrough, supported narrow package layout, exact final full tests/build/reviews/CI. |
+| V-01 — scoped roles | Current verified identity, assigned project leads, responsible department leads, Finance and explicit Head of Finance; ordinary department members receive only their approved Home aggregate. Foreign/revoked access is denied. Private Draft amounts, entries and raw audit snapshots are excluded from unrelated Finance, including funding paths; legitimate role overlap remains. | Actual 066–074 authorization/privacy suites; local dirty-editor revocation tests. Browser Finance saw approved 9,750.75 without the private Draft 100,749.25 or private description/note; assigned lead retained it. |
+| V-02 — whole package | Missing/Draft readiness, fixed multi-project snapshots, one atomic Head decision, individual bypass denial, stale/current-owner/legacy-transition checks, whole-package reset, real pre-074 pending migration and retry safety. | Actual 074 lifecycle and PostgreSQL races, late-fault rollback with an outside observer and same-request retry. Browser sent with No budget, withdrew with reason, then approved two projects together for 10,500.75. |
+| V-03 — revisions | New/Changed/Removed old/new comparisons, removed history, unchanged approved context, both reviews again, previous approval usable during revision. Purchases do not invalidate an unchanged plan merely by bumping headers. | Revision/import suites and both PostgreSQL purchase/promotion orders; browser retained 8,500 actual and three invoices through promotion. Native comparison disclosure keyboard/pointer checks. |
+| V-04 — threshold removal | NOK 5,000 rule removed across active purchase forms, SQL, mail and exports; incurred exceptions retain actual facts and Finance review provenance. | Dedicated threshold PostgreSQL suite, retained purchase/service/export tests and full suite. |
+| V-05 — partial fulfillment | Partial purchases, reasoned completion/reopening, linked voids and immutable exception facts; invoice payment and outlay reimbursement remain independent. | Real PostgreSQL purchase/concurrency and local register/recovery suites; browser invoice obligations and unchanged purchase totals. |
+| V-06 — invoice storage | Verified private staging, durable transfer continuation, exact bytes, uncertain-create reconciliation, retry without duplicate purchase, current-owner evidence access and preserved historical providers. | Drive fault/private staging tests, real PostgreSQL durable invoice suite, browser truthful unavailable legacy-file and needs-attention recovery with dirty input retained. Actual configured Drive acceptance remains a release gate. |
+| V-07 — funding/P0 | Award-derived P0, multiple obligations, only Head reasoned release, proposal adoption through both reviews, complete final replacement union and current approved ordinary priority. | Funding/pipeline suites load actual 042 and 066–074; final-union PostgreSQL approval and rollback cases; local application/proposal/award/release walkthrough. |
+| V-08 — totals/mapping | Whole project assigned once to selected responsible department across physical systems; preheader actuals follow later current owner while recorded purchase identity survives. Shared protected actuals partition once; minimal Season and exports agree. | Actual allocation/effective-finance suites and synthetic mapping rehearsal below; Home exact-money and approved-zero coverage. |
+| V-09 — rendered UI/CI | Project, department readiness/send, Finance grouped review, purchases/invoices/funding, Season and Home inspected locally. Desktop and supported CSS 768 layouts are readable, with local table scrolling, native focus/dismissal and shared notification recovery. Home shows 10,500.75 split 9,750.75/750 and excludes unfinished Drafts. | Screenshots outside Git in the existing visualization directory. All local commands and three independent review axes pass; PR CI remains the final publication gate. |
 
-The counts above overlap other test runs and must not be added as an overall feature test count. Earlier ticket evidence is recorded in delivery.md with its applicable commits. Final test results supersede these checkpoints for changed code.
+Counts from focused runs overlap and must not be added. The final full root run at `1c45774` passes 240 files and 2,341 tests, with one optional `ATTIO_IMPORT_SNAPSHOT` skip; all Finance and partner PostgreSQL cases execute. Log: `/private/tmp/helix-pba-final-integrated-tests.log`. The only subsequent product change, `36b41f8`, replaces Object.hasOwn with equivalent Object.prototype.hasOwnProperty.call for the deployment compiler's library target. Scoped purchase read and both API typechecks pass; independent reviewers cleared the exact final commit.
+
+## Independent review
+
+All reviewers inspected source and meaningful tests; they did not rerun runtime commands. Root owns the execution evidence.
+
+- Complete correctness/regression/failure-path/security: `/root/correctness_review`, clear at 36b41f8 against b05c5a4. All reported defects repaired and independently cleared.
+- Standards axis: `/root/standards_review`, zero actionable findings at the same base/head.
+- Spec axis: `/root/spec_review`, zero actionable findings at the same base/head, including revision 2/D16 and final Draft privacy.
+
+Earlier provisional checkpoints in delivery.md remain historical and do not override this final result.
 
 ## Migration rehearsal
 
@@ -28,23 +38,15 @@ This is a synthetic rehearsal. Before live adoption an operator must supply and 
 
 ## Final command gates
 
-Run against the completed integration commit:
+- All three package TypeScript checks pass. Repository lint passes; its existing configuration covers JS/JSX only, while the compilers check TypeScript.
+- Full `FINANCE_TEST_POSTGRES_URL=postgresql://postgres@127.0.0.1:55475/postgres npm test` passes as recorded above. Deployment guard Node tests also pass 3/3.
+- Final local Vercel build on 36b41f8 passes in `/private/tmp/helix-pba-compiler`, with separate dependencies and explicit existing project context. Static output 9.20MB/10MB, source 11/11 and freshly generated 11/11 functions. No TypeScript diagnostic remains. Log: `/private/tmp/helix-pba-final-vercel-verified-build.log`.
+- Compiler installs use the unchanged repository lockfile via `npm ci`. Vercel's function packaging removes optional peer lock entries in that isolated checkout; no dependency or lockfile change is integrated into the feature.
+- Feature-only diff inspected; no screenshots, environment files, credentials, generated deployment output or unrelated working-copy changes are included. Original approved artifact hashes remain preserved. Whole-branch diff whitespace notices are original document EOF blanks and intentional fixed-width PDF xref spaces, rather than accidental product whitespace.
 
-```sh
-npm run typecheck
-npm run typecheck:api
-npm run typecheck:api:runtime
-npm run lint
-FINANCE_TEST_POSTGRES_URL=postgresql://postgres@127.0.0.1:55475/postgres npm test
-npm run build
-node scripts/check-vercel-functions.mjs
-```
+The Finance PostgreSQL GitHub workflow selects the `test/api/_lib/project-budget` prefix and explicit concurrency/threshold/invoice suites, including real 074 package and migration rehearsal cases. It provides its own loopback PostgreSQL17 service. Required verify and this Finance job must pass on the current PR head or applicable test merge commit; skipped real races do not meet acceptance.
 
-The existing ESLint config covers JS/JSX only; a passing lint command does not establish TypeScript lint coverage. TypeScript is checked by the three compiler commands.
-
-Build the generated deployment locally in the isolated compiler checkout with its own dependencies, then inspect generated functions against the at-most-11 budget. The integration checkout currently contains older generated output, so its printed generated count is not final-build evidence. No hosted staging or deployment is part of validation.
-
-The Finance PostgreSQL GitHub workflow selects the `test/api/_lib/project-budget` prefix and explicit purchase/invoice/concurrency suites. Its loopback PostgreSQL service must execute the new package and migration rehearsal cases; environment-skipped races do not meet acceptance. Required checks must apply to the final PR head or applicable test merge commit.
+No hosted staging, live Finance migration, invoice service write or deployment was performed. An unlinked compiler command briefly created an empty temporary Vercel project; it was stopped, verified to have zero deployments and removed. The production Helix project was unchanged. Subsequent local build explicitly verified and selected the existing project before execution.
 
 ## Release inputs
 
