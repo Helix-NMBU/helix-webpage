@@ -1,4 +1,4 @@
-import type { ProjectBudgetCapabilities, ProjectBudgetDetail, ProjectBudgetSummary } from "./project-budget-types";
+import type { ProjectBudgetCapabilities, ProjectBudgetDetail, ProjectBudgetSummary } from "./project-budget-types.js";
 
 export const APPROVED_MEMBER_BUDGET_CAPABILITIES: ProjectBudgetCapabilities = Object.freeze({
   approvedOnly: true, canRead: true, canDraft: false, canReviewDepartment: false,

@@ -1,3 +1,4 @@
+import { loadMemberApprovedProjectBudgetWorkspace, loadMemberApprovedProjectBudgetDetail } from "./finance-project-budget-member-read.js";
 import {loadDepartmentHomeBudget} from "./finance-department-home.js";
 import {isDepartmentBudgetPackageMutation,loadDepartmentBudgetPreview,loadDepartmentBudgetPackages,loadDepartmentBudgetPackage,mutateDepartmentBudgetPackage} from "./finance-department-packages.js";
 import type {DepartmentHomeBudget,DepartmentBudgetPreview,DepartmentBudgetPackageQueue,DepartmentBudgetPackageDetail} from "../../src/features/Finance/department-budget-types.js";
@@ -205,14 +206,24 @@ export function createFinanceServices(deps: {
     async fundingApplicationBudgetContext(token, applicationId) { return loadFundingApplicationBudgetContext(db, await deps.authenticate(token), applicationId); },
     async projectFundingProposals(token, projectBudgetId) { return loadProjectFundingProposals(db, await deps.authenticate(token), projectBudgetId); },
     async projectBudgets(token, projectId, departmentId) {
-      return loadProjectBudgetWorkspace(db, await deps.authenticate(token), projectId, departmentId);
+      const identity = await deps.authenticate(token);
+      try { return await loadProjectBudgetWorkspace(db, identity, projectId, departmentId); }
+      catch (error) {
+        if (!(error instanceof FinanceError) || error.status !== 403 || !projectId || departmentId) throw error;
+        return loadMemberApprovedProjectBudgetWorkspace(db, identity, projectId);
+      }
     },
     async departmentHomeBudget(token,departmentId){return loadDepartmentHomeBudget(db,await deps.authenticate(token),departmentId);},
     async departmentBudgetPreview(token,departmentId){return loadDepartmentBudgetPreview(db,await deps.authenticate(token),departmentId);},
     async departmentBudgetPackages(token,departmentId){return loadDepartmentBudgetPackages(db,await deps.authenticate(token),departmentId);},
     async departmentBudgetPackage(token,packageId){return loadDepartmentBudgetPackage(db,await deps.authenticate(token),packageId);},
     async projectBudget(token, projectBudgetId) {
-      return loadProjectBudgetDetail(db, await deps.authenticate(token), projectBudgetId);
+      const identity = await deps.authenticate(token);
+      try { return await loadProjectBudgetDetail(db, identity, projectBudgetId); }
+      catch (error) {
+        if (!(error instanceof FinanceError) || error.status !== 403 || typeof projectBudgetId !== "string") throw error;
+        return loadMemberApprovedProjectBudgetDetail(db, identity, projectBudgetId);
+      }
     },
     async projectPurchaseContext(token, projectId, departmentId) {
       return loadProjectPurchaseContext(db, await deps.authenticate(token), projectId, departmentId);
