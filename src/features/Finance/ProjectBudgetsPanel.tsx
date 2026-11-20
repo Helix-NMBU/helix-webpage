@@ -686,9 +686,10 @@ export function ProjectBudgetsPanel({
         const previousCapabilities = selectedCapabilities.current;
         selectedCapabilities.current = currentCapabilities ?? null;
         if (currentCapabilities && previousCapabilities &&
-          ((previousCapabilities.canDraft && !currentCapabilities.canDraft) ||
+          ((!previousCapabilities.approvedOnly && currentCapabilities.approvedOnly) ||
+           (previousCapabilities.canDraft && !currentCapabilities.canDraft) ||
            (canReadProjectBudgetDraft(previousCapabilities) && !canReadProjectBudgetDraft(currentCapabilities)))) {
-          // Authorization loss takes precedence over keeping unsaved private Draft input.
+          // Authorization loss takes precedence over private edits and dirty purchase input.
           authorizationEpoch.current++;
           mutationGeneration.current++;
           setDetail(null);
@@ -696,6 +697,7 @@ export function ProjectBudgetsPanel({
           setReasonAction(null);
           setImportOpen(false);
           setProposalDirty(false);
+          setPurchaseDirty(false);
           setVersionView("approved");
           dirty.current = false;
         }
@@ -905,6 +907,8 @@ export function ProjectBudgetsPanel({
   const filterChoices=projectBudgetFilterChoices(workspace?.budgets??[]);
   const matching = workspace?.budgets.filter(budget=>matchesProjectBudget(budget,{stage,projectId:projectFilter,departmentId:departmentFilter}))??[];
   const budgetAccessRequired = denied || Boolean(projectId && workspace && !workspace.scopes.some(scope => scope.projectId === projectId && scope.capabilities.canRead));
+  const approvedOnly = detail?.capabilities.approvedOnly === true;
+  const approvedOnlyScope = Boolean(projectId && workspace?.scopes.some(scope => scope.projectId === projectId && scope.capabilities.approvedOnly));
   const detailVisible=detail && (dirty.current||matching.some(budget=>budget.id===detail.id));
   const canEdit = Boolean(
     detail?.capabilities.canDraft &&
@@ -1037,11 +1041,13 @@ export function ProjectBudgetsPanel({
         <Empty className="min-h-40 border">
           <EmptyHeader>
             <EmptyTitle>
-              {budgetAccessRequired ? "Budget access required" : "No project budgets yet"}
+              {budgetAccessRequired ? "Budget access required" : approvedOnlyScope ? "No approved project budget yet" : "No project budgets yet"}
             </EmptyTitle>
             <EmptyDescription>
               {budgetAccessRequired
                 ? "Your current assignments do not give access to these budgets."
+                : approvedOnlyScope
+                  ? "The allocated budget will appear here after Finance approves it."
                 : authorScopes.length
                   ? "Create a budget for a project you lead."
                   : "Submitted and approved budgets will appear here."}
@@ -1201,7 +1207,7 @@ export function ProjectBudgetsPanel({
             <div><dt className="text-xs text-muted-foreground">Spent</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.actualNok ?? formatOre(displayed.entries.reduce((total, item) => total + canonicalNokOre(item.actualNok), 0n)))}</dd></div>
             {viewingCandidate && detail.approvedVersion && <div><dt className="text-xs text-muted-foreground">Approved budget</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.approvedTotalNok)}</dd></div>}
           </dl>}
-          {detail.approvedVersion && (
+          {detail.approvedVersion && !approvedOnly && (
             <div className={projectId ? "max-w-xs space-y-2" : "max-w-md space-y-2"}>
               <Label htmlFor="project-budget-version" className={projectId ? "sr-only" : undefined}>Budget version</Label>
               <Select
@@ -1411,8 +1417,8 @@ export function ProjectBudgetsPanel({
           {!projectId && <p className="text-right font-medium">
             Total {money(displayed.totalNok)}
           </p>}
-          {projectId && <BudgetDisclosure compact label="More actions" locked={busy || dirty.current}>{secondaryActions}</BudgetDisclosure>}
-          <FundingBudgetProposals compact={!!projectId} budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />
+          {projectId && !approvedOnly && <BudgetDisclosure compact label="More actions" locked={busy || dirty.current}>{secondaryActions}</BudgetDisclosure>}
+          {!approvedOnly && <FundingBudgetProposals compact={!!projectId} budget={detail} onChanged={() => load(true)} onDirtyChange={setProposalDirty} />}
           {detail.capabilities.canRegisterPurchase && (
             <BudgetDisclosure compact={!!projectId} label="Purchases and completion" locked={purchaseDirty}>
             <ProjectBudgetPurchases budget={detail} onChanged={() => load(true)} onEvidenceChanged={() => load(false)} onDirtyChange={setPurchaseDirty} onAccessLost={clearPrivate} />

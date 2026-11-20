@@ -1,3 +1,5 @@
+import { APPROVED_MEMBER_BUDGET_CAPABILITIES, memberApprovedBudgetDetail, memberApprovedBudgetSummary } from "./project-budget-member-view";
+import { departmentMemberIds } from "../ProjectManagement/permissions";
 import { isProjectMemberPreview } from "../MemberPlatform/local-member-profile-selection";
 import { projectMemberWorkspace } from "../ProjectManagement/local-member-preview";
 import { canReadProjectBudgetDraft } from "./project-budget-visibility";
@@ -129,8 +131,11 @@ function scopes(state: State): ProjectBudgetScope[] {
     const reviewer = profile === "department_lead"
       ? reviewerDepartments.some(department=>department.id===responsible)
       : finance && data.departments.some(department => department.id === responsible && (department.leadIds ?? (department.leadId ? [department.leadId] : [])).includes(financeActor));
-    if (!finance && !author && !reviewer) return [];
-    const capabilities: ProjectBudgetCapabilities = {
+    const assignedMember = data.tasks.some(task => task.projectId === project.id && task.season === project.season && task.kind === "task" && task.assigneeIds.includes(data.viewerId)) &&
+      departments.some(department => departmentMemberIds(department).includes(data.viewerId));
+    const approvedOnly = !finance && !author && !reviewer && assignedMember;
+    if (!finance && !author && !reviewer && !approvedOnly) return [];
+    const capabilities: ProjectBudgetCapabilities = approvedOnly ? APPROVED_MEMBER_BUDGET_CAPABILITIES : {
       canRead: true,
       canDraft: author,
       canReviewDepartment: reviewer,
@@ -143,7 +148,7 @@ function scopes(state: State): ProjectBudgetScope[] {
     };
     return [
       {
-        memberId: finance
+        memberId: approvedOnly ? data.viewerId : finance
           ? financeActor
           : author
           ? data.viewerId
@@ -171,6 +176,7 @@ function scopes(state: State): ProjectBudgetScope[] {
   });
 }
 function summary(budget: ProjectBudgetDetail, capabilities: ProjectBudgetCapabilities): ProjectBudgetSummary {
+  if (capabilities.approvedOnly) return memberApprovedBudgetSummary({ ...budget, revision: budget.approvedVersion?.revision ?? 0 });
   return {
     id: budget.id, projectId: budget.projectId, projectName: budget.projectName,
     seasonId: budget.seasonId, seasonCode: budget.seasonCode,
@@ -204,6 +210,7 @@ function view(
       .filter(
         (budget) =>
           byProject.has(budget.projectId) &&
+          (!byProject.get(budget.projectId)!.capabilities.approvedOnly || budget.approvedVersionId !== null) &&
           (canReadProjectBudgetDraft(byProject.get(budget.projectId)!.capabilities) ||
             budget.pendingStage !== "draft" ||
             budget.approvedVersionId !== null),
@@ -231,6 +238,10 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
         scopes(state).find((item) => item.projectId === budget.projectId);
       if (!budget || !scope)
         fail("You do not have access to this project budget.");
+      if (scope.capabilities.approvedOnly) {
+        if (!budget.approvedVersion) fail("No approved project budget is available yet.", 404);
+        return memberApprovedBudgetDetail(budget);
+      }
       const draftAccess = canReadProjectBudgetDraft(scope.capabilities);
       const detail: ProjectBudgetDetail = structuredClone({
         ...summary(budget, scope.capabilities),
@@ -246,6 +257,8 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
       const state = read(),
         fingerprint = JSON.stringify(change),
         profile = localBudgetRole();
+      const targetProjectId = change.action === "createProjectBudget" ? change.projectId : state.budgets.find(budget => budget.id === change.projectBudgetId)?.projectId;
+      if (scopes(state).some(scope => scope.projectId === targetProjectId && scope.capabilities.approvedOnly)) fail("This approved project budget is read-only.");
       if(change.action==="approveDepartmentBudget"||change.action==="approveProjectBudget")fail("Use the department package preview and decision workflow.",409);
       const requestKey = `${profile}:${change.requestId}`;
       const previous = state.requests[requestKey];

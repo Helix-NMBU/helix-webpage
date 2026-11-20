@@ -43,3 +43,8 @@ Specification cases: V-01, V-02, V-09.
 
 Approved, published in Linear. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
 
+
+
+## Direct member-read amendment D17
+
+Current assigned project members can read the current approved project allocation and public entries with no request-changes or other mutation permission. Do not broaden the privileged SQL scope used by authoring, purchases, uploads or invoice evidence. Use a separate current-authority, approved-only allowlisted read. Preserve private pending revisions, notes/owners, invoices, funding and reviewer history. Verify actual membership/revocation, no approved version, private pending revisions, direct mutation denial, role overlap and dirty privileged-form clearing. This addition was directly authorized by the user on 20 November 2026; preserve prior completion evidence and reverify this affected slice.

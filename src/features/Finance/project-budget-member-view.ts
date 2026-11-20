@@ -25,7 +25,7 @@ export function memberApprovedBudgetSummary(source: ProjectBudgetSummary): Proje
 export function memberApprovedBudgetDetail(source: ProjectBudgetDetail): ProjectBudgetDetail {
   const approved = source.approvedVersion;
   return {
-    ...memberApprovedBudgetSummary(source),
+    ...memberApprovedBudgetSummary({ ...source, revision: approved?.revision ?? 0 }),
     approvedVersion: approved ? {
       id: approved.id, versionNumber: approved.versionNumber, revision: approved.revision,
       status: "approved", submittedAt: null, departmentApprovedBy: null,

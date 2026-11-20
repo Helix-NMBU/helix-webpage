@@ -94,6 +94,13 @@
       "exactRequest": "Also, i dont remember if i stated it, but on the departments homepage then there should be a widget that displays the allocated budget to that department and a easy overview of just how its spread on what projects. so people can see at a glance within the department",
       "scope": "Department homepage allocated-budget widget and project breakdown, included in PBA-10",
       "authorization": "Direct user implementation request; no additional approval or allocation-policy change"
+    },
+    {
+      "date": "2026-11-20",
+      "decision": "D17",
+      "exactRequest": "A member should still be able to see the allocated project budget, just not be able to request changes",
+      "scope": "Read-only current approved project budget for current project members, with pending/private details and all mutations excluded",
+      "authorization": "Direct user implementation instruction; prior approval hashes preserved"
     }
   ]
 }
