@@ -1,6 +1,6 @@
 # Project budget verification
 
-Approved specification: revision 2, with direct user addenda D16 and D17. Current product `cf17e124491497c4c7d91b271c546e5ec43ccb7d` and fixture-only follow-up `54fa2ea45ed8af3b9ef58f42f0cd08b22e575afb` are independently reviewed against `b05c5a457a378a76aaba7535ab6c0664505cf089`. The baseline evidence below is preserved. The latest D17 section and delivery.md record current verification; GitHub and HELIX-84 record final PR-head CI/readiness.
+Approved specification: revision 2, with direct user addenda D16, D17 and D18. Current product `01ad9b0db1fb2c269d22e18152ccea30acaaa176` is independently reviewed against main `b05c5a457a378a76aaba7535ab6c0664505cf089`, reusing valid earlier coverage for unchanged code. Baseline evidence is preserved below. The latest D18 section and delivery.md record current verification; GitHub and HELIX-84 hold final PR-head CI/readiness.
 
 ## Baseline local evidence
 
@@ -87,3 +87,14 @@ At final productcf17e124491497c4c7d91b271c546e5ec43ccb7d, the production reader 
 | Browser | Team Member sees approved9,750.75 and spent8,500 with three approved entries. Private draft100,749.25 and its description/note remain absent. No Request changes, edit, funding, invoice, version or history controls. Screenshot `project-member-approved-budget.jpg` remains outside Git. |
 
 Final root suite at54fa2ea passes245 files and2,372 tests, with one optional ATTIO_IMPORT_SNAPSHOT skip; all Finance and partner PostgreSQL cases ran. Deployment guards pass3/3. Log `/private/tmp/helix-member-approved-final-full-serial-check.log`. All three types/lint and the isolated local generated build pass, with9.20MB static output and11 source/generated functions. Build log `/private/tmp/helix-member-approved-final-vercel-build.log`. Earlier concurrent-run startup timeout is superseded by the passing full recheck and separate12/12 local-API check. No assertions or timeouts were changed. Publication documentation does not change reviewed productcf17e12. Exact final PR-head checks and merge readiness remain authoritative in GitHub and HELIX-84. The parent stays open and PR #144 remains unmerged. No production migration, Drive write or deployment occurred.
+
+
+## D18 sidebar and automatic freshness
+
+The final user instruction places the budget/spending circle at the bottom of the right sidebar, below Progress. It uses approved allocation and registered spending, while proposed totals stay in the candidate editor. Draft/continue navigation is scoped to authorized leads, and zero or over-budget allocations use the existing accessible ring semantics. The metadata line and manual refresh controls are removed.
+
+Shared successful-write events refresh clean views immediately. Visible polling, focus and storage provide ongoing freshness. Access/session changes clear data, dirty forms remain protected, cancelled/superseded reads cannot restore old values, and notification recovery remains available. Non-browser invoice continuation callers safely skip browser notifications. Existing D17 and approval/evidence permissions are unchanged.
+
+Final local verification at01ad9b0 passes246 files/2,384 tests with one optional Attio skip, all Finance/partner PostgreSQL cases and deployment guards3/3. The three TypeScript checks, repository lint and local frontend build pass. Static output is9.21MB, source/generated functions11/11. API source is unchanged from the earlier generated deployment compilation. Independent correctness, Standards and Spec reviews are clear on exact01ad9b0. Logs and repair evidence are in delivery.md.
+
+Browser verified the bottom position, correct9,750.75/8,500/87% member values, absence of private/action controls, no-budget lead prompt and setup route, Escape focus recovery and readable CSS768 without document overflow. Screenshots remain outside Git. The original member view is retained; temporary QA/viewport changes were restored. Final exact-head verify and Finance PostgreSQL CI/readiness are authoritative in GitHub PR144 and HELIX-84. The PR remains unmerged and the parent open. No deployment occurred.

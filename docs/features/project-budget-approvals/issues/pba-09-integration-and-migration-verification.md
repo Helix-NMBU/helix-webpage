@@ -46,3 +46,8 @@ Specification cases: V-01, V-02, V-03, V-04, V-05, V-06, V-07, V-08, V-09.
 
 Existing HELIX-84 is published and Backlog. Its revision 2 scope and added PBA-10 / HELIX-85 blocker were approved on 20 November 2026; publication and native blocker readback are verified. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
 
+
+
+## D18 verification addition
+
+Reverify the automatic project budget/spending widget at the bottom of the sidebar, absence of metadata/refresh controls, permission-aware empty state, current approved versus proposed totals, canonical registered/unbudgeted/voided actuals, success-only update events, dirty-form preservation and session/access/cancellation boundaries. Keep the exact-head CI and merge-readiness evidence in HELIX-84 after updating PR144.
