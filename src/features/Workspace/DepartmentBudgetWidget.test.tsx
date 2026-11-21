@@ -131,7 +131,7 @@ it("clears a pending response when the repository's session watcher reports acco
   await act(async () => finish(budget));
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(repository.load).toHaveBeenCalledOnce();
-  expect((container.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
+  expect(container.querySelector('[aria-label="Refresh allocated budget"]')).toBeNull();
   expect(container.textContent).not.toContain("NOK 8,900.75");
   expect(container.textContent).toContain("Your session has ended Sign in");
   await act(async () => root.unmount()); expect(stop).toHaveBeenCalledOnce(); root = createRoot(container);

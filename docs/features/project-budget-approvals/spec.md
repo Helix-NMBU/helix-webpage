@@ -2,11 +2,11 @@
 
 Feature: `project-budget-approvals`
 Revision: 2
-Status: approved revision 2, with direct user addenda D16 and D17
+Status: approved revision 2, with direct user addenda D16, D17 and D18
 Prepared: 19 November 2026; amended: 20 November 2026
 Tracker: Linear, team `HELIX`, project `P-HELIX-4`, existing Finance milestone `eb62b788-596a-4920-ab8d-cfda9aa53cc0`
 Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), related to HELIX-34 and HELIX-63.
-Scope: [scope.md](scope.md), confirmed decisions D1 through D17.
+Scope: [scope.md](scope.md), confirmed decisions D1 through D18.
 Ticket plan: [tickets.md](tickets.md). Individual drafts are in [issues/](issues/).
 
 ## Approval contract
@@ -186,3 +186,10 @@ Published parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project
 ## D17 member allocation verification
 
 An ordinary current project member can open its Budget tab and see the last approved total and active entries while a revision is Draft or pending either review. No request-changes, edit, approval, import, funding or purchase controls appear, and direct calls to those operations remain denied. A project without an approval shows an honest not-approved-yet state without exposing the Draft. The public wire omits pending IDs/amounts, author notes/owners, invoice/document references, funding links/conditions and decisions/history. Membership, project access, season and verified Google linkage are rechecked together with the approved pointer in each server read. Revoked/unassigned/viewer-only/foreign project access is denied. A privileged reader downgraded to this member view loses dirty private forms immediately. Existing Finance/lead and invoice authority stay unchanged.
+
+
+## D18 project sidebar and automatic freshness
+
+The bottom of the project right sidebar contains Budget and spending with the shared circular usage indicator, approved allocated total and registered spending. It remains separate from private proposed version totals. An approved zero allocation remains a real budget; zero-denominator and over-budget states retain the existing accessible ring semantics. The department/season/version metadata line and manual refresh controls are removed. Authorized leads can navigate to draft or continue their budget when approval is absent; other members receive an awaiting-approval state without editing permissions.
+
+Budgets update automatically after successful material writes, package approvals, visible polling, focus and cross-tab changes. Dirty authoring/purchase input survives refresh. Session, identity, project or membership changes invalidate old responses and clear private data. Notification actions retain recovery and conflict handling. Existing finance approval, evidence and D17 visibility policies stay in force.

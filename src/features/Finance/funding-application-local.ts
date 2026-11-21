@@ -672,6 +672,7 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
       state.requests[key] = { fingerprint, result };
       localStorage.setItem(KEY, JSON.stringify(state));
       synchronize(state);
+      window.dispatchEvent(new Event("helix-workspace-updated"));
       return result;
     },
   };

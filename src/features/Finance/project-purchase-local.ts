@@ -253,6 +253,7 @@ export function createLocalProjectPurchaseRepository(): ProjectPurchaseRepositor
         reviewFacts:checked.warnings.map((warning,index)=>({id:`${id}-review-${index+1}`,kind:warning.message.toLowerCase().includes("unbudgeted")?"unbudgeted" as const:"budget_overrun" as const,reviewStatus:"open" as const,facts:{message:warning.message},reason:null,actorMemberId:null,reviewedAt:null}))};
       purchases.requests[key] = { fingerprint, result };
       save(value, purchases);
+      window.dispatchEvent(new Event("helix-workspace-updated"));
       return result;
     },
     async complete(change) {
@@ -303,6 +304,7 @@ export function createLocalProjectPurchaseRepository(): ProjectPurchaseRepositor
       };
       purchases.requests[key] = { fingerprint, result };
       save(value, purchases);
+      window.dispatchEvent(new Event("helix-workspace-updated"));
       return result;
     },
   };

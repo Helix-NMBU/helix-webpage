@@ -101,6 +101,14 @@
       "exactRequest": "A member should still be able to see the allocated project budget, just not be able to request changes",
       "scope": "Read-only current approved project budget for current project members, with pending/private details and all mutations excluded",
       "authorization": "Direct user implementation instruction; prior approval hashes preserved"
+    },
+    {
+      "date": "2026-11-21",
+      "decision": "D18",
+      "exactRequest": "Notes:\n\n- Refresh budgets should not have to exist. I expect the budget showing to be the one up to date.\n- \"Department . S27 . Verision\" that small text can be removed.\n- Budget vs spend can be made into a widget on the right hand side also with a circle progress. See attached image for reference.\n  - If no budget is set up then have the widget show something like, draft a budget",
+      "exactFollowup": "let's have the budget widget at the bottom of the right side area. not the top",
+      "scope": "Project sidebar budget/spending circle at the bottom, permission-aware empty state and automatic current-budget freshness",
+      "authorization": "Direct user implementation request; original approval hashes and approval policies preserved"
     }
   ]
 }

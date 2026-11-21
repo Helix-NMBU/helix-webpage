@@ -479,3 +479,12 @@ This publication includes the earlier local-only member inspection aid22f083c an
 Existing PR #144 is the only feature PR. Publish this verified batch under Deliver authorization, keep it draft while new-head CI runs, require both verify and finance-postgres, then inspect exact remote head/base, strict freshness, conflicts, review requirements, auto-merge and draft state. Restore ready status only after passing. GitHub's current PR state and the final HELIX-84 closure hold exact final head/run evidence after this documentation checkpoint. HELIX-78 records D17 slice closure; parent HELIX-75 stays open until merge. No new code change is planned unless CI exposes a defect.
 
 The PR remains unmerged. Production mapping and Drive identity/folder/narrow-scope/reader-ACL acceptance remain release inputs. Merge, live migration and deployment need separate authorization. No deployment or live financial write was performed.
+
+
+## D18 live UI refinement, 21 November 2026
+
+The user requested automatic budget freshness without refresh controls, removal of the small department/season/version text and a project Budget and spending circle widget. A subsequent direct instruction places it at the bottom of the right sidebar, below Progress. D18 is recorded in scope/spec and the addendum record without changing original approved hashes or workflow permissions. HELIX-83 and HELIX-84 are reopened for this bounded refinement; the same unmerged PR #144 remains the publication target.
+
+Root owns implementation in the existing integration branch based on68978241a8484cdfb492d29c7054c01301c6515d. Existing backend worker independently audited event freshness read-only, identifying missing successful purchase/funding/generic Finance emissions. Existing source/protection/PR state was verified live: mainb05c5a4, PR144 OPEN/non-draft/CLEAN before this amendment.
+
+Initial targeted UI/local checks pass102 tests across10 files. Browser exposed a local workspace-summary spending gap while entry detail correctly showed8,500. The local summary now derives canonical registered/voided/unbudgeted actuals through the existing Finance projection. No production API or authorization grant changed. Typechecks, full local tests, browser/narrow/empty-state verification, independent review and new-head CI remain before publication/closure.

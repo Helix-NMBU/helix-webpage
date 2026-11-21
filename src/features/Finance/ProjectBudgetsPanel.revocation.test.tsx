@@ -31,6 +31,5 @@ it.each(["header", "unbudgeted"])("clears enclosing private budget data after %s
   expect(container.textContent).toContain("Budget access required");
   expect(container.textContent).not.toContain("Private material description");
   expect(container.textContent).not.toContain("Chassis & assembly");
-  const refresh = [...container.querySelectorAll("button")].find(button => button.textContent === "Refresh budgets");
-  expect(document.activeElement).toBe(refresh);
+  expect(document.activeElement).toBe(container.querySelector("h2"));
 });

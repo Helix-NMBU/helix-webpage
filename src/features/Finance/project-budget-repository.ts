@@ -18,7 +18,7 @@ export interface ProjectBudgetFilters {
   departmentId?: string;
 }
 export interface ProjectBudgetRepository {
-  load(filters?: ProjectBudgetFilters): Promise<ProjectBudgetWorkspaceView>;
+  load(filters?: ProjectBudgetFilters, signal?: AbortSignal): Promise<ProjectBudgetWorkspaceView>;
   detail(id: string): Promise<ProjectBudgetDetail>;
   mutate(change: ProjectBudgetMutation): Promise<ProjectBudgetMutationResult>;
   watchSession?(onEnd: () => void): () => void;
@@ -39,6 +39,7 @@ export function createProjectBudgetRepository(): ProjectBudgetRepository {
   async function request<T>(
     parameters: Record<string, string | undefined>,
     change?: ProjectBudgetMutation,
+    signal?: AbortSignal,
   ): Promise<T> {
     const token = await memberSessionToken(owner);
     const query = new URLSearchParams();
@@ -46,6 +47,7 @@ export function createProjectBudgetRepository(): ProjectBudgetRepository {
       if (value) query.set(key, value);
     const result = await fetch(`/api/finance${query.size ? `?${query}` : ""}`, {
       method: change ? "POST" : "GET",
+      signal,
       cache: "no-store",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -64,9 +66,13 @@ export function createProjectBudgetRepository(): ProjectBudgetRepository {
     return body;
   }
   return {
-    load: (filters = {}) => request({ action: "projectBudgets", ...filters }),
+    load: (filters = {}, signal) => request({ action: "projectBudgets", ...filters }, undefined, signal),
     detail: (id) => request({ action: "projectBudget", projectBudgetId: id }),
-    mutate: (change) => request({}, change),
+    mutate: async change => {
+      const result = await request<ProjectBudgetMutationResult>({}, change);
+      window.dispatchEvent(new Event("helix-workspace-updated"));
+      return result;
+    },
     watchSession: (onEnd) => watchMemberSession(onEnd, undefined, owner),
   };
 }

@@ -260,6 +260,21 @@ function readFacts(bankVersion: number): LocalFinanceProjectionInput {
     commitments: ledger.commitments,
   };
 }
+/** Minimal local project totals. Callers must first enforce their project budget scope. */
+export function loadLocalProjectBudgetFinancials(projectId: string) {
+  if (!isLocalMemberMode() || !localMemberSignedIn())
+    throw Object.assign(new Error("Sign in to continue."), { status: 401 });
+  const facts = readFacts(0), projected = projectLocalFinance(facts);
+  const itemIds = new Set(projected.items.map(item => item.id));
+  const allocated = projected.items.filter(item => item.projectId === projectId)
+    .reduce((total, item) => total + nokToOre(item.actualNok), 0n);
+  const unbudgeted = facts.purchases.filter(purchase => purchase.projectId === projectId && (!purchase.status || purchase.status === "registered"))
+    .reduce((total, purchase) => total + (normalizePurchaseInput(purchase.purchase).purchase?.lines ?? [])
+      .filter(line => line.unbudgeted || !line.budgetItemId || !itemIds.has(line.budgetItemId))
+      .reduce((amount, line) => amount + line.amountOre, 0n), 0n);
+  return { actualNok: formatOre(allocated + unbudgeted), unbudgetedNok: formatOre(unbudgeted) };
+}
+
 export function loadLocalFinanceViews(bankVersion: number) {
   guard("finance");
   return projectLocalFinance(readFacts(bankVersion));

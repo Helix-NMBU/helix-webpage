@@ -646,7 +646,7 @@ describe("project budget controls", () => {
     ).toBeNull();
     expect(container.textContent).toContain("NOK 10,100.00");
     await vi.waitFor(() =>
-      expect(document.activeElement?.textContent).toBe("Refresh budgets"),
+      expect(document.activeElement).toBe(container.querySelector("h2")),
     );
   });
   it.each(["stale", "protected"])(

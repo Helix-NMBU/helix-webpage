@@ -66,14 +66,14 @@ export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
   );
   const mutate = async (change: ProjectPurchaseChange) => {
     const result = await request<ProjectPurchaseResult>({}, change);
-    if (change.action === "registerProjectPurchase") continuation.start(result);
+    if (change.action === "registerProjectPurchase") { continuation.start(result); window.dispatchEvent(new Event("helix-workspace-updated")); }
     return result;
   };
   return {
     load: (binding) =>
       request({ action: "projectPurchaseContext", ...binding }),
     mutate,
-    complete: (change) => request({}, change),
+    complete: async change => { const result = await request<ProjectBudgetMutationResult>({}, change); window.dispatchEvent(new Event("helix-workspace-updated")); return result; },
     async upload(binding, file) {
       const authorized = await mutate({
         action: "authorizeProjectPurchaseUpload",

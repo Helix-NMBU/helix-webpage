@@ -1,3 +1,4 @@
+import { ProjectBudgetWidget } from "./ProjectBudgetWidget";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { IconDiamonds, IconPlus } from "@tabler/icons-react";
@@ -252,6 +253,7 @@ export function ProjectSidebar({
           </p>
         )}
       </Widget>
+      <ProjectBudgetWidget key={`${directory.viewerId}:${project.id}`} projectId={project.id} viewerId={directory.viewerId} />
     </aside>
   );
 }

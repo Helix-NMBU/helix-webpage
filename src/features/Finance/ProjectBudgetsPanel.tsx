@@ -1,5 +1,5 @@
+import { MEMBER_ACCESS_CHANGED } from "../MemberPlatform/member-access-api";
 import { BudgetDisclosure } from "./BudgetDisclosure";
-import { canonicalNokOre } from "./project-budget-diff";
 import { canReadProjectBudgetDraft } from "./project-budget-visibility";
 import { Link, useInRouterContext } from "react-router-dom";
 import type {MouseEvent,ReactNode} from "react";
@@ -55,7 +55,7 @@ import {
 } from "@libs/components/ui/empty";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { BUDGET_ITEM_CATEGORIES } from "./budget-domain";
-import { formatOre, parseNokToOre } from "./money";
+import { parseNokToOre } from "./money";
 import {
   PROJECT_BUDGET_STAGE_LABELS,
   type ProjectBudgetCapabilities,
@@ -597,6 +597,7 @@ export function ProjectBudgetsPanel({
   const [purchaseDirty, setPurchaseDirty] = useState(false);
   const [purchaseScopeId, setPurchaseScopeId] = useState("");
   const notify = useNotify();
+  const sessionEnded = useRef(false);
   const alive = useRef(false),
     generation = useRef(0),
     saving = useRef(false),
@@ -608,13 +609,13 @@ export function ProjectBudgetsPanel({
   dirty.current =
     entry !== null || createOpen || reasonAction !== null || importOpen || purchaseDirty || proposalDirty;
   const dialogOpener = useRef<HTMLButtonElement | null>(null);
-  const focusFallback = useRef<HTMLButtonElement | null>(null);
+  const focusFallback = useRef<HTMLHeadingElement | null>(null);
   const pendingFocus = useRef(false);
   const restoreFocus = useCallback(() => {
     const target = dialogOpener.current?.isConnected
       ? dialogOpener.current
       : focusFallback.current;
-    if (target?.disabled) {
+    if (target instanceof HTMLButtonElement && target.disabled) {
       pendingFocus.current = true;
       return;
     }
@@ -658,7 +659,7 @@ export function ProjectBudgetsPanel({
   }, [denied]);
   const load = useCallback(
     async (force = false) => {
-      if (saving.current || currentScope.current !== scopeIdentity) return;
+      if (sessionEnded.current || saving.current || currentScope.current !== scopeIdentity) return;
       const noticeEpoch = authorizationEpoch.current;
       const request = ++generation.current;
       try {
@@ -729,7 +730,7 @@ export function ProjectBudgetsPanel({
         }
       } catch (error) {
         if (!alive.current || request !== generation.current) return;
-        if ([401, 403].includes(status(error) ?? 0)) clearPrivate();
+        if ([401, 403].includes(status(error) ?? 0)) { if (status(error) === 401) sessionEnded.current = true; clearPrivate(); }
         notify("Could not load project budgets", message(error), {
           variant: "error",
           href: null,
@@ -752,6 +753,7 @@ export function ProjectBudgetsPanel({
   );
   useEffect(() => {
     alive.current = true;
+    sessionEnded.current = false;
     mutationGeneration.current++;
     saving.current = false;
     setBusy(false);
@@ -775,9 +777,14 @@ export function ProjectBudgetsPanel({
     };
     window.addEventListener("focus", refresh);
     window.addEventListener("helix-workspace-updated",refresh);
+    window.addEventListener("storage", refresh);
+    const accessChanged = () => { clearPrivate(); void load(); };
+    window.addEventListener(MEMBER_ACCESS_CHANGED, accessChanged);
+    window.addEventListener("helix-member-local-session-changed", accessChanged);
     document.addEventListener("visibilitychange", refresh);
     const timer = window.setInterval(refresh, 30000);
     const stop = repository.watchSession?.(() => {
+      sessionEnded.current = true;
       generation.current++;
       clearPrivate();
       notify("Session ended", "Sign in again to continue.", {
@@ -791,6 +798,9 @@ export function ProjectBudgetsPanel({
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("helix-workspace-updated",refresh);
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(MEMBER_ACCESS_CHANGED, accessChanged);
+      window.removeEventListener("helix-member-local-session-changed", accessChanged);
       document.removeEventListener("visibilitychange", refresh);
       stop?.();
     };
@@ -831,7 +841,7 @@ export function ProjectBudgetsPanel({
       return true;
     } catch (error) {
       if (!alive.current || operation !== generation.current) return false;
-      if ([401, 403].includes(status(error) ?? 0)) clearPrivate();
+      if ([401, 403].includes(status(error) ?? 0)) { if (status(error) === 401) sessionEnded.current = true; clearPrivate(); }
       notify(
         "Could not save the budget",
         `${message(error)}${status(error) === 409 ? " Your form is kept." : ""}`,
@@ -1008,20 +1018,12 @@ export function ProjectBudgetsPanel({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-medium">{title}</h2>
+          <h2 ref={focusFallback} tabIndex={-1} className="text-xl font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">{title}</h2>
           {!projectId && <p className="mt-1 text-sm text-muted-foreground">
             Project budgets pass through their department lead and then Head of Finance.
           </p>}
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            disabled={loading || busy}
-            ref={focusFallback}
-            onClick={() => void load(true)}
-          >
-            Refresh budgets
-          </Button>
           {authorScopes.length > 0 && (
             <Button
               disabled={busy}
@@ -1164,10 +1166,6 @@ export function ProjectBudgetsPanel({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-2">
               {!projectId && <h3 className="text-lg font-medium">{detail.projectName}</h3>}
-              <p className="text-sm text-muted-foreground">
-                {detail.responsibleDepartmentName} · {detail.seasonCode} ·
-                Version {displayed.versionNumber}
-              </p>
               <Badge variant="secondary">{PROJECT_BUDGET_STAGE_LABELS[displayed.status]}</Badge>
               {!projectId && <>
               <p className="text-sm text-muted-foreground">
@@ -1202,11 +1200,7 @@ export function ProjectBudgetsPanel({
             </div>}
             {!projectId && secondaryActions}
           </div>
-          {projectId && <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-y py-4 xl:grid-cols-3">
-            <div><dt className="text-xs text-muted-foreground">{viewingCandidate ? "Proposed budget" : "Budget"}</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(displayed.totalNok)}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Spent</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.actualNok ?? formatOre(displayed.entries.reduce((total, item) => total + canonicalNokOre(item.actualNok), 0n)))}</dd></div>
-            {viewingCandidate && detail.approvedVersion && <div><dt className="text-xs text-muted-foreground">Approved budget</dt><dd className="mt-1 text-lg font-medium tabular-nums">{money(detail.approvedTotalNok)}</dd></div>}
-          </dl>}
+          {projectId && viewingCandidate && <p className="text-sm text-muted-foreground">Proposed budget <span className="ml-2 font-medium tabular-nums text-foreground">{money(displayed.totalNok)}</span></p>}
           {detail.approvedVersion && !approvedOnly && (
             <div className={projectId ? "max-w-xs space-y-2" : "max-w-md space-y-2"}>
               <Label htmlFor="project-budget-version" className={projectId ? "sr-only" : undefined}>Budget version</Label>

@@ -1,3 +1,4 @@
+import { BudgetRing, budgetUsage } from "../Finance/BudgetRing";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -25,29 +26,10 @@ function snapshotDate(value: string): string {
   return `${parts.find(part => part.type === "day")?.value}. ${parts.find(part => part.type === "month")?.value}`;
 }
 
-function usage(actual: string, planned: string): number {
-  const a = nokToOre(actual), p = nokToOre(planned);
-  if (p <= 0n) return a > 0n ? 100 : 0;
-  return Number(a >= p ? 100n : a <= 0n ? 0n : a * 100n / p);
-}
-
-function BudgetRing({ planned, actual }: { planned: string; actual: string }) {
-  const planOre = nokToOre(planned), actualOre = nokToOre(actual);
-  const over = actualOre > planOre;
-  const percent = usage(actual, planned);
-  const label = planOre === 0n ? (over ? "Over" : "—") : over ? "Over" : `${percent}%`;
-  const details = `Recorded spending ${money(actual)} of budget ${money(planned)}${over ? ", over budget" : planOre === 0n ? ", percentage unavailable for a zero budget" : `, ${percent}% used`}`;
-  return <div role="img" aria-label={details} className="relative grid size-32 shrink-0 place-items-center sm:size-40">
-    <svg viewBox="0 0 100 100" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted" />
-      <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" pathLength="100" strokeDasharray={`${percent} 100`} className={over ? "text-destructive" : "text-primary"} />
-    </svg><span className="text-lg font-medium tabular-nums" aria-hidden="true">{label}</span>
-  </div>;
-}
 
 function DepartmentRow({ department }: { department: SeasonFinancialDepartment }) {
   const Icon = getDepartmentIcon(department.name);
-  const percent = usage(department.actualNok, department.plannedNok);
+  const percent = budgetUsage(department.actualNok, department.plannedNok);
   const over = nokToOre(department.actualNok) > nokToOre(department.plannedNok);
   const label = `${department.name}: ${money(department.actualNok)} spent of ${money(department.plannedNok)} allocated${over ? ", over budget" : ""}${nokToOre(department.unbudgetedNok) > 0n ? `, ${money(department.unbudgetedNok)} unbudgeted` : ""}`;
   return <li className="grid grid-cols-[minmax(0,1fr)_minmax(4rem,1fr)] items-center gap-4 py-2">

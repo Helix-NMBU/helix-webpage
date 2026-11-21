@@ -43,3 +43,8 @@ Specification cases: V-01, V-05, V-06, V-07, V-08, V-09.
 
 Approved, published in Linear. Blocked by the dependencies above once approved. Record real verification and review evidence before closure.
 
+
+
+## D18 direct UI refinement
+
+Place the approved budget/spending circle widget at the bottom of the project sidebar below Progress. Remove the metadata line and refresh controls. Keep candidate totals distinct, provide permission-aware drafting/continuation when unapproved, and automatically refresh after material writes and access/focus/visible/cross-tab changes. Preserve dirty input and current authorization. Reverify canonical actuals including unbudgeted and voided purchases.

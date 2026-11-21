@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@libs/components/ui/button";
-import { IconRefresh } from "@tabler/icons-react";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { MEMBER_ACCESS_CHANGED } from "../MemberPlatform/member-access-api";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -28,7 +26,6 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
   currentScope.current = scope;
   const [state, setState] = useState<{ scope: string; value: DepartmentHomeBudget | null; stale: boolean }>({ scope, value: null, stale: false });
   const [loading, setLoading] = useState(true);
-  const [sessionEnded, setSessionEnded] = useState(false);
   const active = useRef(false), generation = useRef(0);
   const pending = useRef<{ controller: AbortController; timer: number } | null>(null);
   const notify = useNotify(), navigate = useNavigate();
@@ -37,8 +34,9 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
     if (pending.current) { window.clearTimeout(pending.current.timer); pending.current.controller.abort(); pending.current = null; }
     setState({ scope, value: null, stale: false });
   }, [scope]);
-  const refresh = useCallback(async () => {
-    if (!active.current || currentScope.current !== scope || pending.current) return;
+  const refresh = useCallback(async (force = false) => {
+    if (!active.current || currentScope.current !== scope || (pending.current && !force)) return;
+    if (pending.current) { window.clearTimeout(pending.current.timer); pending.current.controller.abort(); pending.current = null; }
     const current = ++generation.current, controller = new AbortController();
     let timer = 0;
     const timeout = new Promise<never>((_, reject) => {
@@ -56,7 +54,7 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
     } catch (error) {
       if (!active.current || current !== generation.current) return;
       const code = status(error), denied = code === 401 || code === 403;
-      if (code === 401) { active.current = false; setSessionEnded(true); }
+      if (code === 401) { active.current = false; }
       if (denied) setState({ scope, value: null, stale: false });
       else setState(previous => previous.scope === scope ? { ...previous, stale: previous.value !== null } : { scope, value: null, stale: false });
       notify("Could not load allocated budget", error instanceof Error ? error.message : "Try again.", {
@@ -71,15 +69,17 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
   }, [repository, departmentId, scope, notify, navigate]);
   useEffect(() => {
     active.current = true;
-    setSessionEnded(false);
     clear();
     void refresh();
     const onFocus = () => void refresh();
     const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
     const onAccess = () => { clear(); void refresh(); };
-    const end = () => { active.current = false; clear(); setSessionEnded(true); setLoading(false); notify("Your session has ended", "Sign in again to view the allocated budget.", { variant: "error", href: null, action: { label: "Sign in", onClick: () => navigate("/login") } }); };
+    const end = () => { active.current = false; clear(); setLoading(false); notify("Your session has ended", "Sign in again to view the allocated budget.", { variant: "error", href: null, action: { label: "Sign in", onClick: () => navigate("/login") } }); };
     const unwatch = repository.watchSession?.(end);
     window.addEventListener("focus", onFocus);
+    const onUpdate = () => void refresh(true);
+    window.addEventListener("helix-workspace-updated", onUpdate);
+    window.addEventListener("storage", onVisible);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener(MEMBER_ACCESS_CHANGED, onAccess);
     window.addEventListener("helix-member-local-session-changed", onAccess);
@@ -89,7 +89,7 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
       generation.current++;
       if (pending.current) { window.clearTimeout(pending.current.timer); pending.current.controller.abort(); pending.current = null; }
       unwatch?.(); window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus); window.removeEventListener("helix-workspace-updated", onUpdate); window.removeEventListener("storage", onVisible); document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener(MEMBER_ACCESS_CHANGED, onAccess); window.removeEventListener("helix-member-local-session-changed", onAccess);
     };
   }, [clear, refresh, repository, notify, navigate]);
@@ -98,7 +98,6 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h2 id="department-budget-title" className="text-sm font-medium text-muted-foreground">Allocated budget</h2>
-        <Button aria-label="Refresh allocated budget" variant="ghost" size="icon" className="size-7 shrink-0" disabled={loading || sessionEnded} onClick={() => void refresh()}><IconRefresh aria-hidden="true" className="size-3.5" /></Button>
       </div>
       {loading && !data ? <Skeleton className="h-8 w-36" aria-label="Loading allocated budget" /> : <p className="break-words text-2xl font-medium tabular-nums">{data ? amount(data.approvedTotalNok) : "—"}</p>}
       <p className="text-xs text-muted-foreground">{data ? `${state.stale ? "Last loaded approved allocation" : "Approved allocation"} · ${data.seasonCode}` : "Approved department allocation by project."}</p>

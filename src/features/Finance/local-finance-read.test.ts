@@ -1,3 +1,4 @@
+import { createLocalProjectBudgetRepository } from "./project-budget-local";
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFinanceApi } from "./repository";
@@ -455,4 +456,19 @@ describe("canonical local Finance repository", () => {
     gates.local = false;
     expect(() => loadLocalSeasonFinancialSummary()).toThrow();
   });
+});
+
+it("keeps the project summary spending aligned with registered, unbudgeted and voided actuals", async () => {
+  const { budget } = await fundingFixture();
+  fundingRole("head_of_finance");
+  const entryId = budget.approvedVersion!.entries[0].entryId;
+  const registered = await registration(entryId, "60.00");
+  await registration(null, "25.25");
+  const budgets = createLocalProjectBudgetRepository();
+  const summary = (await budgets.load({ projectId: binding.projectId })).budgets[0];
+  expect(summary).toMatchObject({ actualNok: "85.25", unbudgetedNok: "25.25" });
+  const row = (await api().purchases()).register!.find(purchase => purchase.id === registered.id)!;
+  await api().mutate({ action: "voidPurchase", purchaseId: row.id, expectedRevision: row.revision, requestId: crypto.randomUUID(), reason: "Duplicate purchase" });
+  expect((await budgets.load({ projectId: binding.projectId })).budgets[0]).toMatchObject({ actualNok: "25.25", unbudgetedNok: "25.25" });
+  expect(await budgets.detail(budget.id)).toMatchObject({ actualNok: "25.25", unbudgetedNok: "25.25" });
 });

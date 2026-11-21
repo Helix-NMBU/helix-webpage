@@ -90,7 +90,7 @@ export function createFundingApplicationRepository(): FundingApplicationReposito
       return result;
     },
     card: (dealId) => request("fundingApplicationCard", { dealId }),
-    mutate: (change) => request("", {}, change),
+    mutate: async change => { const result = await request<FundingApplicationMutationResult>("", {}, change); window.dispatchEvent(new Event("helix-workspace-updated")); return result; },
     watchSession: (end) => watchMemberSession(end, undefined, owner),
   };
 }

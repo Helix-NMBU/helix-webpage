@@ -1,3 +1,4 @@
+import { loadLocalProjectBudgetFinancials } from "./local-finance-read";
 import { APPROVED_MEMBER_BUDGET_CAPABILITIES, memberApprovedBudgetDetail, memberApprovedBudgetSummary } from "./project-budget-member-view";
 import { departmentMemberIds } from "../ProjectManagement/permissions";
 import { isProjectMemberPreview } from "../MemberPlatform/local-member-profile-selection";
@@ -175,7 +176,8 @@ function scopes(state: State): ProjectBudgetScope[] {
     ];
   });
 }
-function summary(budget: ProjectBudgetDetail, capabilities: ProjectBudgetCapabilities): ProjectBudgetSummary {
+function summary(source: ProjectBudgetDetail, capabilities: ProjectBudgetCapabilities): ProjectBudgetSummary {
+  const budget = { ...source, ...loadLocalProjectBudgetFinancials(source.projectId) };
   if (capabilities.approvedOnly) return memberApprovedBudgetSummary({ ...budget, revision: budget.approvedVersion?.revision ?? 0 });
   return {
     id: budget.id, projectId: budget.projectId, projectName: budget.projectName,
@@ -240,7 +242,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
         fail("You do not have access to this project budget.");
       if (scope.capabilities.approvedOnly) {
         if (!budget.approvedVersion) fail("No approved project budget is available yet.", 404);
-        return memberApprovedBudgetDetail(budget);
+        return memberApprovedBudgetDetail({ ...budget, ...loadLocalProjectBudgetFinancials(budget.projectId) });
       }
       const draftAccess = canReadProjectBudgetDraft(scope.capabilities);
       const detail: ProjectBudgetDetail = structuredClone({
@@ -390,6 +392,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
             };
             state.requests[requestKey] = { fingerprint, result };
             localStorage.setItem(KEY, JSON.stringify(state));
+      window.dispatchEvent(new Event("helix-workspace-updated"));
             return result;
           }
           const preview = state.previews?.[change.previewToken ?? ""];
@@ -573,6 +576,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
       };
       state.requests[requestKey] = { fingerprint, result };
       localStorage.setItem(KEY, JSON.stringify(state));
+      window.dispatchEvent(new Event("helix-workspace-updated"));
       return result;
     },
   };

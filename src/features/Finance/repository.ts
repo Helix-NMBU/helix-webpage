@@ -69,7 +69,7 @@ export function createFinanceApi(owner: { current: string | null }) {
     return body as T;
   }
   const continuation = createInvoiceContinuation(owner, (action, signal) => mutate(action, signal));
-  async function mutate(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
+  async function performMutation(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
     if (local()) {
       if (action.action === "retryInvoiceTransfer") {
         const result = await createLocalInvoiceEvidenceApi().retry(String(action.documentId), Number(action.expectedRevision), String(action.requestId));
@@ -103,6 +103,12 @@ export function createFinanceApi(owner: { current: string | null }) {
     const result = body as FinanceMutationResult;
     if (action.action === "registerPurchase") continuation.start(result);
     else if (action.action === "retryInvoiceTransfer" && result.purchaseId) continuation.start({...result,id:result.purchaseId});
+    return result;
+  }
+  async function mutate(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
+    const result = await performMutation(action, signal);
+    if (result.ok && !/^(check|download|authorize.*Upload|finalize.*Upload|continueInvoice|retryInvoice)/.test(String(action.action)))
+      window.dispatchEvent(new Event("helix-workspace-updated"));
     return result;
   }
   return {
