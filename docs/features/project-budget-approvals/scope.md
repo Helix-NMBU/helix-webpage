@@ -179,3 +179,6 @@ The draft amendment is in `department-submission-amendment.md`. Existing PBA-08 
 
 
 D18 presentation follow-up, 21 November 2026: The user directly requested a suitable status-pill color and right alignment on the Budget title row. Approved uses existing success colors, pending stages use warning colors, and Draft remains neutral. Labels, permissions and version semantics remain unchanged.
+
+
+- D19, 21 November 2026: The user directly requested a department Budget pill like the project navigation and removal of the allocation widget from the department Home sidebar. Move the existing approved total/project breakdown to a Budget tab beside Home, Documents and Members, preserving the existing `?tab=budgets` route. Current department memberships retain the minimal aggregate visibility, including existing Viewer eligibility. Reviewer-only panels remain restricted to existing reviewers; a Finance reviewer without department membership must not call the membership-only aggregate reader. Home no longer mounts or fetches the allocation view. This supersedes D16's placement while preserving its information and access boundaries.

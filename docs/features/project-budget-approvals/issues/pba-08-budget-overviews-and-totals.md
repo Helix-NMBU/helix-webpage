@@ -48,3 +48,8 @@ Approved, published in Linear. Blocked by the dependencies above once approved. 
 ## D18 direct UI refinement
 
 Place the approved budget/spending circle widget at the bottom of the project sidebar below Progress. Remove the metadata line and refresh controls. Keep candidate totals distinct, provide permission-aware drafting/continuation when unapproved, and automatically refresh after material writes and access/focus/visible/cross-tab changes. Preserve dirty input and current authorization. Reverify canonical actuals including unbudgeted and voided purchases.
+
+
+## D19 department Budget tab
+
+Move the existing approved department allocation/project breakdown into a Budget tab for eligible department memberships. Remove its Home sidebar instance and Home allocation fetch. Keep existing reviewer workflows isolated, preserve nonmember Finance review, avoid admin wildcards and retain existing links/refresh/revocation behavior.

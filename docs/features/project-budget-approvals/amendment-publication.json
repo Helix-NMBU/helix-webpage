@@ -116,6 +116,13 @@
       "exactRequest": "Have the budget status pill have a color that fits. Move it so it's at the right side. same level height as the \"budget\" title",
       "scope": "Semantic status colors and project title-row right alignment",
       "authorization": "Direct user presentation request; existing approval hashes and workflows preserved"
+    },
+    {
+      "date": "2026-11-21",
+      "decision": "D19",
+      "exactRequest": "Can we make a \"pill\" for budget on the department home page like we have on project. And then rather remove the right side widghet on the right side on the home of a department page.",
+      "scope": "Department Budget tab replaces the Home sidebar allocation widget, with existing public/member and private/reviewer reads kept separate",
+      "authorization": "Direct user implementation request; D16 placement superseded, original approval hashes and data/approval grants preserved"
     }
   ]
 }

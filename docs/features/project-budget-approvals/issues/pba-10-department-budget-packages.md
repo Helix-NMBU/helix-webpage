@@ -45,3 +45,8 @@ Pin candidate IDs/content hashes and baseline pointers with a package revision. 
 ## Status
 
 Approved on 20 November 2026 with "Approve, publish and continue delivery". Published as [HELIX-85](https://linear.app/helixnmbu/issue/HELIX-85/pba-10-submit-and-approve-department-budget-packages). Implementation is blocked by verified PBA-08.
+
+
+## D19 placement supersession
+
+The user directly replaced D16's Home-sidebar placement with a department Budget tab. The existing minimal approved-allocation reader, membership/Viewer eligibility and package lifecycle remain unchanged. PBA-08/PBA-09 deliver and verify the new presentation; private reviewer panels remain under their existing authority.

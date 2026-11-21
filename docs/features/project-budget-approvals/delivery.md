@@ -7,7 +7,7 @@ Started: 19 November 2026 after the user explicitly invoked Deliver.
 Base: remote `main`, `b05c5a457a378a76aaba7535ab6c0664505cf089`, reverified live.
 Integration branch: `codex/project-budget-approvals`.
 Integration worktree: `/Users/henrik.noteless/.codex/worktrees/project-budget-approvals/helix-webpage`.
-PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. D18 sidebar and automatic freshness are implemented, independently reviewed and locally verified at product9813a94. The earlier5ceb4d8 checks are the prior D18 checkpoint. The latest publication evidence is below; GitHub and HELIX-84 hold final exact-head CI/readiness after publication.
+PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. D19 department Budget navigation is implemented, independently reviewed and locally verified at productfc8ff3e. Earlier0efabd7 checks are the prior presentation checkpoint. The latest publication evidence is below; GitHub and HELIX-84 hold final exact-head CI/readiness after publication.
 
 ## Reconciliation
 
@@ -26,7 +26,7 @@ The current remote base has 11 API functions. The original working tree's two ex
 | PBA-05 | HELIX-80 | closed again after reviewed repair | reused `/root/pba_04_threshold`; `/private/tmp/helix-pba-05-purchases`; `codex/pba-05-purchases`; base78e6c74 | Verified PBA-02 prerequisite; owns070 purchase/completion routines and purchase UI. |
 | PBA-06 | HELIX-81 | closed on feature branch | reused `/root/pba_04_threshold`; `/private/tmp/helix-pba-06-drive-invoices`; `codex/pba-06-drive-invoices`; basedb25e84 | PBA-05 verified;071 Drive transfer/evidence/recovery assigned. |
 | PBA-07 | HELIX-82 | closed again after reviewed repair | reused `/root/pba_01_contracts`; `/private/tmp/helix-pba-07-obligations`; `codex/pba-07-obligations`; base990e0de | PBA-03 verified;072 funding applications, awarded obligations, limited HOF review assigned. |
-| PBA-08 | HELIX-83 | reopened for D18 UI/freshness | `/root/pba_01_contracts` backend: `/private/tmp/helix-pba-08-effective-finance`, `codex/pba-08-effective-finance`; `/root/pba_04_threshold` UI: `/private/tmp/helix-pba-08-budget-views`, `codex/pba-08-budget-views`; base2924d8d | Both06/07 prerequisites verified; shared contracts first. |
+| PBA-08 | HELIX-83 | reopened for D19 Budget navigation | `/root/pba_01_contracts` backend: `/private/tmp/helix-pba-08-effective-finance`, `codex/pba-08-effective-finance`; `/root/pba_04_threshold` UI: `/private/tmp/helix-pba-08-budget-views`, `codex/pba-08-budget-views`; base2924d8d | Both06/07 prerequisites verified; shared contracts first. |
 | PBA-10 | HELIX-85 | closed on feature branch | backend /root/pba_01_contracts in /private/tmp/helix-pba10-department-packages; main UI /root/pba_04_threshold in /private/tmp/helix-pba10-department-ui; widget /root/pba_10_home_widget in /private/tmp/helix-pba10-home-widget; root reader in /private/tmp/helix-pba10-home-reader | Base31059fa for core/UI; widget/reader base original d8fe3fb shared contract. |
 | PBA-09 | HELIX-84 | final PR CI in progress | root integration coordinator | Dependencies integrated/verified; local V01–V09 and independent reviews pass. Closure requires final exact-head PR checks and readiness readback. |
 
@@ -43,9 +43,9 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 
 ## Next action
 
-Publish the verified D18 refinement and this evidence to existing PR #144. Affected local checks and independent reviews clear product9813a94; prior full-suite evidence covers unchanged behavior. Keep the PR draft during current-head verify and Finance PostgreSQL CI, then inspect exact head/base, strict freshness, conflicts, review requirements and readiness. Restore ready status and close HELIX-83/HELIX-84 only after both checks pass. Final readback is recorded in GitHub and HELIX-84. Earlier passing5ceb4d8 checks do not establish this presentation follow-up publication result.
+Publish the verified D19 department Budget navigation and this evidence to existing PR144. Affected checks, browser/build and independent reviews clear productfc8ff3e. Keep the PR draft while current-head verify and Finance PostgreSQL CI run, then inspect exact head/base, strict freshness, conflicts, review requirements and readiness. Restore ready status and close HELIX-83/HELIX-84 after both pass. Final readback is recorded in GitHub and HELIX-84. Earlier0efabd7 checks are historical.
 
-Deliver authorizes ordinary feature push, PR updates and tracker evidence. Keep the parent open and the PR unmerged. Real mapping and Drive identity/folder/scope/reader-ACL acceptance remain production release inputs. Merge, production migration and deployment require separate authorization. No user scope decision or worker implementation is pending.
+Deliver authorizes ordinary feature push, PR updates and tracker evidence. Keep the parent open and PR unmerged. Real mapping and Drive configuration/reader-ACL acceptance remain release inputs. Merge, production migration and deployment require separate authorization. No worker implementation or user scope decision is pending.
 
 ## PBA-04 integration, 19 November 2026
 
@@ -516,3 +516,18 @@ Affected verification passes34 tests across five files, client TypeScript, repos
 Complete correctness, Standards and Spec reviews all clear exact9813a94 with no actionable findings, reusing unchanged full-feature coverage. Browser confirms the green Approved pill, dark readable foreground, right inset0 and vertical-center difference0 against Budget. The regular-member view remains read-only and retained. Screenshot `project-budget-status-title.jpg` is outside Git in the existing visualization directory. CUA completion was issued. No financial record was changed.
 
 HELIX-83 and HELIX-84 were reopened for this follow-up and read back In Progress. Publish to existing PR144 as draft during fresh exact-head checks. GitHub and final HELIX-84 closure hold current-head CI/readiness after this documentation checkpoint. Restore ready status only after verify and Finance PostgreSQL pass. Keep the parent open and PR unmerged. No deployment occurred.
+
+
+## D19 department Budget tab, 21 November 2026
+
+The user directly requested a department Budget navigation pill like the project page and removal of the Home sidebar allocation widget. Sourcefc8ff3ea1c8e34818a61d0d7758c6d01c19733a3 adds Budget alongside Home/Documents/Members, preserves `?tab=budgets`, and removes the Home instance. The renamed DepartmentBudgetOverview uses the same minimal reader/lifecycle but presents a main-content approved total and project table.
+
+Ordinary eligible memberships, including existing department Viewers, see only the approved aggregate. Existing reviewers alone mount private department/project panels; nonmember Finance reviewers do not call the membership-only reader. Admin status alone grants nothing. The shared departmentAccess predicate matches membership semantics, while the avatar helper intentionally excludes Viewers and is not an authorization substitute. Existing API/DTO/SQL grants and package rules are unchanged. Home makes no allocation fetch. Parent-held description drafts survive tab changes.
+
+Existing backend worker independently audited the proposed split read-only before implementation. Root implementation and tests pass36 cases across five files, client TypeScript and repository lint. Logs `/private/tmp/helix-department-budget-tab-tests.log`, `/private/tmp/helix-department-budget-tab-types.log`, `/private/tmp/helix-department-budget-tab-lint.log`. Tests cover member/Viewer/admin-nonmember selection, deep links, private-panel isolation, nonmember Finance with no aggregate read, zero Home allocation loads, retained Home edits, and the preserved freshness/revocation/session lifecycle. Native keyboard events exercise shared Radix tab behavior.
+
+Isolated compiler source matches fc8ff3e. Frontend build passes9.21MB/10MB, source/generated function guard11/11. Log `/private/tmp/helix-department-budget-tab-build.log`. API source is unchanged, so prior generated API compilation and real PostgreSQL acceptance remain applicable; current-head CI still follows. Complete correctness, Standards and Spec reviews clear exactfc8ff3e with no actionable findings.
+
+Browser as Team Member verifies Home has Budget beside its existing navigation and no allocation widget. Budget opens10,500.75 approved, split9,750.75 Chassis/750 Workshop, in the main project table without private review, draft, invoice or funding controls. Pointer selection and Home/End keyboard navigation both work. CSS768 has document width768 with readable totals/project rows. Temporary viewport was reset and the Budget tab retained for the user. Screenshots outside Git are `department-home-budget-pill.jpg`, `department-budget-tab.jpg` and `department-budget-tab-768.jpg` in the existing visualization directory. CUA completion was issued; no saved financial record changed.
+
+D19 is recorded as a direct user addendum preserving original approval hashes and superseding D16 placement only. HELIX-83/HELIX-84 are reopened and read back In Progress. Publish this reviewed batch to existing PR144, keep draft while fresh verify/Finance PostgreSQL checks run, then record exact-head readiness and closure in GitHub/HELIX-84. Parent remains open, PR unmerged and auto-merge disabled. No production migration, Drive write or deployment occurred.

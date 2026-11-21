@@ -1,6 +1,6 @@
 # Project budget verification
 
-Approved specification: revision 2, with direct user addenda D16, D17 and D18. Current product `9813a94e4521be4511ace822151baf5d6baf05ce` is independently reviewed against main `b05c5a457a378a76aaba7535ab6c0664505cf089`, reusing valid earlier coverage for unchanged code. Baseline evidence is preserved below. The latest D18 section and delivery.md record current verification; GitHub and HELIX-84 hold final PR-head CI/readiness.
+Approved specification: revision 2, with direct user addenda D16, D17, D18 and D19. Current product `fc8ff3ea1c8e34818a61d0d7758c6d01c19733a3` is independently reviewed against main `b05c5a457a378a76aaba7535ab6c0664505cf089`, reusing valid earlier coverage for unchanged code. Baseline evidence is preserved below. The latest D18 section and delivery.md record current verification; GitHub and HELIX-84 hold final PR-head CI/readiness.
 
 ## Baseline local evidence
 
@@ -105,3 +105,12 @@ Browser verified the bottom position, correct9,750.75/8,500/87% member values, a
 Exact product9813a94 is independently cleared by correctness, Standards and Spec reviews. The green Approved pill is right-aligned with the Budget title and shares its vertical center. Pending stages use existing warning colors; Draft remains neutral. Browser measurement confirms zero center difference and right inset, with existing member privacy/actions unchanged.
 
 Affected tests34/34 in five files, client types, lint and isolated frontend build pass. Output9.21MB and11 source/generated functions. Previous complete local/API/PostgreSQL evidence remains applicable to unchanged behavior. Fresh exact-head CI and final readiness are recorded in GitHub PR144 and HELIX-84; the PR remains unmerged. Screenshot and command logs are in delivery.md.
+
+
+## D19 department Budget tab
+
+The Budget tab replaces the department Home sidebar allocation widget. Eligible department members/Viewers receive the existing minimal approved aggregate, while unchanged reviewer authority controls private department/project panels. Nonmember Finance uses only its reviewer path; an admin-only nonmember gains nothing. Existing `?tab=budgets` links remain valid. Home no longer fetches allocation data.
+
+Atfc8ff3e,36 affected tests in five files, client types, lint and isolated frontend build pass. Static output9.21MB; source/generated function count11. Existing safe-reader lifecycle is preserved, and reviewer/member isolation plus retained Home input are specifically tested. Complete correctness, Standards and Spec reviews clear the exact commit. Unchanged API/PostgreSQL/full-feature evidence remains valid.
+
+Browser verifies the Budget pill, absence of the Home widget, approved10,500.75/project breakdown, read-only member privacy, pointer and Home/End keyboard navigation, and readable CSS768 with no page overflow. Screenshots/logs are in delivery.md. Final current-head CI/readiness is authoritative in GitHub PR144 and HELIX-84. The PR remains unmerged and no deployment occurred.
