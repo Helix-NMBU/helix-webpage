@@ -1,3 +1,4 @@
+import { publishFinanceUpdate } from "./finance-events";
 import {
   isLocalMemberMode,
   localMemberSignedIn,
@@ -672,7 +673,7 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
       state.requests[key] = { fingerprint, result };
       localStorage.setItem(KEY, JSON.stringify(state));
       synchronize(state);
-      window.dispatchEvent(new Event("helix-workspace-updated"));
+      publishFinanceUpdate();
       return result;
     },
   };

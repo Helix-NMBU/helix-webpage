@@ -1,3 +1,4 @@
+import { publishFinanceUpdate } from "./finance-events";
 import { loadLocalFinanceViews, localFinanceVersion, mutateLocalPurchase } from "./local-finance-read";
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
 import { createLocalInvoiceEvidenceApi, localInvoiceRecovery } from "./invoice-local";
@@ -108,7 +109,7 @@ export function createFinanceApi(owner: { current: string | null }) {
   async function mutate(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
     const result = await performMutation(action, signal);
     if (result.ok && !/^(check|download|authorize.*Upload|finalize.*Upload|continueInvoice|retryInvoice)/.test(String(action.action)))
-      window.dispatchEvent(new Event("helix-workspace-updated"));
+      publishFinanceUpdate();
     return result;
   }
   return {

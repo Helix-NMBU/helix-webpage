@@ -1,3 +1,4 @@
+import { publishFinanceUpdate } from "./finance-events";
 import { loadLocalProjectBudgetFinancials } from "./local-finance-read";
 import { APPROVED_MEMBER_BUDGET_CAPABILITIES, memberApprovedBudgetDetail, memberApprovedBudgetSummary } from "./project-budget-member-view";
 import { departmentMemberIds } from "../ProjectManagement/permissions";
@@ -392,7 +393,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
             };
             state.requests[requestKey] = { fingerprint, result };
             localStorage.setItem(KEY, JSON.stringify(state));
-      window.dispatchEvent(new Event("helix-workspace-updated"));
+      publishFinanceUpdate();
             return result;
           }
           const preview = state.previews?.[change.previewToken ?? ""];
@@ -576,7 +577,7 @@ export function createLocalProjectBudgetRepository(): ProjectBudgetRepository {
       };
       state.requests[requestKey] = { fingerprint, result };
       localStorage.setItem(KEY, JSON.stringify(state));
-      window.dispatchEvent(new Event("helix-workspace-updated"));
+      publishFinanceUpdate();
       return result;
     },
   };

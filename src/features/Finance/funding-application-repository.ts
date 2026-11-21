@@ -1,3 +1,4 @@
+import { publishFinanceUpdate } from "./finance-events";
 import { memberSessionToken, watchMemberSession } from "../MemberCV/session";
 import {
   isLocalMemberMode,
@@ -90,7 +91,7 @@ export function createFundingApplicationRepository(): FundingApplicationReposito
       return result;
     },
     card: (dealId) => request("fundingApplicationCard", { dealId }),
-    mutate: async change => { const result = await request<FundingApplicationMutationResult>("", {}, change); window.dispatchEvent(new Event("helix-workspace-updated")); return result; },
+    mutate: async change => { const result = await request<FundingApplicationMutationResult>("", {}, change); publishFinanceUpdate(); return result; },
     watchSession: (end) => watchMemberSession(end, undefined, owner),
   };
 }

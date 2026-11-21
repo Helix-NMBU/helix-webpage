@@ -1,3 +1,4 @@
+import { publishFinanceUpdate } from "./finance-events";
 import { memberSessionToken, watchMemberSession } from "../MemberCV/session";
 import {
   isLocalMemberMode,
@@ -70,7 +71,7 @@ export function createProjectBudgetRepository(): ProjectBudgetRepository {
     detail: (id) => request({ action: "projectBudget", projectBudgetId: id }),
     mutate: async change => {
       const result = await request<ProjectBudgetMutationResult>({}, change);
-      window.dispatchEvent(new Event("helix-workspace-updated"));
+      publishFinanceUpdate();
       return result;
     },
     watchSession: (onEnd) => watchMemberSession(onEnd, undefined, owner),

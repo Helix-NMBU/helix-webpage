@@ -182,7 +182,9 @@ describe("reviewing revisions and CSV changes", () => {
     await render();
     expect((await repo.detail(id)).approvedTotalNok).toBe("12550.25");
     await chooseVersion("Earlier approved version 1");
-    expect(container.textContent).toContain("Version 1");
+    expect(document.getElementById("project-budget-version")?.textContent).toBe("Earlier approved version 1");
+    expect(container.querySelector("table")?.textContent).toContain("NOK 10,000.00");
+    expect(container.querySelector("table")?.textContent).not.toContain("Motor");
     expect(container.textContent).not.toContain("Import CSV");
   });
   it("retains CSV through a stale preview and refresh, then requires preview again", async () => {

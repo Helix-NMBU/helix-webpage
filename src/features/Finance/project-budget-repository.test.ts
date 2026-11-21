@@ -104,3 +104,22 @@ describe("project budget API repository", () => {
     vi.unstubAllGlobals();
   });
 });
+
+it("notifies mounted views after a successful write, while reads and rejected writes do not notify", async () => {
+  const changed = vi.fn();
+  window.addEventListener("helix-workspace-updated", changed);
+  try {
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ scopes: [], budgets: [], viewVersion: 1 }))
+      .mockResolvedValueOnce(Response.json({ ok: true, id: "budget", revision: 2, viewVersion: 2 }))
+      .mockResolvedValueOnce(Response.json({ error: "Access revoked" }, { status: 403 }));
+    vi.stubGlobal("fetch", fetcher);
+    const repo = createProjectBudgetRepository(), controller = new AbortController();
+    await repo.load({ projectId: "project" }, controller.signal);
+    expect(fetcher.mock.calls[0][1].signal).toBe(controller.signal);
+    expect(changed).not.toHaveBeenCalled();
+    const change = { action: "submitProjectBudget" as const, projectBudgetId: "budget", expectedRevision: 1, requestId: crypto.randomUUID() };
+    await repo.mutate(change); expect(changed).toHaveBeenCalledOnce();
+    await expect(repo.mutate(change)).rejects.toMatchObject({ status: 403 });
+    expect(changed).toHaveBeenCalledOnce();
+  } finally { window.removeEventListener("helix-workspace-updated", changed); }
+});

@@ -1,3 +1,4 @@
+import { publishFinanceUpdate } from "./finance-events";
 import { createInvoiceContinuation } from "./invoice-continuation";
 import { memberSessionToken, watchMemberSession } from "../MemberCV/session";
 import {
@@ -66,14 +67,14 @@ export function createProjectPurchaseRepository(): ProjectPurchaseRepository {
   );
   const mutate = async (change: ProjectPurchaseChange) => {
     const result = await request<ProjectPurchaseResult>({}, change);
-    if (change.action === "registerProjectPurchase") { continuation.start(result); window.dispatchEvent(new Event("helix-workspace-updated")); }
+    if (change.action === "registerProjectPurchase") { continuation.start(result); publishFinanceUpdate(); }
     return result;
   };
   return {
     load: (binding) =>
       request({ action: "projectPurchaseContext", ...binding }),
     mutate,
-    complete: async change => { const result = await request<ProjectBudgetMutationResult>({}, change); window.dispatchEvent(new Event("helix-workspace-updated")); return result; },
+    complete: async change => { const result = await request<ProjectBudgetMutationResult>({}, change); publishFinanceUpdate(); return result; },
     async upload(binding, file) {
       const authorized = await mutate({
         action: "authorizeProjectPurchaseUpload",
