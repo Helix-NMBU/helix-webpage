@@ -59,6 +59,7 @@ import { parseNokToOre } from "./money";
 import {
   PROJECT_BUDGET_STAGE_LABELS,
   type ProjectBudgetCapabilities,
+  type ProjectBudgetStage,
   type ProjectBudgetDetail,
   type ProjectBudgetEntryInput,
   type ProjectBudgetMutation,
@@ -81,6 +82,12 @@ const money = (value: string) => {
   const [whole, fraction = "00"] = value.split(".");
   return `NOK ${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${fraction.padEnd(2, "0")}`;
 };
+function BudgetStatusBadge({ stage }: { stage: ProjectBudgetStage }) {
+  const color = stage === "approved"
+    ? "bg-[var(--success)] text-[var(--success-foreground)]"
+    : stage === "draft" ? undefined : "bg-[var(--warning)] text-[var(--warning-foreground)]";
+  return <Badge variant="secondary" className={color}>{PROJECT_BUDGET_STAGE_LABELS[stage]}</Badge>;
+}
 const status = (error: unknown) =>
   error && typeof error === "object" && "status" in error
     ? Number(error.status)
@@ -1023,7 +1030,8 @@ export function ProjectBudgetsPanel({
             Project budgets pass through their department lead and then Head of Finance.
           </p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {projectId && detailVisible && displayed && <BudgetStatusBadge stage={displayed.status} />}
           {authorScopes.length > 0 && (
             <Button
               disabled={busy}
@@ -1117,8 +1125,8 @@ export function ProjectBudgetsPanel({
                   <TableCell>{budget.responsibleDepartmentName}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
-                      {budget.approvedVersionId && <Badge variant="outline">Approved</Badge>}
-                      {budget.pendingStage && <Badge variant="secondary">{PROJECT_BUDGET_STAGE_LABELS[budget.pendingStage]}</Badge>}
+                      {budget.approvedVersionId && <BudgetStatusBadge stage="approved" />}
+                      {budget.pendingStage && <BudgetStatusBadge stage={budget.pendingStage} />}
                     </div>
                     {budget.approvedVersionId && budget.pendingVersionId && (
                       <span className="ml-2 text-xs text-muted-foreground">
@@ -1163,11 +1171,10 @@ export function ProjectBudgetsPanel({
           aria-label={`${detail.projectName} budget details`}
           className={projectId ? "min-w-0 space-y-5" : "space-y-4 rounded-xl border p-4 sm:p-6"}
         >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              {!projectId && <h3 className="text-lg font-medium">{detail.projectName}</h3>}
-              <Badge variant="secondary">{PROJECT_BUDGET_STAGE_LABELS[displayed.status]}</Badge>
-              {!projectId && <>
+          {(!projectId || canEdit) && <div className={`flex flex-wrap items-start gap-4 ${projectId ? "justify-end" : "justify-between"}`}>
+            {!projectId && <div className="space-y-2">
+              <h3 className="text-lg font-medium">{detail.projectName}</h3>
+              <BudgetStatusBadge stage={displayed.status} />
               <p className="text-sm text-muted-foreground">
                 {detail.approvedVersionId ? `Approved plan: ${money(detail.approvedTotalNok)}` : "No approved project plan"}
                 {detail.pendingTotalNok!==null ? ` · Proposed plan: ${money(detail.pendingTotalNok)}` : ""}
@@ -1176,8 +1183,7 @@ export function ProjectBudgetsPanel({
                 <BudgetWorkspaceLink href={`/projects/${detail.projectId}?tab=budget`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the open form","Save or cancel your current form before leaving this budget.",{variant:"warning",href:null});}}} >Open project budget</BudgetWorkspaceLink>
                 <BudgetWorkspaceLink href={`${departmentPath(detail.responsibleDepartmentName)}?tab=budgets`} onClick={event=>{if(dirty.current){event.preventDefault();notify("Finish the open form","Save or cancel your current form before leaving this budget.",{variant:"warning",href:null});}}} >Open department budgets</BudgetWorkspaceLink>
               </div>
-              </>}
-            </div>
+            </div>}
             {canEdit && <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
@@ -1199,7 +1205,7 @@ export function ProjectBudgetsPanel({
                   </Button>
             </div>}
             {!projectId && secondaryActions}
-          </div>
+          </div>}
           {projectId && viewingCandidate && <p className="text-sm text-muted-foreground">Proposed budget <span className="ml-2 font-medium tabular-nums text-foreground">{money(displayed.totalNok)}</span></p>}
           {detail.approvedVersion && !approvedOnly && (
             <div className={projectId ? "max-w-xs space-y-2" : "max-w-md space-y-2"}>
