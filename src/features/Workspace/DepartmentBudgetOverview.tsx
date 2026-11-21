@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { MEMBER_ACCESS_CHANGED } from "../MemberPlatform/member-access-api";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -15,7 +16,7 @@ function status(error: unknown): number | null {
   return error && typeof error === "object" && "status" in error ? Number(error.status) : null;
 }
 
-export function DepartmentBudgetWidget({ departmentId, viewerId, repository: supplied }: {
+export function DepartmentBudgetOverview({ departmentId, viewerId, repository: supplied }: {
   departmentId: string;
   viewerId: string;
   repository?: DepartmentBudgetHomeRepository;
@@ -94,20 +95,25 @@ export function DepartmentBudgetWidget({ departmentId, viewerId, repository: sup
     };
   }, [clear, refresh, repository, notify, navigate]);
   const data = state.scope === scope ? state.value : null;
-  return <section aria-labelledby="department-budget-title" aria-busy={loading} className="min-w-0 space-y-4 border-t pt-6">
+  return <section aria-labelledby="department-budget-title" aria-busy={loading} className="min-w-0 max-w-5xl space-y-6">
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h2 id="department-budget-title" className="text-sm font-medium text-muted-foreground">Allocated budget</h2>
-      </div>
-      {loading && !data ? <Skeleton className="h-8 w-36" aria-label="Loading allocated budget" /> : <p className="break-words text-2xl font-medium tabular-nums">{data ? amount(data.approvedTotalNok) : "—"}</p>}
+      <h2 id="department-budget-title" className="text-xl font-medium">Budget</h2>
+      <p className="text-sm text-muted-foreground">Approved allocation across this department's projects.</p>
+    </div>
+    <div className="space-y-2 rounded-xl border bg-card p-5">
+      <p className="text-sm text-muted-foreground">Allocated budget</p>
+      {loading && !data ? <Skeleton className="h-9 w-40" aria-label="Loading allocated budget" /> : <p className="break-words text-3xl font-medium tabular-nums">{data ? amount(data.approvedTotalNok) : "—"}</p>}
       <p className="text-xs text-muted-foreground">{data ? `${state.stale ? "Last loaded approved allocation" : "Approved allocation"} · ${data.seasonCode}` : "Approved department allocation by project."}</p>
     </div>
     {data && <>
-      {data.projects.length ? <dl className="space-y-4">{data.projects.map(project => <div className="min-w-0 space-y-1" key={project.projectId}>
-        <dt className="break-words text-sm"><Link className="underline-offset-4 hover:underline focus-visible:underline" to={`/projects/${encodeURIComponent(project.projectId)}`}>{project.projectName}</Link></dt>
-        <dd className="break-words text-sm tabular-nums text-muted-foreground">{amount(project.approvedTotalNok)}</dd>
-      </div>)}</dl> : <p className="text-sm text-muted-foreground">No approved project budgets yet.</p>}
-      {data.legacyTotalNok !== "0.00" && <div className="space-y-1 border-t pt-3 text-sm"><p className="text-muted-foreground">Unmapped legacy budget</p><p className="break-words tabular-nums">{amount(data.legacyTotalNok)}</p></div>}
+      {data.projects.length ? <Table aria-label="Approved project allocations">
+        <TableHeader><TableRow><TableHead>Project</TableHead><TableHead className="text-right">Allocated budget</TableHead></TableRow></TableHeader>
+        <TableBody>{data.projects.map(project => <TableRow key={project.projectId}>
+          <TableCell className="font-medium"><Link className="underline-offset-4 hover:underline focus-visible:underline" to={`/projects/${encodeURIComponent(project.projectId)}`}>{project.projectName}</Link></TableCell>
+          <TableCell className="text-right tabular-nums">{amount(project.approvedTotalNok)}</TableCell>
+        </TableRow>)}</TableBody>
+      </Table> : <p className="text-sm text-muted-foreground">No approved project budgets yet.</p>}
+      {data.legacyTotalNok !== "0.00" && <div className="flex flex-wrap justify-between gap-3 border-t pt-4 text-sm"><p className="text-muted-foreground">Unmapped legacy budget</p><p className="tabular-nums">{amount(data.legacyTotalNok)}</p></div>}
     </>}
   </section>;
 }

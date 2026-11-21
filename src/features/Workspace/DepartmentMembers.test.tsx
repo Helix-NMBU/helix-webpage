@@ -12,6 +12,11 @@ vi.mock("./department-home-repository", () => ({
   departmentHomeRepository: async () => ({ load: async (departmentId: string) => ({ departmentId, revision: 1, description: "", driveFolderUrl: null, canEdit: false }) }),
 }));
 
+vi.mock("./department-budget-home-repository", async importOriginal => ({
+  ...await importOriginal<typeof import("./department-budget-home-repository")>(),
+  createDepartmentBudgetHomeRepository: () => ({ load: async (departmentId: string) => ({ departmentId, departmentName: "Management", seasonId: "season", seasonCode: "S27", viewVersion: 1, approvedTotalNok: "0.00", legacyTotalNok: "0.00", projects: [] }) }),
+}));
+
 describe("department member displays", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -45,11 +50,17 @@ describe("department member displays", () => {
     expect(table?.textContent).not.toContain("Viewer Example");
     expect(table?.querySelectorAll("tbody tr")).toHaveLength(2);
   });
-  it("keeps ordinary members and administrators on Home without private packet requests",async()=>{
-    const data=directoryFixture();data.canAdmin=true;data.canManageProjects=true;const department={...data.departments[0],memberIds:[data.viewerId],leadId:"other-lead",leadIds:["other-lead"]};data.departments=[department];
-    const request=vi.fn(async(_url:RequestInfo|URL)=>Response.json({}));vi.stubGlobal("fetch",request);
-    await act(async()=>root.render(<MemoryRouter initialEntries={["/departments/management?tab=budgets"]}><MemberThemeProvider><MemberNotificationsProvider><DepartmentWorkspace department={department} data={data}/></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
-    expect(container.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe("Home");expect([...container.querySelectorAll('[role="tab"]')].some(tab=>tab.textContent==="Budgets")).toBe(false);expect(request.mock.calls.some(call=>/departmentBudgetPackage|departmentBudgetPreview|action=projectBudget/.test(String(call[0])))).toBe(false);
+  it.each(["member", "viewer", "admin_nonmember"])("scopes the Budget pill for %s without private packet requests", async role => {
+    const data = directoryFixture(); data.canAdmin = true; data.canManageProjects = true;
+    const included = role !== "admin_nonmember";
+    const department = { ...data.departments[0], memberIds: included ? [data.viewerId] : [], viewerIds: role === "viewer" ? [data.viewerId] : [], leadId: "other-lead", leadIds: ["other-lead"] };
+    data.departments = [department];
+    const request = vi.fn(async (_url: RequestInfo | URL) => Response.json({})); vi.stubGlobal("fetch", request);
+    await act(async () => root.render(<MemoryRouter initialEntries={["/departments/management?tab=budgets"]}><MemberThemeProvider><MemberNotificationsProvider><DepartmentWorkspace department={department} data={data}/></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+    expect(container.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe(included ? "Budget" : "Home");
+    expect([...container.querySelectorAll('[role="tab"]')].some(tab => tab.textContent === "Budget")).toBe(included);
+    if (included) expect(container.textContent).toContain("No approved project budgets yet.");
+    expect(request.mock.calls.some(call => /departmentBudgetPackage|departmentBudgetPreview|action=projectBudget/.test(String(call[0])))).toBe(false);
   });
 
 });

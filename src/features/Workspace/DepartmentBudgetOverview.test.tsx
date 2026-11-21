@@ -8,10 +8,14 @@ import { MemberNotificationsProvider, useMemberNotifications } from "../MemberPl
 import { MemberThemeProvider } from "../MemberPlatform/MemberTheme";
 import { MEMBER_ACCESS_CHANGED } from "../MemberPlatform/member-access-api";
 import { DepartmentBudgetHomeError, type DepartmentBudgetHomeRepository } from "./department-budget-home-repository";
-import { DepartmentBudgetWidget } from "./DepartmentBudgetWidget";
+import { DepartmentBudgetOverview } from "./DepartmentBudgetOverview";
 import * as budgetRepository from "./department-budget-home-repository";
 import { DepartmentWorkspace } from "./DepartmentWorkspace";
 import { directoryFixture } from "./fixtures.test-support";
+const gates = vi.hoisted(() => ({ finance: false, packets: vi.fn(), projects: vi.fn() }));
+vi.mock("../MemberPlatform/FinanceAccess", () => ({ useOptionalFinanceAccess: () => gates.finance ? { access: "allowed", capabilities: { purchaseRegister: true } } : null }));
+vi.mock("../Finance/DepartmentBudgetsPanel", () => ({ DepartmentBudgetsPanel: () => { gates.packets(); return <div>Private department review</div>; } }));
+vi.mock("../Finance/ProjectBudgetsPanel", () => ({ ProjectBudgetsPanel: () => { gates.projects(); return <div>Private project budgets</div>; } }));
 
 vi.mock("./department-home-repository", () => ({
   departmentHomeRepository: async () => ({ load: async (departmentId: string) => ({ departmentId, revision: 1, description: "Current department description", driveFolderUrl: null, canEdit: true }) }),
@@ -25,12 +29,13 @@ const budget: DepartmentHomeBudget = {
 let root: Root, container: HTMLDivElement;
 function Notifications() { const context = useMemberNotifications(); return <output>{context?.items.map(item => <span key={item.id}>{item.title} {item.action && <button onClick={item.action.onClick}>{item.action.label}</button>}</span>)}</output>; }
 beforeEach(() => {
+  gates.finance = false; gates.packets.mockClear(); gates.projects.mockClear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 async function render(repository: DepartmentBudgetHomeRepository, viewerId = "member", departmentId = "department") {
-  await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><DepartmentBudgetWidget departmentId={departmentId} viewerId={viewerId} repository={repository} /><Notifications /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+  await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><DepartmentBudgetOverview departmentId={departmentId} viewerId={viewerId} repository={repository} /><Notifications /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
 }
 
 it("shows an ordinary member the approved total and project breakdown with normal project links", async () => {
@@ -56,22 +61,28 @@ it("renders exact large amounts and a valid pre-season empty allocation", async 
   expect(container.textContent).not.toContain("Unmapped legacy budget");
 });
 
-it("refreshes approvals without touching surrounding dirty input", async () => {
+it("opens approved allocations in Budget without discarding a Home draft", async () => {
   const repository = { load: vi.fn().mockResolvedValueOnce(budget).mockResolvedValue({ ...budget, viewVersion: 2, approvedTotalNok: "9900.75" }) };
   vi.spyOn(budgetRepository, "createDepartmentBudgetHomeRepository").mockReturnValue(repository);
-  const data = directoryFixture(), department = data.departments[0];
+  const data = directoryFixture(), department = { ...data.departments[0], leadId: "other-lead", leadIds: ["other-lead"], memberIds: [data.viewerId] };
+  data.departments = [department];
   await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><DepartmentWorkspace department={department} data={data} /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
   await act(async () => (container.querySelector('[aria-label="Edit department description"]') as HTMLButtonElement).click());
   const sidebar = container.querySelector('aside[aria-label="Department details"]')!;
-  expect(sidebar.querySelector('[aria-labelledby="department-budget-title"]')).not.toBeNull();
-  expect(sidebar.textContent!.indexOf("Go to")).toBeLessThan(sidebar.textContent!.indexOf("Allocated budget"));
+  expect(sidebar.querySelector('[aria-labelledby="department-budget-title"]')).toBeNull();
+  expect(repository.load).not.toHaveBeenCalled();
   const draft = container.querySelector('[aria-label="Department description"]') as HTMLTextAreaElement;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "Unfinished department description");
     draft.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  await act(async () => ([...container.querySelectorAll('[role="tab"]')].find(tab => tab.textContent === "Budget") as HTMLButtonElement).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  expect(container.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe("Budget");
+  expect(container.textContent).toContain("NOK 8,900.75");
+  expect(gates.packets).not.toHaveBeenCalled(); expect(gates.projects).not.toHaveBeenCalled();
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("NOK 9,900.75");
+  await act(async () => ([...container.querySelectorAll('[role="tab"]')].find(tab => tab.textContent === "Home") as HTMLButtonElement).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   expect((container.querySelector('[aria-label="Department description"]') as HTMLTextAreaElement).value).toBe("Unfinished department description");
 });
 
@@ -153,4 +164,27 @@ it("polls visible pages without overlapping loads, times out stuck requests and 
   expect(container.textContent).toContain("Last loaded approved allocation");
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(container.textContent).toContain("NOK 9,000.00");
+});
+
+it("opens the approved overview from a member's Budget deep link without private review panels", async () => {
+  const repository = { load: vi.fn().mockResolvedValue(budget) };
+  vi.spyOn(budgetRepository, "createDepartmentBudgetHomeRepository").mockReturnValue(repository);
+  const data = directoryFixture(), department = { ...data.departments[0], memberIds: [data.viewerId], leadId: "other", leadIds: ["other"] };
+  await act(async () => root.render(<MemoryRouter initialEntries={["/?tab=budgets"]}><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><DepartmentWorkspace data={data} department={department} /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+  expect(container.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe("Budget");
+  expect(container.querySelector('table[aria-label="Approved project allocations"]')?.textContent).toContain("Chassis & assembly");
+  expect(container.textContent).toContain("NOK 8,900.75");
+  expect(gates.packets).not.toHaveBeenCalled(); expect(gates.projects).not.toHaveBeenCalled();
+  expect(container.querySelector('aside[aria-label="Department details"]')).toBeNull();
+});
+it("keeps nonmember Finance reviewers in their authorized workflow without reading the membership-only overview", async () => {
+  gates.finance = true;
+  const repository = { load: vi.fn().mockResolvedValue(budget) };
+  vi.spyOn(budgetRepository, "createDepartmentBudgetHomeRepository").mockReturnValue(repository);
+  const data = directoryFixture(), department = { ...data.departments[0], memberIds: [], viewerIds: [], leadId: "other", leadIds: ["other"] };
+  await act(async () => root.render(<MemoryRouter initialEntries={["/?tab=budgets"]}><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><DepartmentWorkspace data={data} department={department} /></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+  expect(container.querySelector('[role="tab"][data-state="active"]')?.textContent).toBe("Budget");
+  expect(gates.packets).toHaveBeenCalled(); expect(gates.projects).toHaveBeenCalled();
+  expect(repository.load).not.toHaveBeenCalled();
+  expect(container.querySelector('[aria-labelledby="department-budget-title"]')).toBeNull();
 });
