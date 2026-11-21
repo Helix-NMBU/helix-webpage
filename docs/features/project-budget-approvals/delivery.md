@@ -7,7 +7,7 @@ Started: 19 November 2026 after the user explicitly invoked Deliver.
 Base: remote `main`, `b05c5a457a378a76aaba7535ab6c0664505cf089`, reverified live.
 Integration branch: `codex/project-budget-approvals`.
 Integration worktree: `/Users/henrik.noteless/.codex/worktrees/project-budget-approvals/helix-webpage`.
-PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. D18 sidebar and automatic freshness are implemented, independently reviewed and locally verified at product01ad9b0. The earlier6897824 checks are the D17 checkpoint. The latest publication evidence is below; GitHub and HELIX-84 hold final exact-head CI/readiness after publication.
+PR: [#144](https://github.com/Helix-NMBU/helix-webpage/pull/144), open and unmerged. D18 sidebar and automatic freshness are implemented, independently reviewed and locally verified at product9813a94. The earlier5ceb4d8 checks are the prior D18 checkpoint. The latest publication evidence is below; GitHub and HELIX-84 hold final exact-head CI/readiness after publication.
 
 ## Reconciliation
 
@@ -43,7 +43,7 @@ Reserve migration numbers from 066 upwards: 066 foundation, 067 threshold policy
 
 ## Next action
 
-Publish the verified D18 refinement and this evidence to existing PR #144. All local checks and independent reviews clear product01ad9b0. Keep the PR draft during current-head verify and Finance PostgreSQL CI, then inspect exact head/base, strict freshness, conflicts, review requirements and readiness. Restore ready status and close HELIX-83/HELIX-84 only after both checks pass. Final readback is recorded in GitHub and HELIX-84. Earlier passing6897824 checks do not establish the D18 publication result.
+Publish the verified D18 refinement and this evidence to existing PR #144. Affected local checks and independent reviews clear product9813a94; prior full-suite evidence covers unchanged behavior. Keep the PR draft during current-head verify and Finance PostgreSQL CI, then inspect exact head/base, strict freshness, conflicts, review requirements and readiness. Restore ready status and close HELIX-83/HELIX-84 only after both checks pass. Final readback is recorded in GitHub and HELIX-84. Earlier passing5ceb4d8 checks do not establish this presentation follow-up publication result.
 
 Deliver authorizes ordinary feature push, PR updates and tracker evidence. Keep the parent open and the PR unmerged. Real mapping and Drive identity/folder/scope/reader-ACL acceptance remain production release inputs. Merge, production migration and deployment require separate authorization. No user scope decision or worker implementation is pending.
 
@@ -505,3 +505,14 @@ Independent correctness, Standards and Spec reviewers inspected the D18 delta an
 Browser evidence covers the regular member seeing9,750.75 approved,8,500 spent and87% at the bottom below Progress, with no private draft, request-change or edit action. Operations has no budget and an authorized lead sees the drafting prompt; its link opens the Budget view and Create budget dialog. Escape restores focus to Create budget. No budget or financial record was saved during QA. CSS768 has document width768 and widget content width417, with readable totals and no page overflow. The temporary viewport was reset, QA tab closed and original member tab restored and retained. Screenshots outside Git are `project-budget-bottom-sidebar.jpg`, `project-budget-bottom-sidebar-768.jpg` and `project-budget-draft-empty.jpg` in the existing visualization directory. CUA completion was issued.
 
 This documentation publication has no product effect. Publish only to existing PR144, then record exact current-head CI and final non-draft MERGEABLE/CLEAN readback in HELIX-84 and GitHub. HELIX-83 records implementation closure. Parent HELIX-75 remains open until merge, with auto-merge disabled. No production migration, Drive write or deployment was performed.
+
+
+### D18 status-pill presentation follow-up
+
+The user directly requested a suitable color and alignment at the right of the Budget title. Product9813a94e4521be4511ace822151baf5d6baf05ce changes only ProjectBudgetsPanel presentation. A shared local Badge wrapper uses existing success/foreground tokens for Approved, warning/foreground for pending stages and neutral Draft. The project pill moves to the title row with the existing detailVisible guard. Generic list/detail pills use the same colors. Empty read-only detail headers are omitted; editing actions and existing semantics remain intact.
+
+Affected verification passes34 tests across five files, client TypeScript, repository lint and isolated frontend build. Static output9.21MB, source/generated function guard11/11. Logs `/private/tmp/helix-budget-pill-tests.log`, `/private/tmp/helix-budget-pill-types.log`, `/private/tmp/helix-budget-pill-lint.log`, `/private/tmp/helix-budget-pill-build.log`. Prior complete2,384-test local verification and API/PostgreSQL coverage remain valid for unchanged source; no duplicate full local run is required for this presentation-only change.
+
+Complete correctness, Standards and Spec reviews all clear exact9813a94 with no actionable findings, reusing unchanged full-feature coverage. Browser confirms the green Approved pill, dark readable foreground, right inset0 and vertical-center difference0 against Budget. The regular-member view remains read-only and retained. Screenshot `project-budget-status-title.jpg` is outside Git in the existing visualization directory. CUA completion was issued. No financial record was changed.
+
+HELIX-83 and HELIX-84 were reopened for this follow-up and read back In Progress. Publish to existing PR144 as draft during fresh exact-head checks. GitHub and final HELIX-84 closure hold current-head CI/readiness after this documentation checkpoint. Restore ready status only after verify and Finance PostgreSQL pass. Keep the parent open and PR unmerged. No deployment occurred.

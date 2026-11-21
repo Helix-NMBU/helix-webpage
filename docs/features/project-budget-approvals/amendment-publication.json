@@ -109,6 +109,13 @@
       "exactFollowup": "let's have the budget widget at the bottom of the right side area. not the top",
       "scope": "Project sidebar budget/spending circle at the bottom, permission-aware empty state and automatic current-budget freshness",
       "authorization": "Direct user implementation request; original approval hashes and approval policies preserved"
+    },
+    {
+      "date": "2026-11-21",
+      "decision": "D18 presentation follow-up",
+      "exactRequest": "Have the budget status pill have a color that fits. Move it so it's at the right side. same level height as the \"budget\" title",
+      "scope": "Semantic status colors and project title-row right alignment",
+      "authorization": "Direct user presentation request; existing approval hashes and workflows preserved"
     }
   ]
 }

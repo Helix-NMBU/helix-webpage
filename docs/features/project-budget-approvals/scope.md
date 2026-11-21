@@ -176,3 +176,6 @@ The draft amendment is in `department-submission-amendment.md`. Existing PBA-08 
 
 
 - D18, 21 November 2026: The user requested current budgets without manual refresh controls, removal of the department/season/version line, and a project sidebar budget/spending widget with a circular indicator matching the existing Season view. The follow-up explicitly places this widget at the bottom of the right sidebar, below Progress. Show approved allocation against registered spending, including unpaid invoices. Keep proposed totals in the candidate editor. Where no allocation exists, offer a draft/continue action only to an authorized project lead; ordinary members retain an honest awaiting-approval state. Successful material writes, visible polling, focus and cross-tab changes update automatically without discarding dirty forms. Session/access loss clears data.
+
+
+D18 presentation follow-up, 21 November 2026: The user directly requested a suitable status-pill color and right alignment on the Budget title row. Approved uses existing success colors, pending stages use warning colors, and Draft remains neutral. Labels, permissions and version semantics remain unchanged.

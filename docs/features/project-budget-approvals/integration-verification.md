@@ -1,6 +1,6 @@
 # Project budget verification
 
-Approved specification: revision 2, with direct user addenda D16, D17 and D18. Current product `01ad9b0db1fb2c269d22e18152ccea30acaaa176` is independently reviewed against main `b05c5a457a378a76aaba7535ab6c0664505cf089`, reusing valid earlier coverage for unchanged code. Baseline evidence is preserved below. The latest D18 section and delivery.md record current verification; GitHub and HELIX-84 hold final PR-head CI/readiness.
+Approved specification: revision 2, with direct user addenda D16, D17 and D18. Current product `9813a94e4521be4511ace822151baf5d6baf05ce` is independently reviewed against main `b05c5a457a378a76aaba7535ab6c0664505cf089`, reusing valid earlier coverage for unchanged code. Baseline evidence is preserved below. The latest D18 section and delivery.md record current verification; GitHub and HELIX-84 hold final PR-head CI/readiness.
 
 ## Baseline local evidence
 
@@ -98,3 +98,10 @@ Shared successful-write events refresh clean views immediately. Visible polling,
 Final local verification at01ad9b0 passes246 files/2,384 tests with one optional Attio skip, all Finance/partner PostgreSQL cases and deployment guards3/3. The three TypeScript checks, repository lint and local frontend build pass. Static output is9.21MB, source/generated functions11/11. API source is unchanged from the earlier generated deployment compilation. Independent correctness, Standards and Spec reviews are clear on exact01ad9b0. Logs and repair evidence are in delivery.md.
 
 Browser verified the bottom position, correct9,750.75/8,500/87% member values, absence of private/action controls, no-budget lead prompt and setup route, Escape focus recovery and readable CSS768 without document overflow. Screenshots remain outside Git. The original member view is retained; temporary QA/viewport changes were restored. Final exact-head verify and Finance PostgreSQL CI/readiness are authoritative in GitHub PR144 and HELIX-84. The PR remains unmerged and the parent open. No deployment occurred.
+
+
+## Status-pill presentation follow-up
+
+Exact product9813a94 is independently cleared by correctness, Standards and Spec reviews. The green Approved pill is right-aligned with the Budget title and shares its vertical center. Pending stages use existing warning colors; Draft remains neutral. Browser measurement confirms zero center difference and right inset, with existing member privacy/actions unchanged.
+
+Affected tests34/34 in five files, client types, lint and isolated frontend build pass. Output9.21MB and11 source/generated functions. Previous complete local/API/PostgreSQL evidence remains applicable to unchanged behavior. Fresh exact-head CI and final readiness are recorded in GitHub PR144 and HELIX-84; the PR remains unmerged. Screenshot and command logs are in delivery.md.
