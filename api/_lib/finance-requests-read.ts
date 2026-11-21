@@ -325,11 +325,10 @@ export async function loadRequestChoices(db: CvDatabase, seasonCode: string): Pr
   }>(
     `select i.id as item_id, i.public_ref, i.description, i.system_id, i.status,
             s.code as system_code, s.name as system_name, s.department_key, s.active
-     from finance.budget_items i
-     join finance.budgets b on b.id = i.budget_id
-     join finance.seasons se on se.id = b.season_id
+     from finance.effective_budget_entries i
+     join finance.seasons se on se.id = i.season_id
      join finance.systems s on s.id = i.system_id
-     where se.code = $1 and b.status = 'approved' and i.protected is not true and i.status <> 'cancelled'
+     where se.code = $1 and (i.approved_version_id is not null or i.legacy_budget_status='approved') and i.protected is not true and i.status <> 'cancelled'
      order by s.code, i.public_ref`,
     [seasonCode],
   );

@@ -60,6 +60,7 @@ export function putSizedPdf(storage: ReturnType<typeof createMemoryFinanceStorag
   bytes[1] = 0x50;
   bytes[2] = 0x44;
   bytes[3] = 0x46;
+  bytes[4] = 0x2d;
   storage.objects.set(key, bytes);
   return byteSize;
 }

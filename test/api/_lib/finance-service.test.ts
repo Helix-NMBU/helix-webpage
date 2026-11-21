@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -117,6 +118,8 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/021_finance_final_candidate_ledger.sql", import.meta.url), "utf8"));
+  await pg.exec(readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8"));
+  await bootstrapFinanceFeature(pg);
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
@@ -136,8 +139,11 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects,
       finance.upload_final_candidates,
       finance.allocations,
       finance.purchase_lines,
@@ -166,6 +172,8 @@ async function resetFinance() {
       finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 }
@@ -186,11 +194,12 @@ describe("finance schema privacy", () => {
     expect(tables.rows.length).toBeGreaterThanOrEqual(20);
     expect(tables.rows.every((row) => row.rls && !row.forced)).toBe(true);
     for (const role of ["anon", "authenticated", "anonymous", "public"]) {
-      const privilege = await sql<{ allowed: boolean }>(
-        "select has_table_privilege($1, 'finance.member_grants', 'select') as allowed",
-        [role],
-      );
-      expect(privilege.rows[0]?.allowed, role).toBe(false);
+      for (const table of ["member_grants", "department_budget_packages", "department_budget_package_members", "department_budget_package_decisions"]) {
+        const privilege = await sql<{ allowed: boolean }>(
+          "select has_table_privilege($1, $2, 'SELECT,INSERT,UPDATE,DELETE') as allowed", [role, `finance.${table}`],
+        );
+        expect(privilege.rows[0]?.allowed, `${role}: ${table}`).toBe(false);
+      }
     }
     const version = await sql<{ version: string }>("select version::text as version from finance.view_versions");
     expect(version.rows).toEqual([{ version: "0" }]);
@@ -243,9 +252,9 @@ describe("finance schema privacy", () => {
     expect(flags.rows[0]?.flags.financing).toBe(false);
   });
 
-  it("stores season, threshold, and a monotonic reference start without issuing a reference", async () => {
+  it("stores season and a monotonic reference start while retiring amount-based approval configuration", async () => {
     await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-    await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+    await expect(sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId])).rejects.toThrow(/retired/i);
     const started = await sql<{ calendar_year: number; next_value: string; issued: boolean }>(
       "select calendar_year, next_value::text, issued from finance.configure_annual_reference_start($1::uuid, 2026, 42)",
       [operatorId],
@@ -529,7 +538,7 @@ describe("finance access API", () => {
 
     await grant(adminId, "head_of_finance");
     const versionBefore = await sql<{ version: string }>("select version::text as version from finance.view_versions");
-    expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 409, body: { error: "A budget already exists for this season." } });
+    expect(await call({ token: "admin", body: { action: "createBudget", requestId } })).toMatchObject({ status: 409, body: { error: "Edit a project Draft and submit it for both approvals. Season budget history is read-only." } });
     const versionAfter = await sql<{ version: string }>("select version::text as version from finance.view_versions");
     expect(versionAfter.rows[0]?.version).toBe(versionBefore.rows[0]?.version);
     expect(await call({ token: "admin", body: { action: "registerPurchase", requestId, purchase: {} } })).toMatchObject({ status: 400 });
@@ -539,7 +548,7 @@ describe("finance access API", () => {
     await seedPrivateRows();
     await sql("update finance.budgets set status = 'draft', approved_by_member_id = null, approved_on = null");
     const hidden = await call({ query: { action: "budgets" }, token: "member" });
-    expect(hidden.body).toMatchObject({ budgetStatus: "draft", departments: [] });
+    expect(hidden.body).toMatchObject({ budgetStatus: "draft", hasRecordedActuals: true, departments: [{ plannedNok: "0.00", actualNok: "0.00", systems: [{ items: [] }] }] });
     expect(JSON.stringify(hidden.body)).not.toContain("Frame tube");
     await grant(memberId, "business");
     expect(JSON.stringify((await call({ query: { action: "budgets" }, token: "member" })).body)).not.toContain("Frame tube");
@@ -592,8 +601,8 @@ describe("finance access API", () => {
       lines: [{ systemId, budgetItemId: itemId, unbudgeted: false, description: "Tube", quantity: "1", amountOre: "90000" }],
       uploadIds: [uploadId],
       registrationYear: 2026,
-      thresholdOre: "500000",
-      missingApproval: false,
+      thresholdOre: "obsolete",
+      missingApproval: "obsolete",
       warnings: [],
     };
     const hash = "a".repeat(64);
@@ -604,6 +613,38 @@ describe("finance access API", () => {
       [memberId, crypto.randomUUID(), hash, JSON.stringify(body)],
     );
     expect(result.rows[0]?.result).toMatchObject({ ok: true });
+  });
+
+  it.each(["5000.00", "5000.01", "8000.00"])("registers NOK %s without prior approval despite a stale threshold setting", async (amountNok) => {
+    await seedPrivateRows();
+    await sql("update finance.settings set setting_value = $1::jsonb where setting_key = 'approval_threshold_ore'", [JSON.stringify("obsolete")]);
+    expect((await services.capabilities("member")).approvalThresholdNok).toBeNull();
+    const [{ id: systemId }] = (await sql<{ id: string }>("select id from finance.systems where code = 'SYS-FR'")).rows;
+    const [{ id: itemId }] = (await sql<{ id: string }>("select id from finance.budget_items where description = 'Frame tube'")).rows;
+    const saved = await call({ token: "member", body: {
+      action: "registerPurchase", requestId: crypto.randomUUID(),
+      purchase: {
+        buyerName: "Buyer Example", supplierName: "Supplier Example", paymentMethod: "team_account",
+        purchaseDate: "2026-10-01", justification: "Workshop material for frame", documentKind: "receipt",
+        lines: [{ systemId, budgetItemId: itemId, description: "Frame material", quantity: "1", amountNok }],
+        uploadIds: [await authorizeAndFinalizeUpload(8)],
+      },
+    } });
+    expect(saved.status).toBe(200);
+    expect(JSON.stringify(saved.body)).not.toMatch(/approval threshold|approval limit|prior approval/i);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews where kind = 'missing_approval'")).rows[0]?.count).toBe("0");
+  });
+
+  it("marks existing configuration retired without changing its historical value", async () => {
+    await seedPrivateRows();
+    // Reapply only retired-setting metadata; later migrations own registration.
+    const retirement = readFileSync(new URL("../../../db/migrations/067_finance_retire_purchase_threshold.sql", import.meta.url), "utf8");
+    await pg.exec(retirement.slice(0, retirement.indexOf("-- Ignore legacy payload")) + "commit;");
+    const setting = (await sql<{ value: string; description: string }>("select setting_value::text as value, description from finance.settings where setting_key = 'approval_threshold_ore'")).rows[0];
+    expect(setting?.value).toBe("500000");
+    expect(setting?.description).toMatch(/retired/i);
+    await expect(sql("select finance.configure_approval_threshold($1::uuid, 1)", [operatorId])).rejects.toThrow(/retired/i);
+    expect((await services.capabilities("member")).approvalThresholdNok).toBeNull();
   });
 
   it("registers a purchase with uploads, returns the member its public reference, and replays idempotently", async () => {
@@ -1028,12 +1069,13 @@ describe("finance access API", () => {
       },
     });
     expect(saved.status).toBe(200);
-    expect(await viewVersion()).toBe(versionBeforeRegister + 1);
+    expect(await viewVersion()).toBe(versionBeforeRegister + 1 + MAX_PURCHASE_FILES * 2);
     expect(await tableCount("purchases")).toBe(purchasesBefore + 1);
     expect(await tableCount("documents")).toBe(MAX_PURCHASE_FILES);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.invoice_transfers where status='needs_attention' and last_error='configuration_missing'")).rows[0].count).toBe(String(MAX_PURCHASE_FILES));
   });
 
-  it("records missing-approval exception, warnings, and finance outbox with single view bump and idempotent replay", async () => {
+  it("ignores historical threshold settings while keeping budget previews advisory and registration replay stable", async () => {
     await seedPrivateRows();
     await grant(memberId, "finance");
     await grant(adminId, "head_of_finance");
@@ -1058,26 +1100,31 @@ describe("finance access API", () => {
       ],
       uploadIds: [uploadId],
     };
+    const checked = await call({ token: "member", body: { action: "checkPurchase", requestId: crypto.randomUUID(), purchase } });
+    expect(checked.status).toBe(200);
+    const advisoryWarnings = (checked.body as { warnings: { message: string }[] }).warnings;
+    expect(advisoryWarnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
+    expect(advisoryWarnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
+    expect(advisoryWarnings.some((row) => /approval threshold/i.test(row.message))).toBe(false);
     const versionBefore = await viewVersion();
     const rid = crypto.randomUUID();
     const saved = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     if (saved.status !== 200) throw new Error(JSON.stringify(saved.body));
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
 
     const warnings = (saved.body as { warnings?: { message: string }[] }).warnings ?? [];
-    expect(warnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
-    expect(warnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
-    expect(warnings.some((row) => /approval threshold/i.test(row.message))).toBe(true);
+    // Current tracking records discrepancies; the retired threshold adds none.
+    expect(warnings.map(row => row.message)).toEqual([
+      "Actual cost exceeds the approved plan. Finance review is required.",
+      "Unbudgeted actual cost recorded for Finance review.",
+    ]);
 
     const exceptions = await sql<{ kind: string; facts: Record<string, string> }>(
       "select kind, facts from finance.exception_reviews",
     );
-    expect(exceptions.rows).toHaveLength(1);
-    expect(exceptions.rows[0]).toMatchObject({
-      kind: "missing_approval",
-      facts: { totalOre: "650000", thresholdOre: "500000" },
-    });
-    expect(exceptions.rows[0]?.facts.publicRef).toMatch(/^2026-/);
+    expect(exceptions.rows.map(row => row.kind).sort()).toEqual(["budget_overrun", "unbudgeted"]);
+    const publicRef = (await sql<{ public_ref: string }>("select public_ref from finance.purchases where id = $1::uuid", [(saved.body as { id: string }).id])).rows[0]?.public_ref;
+    expect(publicRef).toMatch(/^2026-/);
 
     const outbox = await sql<{ event_type: string; payload: Record<string, string> }>(
       "select event_type, payload from finance.outbox order by recipient_member_id::text",
@@ -1086,7 +1133,7 @@ describe("finance access API", () => {
     for (const row of outbox.rows) {
       expect(row.event_type).toBe("purchase_registered");
       expect(row.payload).toMatchObject({
-        publicRef: exceptions.rows[0]?.facts.publicRef,
+        publicRef,
         supplierName: "Supplier Example",
         totalOre: "650000",
       });
@@ -1098,8 +1145,8 @@ describe("finance access API", () => {
     const replay = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     expect(replay.status).toBe(200);
     expect(replay.body).toMatchObject(saved.body as Record<string, unknown>);
-    expect(await viewVersion()).toBe(versionBefore + 1);
-    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews")).rows[0]?.count).toBe("1");
+    expect(await viewVersion()).toBe(versionBefore + 3);
+    expect((await sql<{ count: string }>("select count(*)::text as count from finance.exception_reviews")).rows[0]?.count).toBe("2");
     expect((await sql<{ count: string }>("select count(*)::text as count from finance.outbox")).rows[0]?.count).toBe(String(outbox.rows.length));
 
     const stored = await sql<{ response: { warnings: { message: string }[] } }>(
@@ -1107,8 +1154,7 @@ describe("finance access API", () => {
       [memberId, rid],
     );
     const storedWarnings = stored.rows[0]?.response?.warnings ?? [];
-    expect(storedWarnings.some((row) => /not in the budget/i.test(row.message))).toBe(true);
-    expect(storedWarnings.some((row) => /exceed the plan/i.test(row.message))).toBe(true);
+    expect(storedWarnings).toEqual(warnings);
   });
 
   it("keeps register_purchase advisory lock, item key-share locks, and post-budget quota count in migration 014", () => {
@@ -1161,7 +1207,7 @@ describe("finance access API", () => {
     const versionBefore = await viewVersion();
     expect((await call({ token: "member", body: { action: "registerPurchase", requestId: crypto.randomUUID(), purchase } })).status).toBe(200);
     expect(await tableCount("purchases")).toBe(20);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
     const uploadId2 = await authorizeAndFinalizeUpload(8);
     expect(
       (await call({
@@ -1174,7 +1220,7 @@ describe("finance access API", () => {
       })).status,
     ).toBe(429);
     expect(await tableCount("purchases")).toBe(20);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
   });
 
   it("replays a stored registerPurchase before validation when the budget is no longer approved", async () => {
@@ -1243,7 +1289,7 @@ describe("finance access API", () => {
     const purchasesAfter = await tableCount("purchases");
     const auditsAfter = await tableCount("audit_log");
     const outboxAfter = await tableCount("outbox");
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
     const replay = await call({ token: "member", body: { action: "registerPurchase", requestId: rid, purchase } });
     expect(replay.status).toBe(200);
     expect(replay.body).toMatchObject(saved.body as Record<string, unknown>);
@@ -1251,7 +1297,7 @@ describe("finance access API", () => {
     expect(await tableCount("audit_log")).toBe(auditsAfter);
     expect(await tableCount("outbox")).toBe(outboxAfter);
     expect(await tableCount("idempotency_keys")).toBe(1);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
   });
 
   it("rejects registerPurchase when the same requestId is reused with a different purchase payload", async () => {
@@ -1298,7 +1344,7 @@ describe("finance access API", () => {
       body: { error: "This request ID was already used for a different change." },
     });
     expect(await tableCount("purchases")).toBe(purchasesAfter);
-    expect(await viewVersion()).toBe(versionBefore + 1);
+    expect(await viewVersion()).toBe(versionBefore + 3);
   });
 
   it("returns an unchanged view without skipping a financing denial", async () => {
@@ -1345,7 +1391,7 @@ async function authorizeAndFinalizeUpload(byteSize: number) {
 
 async function seedPrivateRows() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-  await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+  await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
   const season = await sql<{ id: string }>("select id from finance.seasons");
   const seasonId = season.rows[0]?.id;
   await sql("insert into finance.systems (department_key, code, name) values ('mechanical-production', 'SYS-FR', 'Frame')");
@@ -1399,6 +1445,8 @@ describe("finance snapshot", () => {
       db: {
         query: async <T>(text: string) => {
           queries.push(text);
+          if (text.includes("to_regprocedure('finance.claim_invoice_transfer")) return { rows: [{ available: true }] as T[] };
+          if (text.includes("finance.documents")) return { rows: [] as T[] };
           if (text.includes("capability_flags") !== text.includes("finance.view_versions")) throw new Error("split snapshot");
           if (text.includes("finance.budget_items") && (text.includes("i.protected is not true") || text.includes("finance.purchase_lines pl"))) {
             return { rows: [] as T[] };

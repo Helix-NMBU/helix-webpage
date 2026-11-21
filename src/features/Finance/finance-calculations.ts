@@ -4,6 +4,8 @@ import { derivePartUsage } from "./funding.js";
 import { addCalendarDays, formatOre } from "./money.js";
 import type {
   BudgetItemPriority,
+  EffectiveBudgetItemPriority,
+  FinanceApprovalPresence,
   BudgetItemStatus,
   FundingConfidence,
   FundingScenario,
@@ -38,7 +40,7 @@ export type FundingFact = {
 
 export type BudgetItemFact = {
   id: string;
-  priority: BudgetItemPriority;
+  priority: EffectiveBudgetItemPriority;
   status: BudgetItemStatus;
   plannedOre: bigint;
   actualOre: bigint;
@@ -47,6 +49,8 @@ export type BudgetItemFact = {
   earmarkId: string | null;
   earmarkAmountOre: bigint | null;
   funding: FundingFact | null;
+  /** Actual cost attributed to recorded funding parts, independently of the current plan link. */
+  restrictedActual?: readonly { partId: string; amountOre: bigint }[];
 };
 
 export type FundingPartFact = {
@@ -98,16 +102,17 @@ export function fundingEligible(scenario: ScenarioKey, funding: Pick<FundingFact
 
 export function priorityEligible(
   scenario: ScenarioKey,
-  priority: BudgetItemPriority,
+  priority: EffectiveBudgetItemPriority,
   funding: Pick<FundingFact, "status" | "confidence"> | null,
 ): boolean {
+  if (priority === "P0") return true;
   if (priority === "EM") return funding !== null && fundingEligible(scenario, funding);
   return ORDINARY_PRIORITIES[scenario].includes(priority);
 }
 
 export function eligibleRemainingPlanOre(input: {
   scenario: ScenarioKey;
-  priority: BudgetItemPriority;
+  priority: EffectiveBudgetItemPriority;
   status: BudgetItemStatus;
   plannedOre: bigint;
   actualOre: bigint;
@@ -186,8 +191,13 @@ export function calculateScenarios(items: readonly BudgetItemFact[], funding: re
     const needOreAmount = itemNeeds.reduce((sum, entry) => sum + entry.needOre, 0n);
     const partsUse = parts.map((part): PartScenarioUse => {
       const counted = eligibleIds.has(part.fundingId);
-      const linked = items.filter((item) => item.earmarkId === part.id);
-      const needOre = linked.reduce((sum, item) => sum + (needByItem.get(item.id) ?? 0n), 0n);
+      const needOre = items.reduce((sum, item) => {
+        const recordedActual = item.restrictedActual === undefined
+          ? item.earmarkId === part.id ? item.actualOre : 0n
+          : item.restrictedActual.filter(actual => actual.partId === part.id).reduce((amount, actual) => amount + actual.amountOre, 0n);
+        const remainingNeed = item.earmarkId === part.id ? (needByItem.get(item.id) ?? item.actualOre) - item.actualOre : 0n;
+        return sum + recordedActual + remainingNeed;
+      }, 0n);
       if (!counted) return { partId: part.id, counted: false, needOre, coverOre: 0n, unusedOre: part.amountOre };
       const coverOre = needOre < part.amountOre ? needOre : part.amountOre;
       return { partId: part.id, counted: true, needOre, coverOre, unusedOre: part.amountOre - coverOre };
@@ -220,7 +230,7 @@ function earmarkedOnSystem(items: readonly BudgetItemFact[]): bigint {
   const seen = new Set<string>();
   let total = 0n;
   for (const item of items) {
-    if (item.status === "cancelled" || item.unallocated || item.priority !== "EM" || !item.earmarkId) continue;
+    if (item.status === "cancelled" || item.unallocated || !item.earmarkId) continue;
     if (seen.has(item.earmarkId)) continue;
     seen.add(item.earmarkId);
     total += item.earmarkAmountOre ?? 0n;
@@ -307,6 +317,8 @@ export function presentFinanceOverview(input: {
   seasonCode: string | null;
   budgetStatus: PublicOverview["budgetStatus"];
   approvedOn: string | null;
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
   departments: PublicDepartmentSummary[];
   publicEarmarks: PublicEarmarkSummary[];
   scenarios: FundingScenario[];
@@ -319,6 +331,8 @@ export function presentFinanceOverview(input: {
     seasonCode: input.seasonCode,
     budgetStatus: input.budgetStatus,
     approvedOn: input.approvedOn,
+    ...(input.approvedPresence ? { approvedPresence: input.approvedPresence } : {}),
+    ...(input.hasRecordedActuals !== undefined ? { hasRecordedActuals: input.hasRecordedActuals } : {}),
     departments: input.showAggregates ? input.departments : [],
     publicEarmarks: input.publicEarmarks,
   };
@@ -327,4 +341,14 @@ export function presentFinanceOverview(input: {
     overview.earmarkSources = input.earmarkSources;
   }
   return overview;
+}
+
+/** Legacy approval facts and approved project presence are distinct; actuals remain visible without a plan. */
+export function hasVisibleApprovedFinances(input: {
+  budgetStatus?: string | null;
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
+}): boolean {
+  return input.approvedPresence?.legacyBudget === true || input.budgetStatus === "approved"
+    || input.approvedPresence?.projectBudgets === true || input.hasRecordedActuals === true;
 }

@@ -1,3 +1,4 @@
+import { requireInvoiceTransferSchema } from "./finance-invoices.js";
 import { createHash } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
 import { formatOre } from "./finance-money.js";
@@ -26,7 +27,6 @@ type PurchaseExportRow = {
   invoice_due_date: string | null;
   invoice_paid: boolean | null;
   outlay_paid: boolean | null;
-  registration_threshold_ore: string | null;
 };
 
 type LineExportRow = {
@@ -37,6 +37,7 @@ type LineExportRow = {
   amount_ore: string;
   unbudgeted: boolean;
   system_code: string;
+  budget_department:string|null; project_name:string|null; purchase_department:string|null;
   budget_item_ref: string | null;
   effective_plan_ore: string | null;
   actual_ore: string | null;
@@ -83,14 +84,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
             coalesce(sum(l.amount_ore), 0)::text as total_ore,
             i.due_date::text as invoice_due_date,
             i.paid as invoice_paid,
-            o.paid as outlay_paid,
-            (
-              select e.facts ->> 'thresholdOre'
-              from finance.exception_reviews e
-              where e.purchase_id = p.id and e.kind = 'missing_approval'
-              order by e.created_at, e.id
-              limit 1
-            ) as registration_threshold_ore
+            o.paid as outlay_paid
      from finance.purchases p
      join finance.seasons s on s.id = p.season_id
      left join finance.purchase_lines l on l.purchase_id = p.id
@@ -104,6 +98,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
   const lines = (await db.query<LineExportRow>(
     `select l.purchase_id, l.public_ref, l.description, l.quantity::text as quantity, l.amount_ore::text as amount_ore,
             l.unbudgeted, s.code as system_code, i.public_ref as budget_item_ref,
+            coalesce(owner.name,physical_department.name) as budget_department,project.name as project_name,recorded_department.name as purchase_department,
             case
               when i.id is null then null
               when i.status = 'cancelled' or i.protected then '0'
@@ -114,7 +109,12 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      join finance.purchases p on p.id = l.purchase_id
      join finance.seasons season on season.id = p.season_id
      join finance.systems s on s.id = l.system_id
-     left join finance.budget_items i on i.id = l.budget_item_id
+     left join finance.effective_budget_entries i on i.id = l.budget_item_id
+     join identity.departments physical_department on physical_department.department_key=s.department_key
+     left join finance.project_budgets current_header on current_header.project_id=p.project_id and current_header.season_id=p.season_id
+     left join project_management.departments recorded_department on recorded_department.id=p.responsible_department_id
+     left join project_management.departments owner on owner.id=case when i.source='project' then i.responsible_department_id when l.unbudgeted then coalesce(current_header.responsible_department_id,p.responsible_department_id) end
+     left join project_management.projects project on project.id=case when i.source='project' then i.project_id when l.unbudgeted then p.project_id end
      where season.code = $1
      order by l.public_ref`,
     [seasonCode],
@@ -139,17 +139,10 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      order by d.public_ref`,
     [seasonCode],
   )).rows;
-  const setting = (await db.query<{ threshold_ore: string | null }>(
-    "select setting_value #>> '{}' as threshold_ore from finance.settings where setting_key = 'approval_threshold_ore'",
-  )).rows[0];
-  const currentThreshold = setting?.threshold_ore && /^[0-9]+$/.test(setting.threshold_ore) ? setting.threshold_ore : null;
+  await requireInvoiceTransferSchema(db);
+  const evidence = (await db.query<{id:string;storage_backend:string;status:string|null;drive_viewer_url:string|null}>(`select d.id,d.storage_backend,t.status,d.drive_viewer_url from finance.documents d left join finance.invoice_transfers t on t.document_id=d.id join finance.purchases p on p.id=d.purchase_id join finance.seasons s on s.id=p.season_id where s.code=$1`, [seasonCode])).rows;
   const rows: FinanceExportRow[] = [];
   for (const purchase of purchases) {
-    const basis = purchase.registration_threshold_ore && /^[0-9]+$/.test(purchase.registration_threshold_ore)
-      ? "at_registration"
-      : "current_setting";
-    const threshold = basis === "at_registration" ? purchase.registration_threshold_ore : currentThreshold;
-    const above = threshold !== null && BigInt(purchase.total_ore) > BigInt(threshold);
     const summary = emptyExportRow();
     summary.row_kind = "purchase";
     summary.purchase_ref = purchase.public_ref;
@@ -162,8 +155,6 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
     summary.invoice_due_date = purchase.invoice_due_date ?? "";
     summary.invoice_state = stateLabel(readDbBoolean(purchase.invoice_paid), "paid", "unpaid");
     summary.outlay_state = stateLabel(readDbBoolean(purchase.outlay_paid), "reimbursed", "unreimbursed");
-    summary.above_limit = above ? "yes" : "no";
-    summary.above_limit_basis = threshold ? basis : "";
     summary.purchase_status = purchase.status;
     summary.voided_on = purchase.voided_on ?? "";
     summary.line_amount_nok = money(purchase.total_ore);
@@ -182,6 +173,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
       record.quantity = line.quantity;
       record.line_amount_nok = money(line.amount_ore);
       record.system_code = line.system_code;
+      record.budget_department=line.budget_department??"";record.project_name=line.project_name??"";record.purchase_department=line.purchase_department??"";
       record.budget_item_ref = line.budget_item_ref ?? "";
       record.budget_status = status;
       record.budget_status_basis = "current";
@@ -206,6 +198,10 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
       record.content_sha256 = document.content_sha256;
       record.content_type = document.content_type;
       record.byte_size = document.byte_size;
+      const attachment = evidence.find(d => d.id === document.id);
+      record.document_backend = attachment?.storage_backend ?? "private_storage";
+      record.invoice_transfer_status = attachment?.storage_backend === "google_drive" ? attachment.status ?? "needs_attention" : "stored";
+      record.invoice_viewer_url = attachment?.status === "stored" ? attachment.drive_viewer_url ?? "" : "";
       rows.push(record);
     }
   }

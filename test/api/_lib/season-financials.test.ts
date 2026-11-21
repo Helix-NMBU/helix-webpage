@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -41,6 +42,7 @@ beforeAll(async () => {
   for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "016_finance_fulfillment.sql", "024_financials_member_role.sql", "034_finance_bank_snapshot.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   db = { query: async <T>(text: string, params?: unknown[]) => {
     const rows = (await pg.query<T>(text, params)).rows;
     if (afterQuery) await afterQuery(text);
@@ -63,7 +65,7 @@ it("requires the independent Season Overview grant and a verified linked account
   expect(await services.summary("user")).toMatchObject({ budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], canOpenFinancials: false, bank: { status: "available", snapshot: null } });
 });
 
-it("hides draft amounts until the Financials capability is granted", async () => {
+it("keeps unapproved Draft amounts outside approved totals even with Financials access", async () => {
   await pg.exec(`
     select finance.configure_current_season('${admin}', 'S27', 'Season', '2026-08-01', '2027-07-31');
     insert into finance.budgets (season_id,public_ref,status,created_by_member_id,updated_by_member_id)
@@ -76,9 +78,9 @@ it("hides draft amounts until the Financials capability is granted", async () =>
   expect(hidden).toMatchObject({ seasonCode: "S27", budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, departments: [] });
   await pg.exec(`insert into identity.member_roles values ('${user}','financials');`);
   const visible = await services.summary("user");
-  expect(visible).toMatchObject({ budgetStatus: "draft", plannedNok: "123.45", actualNok: "0.00", canOpenFinancials: true });
+  expect(visible).toMatchObject({ budgetStatus: "draft", plannedNok: "0.00", actualNok: "0.00", canOpenFinancials: true });
   expect(visible.departments).toHaveLength(3);
-  expect(visible.departments[0]).toMatchObject({ name: "Mechanical", plannedNok: "123.45", systems: [{ name: "Frame" }] });
+  expect(visible.departments[0]).toMatchObject({ name: "Mechanical", plannedNok: "0.00", systems: [{ name: "Frame" }] });
   expect(visible.departments[2]).toMatchObject({ name: "Empty", plannedNok: "0.00", actualNok: "0.00", systems: [] });
   expect(JSON.stringify(visible)).not.toMatch(/Private detail|commitment|earmark|funding|scenario/i);
   await pg.exec(`delete from identity.member_roles where member_id='${user}' and role_key='financials';`);
@@ -174,7 +176,7 @@ it("shows only aggregate money flow even when draft budget figures are hidden", 
     select finance.bump_view_version();
   `);
   const view = await services.summary("user");
-  expect(view).toMatchObject({ budgetStatus: "draft-hidden", plannedNok: null, actualNok: null, moneyFlow: { status: "available", moneyInNok: "123.45", moneyOutNok: "25.00" } });
+  expect(view).toMatchObject({ budgetStatus: "draft-hidden", plannedNok: "0.00", actualNok: "25.00", hasRecordedActuals: true, moneyFlow: { status: "available", moneyInNok: "123.45", moneyOutNok: "25.00" } });
   expect(JSON.stringify(view)).not.toContain("Private sponsor");
   const failing: CvDatabase = { query: async <T>(text: string, params?: unknown[]) => {
     if (text.includes("with season as")) throw new Error("offline");

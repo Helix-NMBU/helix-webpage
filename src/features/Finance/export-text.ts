@@ -18,8 +18,6 @@ export const FINANCE_EXPORT_COLUMNS = [
   "invoice_due_date",
   "invoice_state",
   "outlay_state",
-  "above_limit",
-  "above_limit_basis",
   "purchase_status",
   "voided_on",
   "line_ref",
@@ -38,6 +36,12 @@ export const FINANCE_EXPORT_COLUMNS = [
   "content_sha256",
   "content_type",
   "byte_size",
+  "document_backend",
+  "invoice_transfer_status",
+  "invoice_viewer_url",
+  "budget_department",
+  "project_name",
+  "purchase_department",
 ] as const;
 
 export type FinanceExportColumn = (typeof FINANCE_EXPORT_COLUMNS)[number];
@@ -80,11 +84,6 @@ export function budgetStatusLabel(input: { unbudgeted: boolean; actualOre: bigin
   if (input.unbudgeted) return "unbudgeted";
   if (input.actualOre > input.effectivePlanOre) return "over_budget";
   return "within";
-}
-
-export function approvalSubjectPrefix(aboveLimit: boolean, thresholdNok: string): string {
-  if (!aboveLimit) return "";
-  return `[Above approval limit NOK ${thresholdNok}]`;
 }
 
 export function invoiceSubjectPrefix(unpaidInvoice: boolean): string {

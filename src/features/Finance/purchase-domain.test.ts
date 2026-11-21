@@ -28,3 +28,16 @@ describe("purchase-domain", () => {
     expect(result.purchase?.lines[0]?.amountOre).toBe(90000n);
   });
 });
+
+describe("verified invoice signatures",()=>{
+ it("rejects unknown/truncated bytes despite allowed names and MIME declarations",()=>{
+  for(const bytes of [new Uint8Array(),new TextEncoder().encode("arbitrary payload"),new Uint8Array([0x89,0x50,0x4e,0x47])])
+   expect(verifyFileSignature(bytes,"invoice.pdf","application/pdf")).toBe(false);
+ });
+ it("accepts supported JPEG, full PNG, PDF and ISO-BMFF HEIC/HEIF signatures",()=>{
+  expect(verifyFileSignature(new Uint8Array([0xff,0xd8,0xff]),"photo.jpg","image/jpeg")).toBe(true);
+  expect(verifyFileSignature(new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),"photo.png","image/png")).toBe(true);
+  for(const brand of ["heic","heif","mif1","heix"]) expect(verifyFileSignature(new Uint8Array([0,0,0,24,...new TextEncoder().encode(`ftyp${brand}`)]),"photo.heic","image/heic")).toBe(true);
+  expect(verifyFileSignature(new TextEncoder().encode("ftypheicfake"),"photo.heic","image/heic")).toBe(false);
+ });
+});

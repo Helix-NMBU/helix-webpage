@@ -1,3 +1,4 @@
+import { isProjectMemberPreview } from "./local-member-profile-selection";
 import type { MemberAccount } from "./account";
 
 // The dedicated Vite mode is restricted to a development server on loopback.
@@ -14,7 +15,7 @@ export function isLocalMemberMode(origin = typeof window === "undefined" ? "" : 
 export const localMemberAccount: MemberAccount = {
   name: "Alex Example",
   email: "alex@example.invalid",
-  role: "Admin",
+  get role() { return isProjectMemberPreview(isLocalMemberMode()) ? "Member" : "Admin"; },
   helixRole: "Mechanical team member",
 };
 
@@ -24,4 +25,5 @@ export function localMemberSignedIn(): boolean {
 }
 export function setLocalMemberSignedIn(signedIn: boolean): void {
   localStorage.setItem(SESSION_KEY, signedIn ? "signed-in" : "signed-out");
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("helix-member-local-session-changed"));
 }

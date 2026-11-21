@@ -1,3 +1,6 @@
+import { loadEffectiveFinancePresence } from "./finance-effective-read.js";
+import { requireInvoiceTransferSchema } from "./finance-invoices.js";
+import { projectBudgetError } from "./finance-project-budget-foundation.js";
 import { createHash, randomUUID } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
 import { FinanceError, type ReviewDecision } from "./finance-error.js";
@@ -19,6 +22,7 @@ import type {
   FinanceFieldError,
   FinanceMutationResult,
   PurchaseInput,
+  FinanceWarning,
 } from "./finance-types.js";
 import { loadBudgetHierarchy } from "./finance-budgets.js";
 
@@ -35,7 +39,8 @@ export type PurchaseCaller = {
   memberId: string;
   viewVersion: number;
   seasonCode: string | null;
-  approvalThresholdNok: string | null;
+  /** Ignored compatibility metadata from callers predating policy retirement. */
+  approvalThresholdNok?: string | null;
   capabilities: FinanceCapabilitySet;
 };
 
@@ -83,6 +88,7 @@ function reviewDecision(error: unknown): ReviewDecision | undefined {
 export function mapPurchaseError(error: unknown): FinanceError {
   if (error instanceof FinanceError) return error;
   const message = textOf(error);
+  if (message.includes("finance:PROJECT_")) return projectBudgetError(error);
   const tagged = /FINANCE\|(conflict|denied|invalid|stale|not_found|quota|recover)\|([^|]*)(?:\|([A-Za-z][A-Za-z0-9]*))?/.exec(message);
   if (tagged) {
     const kind = tagged[1];
@@ -166,9 +172,8 @@ function parsePurchase(body: Record<string, unknown>): PurchaseInput {
   return body.purchase as PurchaseInput;
 }
 
-async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promise<{
+async function validationContext(db: CvDatabase, caller: PurchaseCaller, incurredUnbudgeted: boolean): Promise<{
   choices: BudgetChoices;
-  thresholdOre: bigint | null;
   itemActualOre: (itemId: string) => Promise<bigint>;
   itemPlannedOre: (itemId: string) => Promise<bigint>;
 }> {
@@ -181,31 +186,26 @@ async function validationContext(db: CvDatabase, caller: PurchaseCaller): Promis
     [caller.seasonCode],
   );
   const row = budget.rows[0];
-  if (!row?.budget_id || row.status !== "approved") {
-    throw new FinanceError(409, "The season budget must be approved before registering purchases.");
+  const presence = await loadEffectiveFinancePresence(db.query.bind(db), caller.seasonCode);
+  if (!row?.budget_id || (!presence.approvedPresence.legacyBudget && !presence.approvedPresence.projectBudgets && !incurredUnbudgeted)) {
+    throw new FinanceError(409, "Choose an effective approved entry or register an incurred unbudgeted cost from its project.");
   }
   const hierarchy = await loadBudgetHierarchy(db, {
     memberId: caller.memberId,
     viewVersion: caller.viewVersion,
     seasonCode: caller.seasonCode,
     capabilities: caller.capabilities,
-  }, { status: "approved", approvedOn: null, budgetId: row.budget_id, revision: 0 });
+  }, { status: row.status as "draft" | "approved", approvedOn: null, budgetId: row.budget_id, revision: 0, ...presence });
   const choices = hierarchy.choices ?? { systems: [], items: [] };
-  let threshold: bigint | null = null;
-  if (caller.approvalThresholdNok) {
-    const [whole, fraction = "00"] = caller.approvalThresholdNok.split(".");
-    threshold = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
-  }
   return {
     choices,
-    thresholdOre: threshold,
     async itemActualOre(itemId: string) {
       const result = await db.query<{ actual: string }>("select finance.item_registered_actual_ore($1::uuid)::text as actual", [itemId]);
       return BigInt(result.rows[0]?.actual ?? "0");
     },
     async itemPlannedOre(itemId: string) {
       const result = await db.query<{ planned: string; protected: boolean; status: string }>(
-        "select planned_ore::text as planned, protected, status from finance.budget_items where id = $1::uuid",
+        "select planned_ore::text as planned, protected, status from finance.effective_budget_entries where id = $1::uuid",
         [itemId],
       );
       const item = result.rows[0];
@@ -219,18 +219,15 @@ async function validatePurchase(db: CvDatabase, caller: PurchaseCaller, purchase
   const normalized = normalizePurchaseInput(purchase);
   if (normalized.errors.length) throw invalid(normalized.errors);
   if (!normalized.purchase) throw invalid([{ field: "purchase", message: "Enter a valid purchase." }]);
-  const context = await validationContext(db, caller);
+  const context = await validationContext(db, caller, normalized.purchase.lines.every(line => line.unbudgeted));
   const related = await validatePurchaseRelationships(normalized.purchase, {
     today: osloToday(),
-    thresholdOre: context.thresholdOre,
     choices: context.choices,
     itemActualOre: context.itemActualOre,
     itemPlannedOre: context.itemPlannedOre,
   });
   if (related.errors.length) throw invalid(related.errors);
-  const totalOre = normalized.purchase.lines.reduce((sum, line) => sum + line.amountOre, 0n);
-  const missingApproval = context.thresholdOre !== null && totalOre > context.thresholdOre;
-  return { purchase: normalized.purchase, warnings: related.warnings, thresholdOre: context.thresholdOre, missingApproval };
+  return { purchase: normalized.purchase, warnings: related.warnings };
 }
 
 async function verifyPurchaseEvidence(
@@ -290,16 +287,33 @@ async function verifyPurchaseEvidence(
   }
 }
 
+/** Only created by the authenticated project-purchase dispatcher. No Finance read grants. */
+export type PurchaseProjectScope = {
+  projectId: string; departmentId: string; googleSub: string; email: string;
+  validate: (purchase: PurchaseInput) => Promise<{ purchase: NormalizedPurchase; warnings: FinanceWarning[] }>;
+};
+
 export async function performPurchaseMutation(
   db: CvDatabase,
   storage: FinanceObjectStorage | null,
   caller: PurchaseCaller,
   body: Record<string, unknown>,
+  project?: PurchaseProjectScope,
 ): Promise<FinanceMutationResult> {
   const action = body.action;
+  const projectParams = project ? [caller.memberId, project.googleSub, project.email, project.projectId, project.departmentId] : [];
+  const validate = (input: PurchaseInput) => project ? project.validate(input) : validatePurchase(db, caller, input);
+  const replay = async (requestId: string, hash: string) => {
+    if (!project) return storedPurchaseReplay(db, caller.memberId, requestId, hash);
+    try {
+      const result = await db.query<{ response: FinanceMutationResult | null }>(
+        "select finance.replay_project_purchase($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7) as response", [...projectParams, requestId, hash]);
+      return result.rows[0]?.response ?? null;
+    } catch (error) { throw mapPurchaseError(error); }
+  };
   if (action === "checkPurchase") {
     try {
-      const result = await validatePurchase(db, caller, parsePurchase(body));
+      const result = await validate(parsePurchase(body));
       return { ok: true, viewVersion: caller.viewVersion, warnings: result.warnings, errors: [] };
     } catch (error) {
       if (error instanceof FinanceError && error.errors?.length) {
@@ -324,8 +338,9 @@ export async function performPurchaseMutation(
     const stagingKey = storage.stagingKey(caller.memberId, uploadId);
     const expiresAt = new Date(Date.now() + 120_000).toISOString();
     await db.query(
-      "select finance.create_upload_authorization($1::uuid, $2::uuid, $3, $4, $5, $6::bigint, $7::timestamptz)",
-      [caller.memberId, uploadId, stagingKey, fileName, contentType, byteSize, expiresAt],
+      project ? "select finance.create_project_upload_authorization($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7,$8,$9,$10::bigint,$11::timestamptz)"
+        : "select finance.create_upload_authorization($1::uuid, $2::uuid, $3, $4, $5, $6::bigint, $7::timestamptz)",
+      [...(project ? projectParams : [caller.memberId]), uploadId, stagingKey, fileName, contentType, byteSize, expiresAt],
     );
     const uploadUrl = await storage.presignPut(stagingKey, contentType, byteSize);
     return { ok: true, viewVersion: caller.viewVersion, id: uploadId, warnings: [], errors: [], uploadUrl, stagingKey, expiresAt } as FinanceMutationResult & { uploadUrl: string; stagingKey: string; expiresAt: string };
@@ -333,6 +348,7 @@ export async function performPurchaseMutation(
   if (action === "finalizeUpload") {
     if (!storage) throw new FinanceError(503, "Finance file storage is unavailable. Configure the private finance bucket.");
     const uploadId = requireUuid(body.uploadId, "uploadId", "A valid upload ID is required.");
+    if (project) await db.query("select finance.check_project_upload_access($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid)", [...projectParams, uploadId]);
     const rows = await db.query<{
       staging_key: string;
       byte_size: string;
@@ -375,8 +391,9 @@ export async function performPurchaseMutation(
     try {
       // Record the key before object I/O, including writes whose outcome is unknown.
       await db.query(
-        "select finance.reserve_upload_final_candidate($1::uuid, $2::uuid, $3, $4, $5::bigint)",
-        [caller.memberId, uploadId, finalKey, digest, expectedSize],
+        project ? "select finance.reserve_project_upload_final_candidate($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7,$8,$9::bigint)"
+          : "select finance.reserve_upload_final_candidate($1::uuid, $2::uuid, $3, $4, $5::bigint)",
+        [...(project ? projectParams : [caller.memberId]), uploadId, finalKey, digest, expectedSize],
       );
     } catch (error) {
       const winner = (await db.query<{ member_id: string; status: string; final_key: string | null; byte_size: string }>(
@@ -391,8 +408,9 @@ export async function performPurchaseMutation(
     await storage.putFinalObject(finalKey, bytes, contentType);
     try {
       await db.query(
-        "select finance.complete_upload_finalize($1::uuid, $2::uuid, $3, $4, $5::bigint, $6)",
-        [caller.memberId, uploadId, finalKey, digest, expectedSize, contentType],
+        project ? "select finance.complete_project_upload_finalize($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7,$8,$9::bigint,$10)"
+          : "select finance.complete_upload_finalize($1::uuid, $2::uuid, $3, $4, $5::bigint, $6)",
+        [...(project ? projectParams : [caller.memberId]), uploadId, finalKey, digest, expectedSize, contentType],
       );
     } catch (error) {
       // A concurrent or previously successful finalize may have won. Only clean
@@ -422,26 +440,29 @@ export async function performPurchaseMutation(
     const normalized = normalizePurchaseInput(parsePurchase(body));
     if (normalized.errors.length) throw invalid(normalized.errors);
     if (!normalized.purchase) throw invalid([{ field: "purchase", message: "Enter a valid purchase." }]);
-    const hash = hashRegisterPurchaseIdempotency(normalized.purchase);
-    const replayed = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
+    await requireInvoiceTransferSchema(db);
+    const purchaseHash = hashRegisterPurchaseIdempotency(normalized.purchase);
+    const hash = project ? payloadHash({ projectId: project.projectId, departmentId: project.departmentId, purchaseHash }) : purchaseHash;
+    const replayed = await replay(requestId, hash);
     if (replayed) return withPurchaseReference(db, caller.memberId, replayed);
-    const validated = await validatePurchase(db, caller, parsePurchase(body));
+    const validated = await validate(parsePurchase(body));
     try {
       await verifyPurchaseEvidence(db, storage, caller.memberId, validated.purchase.uploadIds);
     } catch (error) {
       // Another identical request may have committed while evidence was checked.
-      const concurrentReplay = await storedPurchaseReplay(db, caller.memberId, requestId, hash);
+      const concurrentReplay = await replay(requestId, hash);
       if (concurrentReplay) return withPurchaseReference(db, caller.memberId, concurrentReplay);
       throw error;
     }
     const payload = serializePurchaseBody(validated.purchase, {
       registrationYear: registrationYear(),
-      thresholdOre: validated.thresholdOre,
-      missingApproval: validated.missingApproval,
-      warnings: validated.warnings,
+      // Read-snapshot plan warnings belong to checkPurchase/checkProjectPurchase.
+      // Registration SQL derives discrepancy warnings from the locked approval.
+      warnings: [],
     });
-    const registered = await call(db, "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [
-      caller.memberId,
+    const registered = await call(db, project ? "select finance.register_project_purchase($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7,$8::jsonb) as result"
+      : "select finance.register_purchase($1::uuid, $2::uuid, $3, $4::jsonb) as result", [
+      ...(project ? projectParams : [caller.memberId]),
       requestId,
       hash,
       JSON.stringify(payload),

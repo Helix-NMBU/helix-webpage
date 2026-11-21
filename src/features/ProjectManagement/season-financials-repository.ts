@@ -1,8 +1,8 @@
 import { CvRequestError } from "../MemberCV/repository";
 import { memberLoadFailure, memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
-import { localMemberHasFinancials, localMemberHasSeasonOverview } from "../MemberPlatform/member-access-api";
-import { loadLocalSeasonBankView } from "./season-financials-local";
+import { localMemberHasSeasonOverview } from "../MemberPlatform/member-access-api";
+import { loadLocalSeasonFinancialSummary } from "./season-financials-local";
 import type { SeasonFinancialSummary } from "./season-financials-types";
 
 export class SeasonFinancialRequestError extends Error {
@@ -12,7 +12,7 @@ export class SeasonFinancialRequestError extends Error {
 export async function loadSeasonFinancialSummary(owner: { current: string | null }, signal?: AbortSignal): Promise<SeasonFinancialSummary> {
   if (isLocalMemberMode()) {
     if (!localMemberSignedIn() || !localMemberHasSeasonOverview()) throw new SeasonFinancialRequestError("Season Overview access is required.", 403);
-    return { bank: loadLocalSeasonBankView(), moneyFlow: { status: "no-season" }, seasonCode: null, budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], canOpenFinancials: localMemberHasFinancials(), viewVersion: 0 };
+    return loadLocalSeasonFinancialSummary();
   }
   const token = await memberSessionToken(owner);
   if (signal?.aborted) throw new DOMException("The request was cancelled.", "AbortError");

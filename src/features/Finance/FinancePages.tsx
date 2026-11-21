@@ -1,3 +1,7 @@
+import { hasVisibleApprovedFinances } from "./finance-calculations";
+import { DepartmentBudgetsPanel } from "./DepartmentBudgetsPanel";
+import { ProjectBudgetsPanel } from "./ProjectBudgetsPanel";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@libs/components/ui/collapsible";
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -34,13 +38,15 @@ function FinanceSection({ page }: { page: FinancePageId }) {
     void session.loadPage("budgets");
   }, [page, session.access, session.budgets, session.capabilities?.registerActual, session.loadPage]);
   const overviewReady = page === "overview" && Boolean(session.overview) && (
-    (session.overview?.departments.length ?? 0) > 0
+    (session.overview && hasVisibleApprovedFinances(session.overview))
+    || (session.overview?.departments.length ?? 0) > 0
     || (session.overview?.publicEarmarks.length ?? 0) > 0
     || session.overview?.budgetStatus !== "absent"
     || Boolean(session.overview?.scenarios?.length)
   );
   const budgetsReady = page === "budgets" && Boolean(session.budgets) && (
-    (session.budgets?.departments.length ?? 0) > 0
+    (session.budgets && hasVisibleApprovedFinances(session.budgets))
+    || (session.budgets?.departments.length ?? 0) > 0
     || session.budgets?.budgetStatus !== "absent"
     || Boolean(session.capabilities?.createBudget)
   );
@@ -71,8 +77,20 @@ function FinanceSection({ page }: { page: FinancePageId }) {
           </Button>
         ))}
       </nav>}
+      {session.profiles?.includes("head_of_finance") && <Button asChild variant="outline"><Link to="/finance/funding-applications">Funding applications</Link></Button>}
       {page === "overview" && session.capabilities?.draftBudgetItems ? <BankSnapshotEditor /> : null}
-      {page === "financing" ? <FinancingPage /> : !loaded ? (
+      {page === "budgets" ? (
+        <>
+          <DepartmentBudgetsPanel />
+          <ProjectBudgetsPanel title="Project budgets" />
+          <Collapsible className="space-y-4">
+            <CollapsibleTrigger asChild><Button variant="outline">Season budget</Button></CollapsibleTrigger>
+            <CollapsibleContent>
+              {budgetsReady ? <BudgetsBoard /> : !loaded ? <FinanceContentSkeleton page={page} /> : <p className="text-sm text-muted-foreground">No season budget is configured yet.</p>}
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      ) : page === "financing" ? <FinancingPage /> : !loaded ? (
         <FinanceContentSkeleton page={page} canRegister={Boolean(session.capabilities?.registerActual)} />
       ) : budgetsReady ? (
         <BudgetsBoard />

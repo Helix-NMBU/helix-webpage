@@ -1,3 +1,8 @@
+import { publishFinanceUpdate } from "./finance-events";
+import { loadLocalFinanceViews, localFinanceVersion, mutateLocalPurchase } from "./local-finance-read";
+import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
+import { createLocalInvoiceEvidenceApi, localInvoiceRecovery } from "./invoice-local";
+import { createInvoiceContinuation } from "./invoice-continuation";
 import { capabilitiesForProfiles } from "./access";
 import { formatOre, osloToday, parseIsoDate, parseNokToOre } from "./money";
 import type {
@@ -15,7 +20,6 @@ import type {
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
-import { localSponsorFunding } from "../PartnerDeals/local-fixture";
 
 let localBankSnapshot: BankSnapshot | null = null;
 let localBankVersion = 0;
@@ -30,27 +34,23 @@ export class FinanceRequestError extends Error {
 }
 
 function localCapabilities(): FinanceCapabilitiesResponse {
+  const profiles = [localFinanceProfileSelection() ?? "finance"];
   return {
     memberId: "local-member",
-    viewVersion: localBankVersion,
-    profiles: ["finance"],
-    capabilities: capabilitiesForProfiles(["finance"]),
+    viewVersion: localFinanceVersion(localBankVersion),
+    profiles,
+    capabilities: capabilitiesForProfiles(profiles),
     seasonCode: "S27",
     approvalThresholdNok: null,
     today: osloToday(),
   };
 }
 
-function localOverview(): PublicOverview {
-  return { viewVersion: localBankVersion, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] };
+export function localFinanceRevisionForDevelopment():number {
+  return isLocalMemberMode()&&localMemberSignedIn()?localBankVersion:0;
 }
-
-function localBudgets(): PublicBudgets {
-  return { viewVersion: localBankVersion, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 0, departments: [], choices: { systems: [], items: [] } };
-}
-
-function localPurchases(): PurchasesView {
-  return { viewVersion: localBankVersion, ownRequests: [] };
+function localRead<T>(read:()=>T):Promise<T> {
+  return Promise.resolve().then(read).catch((error:unknown)=>{if(error instanceof FinanceRequestError)throw error;const status=error&&typeof error==="object"&&"status" in error?Number(error.status):503;throw new FinanceRequestError(error instanceof Error?error.message:"Could not load finance.",status);});
 }
 
 export function createFinanceApi(owner: { current: string | null }) {
@@ -69,9 +69,16 @@ export function createFinanceApi(owner: { current: string | null }) {
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not load finance.", response.status, body.errors ?? []);
     return body as T;
   }
-  async function mutate(action: Record<string, unknown>): Promise<FinanceMutationResult> {
+  const continuation = createInvoiceContinuation(owner, (action, signal) => mutate(action, signal));
+  async function performMutation(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
     if (local()) {
-      if (action.action !== "setBankSnapshot" || !localMemberHasFinancials()) throw new FinanceRequestError("Budget changes are unavailable in this session.", 403);
+      if (action.action === "retryInvoiceTransfer") {
+        const result = await createLocalInvoiceEvidenceApi().retry(String(action.documentId), Number(action.expectedRevision), String(action.requestId));
+        return {...result, viewVersion:localFinanceVersion(localBankVersion)};
+      }
+      if (action.action === "downloadDocument") return {ok:true,viewVersion:localFinanceVersion(localBankVersion),warnings:[],errors:[],...await createLocalInvoiceEvidenceApi().open(String(action.documentId))};
+      if (!localMemberHasFinancials()) throw new FinanceRequestError("Finance access is required.",403);
+      if (action.action !== "setBankSnapshot") return localRead(()=>mutateLocalPurchase(action,localBankVersion));
       if (action.expectedRevision !== (localBankSnapshot?.revision ?? 0)) throw new FinanceRequestError("The balance changed. Reload it before saving.", 409);
       let amount: bigint | null;
       let asOfDate: string;
@@ -82,35 +89,47 @@ export function createFinanceApi(owner: { current: string | null }) {
       } catch { throw new FinanceRequestError("Enter a valid balance and as-of date.", 400); }
       localBankSnapshot = { amountNok: formatOre(amount), asOfDate, updatedAt: new Date().toISOString(), revision: (localBankSnapshot?.revision ?? 0) + 1 };
       localBankVersion += 1;
-      return { ok: true, viewVersion: localBankVersion, revision: localBankSnapshot.revision, warnings: [], errors: [] };
+      return { ok: true, viewVersion: localFinanceVersion(localBankVersion), revision: localBankSnapshot.revision, warnings: [], errors: [] };
     }
     const token = await memberSessionToken(owner);
     const response = await fetch("/api/finance", {
       method: "POST",
+      signal,
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify(action),
     });
     const body = await response.json().catch(() => ({})) as { error?: string; errors?: FinanceFieldError[] };
     if (!response.ok) throw new FinanceRequestError(body.error || "Could not save the budget change.", response.status, body.errors ?? []);
-    return body as FinanceMutationResult;
+    const result = body as FinanceMutationResult;
+    if (action.action === "registerPurchase") continuation.start(result);
+    else if (action.action === "retryInvoiceTransfer" && result.purchaseId) continuation.start({...result,id:result.purchaseId});
+    return result;
+  }
+  async function mutate(action: Record<string, unknown>, signal?: AbortSignal): Promise<FinanceMutationResult> {
+    const result = await performMutation(action, signal);
+    if (result.ok && !/^(check|download|authorize.*Upload|finalize.*Upload|continueInvoice|retryInvoice)/.test(String(action.action)))
+      publishFinanceUpdate();
+    return result;
   }
   return {
-    bankSnapshot: () => local() ? Promise.resolve(localBankSnapshot) : request<BankSnapshot | null>("bankSnapshot"),
-    capabilities: () => local() ? localMemberHasFinancials() ? Promise.resolve(localCapabilities()) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
-    version: () => local() ? Promise.resolve({ viewVersion: localBankVersion } satisfies FinanceVersionResponse) : request<FinanceVersionResponse>("version"),
-    recovery: (deliveryAfter?: string, uploadAfter?: string) => {
-      if (local()) return localMemberHasFinancials() ? Promise.resolve({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null } satisfies FinanceRecoveryView) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
+    watchInvoices: continuation.watch,
+    bankSnapshot: () => local() ? localRead(()=>{localFinanceVersion(localBankVersion);return localBankSnapshot;}) : request<BankSnapshot | null>("bankSnapshot"),
+    capabilities: () => local() ? localMemberHasFinancials() ? localRead(localCapabilities) : Promise.reject(new FinanceRequestError("Financials access is required.", 403)) : request<FinanceCapabilitiesResponse>("capabilities"),
+    version: () => local() ? localRead(()=>({ viewVersion: localFinanceVersion(localBankVersion) } satisfies FinanceVersionResponse)) : request<FinanceVersionResponse>("version"),
+    recovery: (deliveryAfter?: string, uploadAfter?: string, invoiceAfter?: string) => {
+      if (local()) return localMemberHasFinancials() ? localRead(()=>({ deliveries: [], uploads: [], deliveryNextCursor: null, uploadNextCursor: null, ...localInvoiceRecovery(invoiceAfter) } satisfies FinanceRecoveryView)) : Promise.reject(new FinanceRequestError("Finance access is required.", 403));
       const params = new URLSearchParams();
       if (deliveryAfter) params.set("deliveryAfter", deliveryAfter);
       if (uploadAfter) params.set("uploadAfter", uploadAfter);
+      if (invoiceAfter) params.set("invoiceAfter", invoiceAfter);
       const suffix = params.toString();
       return request<FinanceRecoveryView>(suffix ? `recovery&${suffix}` : "recovery");
     },
-    overview: () => local() ? Promise.resolve(localOverview()) : request<PublicOverview>("overview"),
-    budgets: () => local() ? Promise.resolve(localBudgets()) : request<PublicBudgets>("budgets"),
+    overview: () => local() ? localRead(()=>loadLocalFinanceViews(localBankVersion).overview) : request<PublicOverview>("overview"),
+    budgets: () => local() ? localRead(()=>loadLocalFinanceViews(localBankVersion).budgets) : request<PublicBudgets>("budgets"),
     purchases: (requestRecordId?: string, unpaidOnly?: boolean) => {
-      if (local()) return Promise.resolve(localPurchases());
+      if (local()) return localRead(()=>{const view=loadLocalFinanceViews(localBankVersion).purchases;return unpaidOnly?{...view,register:view.register.filter(p=>p.status==="registered"&&p.unpaid)}:view;});
       const params = new URLSearchParams();
       if (requestRecordId) params.set("requestRecordId", requestRecordId);
       if (unpaidOnly) params.set("unpaid", "1");
@@ -118,7 +137,7 @@ export function createFinanceApi(owner: { current: string | null }) {
       return request<PurchasesView>(extra ? `purchases&${extra}` : "purchases");
     },
     financing: () => local()
-      ? localMemberHasFinancials() ? Promise.resolve({ viewVersion: localBankVersion, seasonCode: "S27", funding: localSponsorFunding(), parts: [], scenarios: [] } satisfies FinancingView) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
+      ? localMemberHasFinancials() ? localRead(()=>loadLocalFinanceViews(localBankVersion).financing) : Promise.reject(new FinanceRequestError("Financials access is required.", 403))
       : request<FinancingView>("financing"),
     mutate,
   };

@@ -1,4 +1,10 @@
-import { departmentMemberIds } from "../ProjectManagement/permissions";
+import { useOptionalFinanceAccess } from "../MemberPlatform/FinanceAccess";
+import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
+import { localBudgetRole } from "../Finance/project-budget-local";
+import { DepartmentBudgetsPanel } from "../Finance/DepartmentBudgetsPanel";
+import { ProjectBudgetsPanel } from "../Finance/ProjectBudgetsPanel";
+import { DepartmentBudgetOverview } from "./DepartmentBudgetOverview";
+import { departmentAccess, departmentMemberIds } from "../ProjectManagement/permissions";
 import {
   useCallback,
   useEffect,
@@ -213,8 +219,14 @@ export function DepartmentWorkspace({
   const alive = useRef(false);
   const saving = useRef(false);
   const [params, setParams] = useSearchParams();
+  const financeAccess=useOptionalFinanceAccess();
+  const local=isLocalMemberMode()&&localMemberSignedIn();
+  const currentLead=(department.leadIds??(department.leadId?[department.leadId]:[])).includes(data.viewerId);
+  const canReviewBudgets=(currentLead&&(!local||localBudgetRole()==="department_lead"))||(financeAccess?.access==="allowed"&&financeAccess.capabilities?.purchaseRegister===true);
+  // The approved allocation reader permits department Viewers as well as Members and Leads.
+  const canViewBudgets = canReviewBudgets || departmentAccess(department, data.viewerId) !== null;
   const selected = params.get("tab");
-  const tab = selected === "documents" || selected === "members" ? selected : "overview";
+  const tab = selected === "documents" || selected === "members" || (selected === "budgets" && canViewBudgets) ? selected : "overview";
   const notify = useNotify();
   const navigate = useNavigate();
   const DepartmentIcon = getDepartmentIcon(department.name);
@@ -349,9 +361,13 @@ export function DepartmentWorkspace({
           >
             Members
           </TabsTrigger>
+          {canViewBudgets&&<TabsTrigger value="budgets" className="rounded-full border bg-muted/40 px-4 py-2 data-[state=active]:bg-muted data-[state=active]:text-foreground">Budget</TabsTrigger>}
         </TabsList>
+        {canViewBudgets && <TabsContent value="budgets" className="mt-7 space-y-8">
+          {canReviewBudgets ? <><DepartmentBudgetsPanel departmentId={department.id}/><ProjectBudgetsPanel departmentId={department.id} title="Project budgets" /></> : <DepartmentBudgetOverview key={`${data.viewerId}:${department.id}`} departmentId={department.id} viewerId={data.viewerId} />}
+        </TabsContent>}
         <TabsContent value="overview" className="mt-7">
-          <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 md:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-10 px-1 py-2 xl:grid-cols-[minmax(0,1fr)_15rem] md:gap-14 lg:px-8">
             <div className="min-w-0 space-y-10">
               <div className="space-y-5">
                 <div className="flex items-center gap-4">
@@ -470,7 +486,7 @@ export function DepartmentWorkspace({
                 )}
               </section>
             </div>
-            <aside className="space-y-8">
+            <aside aria-label="Department details" className="min-w-0 space-y-8">
               <div className="space-y-3">
                 <h2 className="text-sm font-medium text-muted-foreground">
                   Members

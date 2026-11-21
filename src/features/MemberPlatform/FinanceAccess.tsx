@@ -1,3 +1,4 @@
+import { hasVisibleApprovedFinances } from "../Finance/finance-calculations";
 import { MEMBER_ACCESS_CHANGED } from "./member-access-api";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
@@ -68,7 +69,7 @@ function errorStatus(error: unknown): number {
 }
 
 function visibleBudgets(budgets: PublicBudgets | null, capabilities: FinanceCapabilitySet): PublicBudgets | null {
-  if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems) return budgets;
+  if (!budgets || budgets.budgetStatus !== "draft" || capabilities.draftBudgetItems || hasVisibleApprovedFinances(budgets)) return budgets;
   return { ...budgets, departments: [], choices: { systems: [], items: [] }, earmarkChoices: [] };
 }
 
@@ -137,6 +138,16 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     revalidationToken.current += 1;
     dirtyIds.current.clear();
     setState(emptyState);
+    const stopInvoices = api.watchInvoices?.({
+      updated(result) {
+        if (!active.current || generation.current !== current) return;
+        setState(value => ({...value, viewVersion: Math.max(value.viewVersion ?? 0, result.viewVersion)}));
+        const evidence = result.invoiceEvidence;
+        if (evidence && evidence.pending + evidence.transferring === 0) notify("Invoice evidence updated", evidence.needsAttention ? "Some invoice transfers need Finance attention. Open Recovery to continue." : "Invoice evidence is confirmed in Drive.", {variant:evidence.needsAttention ? "warning" : "success", href:null});
+      },
+      accessEnded(error) { if (active.current && generation.current === current) fail(error); },
+      interrupted() { if (active.current && generation.current === current) notify("Invoice transfer interrupted", "The purchase is saved. Transfers will resume while this session is open; Finance Recovery remains available.", {variant:"warning",href:null}); },
+    });
     void api.capabilities().then((body) => {
       if (!active.current || generation.current !== current) return;
       applyCapabilities(body);
@@ -144,8 +155,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
       if (!active.current || generation.current !== current) return;
       fail(error);
     });
-    return () => { active.current = false; generation.current += 1; };
-  }, [api, applyCapabilities, attempt, fail, userId]);
+    return () => { active.current = false; generation.current += 1; stopInvoices?.(); };
+  }, [api, applyCapabilities, attempt, fail, notify, userId]);
   const revalidate = useCallback(() => {
     const current = generation.current;
     const previousVersion = viewVersionRef.current;
@@ -172,7 +183,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     const onFocus = () => revalidate();
     window.addEventListener("focus", onFocus);
     window.addEventListener(MEMBER_ACCESS_CHANGED, onFocus);
-    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener(MEMBER_ACCESS_CHANGED, onFocus); };
+    window.addEventListener("helix-workspace-updated",onFocus);
+    return () => { window.removeEventListener("focus", onFocus); window.removeEventListener(MEMBER_ACCESS_CHANGED, onFocus);window.removeEventListener("helix-workspace-updated",onFocus); };
   }, [revalidate]);
   const bankSnapshot = useCallback(() => api.bankSnapshot(), [api]);
   const mutate = useCallback(async (body: Record<string, unknown>) => {
@@ -264,6 +276,9 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
   );
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }
+
+/** Scoped department hosts may inspect an already verified Finance capability without requiring the provider. */
+export function useOptionalFinanceAccess(){return useContext(FinanceContext);}
 
 export function useFinanceAccess() {
   const session = useContext(FinanceContext);

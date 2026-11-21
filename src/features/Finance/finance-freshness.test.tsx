@@ -462,8 +462,9 @@ describe("FIN-09-A06 freshness", () => {
       choices: { systems: [], items: [] },
     });
     await act(async () => button("Open budgets")!.click());
-    expect(container.textContent).toContain("Approved 2026-10-27");
-    expect(container.textContent).not.toContain("Approved 2026-10-01");
+    await act(async () => button("Season budget")!.click());
+    expect(container.textContent).toContain("Approved budget · 2026-10-27");
+    expect(container.textContent).not.toContain("Approved budget · 2026-10-01");
     expect(session.budgets?.viewVersion).toBe(version);
     expect(session.overview?.viewVersion).toBe(version);
   });

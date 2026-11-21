@@ -1,0 +1,257 @@
+{
+  "feature": "project-budget-approvals",
+  "specRevision": 1,
+  "status": "published",
+  "tracker": "Linear",
+  "team": "HELIX",
+  "project": "P-HELIX-4",
+  "milestoneId": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+  "parentId": "HELIX-75",
+  "parentUuid": "6c5f6546-f279-400e-95a9-489eb64ea248",
+  "parentUrl": "https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking",
+  "relatedTo": [
+    "HELIX-34",
+    "HELIX-63"
+  ],
+  "scopeDocumentId": "9dd33fe4-7434-4a84-a693-9fd815ef2deb",
+  "implementationLabel": "ready-for-agent",
+  "implementationLabelId": "a8c0111b-af8c-4592-9ffa-28c1b9891728",
+  "state": "Backlog",
+  "approval": {
+    "date": "2026-11-19",
+    "source": "Direct user answer to complete-plan approval request",
+    "answer": "Approve and publish in Linear",
+    "specRevision": 1,
+    "approvedDraftSpecSha256": "6b7b84bc7d55fcd5378f3f07aad69ab17594da9dd53a4363a588df794e56b653",
+    "approvedDraftPlanSha256": "9f28cef8b0c0cb414cb2c6a84347e7b24460e452c6b00ab574ba30a7abab321c"
+  },
+  "baseBranch": "main",
+  "verifiedRemoteSnapshot": "b05c5a457a378a76aaba7535ab6c0664505cf089",
+  "integrationBranch": "codex/project-budget-approvals",
+  "branchesCreated": false,
+  "publicationOutcome": "Complete. Approved specification parent and exactly nine implementation children created. Full normalized content, project/milestone/state, labels, parent links and every native blocker verified by readback. Implementation has not started.",
+  "tickets": [
+    {
+      "localId": "PBA-01",
+      "title": "Establish project budget contracts and safe migration groundwork",
+      "requirements": [
+        "F-01",
+        "F-04",
+        "F-13",
+        "F-15"
+      ],
+      "blockedBy": [],
+      "draftFile": "issues/pba-01-contracts-and-migration.md",
+      "trackerId": "HELIX-76",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "653f6204-7ceb-4648-878f-72eec4d49577",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-76/pba-01-establish-project-budget-contracts-and-safe-migration"
+    },
+    {
+      "localId": "PBA-02",
+      "title": "Draft project budgets and complete both approval stages",
+      "requirements": [
+        "F-01",
+        "F-02",
+        "F-04",
+        "F-05",
+        "F-14"
+      ],
+      "blockedBy": [
+        "PBA-01"
+      ],
+      "draftFile": "issues/pba-02-project-budget-approval.md",
+      "trackerId": "HELIX-78",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "46e81385-ee4f-49de-a618-eec8b7f2ca1b",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-78/pba-02-draft-project-budgets-and-complete-both-approval-stages"
+    },
+    {
+      "localId": "PBA-03",
+      "title": "Revise approved budgets with reviewable changes",
+      "requirements": [
+        "F-03",
+        "F-13",
+        "F-14"
+      ],
+      "blockedBy": [
+        "PBA-02"
+      ],
+      "draftFile": "issues/pba-03-budget-revisions.md",
+      "trackerId": "HELIX-79",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "bed56eec-865b-41d9-b257-95ad42b7a4a6",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-79/pba-03-revise-approved-budgets-with-reviewable-changes"
+    },
+    {
+      "localId": "PBA-04",
+      "title": "Remove the NOK 5,000 rule across active workflows",
+      "requirements": [
+        "F-06",
+        "F-09",
+        "F-14"
+      ],
+      "blockedBy": [],
+      "draftFile": "issues/pba-04-remove-purchase-threshold.md",
+      "trackerId": "HELIX-77",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "c4547076-6772-4f15-bd92-1e5fb4b3a138",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-77/pba-04-remove-the-nok-5000-rule-across-active-workflows"
+    },
+    {
+      "localId": "PBA-05",
+      "title": "Register project purchases and track partial completion",
+      "requirements": [
+        "F-04",
+        "F-06",
+        "F-07",
+        "F-09",
+        "F-14"
+      ],
+      "blockedBy": [
+        "PBA-02"
+      ],
+      "draftFile": "issues/pba-05-project-purchases.md",
+      "trackerId": "HELIX-80",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "6f6d0f6d-49be-4677-9e18-a39575c6d7a0",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-80/pba-05-register-project-purchases-and-track-partial-completion"
+    },
+    {
+      "localId": "PBA-06",
+      "title": "Store uploaded invoices in shared Drive with recovery",
+      "requirements": [
+        "F-04",
+        "F-08",
+        "F-09",
+        "F-14"
+      ],
+      "blockedBy": [
+        "PBA-05"
+      ],
+      "draftFile": "issues/pba-06-drive-invoices.md",
+      "trackerId": "HELIX-81",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "27b71294-68d4-4a45-b5e0-f24cacc4b83d",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-81/pba-06-store-uploaded-invoices-in-shared-drive-with-recovery"
+    },
+    {
+      "localId": "PBA-07",
+      "title": "Apply and release awarded funding obligations",
+      "requirements": [
+        "F-04",
+        "F-10",
+        "F-11",
+        "F-14"
+      ],
+      "blockedBy": [
+        "PBA-03"
+      ],
+      "draftFile": "issues/pba-07-funding-obligations.md",
+      "trackerId": "HELIX-82",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "465d56ae-5521-4a4b-ba69-012b4b7bbbb0",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-82/pba-07-apply-and-release-awarded-funding-obligations"
+    },
+    {
+      "localId": "PBA-08",
+      "title": "Show purchased budgets and consistent financial totals",
+      "requirements": [
+        "F-05",
+        "F-09",
+        "F-12",
+        "F-13",
+        "F-14"
+      ],
+      "blockedBy": [
+        "PBA-06",
+        "PBA-07"
+      ],
+      "draftFile": "issues/pba-08-budget-overviews-and-totals.md",
+      "trackerId": "HELIX-83",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "9f8ea104-b55d-470b-b8d2-0eb06ac91494",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-83/pba-08-show-purchased-budgets-and-consistent-financial-totals"
+    },
+    {
+      "localId": "PBA-09",
+      "title": "Rehearse migration and verify the integrated feature",
+      "requirements": [
+        "F-01",
+        "F-02",
+        "F-03",
+        "F-04",
+        "F-05",
+        "F-06",
+        "F-07",
+        "F-08",
+        "F-09",
+        "F-10",
+        "F-11",
+        "F-12",
+        "F-13",
+        "F-14",
+        "F-15"
+      ],
+      "blockedBy": [
+        "PBA-04",
+        "PBA-08"
+      ],
+      "draftFile": "issues/pba-09-integration-and-migration-verification.md",
+      "trackerId": "HELIX-84",
+      "published": true,
+      "readbackVerified": true,
+      "trackerUuid": "ea44edf0-a14d-4e12-a3e7-24e86d97cc66",
+      "trackerUrl": "https://linear.app/helixnmbu/issue/HELIX-84/pba-09-rehearse-migration-and-verify-the-integrated-feature"
+    }
+  ],
+  "draftPlanHashes": {
+    "spec.md": "6b7b84bc7d55fcd5378f3f07aad69ab17594da9dd53a4363a588df794e56b653",
+    "tickets.md": "9f28cef8b0c0cb414cb2c6a84347e7b24460e452c6b00ab574ba30a7abab321c",
+    "issues/pba-01-contracts-and-migration.md": "003ff8131787a74116d0beb805453c7106e4eda48180860b451ebc3e94afee49",
+    "issues/pba-02-project-budget-approval.md": "86b7a9b6d25cd7e756f6408c48b173c19d7c8379a3ea36ee4f9dcc4775a3fe55",
+    "issues/pba-03-budget-revisions.md": "edab7ae22fb51e9cc7aac14b4a37bb89976444f0bd16ee090579cb86af9fcb72",
+    "issues/pba-04-remove-purchase-threshold.md": "4d1b0aef973a022a25aa72baf18c515b52b1249a24d2869ba3d5befc14f30c39",
+    "issues/pba-05-project-purchases.md": "78b7a63f1fc375ddf1f92d1276042b2bde70f99850d1c707ea520218c713c501",
+    "issues/pba-06-drive-invoices.md": "06a231b732487a0fc9f41fe285b1f1cea4f4c11b502d3a7b5fe24198abbb3093",
+    "issues/pba-07-funding-obligations.md": "92e23f304777e4f856c4c89cf013a865f8602a91d62cb9b8b457c0cd28401b17",
+    "issues/pba-08-budget-overviews-and-totals.md": "31f08108a09ecf56d693f8240b89512f038cc0094bab8e075cbe57f7d7696628",
+    "issues/pba-09-integration-and-migration-verification.md": "952f8175944444d268bebc80474e69d7d0780f4dd6692f24e3518ffc9dbfae6f"
+  },
+  "preparationValidation": {
+    "date": "2026-11-19",
+    "ticketCount": 9,
+    "requirementCount": 15,
+    "acyclic": true,
+    "localLinksValid": true,
+    "specAndTicketDependenciesMatch": true,
+    "initialEligible": [
+      "PBA-01",
+      "PBA-04"
+    ],
+    "applicationTestsRun": false,
+    "reason": "Documentation-only Prepare. No production implementation was changed."
+  },
+  "verification": {
+    "date": "2026-11-19",
+    "parentContent": true,
+    "allChildContent": true,
+    "exactlyNineChildren": true,
+    "allChildMetadataAndNativeBlockers": true,
+    "parentHasNoImplementationLabel": true,
+    "relatedParentsVerified": true,
+    "initialEligible": [
+      "HELIX-76",
+      "HELIX-77"
+    ],
+    "normalization": "Linear normalizes Markdown links/list markers and project mentions. Full word-for-word content verified after normalizing Markdown and P-HELIX-4 to its project display name; requirement IDs, amounts and acceptance meaning retained."
+  }
+}

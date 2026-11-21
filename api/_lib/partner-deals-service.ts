@@ -1,3 +1,6 @@
+import { loadFundingApplicationCard, mutateFundingApplication } from "./finance-funding-applications.js";
+import { FinanceError } from "./finance-error.js";
+import type { FundingApplicationCard, FundingApplicationMutationResult } from "../../src/features/Finance/funding-application-types.js";
 import pg from "pg";
 import { MemberCvError } from "./member-cv-error.js";
 import { neonCvServices, type CvDatabase, type WorkspaceIdentity } from "./member-cv-service.js";
@@ -11,6 +14,8 @@ export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; can
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
+  fundingApplicationCard(token: string, dealId: unknown): Promise<{ application: FundingApplicationCard | null }>;
+  saveFundingApplication(token: string, body: Record<string, unknown>): Promise<FundingApplicationMutationResult>;
   load(token: string, view: DealView): Promise<DealWorkspace>;
   reviewNotifications(token: string): Promise<unknown[]>;
   markReviewNotificationsRead(token: string, ids: unknown): Promise<{ ok: true }>;
@@ -154,6 +159,14 @@ function errorFor(error: unknown): never {
 export function createDealServices(deps: { db: CvDatabase; authenticate(token: string): Promise<WorkspaceIdentity> }): DealServices {
   const identity = async (token: string) => deps.authenticate(token);
   return {
+    async fundingApplicationCard(token, dealId) {
+      try { return await loadFundingApplicationCard(deps.db, await identity(token), dealId); }
+      catch (error) { if (error instanceof FinanceError) throw new MemberCvError(error.status, error.message); return errorFor(error); }
+    },
+    async saveFundingApplication(token, body) {
+      try { return await mutateFundingApplication(deps.db, await identity(token), { ...body, action: "saveFundingApplication" }); }
+      catch (error) { if (error instanceof FinanceError) throw new MemberCvError(error.status, error.message); return errorFor(error); }
+    },
     async load(token, view) {
       try {
         if (view !== "pipeline" && view !== "shared") throw new MemberCvError(400, "Choose a valid deal view.");

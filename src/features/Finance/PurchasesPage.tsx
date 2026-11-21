@@ -1,4 +1,7 @@
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { isLocalMemberMode } from "../MemberPlatform/local-mode";
+import { invoiceEvidenceMessage } from "./InvoiceEvidence";
+import { ProjectPurchaseLauncher } from "./ProjectPurchaseLauncher";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
@@ -127,6 +130,7 @@ export function PurchasesBoard() {
   const [purchase, setPurchase] = useState<PurchaseInput>(() => emptyPurchase(session.today ?? "", buyerDefault));
   const setDirty = session.setFormDirty;
   const hasPendingForm = editor !== null || uploads.length > 0 || decisionReason.trim().length > 0 || Object.keys(decisionAmounts).length > 0 || JSON.stringify(purchase) !== JSON.stringify(emptyPurchase(session.today ?? "", buyerDefault));
+  const projectDirty = useCallback((dirty: boolean) => setDirty?.("project-purchase", dirty), [setDirty]);
   useEffect(() => {
     setDirty?.("purchase-editor", hasPendingForm);
     return () => setDirty?.("purchase-editor", false);
@@ -175,7 +179,8 @@ export function PurchasesBoard() {
   const canDecide = Boolean(session.capabilities?.decideRequests);
   const canRegister = Boolean(session.capabilities?.registerActual);
   const canExport = Boolean(session.capabilities?.purchaseRegister);
-  const budgetsLoaded = session.budgets?.budgetStatus === "approved";
+  const canRegisterOther = canRegister && !isLocalMemberMode();
+  const budgetsLoaded = Boolean(session.budgets && session.budgets.choices.systems.some(system=>system.active));
   const systems = budgetChoices.systems.filter((row) => row.active);
   const choices = purchases.choices?.items ?? [];
   const register = purchases.register ?? [];
@@ -384,8 +389,8 @@ export function PurchasesBoard() {
       });
       if (!saved.publicRef) throw new Error("Your purchase may have been saved, but its reference is unavailable. Try again.");
       purchaseRequests.finish();
-      const details = [`Reference: ${saved.publicRef}.`, ...saved.warnings.map((warning) => warning.message)].join(" ");
-      notify("Purchase registered", details, { id: "purchase-saved", variant: saved.warnings.length ? "warning" : "success" });
+      const details = [`Reference: ${saved.publicRef}.`, ...saved.warnings.map((warning) => warning.message), invoiceEvidenceMessage(saved.invoiceEvidence)].filter(Boolean).join(" ");
+      notify("Purchase registered", details, { id: "purchase-saved", variant: saved.warnings.length || saved.invoiceEvidence?.needsAttention ? "warning" : "success" });
       setPurchase(emptyPurchase(session.today ?? "", purchase.buyerName));
       updateUploads(() => []);
       await session.loadPage("purchases", purchaseLoadOptions(selectedId));
@@ -540,15 +545,16 @@ export function PurchasesBoard() {
 
   return (
     <div className="space-y-10">
-      {canRegister ? (
+      {canRegister && <ProjectPurchaseLauncher onChanged={() => session.loadPage("purchases", purchaseLoadOptions(selectedId))} onDirtyChange={projectDirty} />}
+      {canRegisterOther ? (
         <form className="rounded-lg border p-6" onSubmit={registerPurchase}>
           <fieldset className="space-y-6" disabled={saving}>
           <div>
-            <h2 className="text-xl font-medium">Register a purchase</h2>
+            <h2 className="text-xl font-medium">Other purchases and optional approvals</h2>
             <p className="text-sm text-muted-foreground">Line amount is the total in NOK including VAT; quantity is descriptive only.</p>
           </div>
           {!budgetsLoaded ? (
-            <p className="text-sm text-muted-foreground">An approved season budget is required before you can register purchases.</p>
+            <p className="text-sm text-muted-foreground">Load an available system before registering a purchase. Project purchases above can also record incurred costs without an approved plan.</p>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Buyer name" value={purchase.buyerName} onChange={(value) => setPurchase((current) => ({ ...current, buyerName: value }))} />
@@ -865,6 +871,7 @@ export function PurchasesBoard() {
       {canExport ? <FinanceRecoveryPanel /> : null}
       {session.capabilities?.purchaseRegister ? (
         <PurchaseRegister
+          onAccessEnded={session.retry}
           register={register}
           unpaidCount={purchases.unpaidCount ?? register.filter((row) => row.unpaid).length}
           unpaidOnly={unpaidOnly}

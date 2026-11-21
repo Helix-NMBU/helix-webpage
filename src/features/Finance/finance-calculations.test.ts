@@ -6,6 +6,7 @@ import {
   deadlineAwareUsage,
   eligibleRemainingPlanOre,
   fundingEligible,
+  hasVisibleApprovedFinances,
   itemScenarioNeedOre,
   mustReturnStartsOn,
   presentFinanceOverview,
@@ -369,4 +370,41 @@ describe("FIN-09-A05 role filtered overview", () => {
     expect(overview.scenarios?.map((scenario) => scenario.label)).toEqual(["Now", "Realistic", "Optimistic"]);
     expect(overview.earmarkSources).toEqual([{ id: earmark.id, sourceName: "Example source", conditions: "Private condition text" }]);
   });
+});
+
+describe("effective project finance contracts", () => {
+  it("keeps P0 remaining plan mandatory without funding and compares summed commitments rather than adding them", () => {
+    const mandatory = item({ id: "mandatory", priority: "P0", plannedOre: nok(100n), actualOre: nok(20n), commitmentOre: summedOpenCommitmentOre([nok(50n), nok(40n)]) });
+    expect(calculateScenarios([mandatory], [], []).map(scenario => scenario.needNok)).toEqual(["110.00", "110.00", "110.00"]);
+  });
+  it("keeps P0 need independent from a restricted source's scenario eligibility", () => {
+    const uncertain = funding({ id: "uncertain", status: "applied", confidence: "low", amountOre: nok(70n) });
+    const mandatory = item({ id: "mandatory", priority: "P0", plannedOre: nok(100n), actualOre: nok(20n), earmarkId: "restricted", funding: uncertain });
+    const scenarios = calculateScenarios([mandatory], [uncertain], [{ id: "restricted", fundingId: uncertain.id, amountOre: nok(70n) }]);
+    expect(scenarios.map(scenario => scenario.needNok)).toEqual(["100.00", "100.00", "100.00"]);
+    expect(scenarios.map(scenario => scenario.restrictedCoverNok)).toEqual(["0.00", "0.00", "70.00"]);
+  });
+  it("keeps recorded spend with its old funding part when an approved revision changes the remaining-plan link", () => {
+    const old = funding({ id: "old", status: "secured", amountOre: nok(50n) });
+    const current = funding({ id: "current", status: "secured", amountOre: nok(80n) });
+    const changed = item({ id: "changed", priority: "P0", plannedOre: nok(100n), actualOre: nok(40n), earmarkId: "new-part", funding: current, restrictedActual: [{ partId: "old-part", amountOre: nok(40n) }] });
+    const parts = [{ id: "old-part", fundingId: old.id, amountOre: nok(50n) }, { id: "new-part", fundingId: current.id, amountOre: nok(80n) }];
+    const [now] = calculateScenarios([changed], [old, current], parts);
+    expect(now.parts.map(part => formatAmount(part.coverOre))).toEqual(["40", "60"]);
+    expect(now.needNok).toBe("100.00");
+    expect(now.restrictedCoverNok).toBe("100.00");
+    const [unlinked] = calculateScenarios([{ ...changed, earmarkId: null, funding: null }], [old, current], parts);
+    expect(unlinked.parts.map(part => formatAmount(part.coverOre))).toEqual(["40", "0"]);
+    expect(unlinked.generalNeedNok).toBe("60.00");
+  });
+});
+function formatAmount(value: bigint) { return (value / 100n).toString(); }
+
+it("exposes project approvals and recorded actuals independently of genuine legacy approval facts", () => {
+  const original = { budgetStatus: "draft", approvedPresence: { legacyBudget: false, projectBudgets: true }, hasRecordedActuals: false };
+  expect(hasVisibleApprovedFinances(original)).toBe(true);
+  expect(original.budgetStatus).toBe("draft");
+  expect(hasVisibleApprovedFinances({ budgetStatus: "draft" })).toBe(false);
+  expect(hasVisibleApprovedFinances({ budgetStatus: "approved" })).toBe(true);
+  expect(hasVisibleApprovedFinances({ budgetStatus: "draft", hasRecordedActuals: true })).toBe(true);
 });

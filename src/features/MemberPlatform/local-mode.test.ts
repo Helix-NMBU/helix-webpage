@@ -33,7 +33,8 @@ describe("local member platform", () => {
   it("uses the local account for sign-in and sign-out without calling external auth", async () => {
     const values = new Map<string, string>();
     const assign = vi.fn();
-    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:5190", assign } });
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:5190", assign }, dispatchEvent });
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => { values.set(key, value); },
@@ -48,6 +49,8 @@ describe("local member platform", () => {
     await startGoogleSignIn("/profile");
     expect(assign).toHaveBeenCalledWith("http://127.0.0.1:5190/profile");
     await expect(ensureMemberLanding({ getSession }, request)).resolves.toMatchObject({ phase: "signed-in" });
+    expect(dispatchEvent).toHaveBeenCalledTimes(2);
+    expect(dispatchEvent.mock.calls.every(([event]) => event.type === "helix-member-local-session-changed")).toBe(true);
     expect(getSession).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
   });

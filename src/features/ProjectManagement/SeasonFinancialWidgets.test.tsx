@@ -226,3 +226,35 @@ it("marks retained money flow and previously absent finance season as stale", as
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(flowCard().textContent).toContain("Last checked: no finance season configured.");
 });
+
+
+it("shows genuinely approved project totals while the compatibility season draft remains restricted", async () => {
+  await render(async () => ({ ...summary, budgetStatus: "draft-hidden", approvedPresence: { legacyBudget: false, projectBudgets: true }, hasRecordedActuals: true, canOpenFinancials: false }));
+  expect(container.textContent).toContain("Approved project plans");
+  expect(container.textContent).not.toContain("Draft budget is restricted");
+  expect(container.textContent).toContain("NOK 1 000,00");
+  expect(container.textContent).toContain("NOK 1 250,50");
+  expect(container.querySelector('a[href="/finance"]')).toBeNull();
+  expect(container.textContent).toContain("As of 28. Oct");
+});
+
+it("keeps incurred actual costs visible before an approved plan exists", async () => {
+  await render(async () => ({ ...summary, budgetStatus: "absent", approvedPresence: { legacyBudget: false, projectBudgets: false }, hasRecordedActuals: true, plannedNok: "0.00", actualNok: "25.00", departments: [] }));
+  expect(container.textContent).toContain("Recorded actual costs without an approved plan");
+  expect(container.textContent).not.toContain("No season budget yet");
+  expect(container.textContent).toContain("NOK 25,00");
+  expect(container.textContent).toContain("Includes unpaid invoices");
+  expect(container.querySelector('[role="img"][aria-label*="over budget"]')).not.toBeNull();
+});
+
+it("labels retained project totals as stale and clears them after access is revoked", async () => {
+  const project = { ...summary, budgetStatus: "draft-hidden", approvedPresence: { legacyBudget: false, projectBudgets: true } } satisfies SeasonFinancialSummary;
+  const load = vi.fn().mockResolvedValueOnce(project).mockRejectedValueOnce(new Error("Offline")).mockRejectedValueOnce(new SeasonFinancialRequestError("Access revoked", 403));
+  await render(load);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(container.textContent).toContain("Last loaded values.");
+  expect(container.textContent).toContain("NOK 1 250,50");
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(container.textContent).not.toContain("NOK 1 250,50");
+  expect(container.textContent).not.toContain("Approved project plans");
+});

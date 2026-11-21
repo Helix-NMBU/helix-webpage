@@ -42,6 +42,28 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
         const action = req.query.action;
         if (typeof action !== "string" || !FINANCE_READ_ACTIONS.includes(action as FinanceReadAction)) throw new FinanceError(400, "Unknown request.");
         const version = knownVersion(req.query.knownVersion);
+        if(action==="departmentHomeBudget")return res.status(200).json(await services.departmentHomeBudget(token,req.query.departmentId));
+        if(action==="departmentBudgetPreview")return res.status(200).json(await services.departmentBudgetPreview(token,req.query.departmentId));
+        if(action==="departmentBudgetPackages")return res.status(200).json(await services.departmentBudgetPackages(token,req.query.departmentId));
+        if(action==="departmentBudgetPackage")return res.status(200).json(await services.departmentBudgetPackage(token,req.query.packageId));
+        if (action === "fundingApplications") return res.status(200).json(await services.fundingApplications(token));
+        if (action === "fundingApplication") return res.status(200).json(await services.fundingApplication(token, req.query.applicationId));
+        if (action === "fundingApplicationBudgetContext") return res.status(200).json(await services.fundingApplicationBudgetContext(token, req.query.applicationId));
+        if (action === "projectFundingProposals") return res.status(200).json(await services.projectFundingProposals(token, req.query.projectBudgetId));
+        if (action === "projectBudgets") {
+          const { projectId, departmentId } = req.query;
+          if ((projectId !== undefined && typeof projectId !== "string") || (departmentId !== undefined && typeof departmentId !== "string")) throw new FinanceError(400, "Choose a valid project and department.");
+          return res.status(200).json(await services.projectBudgets(token, projectId, departmentId));
+        }
+        if (action === "projectPurchaseContext") {
+          const { projectId, responsibleDepartmentId } = req.query;
+          if (typeof projectId !== "string" || (responsibleDepartmentId !== undefined && typeof responsibleDepartmentId !== "string")) throw new FinanceError(400, "Choose a valid project and department.");
+          return res.status(200).json(await services.projectPurchaseContext(token, projectId, responsibleDepartmentId));
+        }
+        if (action === "projectBudget") {
+          if (typeof req.query.projectBudgetId !== "string") throw new FinanceError(400, "Choose a project budget.");
+          return res.status(200).json(await services.projectBudget(token, req.query.projectBudgetId));
+        }
         if (action === "bankSnapshot") return res.status(200).json(await services.bankSnapshot(token));
         if (action === "capabilities") return res.status(200).json(await services.capabilities(token));
         if (action === "version") return res.status(200).json(await services.version(token, version));
@@ -51,7 +73,7 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
           if ((deliveryAfter !== undefined && typeof deliveryAfter !== "string") || (uploadAfter !== undefined && typeof uploadAfter !== "string")) {
             throw new FinanceError(400, "Invalid recovery page.");
           }
-          return res.status(200).json(await services.recovery(token, deliveryAfter, uploadAfter));
+          return res.status(200).json(await services.recovery(token, deliveryAfter, uploadAfter, typeof req.query.invoiceAfter === "string" ? req.query.invoiceAfter : undefined));
         }
         if (action === "overview") return res.status(200).json(await services.overview(token, version));
         if (action === "budgets") return res.status(200).json(await services.budgets(token, version));

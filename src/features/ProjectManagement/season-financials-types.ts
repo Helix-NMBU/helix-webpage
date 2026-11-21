@@ -1,3 +1,4 @@
+import type { FinanceApprovalPresence } from "../Finance/types.js";
 export type SeasonFinancialSystem = {
   id: string;
   code: string;
@@ -32,6 +33,8 @@ export type SeasonFinancialSummary = {
   bank: SeasonBankView;
   seasonCode: string | null;
   budgetStatus: "absent" | "draft-hidden" | "draft" | "approved";
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
   plannedNok: string | null;
   actualNok: string | null;
   departments: SeasonFinancialDepartment[];

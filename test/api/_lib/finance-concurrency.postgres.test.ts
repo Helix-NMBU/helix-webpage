@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import pg from "pg";
@@ -7,6 +8,8 @@ import type { CvDatabase, WorkspaceIdentity } from "../../../api/_lib/member-cv-
 import { osloToday } from "../../../src/features/Finance/money.js";
 import { thirdOsloDayFrom } from "../../../src/features/Finance/request-domain.js";
 import { createMemoryFinanceStorage, putMemoryPdf } from "./finance-storage-mock.js";
+import { createPostgresTestPool } from "./postgres-test-pool.js";
+import { seedHistoricalApprovedSeasonBudget } from "./finance-legacy-budget-fixture.js";
 
 // Opt-in, loopback-only PostgreSQL. This suite creates and drops its own
 // randomly named database and never connects to a configured application DB.
@@ -19,6 +22,7 @@ const dbName = `finance_test_${randomUUID().replaceAll("-", "")}`;
 describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connections", () => {
   let admin: pg.Client;
   let pool: pg.Pool;
+  let closePool: (() => Promise<void>) | undefined;
   let services: ReturnType<typeof createFinanceServices>;
   let systemId: string;
   let itemId: string;
@@ -57,7 +61,9 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
     await admin.connect();
     await admin.query(`create database ${dbName}`);
     base.pathname = `/${dbName}`;
-    pool = new pg.Pool({ connectionString: base.toString(), max: 8 });
+    const resource = createPostgresTestPool({ connectionString: base.toString(), max: 8 });
+    pool = resource.pool;
+    closePool = resource.close;
     await pool.query(`
       create schema identity;
       create table identity.members (id uuid primary key, google_sub text not null, email text not null, full_name text not null);
@@ -77,13 +83,13 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
       await pool.query(readFileSync(new URL(file, migrations), "utf8"));
     }
     const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pool.query(query, params)).rows as T[] }) };
+    await bootstrapFinanceFeature({ ...db, exec: (sql) => pool.query(sql) });
     services = createFinanceServices({ db, financeStorage: storage, authenticate: async (token) => identities[token] });
     await pool.query("select finance.configure_current_season($1::uuid, 'S27', 'Test season', '2026-01-01', '2027-12-31')", [operator]);
     await pool.query("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test')", [operator, head]);
     const system = await pool.query("insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true) returning id");
     systemId = system.rows[0].id;
-    await mutate("head", { action: "createBudget" });
-    await mutate("head", { action: "approveBudget", expectedRevision: 0 });
+    await seedHistoricalApprovedSeasonBudget(db, head);
     const item = await pool.query(`insert into finance.budget_items
       (budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected, created_by_member_id, updated_by_member_id)
       select b.id, $1::uuid, 'BI-S27-010', 'Tube stock', 'material', 50000000, 'P2', 'new', 'planned', false, $2::uuid, $2::uuid
@@ -94,10 +100,11 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
   }, 30000);
 
   afterAll(async () => {
-    await pool?.end();
-    if (admin) {
-      await admin.query(`drop database if exists ${dbName} with (force)`);
-      await admin.end();
+    try {
+      await closePool?.();
+      if (admin) await admin.query(`drop database if exists ${dbName}`);
+    } finally {
+      await admin?.end();
     }
   });
 
@@ -162,19 +169,19 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
     expect(purchases.register?.find((item) => item.id === registered.id)?.unpaid).toBe(false);
   }, 30000);
 
-  it("allows only one of two imports based on the same department preview", async () => {
+  it("rejects concurrent legacy import/edit bypasses without changing the historical approved plan", async () => {
     const csv = "system_id;description;planned_nok\nSYS-FR;Tube stock;490000";
-    const preview = (await mutate("head", { action: "previewImport", departmentKey: "mechanical-production", csv })).importPreview;
-    if (!preview) throw new Error("Expected an import preview");
-    expect(preview.errors).toEqual([]);
-    const changes = { action: "importItems", departmentKey: "mechanical-production", csv,
-      expectedRevision: preview.viewVersion, previewToken: preview.previewToken, reason: "Adjust plan" };
-    const outcomes = await Promise.allSettled([mutate("head", changes), mutate("head", changes)]);
-    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
-    const rejected = outcomes.find((outcome) => outcome.status === "rejected");
-    expect(rejected?.status === "rejected" && rejected.reason.status).toBe(409);
-    const item = await pool.query("select planned_ore::text as planned from finance.budget_items where id = $1::uuid", [itemId]);
-    expect(item.rows[0].planned).toBe("49000000");
+    const outcomes = await Promise.allSettled([
+      mutate("head", { action: "importItems", departmentKey: "mechanical-production", csv, expectedRevision: 0, previewToken: "a".repeat(64) }),
+      mutate("head", { action: "editItem", itemId, expectedRevision: 0, patch: { plannedNok: "490000" }, reason: "Old client edit" }),
+    ]);
+    expect(outcomes.every(outcome => outcome.status === "rejected")).toBe(true);
+    expect(outcomes[0]).toMatchObject({ status: "rejected", reason: { status: 400 } });
+    expect(outcomes[1]).toMatchObject({ status: "rejected", reason: { status: 409 } });
+    const item = await pool.query("select planned_ore::text as planned from finance.budget_items where id=$1::uuid", [itemId]);
+    expect(item.rows[0].planned).toBe("50000000");
+    const budget = await pool.query("select status,approved_by_member_id,approved_on::text from finance.budgets where public_ref='B-S27'");
+    expect(budget.rows).toEqual([{ status: "approved", approved_by_member_id: head, approved_on: "2026-10-01" }]);
   }, 30000);
 
   it("does not publish a final object after cleanup claims it, or clean a published object", async () => {

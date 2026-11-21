@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -287,6 +288,7 @@ beforeAll(async () => {
   for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "016_finance_fulfillment.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => {
     const rows = (await pg.query<T>(query, params)).rows;
     if (afterQuery) await afterQuery(query);
@@ -310,8 +312,11 @@ beforeEach(async () => {
   afterQuery = null;
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.upload_final_candidates, finance.outbox_attempts, finance.export_objects,
       finance.allocations,
       finance.purchase_lines,
       finance.outlay_reimbursements,
@@ -339,6 +344,8 @@ beforeEach(async () => {
       finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
     update identity.departments set name = 'Mechanical' where department_key = 'mechanical-production';
     update identity.departments set name = 'Finance' where department_key = 'finance';
@@ -428,7 +435,7 @@ describe("FIN-09-A01 commitment sums", () => {
     const itemId = await insertItem({ budgetId, systemId, publicRef: "BI-S27-001", description: "Frame", plannedOre: 10000 });
     let injections = 0;
     afterQuery = async (query) => {
-      if (!query.includes("i.id as item_id, i.public_ref")) return;
+      if (!query.includes("i.id as item_id,i.public_ref")) return;
       afterQuery = null;
       injections += 1;
       await pg.exec(`begin; update finance.budget_items set planned_ore = 20000 where id = '${itemId}'::uuid; select finance.bump_view_version(); commit;`);
@@ -690,7 +697,7 @@ describe("FIN-09-A04 overview ordering and retention", () => {
 });
 
 describe("FIN-09-A05 role filtered overview", () => {
-  it("shows draft aggregates only to finance and head, and scenarios without draft plans to business", async () => {
+  it("keeps legacy Draft rows outside approved aggregates and scenarios for every profile", async () => {
     const seasonId = await openSeason();
     const budgetId = await insertBudget(seasonId, "draft");
     const systemId = await insertSystem("mechanical-production", "SYS-DR", "Frame");
@@ -715,13 +722,13 @@ describe("FIN-09-A05 role filtered overview", () => {
 
     await grant("finance");
     const financeView = await readOverview();
-    expect(financeView.departments[0]?.plannedNok).toBe("77.00");
-    expect(financeView.scenarios?.[0]?.needNok).toBe("77.00");
+    expect(financeView.departments[0]?.plannedNok).toBe("0.00");
+    expect(financeView.scenarios?.[0]?.needNok).toBe("0.00");
     expect(financeView.earmarkSources).toEqual([]);
 
     await grant("head_of_finance");
     const headView = await readOverview();
-    expect(headView.departments[0]?.systems[0]?.plannedNok).toBe("77.00");
+    expect(headView.departments[0]?.systems[0]?.plannedNok).toBe("0.00");
     expect(headView.scenarios?.[2]?.eligibleFundingNok).toBe("500.00");
     expect(JSON.stringify(headView)).not.toContain("bank");
   });
