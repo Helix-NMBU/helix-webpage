@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { MemberRouteSkeleton } from "./LoadingSkeletons";
 import { IconCube } from "@tabler/icons-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "@libs/components/app-sidebar";
 import {
@@ -33,7 +33,7 @@ function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const contentScroll = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (contentScroll.current) contentScroll.current.scrollTop = 0; }, [location.pathname]);
+  useLayoutEffect(() => { if (contentScroll.current) contentScroll.current.scrollTop = 0; }, [location.pathname]);
   const { setOpenMobile, isMobile } = useSidebar();
   const navigation = useMemberNavigation();
   const [busy, setBusy] = useState(false);

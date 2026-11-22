@@ -410,6 +410,8 @@ describe("internal member platform", () => {
     await act(async () => container.querySelector<HTMLAnchorElement>(`a[href="${href}"]`)!.click());
     await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Mechanical & Production"));
     expect(router.state.location.pathname).toBe(href);
+    expect(scrollArea.isConnected).toBe(true);
+    expect(container.querySelector('[data-slot="member-page-content"]')).toBe(scrollArea);
     expect(scrollArea.scrollTop).toBe(0);
     const breadcrumb = container.querySelector('[aria-label="breadcrumb"]')!;
     expect(breadcrumb.textContent).toContain("Budgets & Financing");
@@ -417,6 +419,8 @@ describe("internal member platform", () => {
     const parent = [...breadcrumb.querySelectorAll("button")].find(button => button.textContent === "Budgets & Financing")!;
     scrollArea.scrollTop = 300;
     await act(async () => parent.click());
+    expect(scrollArea.isConnected).toBe(true);
+    expect(container.querySelector('[data-slot="member-page-content"]')).toBe(scrollArea);
     expect(scrollArea.scrollTop).toBe(0);
     expect(router.state.location.pathname).toBe("/finance/budgets");
     expect(container.querySelector("h1")?.textContent).toBe("Budgets & Financing");

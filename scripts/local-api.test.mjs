@@ -193,21 +193,30 @@ describe('local API HTTP adapter', () => {
 });
 
 describe('repository API integration', () => {
-  it('executes existing protected handlers and Gmail rewrites without authenticating a user', async () => {
-    const repo = await harness(projectRoot, { useProjectConfig: true });
-    expect((await request(repo.port, '/@vite/client')).status).toBe(200);
-    for (const path of ['/api/partner?action=session', '/api/website?action=session', '/api/member-cv', '/api/finance', '/api/projects', '/api/gmail-status?action=connect']) {
-      const response = await request(repo.port, path);
-      expect(response.status, path).toBe(401);
-      expect(response.json()).toEqual({ error: 'Log in to continue.' });
-    }
-    expect((await request(repo.port, '/api/contact')).status).toBe(405);
-    for (const path of ['/api/reject', '/api/apply-confirmation']) {
-      expect((await request(repo.port, path)).status, path).toBe(405);
-      const response = await request(repo.port, path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ application_id: '10000000-0000-4000-8000-000000000001' }) });
-      expect(response.status, path).toBe(401);
-    }
+  let projectApi;
+  beforeAll(async () => {
+    projectApi = await harness(projectRoot, { useProjectConfig: true });
+  });
+
+  it('serves the Vite client alongside real project handlers', async () => {
+    expect((await request(projectApi.port, '/@vite/client')).status).toBe(200);
+  });
+
+  it.each(['/api/partner?action=session', '/api/website?action=session', '/api/member-cv', '/api/finance', '/api/projects', '/api/gmail-status?action=connect'])('keeps %s protected without a session', async path => {
+    const response = await request(projectApi.port, path);
+    expect(response.status, path).toBe(401);
+    expect(response.json()).toEqual({ error: 'Log in to continue.' });
+  });
+
+  it('rejects unsupported contact methods', async () => {
+    expect((await request(projectApi.port, '/api/contact')).status).toBe(405);
+  });
+
+  it.each(['/api/reject', '/api/apply-confirmation'])('protects legacy POST handler %s and rejects GET', async path => {
+    expect((await request(projectApi.port, path)).status, path).toBe(405);
+    const response = await request(projectApi.port, path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ application_id: '10000000-0000-4000-8000-000000000001' }) });
+    expect(response.status, path).toBe(401);
   });
 
   it('passes rewritten auth paths and raw request bytes through the existing auth handler', async () => {

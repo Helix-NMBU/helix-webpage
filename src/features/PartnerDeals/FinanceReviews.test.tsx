@@ -61,7 +61,7 @@ it("directs Finance to correct an active won-deal record instead of unlinking it
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  const {MemoryRouter}=await import("react-router-dom");
  await act(async()=>root.render(<MemoryRouter><FinanceReviews repository={repo}/></MemoryRouter>));
- expect(el.textContent).toContain("Correct the existing record");expect(el.querySelector('a[href="/finance/financing"]')).not.toBeNull();
+ expect(el.textContent).toContain("Correct the existing record");expect(el.querySelector('a[href="/finance/funding"]')).not.toBeNull();
  expect(el.textContent).not.toContain("Remove mismatched link");
  await act(async()=>root.unmount());el.remove();
 });
@@ -71,7 +71,7 @@ it("keeps manually reviewed funding linked and offers correction in Financing",a
  const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",manualFunding:true,partner:"Acme",season:"S27",amountOre:"15000",candidates:[],linkedFunding:linked}]),resolve:vi.fn()};
  const {MemoryRouter}=await import("react-router-dom");const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>root.render(<MemoryRouter><FinanceReviews repository={repo}/></MemoryRouter>));
- expect(el.querySelector('a[href="/finance/financing"]')).not.toBeNull();expect(el.textContent).not.toContain("Remove mismatched link");expect(el.textContent).not.toContain("Approve separate funding");
+ expect(el.querySelector('a[href="/finance/funding"]')).not.toBeNull();expect(el.textContent).not.toContain("Remove mismatched link");expect(el.textContent).not.toContain("Approve separate funding");
  await act(async()=>root.unmount());el.remove();
 });
 it("lets Finance restore the original manual funding link without requiring the later agreement amount",async()=>{
@@ -85,6 +85,6 @@ it("guides Finance to find the original record when the manual link is missing",
  const repo:FinanceReviewRepository={load:vi.fn().mockResolvedValue([{id:"review",manualFunding:true,partner:"Acme",season:"S27",amountOre:"15000",candidates:[],linkedFunding:null}]),resolve:vi.fn()};
  const {MemoryRouter}=await import("react-router-dom");const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>root.render(<MemoryRouter><FinanceReviews repository={repo}/></MemoryRouter>));
- expect(el.textContent).toContain("Find or restore the original funding record");expect(el.querySelector('a[href="/finance/financing"]')).not.toBeNull();expect(el.textContent).not.toContain("Approve separate funding");
+ expect(el.textContent).toContain("Find or restore the original funding record");expect(el.querySelector('a[href="/finance/funding"]')).not.toBeNull();expect(el.textContent).not.toContain("Approve separate funding");
  await act(async()=>root.unmount());el.remove();
 });
