@@ -86,3 +86,20 @@ The implementation and fault tests use synthetic local data and mocked provider 
 5. Remove configuration or deny provider access temporarily. Register an incurred purchase and confirm saved actuals plus honest attention state; restore the approved configuration and recover without another actual expense. Confirm historical private downloads and provider-aware exports still work, and that no tokens/session URLs appear in notifications, logs or exports.
 
 The named release gates remain the real drive/folder, dedicated credential, effective `drive.file` behavior, inherited ACLs and intended-reader checks. Local mocks establish protocol and recovery behavior, not those live service facts.
+
+
+## Production keyless authentication (2026-11-22)
+
+The organization enforces `iam.disableServiceAccountKeyCreation`. Preserve this policy. The production uploader uses Vercel OIDC and Google Workload Identity Federation; it stores no private key or user refresh token. The account remains `helix-finance-invoices@helix-nmbu.iam.gserviceaccount.com`, without project roles or domain-wide delegation.
+
+Configure production-only `FINANCE_GOOGLE_WIF_AUDIENCE` to `//iam.googleapis.com/projects/1024286200685/locations/global/workloadIdentityPools/helix-finance-invoices/providers/vercel-production` and `FINANCE_GOOGLE_SERVICE_ACCOUNT_EMAIL` to that account. Both settings are required; any partial WIF configuration or nonproduction environment disables the adapter without falling back to a key. `@vercel/oidc` reads the runtime identity lazily, including rotating-token support.
+
+The provider trusts `https://oidc.vercel.com/helix-nmbu`, audience `https://vercel.com/helix-nmbu`, subject `owner:helix-nmbu:project:helix-webpage:environment:production`. Its condition also requires exact owner ID `team_gh9gxu7pEyUymhJJzihIiDPZ`, project ID `prj_ZJlpmtshfaXvXnu0qQmQ2SPcE574` and environment `production`. Only that principal receives `roles/iam.workloadIdentityUser` on the uploader account. Enable IAM, STS, IAM Service Account Credentials and Drive APIs.
+
+STS returns an intermediate credential for IAM; the final IAM access token requests only `drive.file` for ten minutes, with no delegates. Tokens, provider bodies and credentials must never appear in logs. Authentication and each provider request are bounded by the transfer deadline.
+
+Folder-only Contributor access was explicitly approved. Google calls this API role `writer`; it also permits sharing individual files. The uploader contains no sharing API. Access is limited to S27 / 3.2 Faktura; it is not shared-drive membership.
+
+Explicit authorized storage verification can run `node scripts/verify-finance-drive.mjs --create-test-files` in the production deployment build identity. It uses the real adapter to create clearly labelled 1 KiB and 10 MiB test files, verify upload progress and stored hashes, and print only safe file identifiers. It does not create purchases or alter financial records. Move those labelled files to Trash with the authorized Drive account afterward. This command is never part of the ordinary build.
+
+Sources: [Vercel GCP OIDC](https://vercel.com/docs/oidc/gcp), [runtime token reference](https://vercel.com/docs/oidc/reference), [Google federation](https://docs.cloud.google.com/iam/docs/workload-identity-federation), [Drive roles](https://developers.google.com/workspace/drive/api/guides/ref-roles).
