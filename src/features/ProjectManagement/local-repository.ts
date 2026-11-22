@@ -1,3 +1,4 @@
+import { projectMemberWorkspace } from "./local-member-preview";
 import { canManageTask, canManageProject, canUpdateTaskStatus } from "./permissions";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { addDays, osloDate, validateProjectMilestones, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
@@ -60,9 +61,10 @@ export function createLocalProjectRepository(): ProjectRepository {
     return { ...workspace, tasks:merged.tasks, projects:merged.projects.map(project => ({ ...project, departments: fixedProjectDepartments(project.departments) })), departments, progressEvents: [...progressEvents, ...missing], taskLeadCategories: workspace.taskLeadCategories ?? [...TASK_CATEGORIES] };
   }
   return {
-    async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return workspace; },
+    async load() { const workspace = read(); localStorage.setItem(KEY, JSON.stringify(workspace)); return projectMemberWorkspace(workspace); },
     async mutate(mutation) {
-      const workspace = read();
+      const original = read();
+      const workspace = projectMemberWorkspace(original);
       const collection = mutation.action === "save_department" ? workspace.departments : (mutation.action === "save_project" || mutation.action === "delete_project") ? workspace.projects : workspace.tasks;
       const current = collection.find(item => item.id === mutation.id);
       if ((current?.revision ?? 0) !== mutation.expectedRevision) throw new ProjectRequestError("This item changed in another session. Reload before saving again.", 409);
@@ -139,8 +141,13 @@ export function createLocalProjectRepository(): ProjectRepository {
         const previous = current as Task | undefined;
         if (!previous || previous.status !== saved.status || previous.kind !== saved.kind || previous.category !== saved.category) workspace.progressEvents.push(progressEvent(saved, now));
       }
-      localStorage.setItem(KEY, JSON.stringify(workspace));
-      return workspace;
+      // Persist legitimate task changes without writing the preview's role/lead projection.
+      const stored = workspace === original ? workspace : { ...workspace,
+        canManage: original.canManage, taskLeadCategories: original.taskLeadCategories,
+        projects: original.projects, departments: original.departments,
+      };
+      localStorage.setItem(KEY, JSON.stringify(stored));
+      return projectMemberWorkspace(stored);
     },
   };
 }

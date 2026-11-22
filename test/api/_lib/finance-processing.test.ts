@@ -1,3 +1,5 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
+import { seedHistoricalSeasonBudget } from "./finance-historical-fixture.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -79,6 +81,10 @@ async function grant(member: string, profile: string) {
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, $3, true, 'Test profile')", [operatorId, member, profile]);
 }
 
+async function historicalMissingApproval(purchaseId: string) {
+  await sql("select finance.record_purchase_exception($1::uuid, 'missing_approval', $2::jsonb)", [purchaseId, JSON.stringify({ totalOre: "600000", thresholdOre: "500000" })]);
+}
+
 async function version() {
   const rows = await sql<{ version: string }>("select version::text as version from finance.view_versions");
   return rows[0]?.version ?? "0";
@@ -90,8 +96,7 @@ async function seasonWithBudget() {
   await grant(headId, "head_of_finance");
   await grant(financeId, "finance");
   await grant(businessId, "business");
-  await call("head", { action: "createBudget", requestId: requestId() });
-  await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+  await seedHistoricalSeasonBudget(sql, headId);
   await sql(
     `insert into finance.budget_items (
       budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,
@@ -110,7 +115,7 @@ async function seasonWithBudget() {
      values ('purchase:2026', 2026, 1, $1::uuid)`,
     [operatorId],
   );
-  await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+  await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
 }
 
 async function authorizeUpload(name = "receipt.pdf") {
@@ -181,9 +186,11 @@ beforeAll(async () => {
     "018_finance_unpaid_voids_reviews.sql",
     "020_finance_processing_guards.sql",
     "021_finance_final_candidate_ledger.sql",
+    "067_finance_retire_purchase_threshold.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -203,8 +210,11 @@ beforeEach(async () => {
   await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects,
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
       finance.documents, finance.upload_final_candidates, finance.uploads, finance.exception_reviews, finance.purchases,
       finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
@@ -213,6 +223,8 @@ beforeEach(async () => {
       finance.reference_counters, finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 });
@@ -347,7 +359,8 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     expect(full.some((row) => row.id === purchaseId && row.status === "voided" && row.publicRef === kept[0]?.ref)).toBe(true);
     expect(registerOf((await read("head", { unpaid: "1" })).body).some((row) => row.id === purchaseId)).toBe(false);
     const documentId = full.find((row) => row.id === purchaseId)?.documents[0]?.id;
-    expect((await call("finance", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(200);
+    // Newly registered evidence remains unavailable until Drive verification.
+    expect((await call("finance", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(409);
     expect((await call("member", { action: "downloadDocument", requestId: requestId(), documentId })).status).toBe(403);
   });
 
@@ -716,9 +729,11 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
        from pg_proc p
        join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'finance'
-         and p.proname in ('void_registered_purchase', 'apply_purchase_settlement', 'review_purchase_exception')`,
+         and p.proname in ('void_registered_purchase', 'void_purchase_before_project_tracking', 'apply_purchase_settlement', 'review_purchase_exception')`,
     );
-    const voidSrc = sources.find((row) => row.proname === "void_registered_purchase")?.prosrc.toLowerCase() ?? "";
+    const voidSrc = sources.find((row) => row.proname === "void_purchase_before_project_tracking")?.prosrc.toLowerCase() ?? "";
+    const wrapper = sources.find((row) => row.proname === "void_registered_purchase")!.prosrc.toLowerCase();
+    expect(wrapper.indexOf("from finance.project_budgets where id=h.project_budget_id for update")).toBeLessThan(wrapper.indexOf("finance.void_purchase_before_project_tracking("));
     const requestLock = voidSrc.indexOf("from finance.requests where id = linked_request_id for update");
     const share = voidSrc.indexOf("for share of i");
     const budget = voidSrc.indexOf("perform finance.lock_current_budget()");
@@ -756,6 +771,8 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     }, "6000.00");
     expect(saved.status).toBe(200);
     const purchaseId = saved.body.id ?? "";
+    // A retained historical exception can still be reviewed after policy retirement.
+    await historicalMissingApproval(purchaseId);
     const review = (await sql<{ id: string; facts: { totalOre?: string }; kind: string }>(
       "select id, facts, kind from finance.exception_reviews where purchase_id = $1::uuid",
       [purchaseId],
@@ -813,6 +830,7 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     await seasonWithBudget();
     const saved = await registerPurchase({}, "6000.00");
     const purchaseId = saved.body.id ?? "";
+    await historicalMissingApproval(purchaseId);
     const reviewId = (await sql<{ id: string }>("select id from finance.exception_reviews where purchase_id = $1::uuid", [purchaseId]))[0]?.id;
     expect((await call("finance", { action: "voidPurchase", requestId: requestId(), purchaseId, reason: "Wrong item", expectedRevision: 0 })).status).toBe(200);
     const before = await version();
@@ -842,6 +860,7 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
       documentNumber: "INV-1001",
       invoiceDueDate: "2026-11-01",
     }, "6000.00");
+    await historicalMissingApproval(saved.body.id ?? "");
     const reviewId = (await sql<{ id: string }>(
       "select id from finance.exception_reviews where purchase_id = $1::uuid",
       [saved.body.id],
@@ -928,4 +947,49 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     expect(await version()).toBe(versionBefore);
     expect(await reviewRows(reviewId)).toEqual(before);
   });
+});
+
+it("returns each purchase's actual project while keeping older unassigned purchases explicit", async () => {
+  await seasonWithBudget();
+  const saved = await registerPurchase(); expect(saved.status).toBe(200);
+  expect(registerOf((await read("finance")).body)[0]).toMatchObject({ projectId: null, projectName: null, departmentId: null, departmentName: null });
+  const projectId = crypto.randomUUID();
+  await sql("insert into project_management.projects(id,season,name,lead_ids,departments) values($1,'S27','Chassis development','{}',array['Mechanical & Production'])", [projectId]);
+  const departmentId = crypto.randomUUID();
+  await sql("insert into project_management.departments(id,season,name) values($1,'S27','Mechanical & Production')", [departmentId]);
+  await sql("update finance.purchases set project_id=$1,responsible_department_id=$3 where id=$2", [projectId, saved.body.id, departmentId]);
+  expect(registerOf((await read("finance")).body)[0]).toMatchObject({ projectId, projectName: "Chassis development", departmentId, departmentName: "Mechanical & Production" });
+});
+
+it("links an existing invoice with Finance authority, audit and idempotency without changing money or transfer jobs", async () => {
+  await seasonWithBudget();
+  const saved = await registerPurchase({paymentMethod:"invoice",documentKind:"invoice",invoiceDueDate:"2026-12-01"}); expect(saved.status).toBe(200);
+  const purchaseId=saved.body.id!;
+  const before=registerOf((await read("finance")).body)[0];
+  const transfers=await sql("select document_id,status,revision from finance.invoice_transfers order by document_id");
+  const change={action:"linkPurchaseInvoice",purchaseId,expectedRevision:0,requestId:requestId(),viewerUrl:"https://drive.google.com/open?id=actual-file-123&usp=sharing"};
+  expect((await call("business",change)).status).toBe(403);
+  expect((await call("finance",{...change,requestId:requestId(),viewerUrl:"https://drive.google.com/drive/folders/not-a-file"})).status).toBe(400);
+  const linked=await call("finance",change); expect(linked.status).toBe(200);
+  const currentVersion=await version(); expect(await call("finance",change)).toEqual(linked); expect(await version()).toBe(currentVersion);
+  expect((await call("finance",{...change,viewerUrl:"https://drive.google.com/file/d/different-file/view"})).status).toBe(409);
+  const after=registerOf((await read("finance")).body)[0];
+  expect(after).toMatchObject({totalNok:before.totalNok,unpaid:before.unpaid,revision:1});
+  expect(after.invoice).toEqual(before.invoice); expect(after.reimbursement).toEqual(before.reimbursement);
+  const reference=after.documents.find(doc=>doc.id===`purchase:${purchaseId}`)!;
+  expect(reference).toMatchObject({backend:"google_drive",transferStatus:"stored",canRetry:false,viewerUrl:"https://drive.google.com/file/d/actual-file-123/view"});
+  expect(await sql("select document_id,status,revision from finance.invoice_transfers order by document_id")).toEqual(transfers);
+  expect((await sql("select * from finance.audit_log where entity='purchase' and entity_id=$1 and field_name='invoice_viewer_url'",[purchaseId])).length).toBe(1);
+  expect((await call("finance",{action:"downloadDocument",requestId:requestId(),documentId:`purchase:${purchaseId}`})).body).toMatchObject({viewerUrl:"https://drive.google.com/file/d/actual-file-123/view"});
+  const correction={...change,requestId:requestId(),expectedRevision:1,viewerUrl:"https://drive.google.com/file/d/corrected-file/view"};
+  expect((await call("finance",{...correction,expectedRevision:0})).status).toBe(409);
+  const corrected=await call("finance",correction);expect(corrected.status).toBe(200);expect(await call("finance",correction)).toEqual(corrected);
+  const updated=registerOf((await read("finance")).body)[0];expect(updated).toMatchObject({revision:2,totalNok:before.totalNok,unpaid:before.unpaid});expect(updated.invoice).toEqual(before.invoice);
+  expect(updated.documents.find(doc=>doc.id===`purchase:${purchaseId}`)?.viewerUrl).toBe(correction.viewerUrl);
+  expect((await call("finance",{action:"downloadDocument",requestId:requestId(),documentId:`purchase:${purchaseId}`})).body).toMatchObject({viewerUrl:correction.viewerUrl});
+  expect(await sql("select document_id,status,revision from finance.invoice_transfers order by document_id")).toEqual(transfers);
+  const audit=await sql("select * from finance.audit_log where entity='purchase' and entity_id=$1 and field_name='invoice_viewer_url' order by occurred_at",[purchaseId]);
+  expect(audit).toHaveLength(2);expect(audit).toEqual(expect.arrayContaining([expect.objectContaining({old_value:"https://drive.google.com/file/d/actual-file-123/view",new_value:correction.viewerUrl})]));
+  await sql("select finance.set_member_grant($1::uuid,$2::uuid,'finance',false,'Test revoked')",[operatorId,financeId]);
+  expect((await call("finance",{action:"downloadDocument",requestId:requestId(),documentId:`purchase:${purchaseId}`})).status).toBe(403);
 });

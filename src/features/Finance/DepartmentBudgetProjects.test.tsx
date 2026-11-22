@@ -1,0 +1,95 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { DepartmentBudgetProjects } from "./DepartmentBudgetProjects";
+import type { DepartmentBudgetPackage } from "./department-budget-types";
+import type { ProjectBudgetDetail, ProjectBudgetEntry, ProjectBudgetVersion } from "./project-budget-types";
+import type { WorkspaceProject } from "../Workspace/types";
+import { item } from "./budget-dashboard.test-support";
+vi.mock("./InvoiceEvidence", () => ({ InvoiceLinks: ({ invoices }: { invoices: { originalName: string; documentId: string }[] }) => <>{invoices.map(invoice => <button key={invoice.documentId}>{invoice.originalName}</button>)}</>, InvoiceEvidence: ({ invoice }: { invoice: { originalName: string } }) => <button>{invoice.originalName}</button> }));
+const entry = (id: string, amount = "100.00"): ProjectBudgetEntry => ({ entryId: id, budgetItemId: id, publicRef: id, systemId: "system", description: id, category: "material", plannedNok: amount, ordinaryPriority: "P1", priority: "P1", reuseStatus: "new", status: "planned", actualNok: "0.00", completion: "not_purchased" });
+const version = (entries: ProjectBudgetEntry[], totalNok: string): ProjectBudgetVersion => ({ id: "version", versionNumber: 1, revision: 1, status: "approved", submittedAt: null, departmentApprovedBy: null, departmentApprovedAt: null, approvedBy: null, approvedAt: null, entries, totalNok });
+const before = version([entry("Changed control"), entry("Removed control"), entry("Unchanged control")], "300.00");
+const after = version([entry("Changed control", "120.00"), entry("New control", "80.00"), entry("Unchanged control")], "300.00");
+const packet: DepartmentBudgetPackage = { id: "packet", revision: 1, status: "finance_pending", submittedAt: "2026-11-22T10:00:00Z", submittedBy: "lead", decidedAt: null, decidedBy: null, reason: null, snapshot: { departmentId: "dep", departmentName: "Electronics", departmentKey: "electrical", seasonId: "season", seasonCode: "S27", approvedTotalNok: "300.00", proposedTotalNok: "300.00", deltaNok: "0.00", legacyTotalNok: "0.00", proposedLegacyTotalNok: "0.00", legacyEntries: [], projects: [{ projectId: "p1", projectName: "Vehicle electronics", projectLeadIds: [], projectBudgetId: "budget", responsibleDepartmentId: "dep", responsibleDepartmentName: "Electronics", readiness: "finance_pending", included: true, approvedVersion: before, proposedVersion: after, approvedTotalNok: "300.00", proposedTotalNok: "300.00", deltaNok: "0.00" }] } };
+const project = (id: string, name: string): WorkspaceProject => ({ id, name, description: "", category: "production", departments: ["Electronics"], deadline: null, season: "S27", revision: 1, total: 0, done: 0, milestones: [] });
+const props = { departmentId: "dep", departmentName: "Electronics", seasonCode: "S27", projects: [project("p1", "Vehicle electronics"), project("p2", "Electrical validation"), project("p3", "Future planning")], entries: before.entries.map(plan => ({ ...item("P1", plan.plannedNok), id: plan.entryId, description: plan.description, projectId: "p1", projectName: "Vehicle electronics", actualNok: "7.00", completion: "partial" as const })), systems: [{ id: "system", name: "Electronics", code: "ELEC", departmentName: "Electronics" }], onChanged: vi.fn(async () => {}), onAccessEnded: vi.fn() };
+let container: HTMLDivElement, root: ReturnType<typeof createRoot>;
+beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = document.createElement("div"); document.body.append(container); root = createRoot(container); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+const trigger = (name: string) => [...container.querySelectorAll("button")].find(button => button.textContent?.includes(name))!;
+it("lists every project, highlights only requested projects and expands all entry diffs including removals and zero-net changes", async () => {
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} pendingPackage={packet} />));
+  expect(container.querySelectorAll('h3')).toHaveLength(3);
+  expect(container.querySelectorAll('[data-slot="badge"]')).toHaveLength(3);
+  const changed = trigger("Vehicle electronics");
+  expect(changed.textContent).toContain("Requested change"); expect(changed.textContent).toContain("1 new · 1 changed · 1 removed");
+  expect(trigger("Electrical validation").textContent).not.toContain("Requested change");
+  expect(changed.textContent).toContain("Requested changeNOK 0.00");
+  expect(changed.querySelectorAll('[data-slot="badge"]')).toHaveLength(1);
+  expect(changed.querySelector('[data-slot="badge"]')?.className).toContain("bg-[var(--warning)]");
+  expect(changed.textContent).not.toContain("Requested NOK");
+  expect(changed.textContent).not.toContain("Net change");
+  expect(changed.closest("[data-slot=collapsible]")?.className).not.toContain("border-[var(--warning)]");
+  expect(changed.textContent).not.toContain("Changes requested");
+  expect(changed.getAttribute("aria-expanded")).toBe("false"); expect(container.querySelector("table")).toBeNull();
+  await act(async () => changed.click());
+  expect(changed.getAttribute("aria-expanded")).toBe("true");
+  expect(container.querySelectorAll("tbody tr")).toHaveLength(4);
+  expect(container.querySelector("tfoot tr")?.children[1].textContent).toBe("NOK 0.00");
+  expect(container.querySelector('[data-change="changed"]')?.children[3].textContent).toBe("NOK 100.00");
+  expect(container.querySelector('[data-change="changed"]')?.children[4].textContent).toBe("+ NOK 20.00");
+  expect(container.querySelector('[data-change="changed"]')?.textContent).not.toContain("Requested:");
+  expect(container.querySelector('[data-change="removed"]')?.textContent).toContain("Removed control");
+  expect(container.querySelector('[data-change="added"]')?.textContent).toContain("New control");
+  expect(container.querySelector('tbody tr:last-child')?.getAttribute("data-change")).toBe("unchanged");
+  await act(async () => changed.click()); expect(container.querySelector("table")).toBeNull();
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} pendingPackage={{ ...packet, status: "approved" }} />));
+  expect(container.textContent).not.toContain("Requested change");
+  await act(async () => trigger("Vehicle electronics").click());
+  expect(container.textContent).not.toContain("New control"); expect(container.querySelectorAll("tbody tr")).toHaveLength(3);
+});
+it("uses the fixed submitted package rather than a mutable candidate and keeps current invoice evidence", async () => {
+  const detail = { id: "budget", projectId: "p1", projectName: "Vehicle electronics", responsibleDepartmentId: "dep", seasonCode: "S27", approvedVersion: before, pendingVersion: version([entry("Unsubmitted replacement", "999.00")], "999.00") } as ProjectBudgetDetail;
+  const entries = props.entries.map(row => ({ ...row, invoices: [{ documentId: row.id, purchaseId: "purchase", purchaseRef: "R1", originalName: "Current invoice.pdf", backend: "private_storage" as const, transferStatus: "stored" as const, viewerUrl: null }] }));
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} entries={entries} details={[detail]} pendingPackage={packet} />));
+  await act(async () => trigger("Vehicle electronics").click());
+  expect(container.textContent).not.toContain("999.00"); expect(container.textContent).not.toContain("Unsubmitted replacement");
+  expect(container.textContent).toContain("Current invoice.pdf"); expect(container.textContent).toContain("NOK 7.00");
+});
+it("shows candidate changes awaiting department approval and keeps draft candidates neutral", async () => {
+  const detail = { id: "budget", projectId: "p1", projectName: "Vehicle electronics", responsibleDepartmentId: "dep", seasonCode: "S27", pendingStage: "department_pending", approvedVersion: before, pendingVersion: after } as ProjectBudgetDetail;
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} details={[detail]} summaries={[detail]} />));
+  expect(trigger("Vehicle electronics").textContent).toContain("Requested change");
+  await act(async () => trigger("Vehicle electronics").click());
+  expect(trigger("Vehicle electronics").textContent).toContain("Requested changeNOK 0.00");
+  expect(container.textContent).not.toContain("Last approved");
+  expect(container.textContent).not.toContain("Requested budget");
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} details={[{ ...detail, pendingStage: "draft" }]} summaries={[{ ...detail, pendingStage: "draft" }]} />));
+  expect(container.textContent).not.toContain("Requested change"); expect(trigger("Vehicle electronics").textContent).toContain("Draft NOK 300.00");
+});
+
+it.each([{ total: "320.00", changedAmount: "140.00", net: "+ NOK 20.00" }, { total: "280.00", changedAmount: "100.00", net: "− NOK 20.00" }])("shows a signed $net net change before expanding a project", async ({ total, changedAmount, net }) => {
+  const proposed = version([entry("Changed control", changedAmount), entry("New control", "80.00"), entry("Unchanged control")], total);
+  const pendingPackage = { ...packet, snapshot: { ...packet.snapshot, projects: [{ ...packet.snapshot.projects[0], proposedVersion: proposed, proposedTotalNok: total }] } };
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} pendingPackage={pendingPackage} />));
+  const changed = trigger("Vehicle electronics");
+  expect(changed.getAttribute("aria-expanded")).toBe("false");
+  expect(changed.textContent).toContain(`Requested change${net}`);
+  expect(container.querySelector("table")).toBeNull();
+});
+
+it("places the Finance review button inside an expanded included project after its summary", async () => {
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} pendingPackage={packet} canReviewDecision />));
+  expect(container.textContent).not.toContain("Review changes");
+  await act(async () => trigger("Vehicle electronics").click());
+  const footer = container.querySelector("tfoot")!;
+  const review = trigger("Review changes");
+  expect(review).toBeTruthy();
+  expect(footer.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(footer.closest('[data-slot="collapsible-content"]')?.contains(review)).toBe(true);
+  expect(container.querySelectorAll('[data-slot="collapsible"]')[0].className).not.toContain("border-[var(--warning)]");
+  await act(async () => root.render(<DepartmentBudgetProjects {...props} pendingPackage={packet} canReviewDecision={false} />));
+  expect(container.textContent).not.toContain("Review changes");
+});

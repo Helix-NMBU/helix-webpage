@@ -1,3 +1,4 @@
+import { isProjectMemberPreview } from "../MemberPlatform/local-member-profile-selection";
 import { departmentAccess } from "../ProjectManagement/permissions";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { createLocalProjectRepository } from "../ProjectManagement/local-repository";
@@ -25,7 +26,7 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
       viewerId: data.viewerId,
       spaceOrder: JSON.parse(localStorage.getItem(`helix-space-order:${data.viewerId}`) ?? "[]") as string[],
       taskLeadCategories: data.taskLeadCategories,
-      canAdmin: true,
+      canAdmin: !isProjectMemberPreview(isLocalMemberMode()),
       projectAccess: true,
       canManageProjects: data.canManage,
       members: data.members.map((m) => ({
@@ -36,6 +37,7 @@ export function createLocalWorkspaceRepository(): WorkspaceRepository {
         lastSeenAt: null,
         revision: 1,
         ...saved[m.id],
+        ...(m.id === data.viewerId && isProjectMemberPreview(isLocalMemberMode()) ? { role: "Member" } : {}),
       })),
       departments: data.departments,
       projects: data.projects.map((p) => {

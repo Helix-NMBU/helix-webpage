@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { isLocalMemberMode, localMemberSignedIn } from "./local-mode";
 import { useMemberAccount } from "./MemberAccountContext";
 
 const preferenceKeys: Array<[RegExp, readonly string[]]> = [
@@ -75,6 +76,12 @@ export function MemberPagePreferences() {
           for (const value of current.getAll(name)) merged.append(name, value);
         }
       }
+      // Preserve the dedicated loopback budget fixture role without saving it as a page preference.
+      const budgetRole = current.get("budgetRole");
+      if (
+        isLocalMemberMode() && localMemberSignedIn() && budgetRole &&
+        ["project_lead", "department_lead", "finance", "head_of_finance"].includes(budgetRole)
+      ) merged.set("budgetRole", budgetRole);
       if (merged.toString() !== current.toString()) {
         navigate(
           {

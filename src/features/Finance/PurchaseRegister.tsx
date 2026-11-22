@@ -1,4 +1,15 @@
-import { useRef, useState } from "react";
+import { watchMemberSession } from "../MemberCV/session";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
+import { Badge } from "@libs/components/ui/badge";
+import { Sheet, SheetContent, SheetTrigger } from "@libs/components/ui/sheet";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
+import { PurchaseInvoice } from "./PurchaseInvoice";
+import { PurchasePanel } from "./PurchasePanel";
+import { purchasePaymentLabel, purchaseReviewLabels, purchaseTitle } from "./purchase-presentation";
+import { projectBudgetMoney } from "./project-budget-diff";
+import { InvoiceEvidence } from "./InvoiceEvidence";
+import type { InvoiceEvidenceActions } from "./invoice-repository";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
@@ -10,15 +21,22 @@ import { useNotify } from "../MemberPlatform/MemberNotifications";
 import type { ExceptionKind, FinanceMutation, FinanceMutationResult, FinancePurchaseSummary } from "./types";
 
 const EXCEPTION_LABELS: Record<ExceptionKind, string> = {
-  missing_approval: "Missing approval",
+  missing_approval: "Historical missing approval",
   overrun: "Approved amount exceeded",
   line_mismatch: "Approval line mismatch",
   dated_before_approval: "Dated before approval",
+  budget_overrun: "Approved budget exceeded",
+  unbudgeted: "Unbudgeted cost",
 };
+
+function PurchaseFilter({ label, value, allLabel, options, onChange }: { label: string; value: string; allLabel: string; options: Array<[string, string]>; onChange: (value: string) => void }) {
+  return <Select value={value} onValueChange={onChange}><SelectTrigger aria-label={label} className="w-full sm:w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">{allLabel}</SelectItem>{options.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>;
+}
 
 function useStableIds() {
   const pending = useRef(new Map<string, { fingerprint: string; id: string }>());
-  return {
+  return useMemo(() => ({
+    clear() { pending.current.clear(); },
     idFor(key: string, fingerprint: string) {
       const current = pending.current.get(key);
       if (current?.fingerprint === fingerprint) return current.id;
@@ -29,7 +47,7 @@ function useStableIds() {
     finish(key: string) {
       pending.current.delete(key);
     },
-  };
+  }), []);
 }
 
 function paymentState(row: FinancePurchaseSummary): string {
@@ -48,7 +66,10 @@ export function PurchaseRegister({
   onToggleUnpaid,
   onMutate,
   onChanged,
+  onAccessEnded,
+  presentation = "cards",
 }: {
+  presentation?: "cards" | "table";
   register: FinancePurchaseSummary[];
   unpaidCount: number;
   unpaidOnly: boolean;
@@ -57,8 +78,13 @@ export function PurchaseRegister({
   onToggleUnpaid: (unpaidOnly: boolean) => void;
   onMutate: (action: FinanceMutation) => Promise<FinanceMutationResult>;
   onChanged: () => Promise<void>;
+  onAccessEnded?: () => void;
 }) {
   const notify = useNotify();
+  const [search, setSearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const requests = useStableIds();
   const [voidReasons, setVoidReasons] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
@@ -66,199 +92,290 @@ export function PurchaseRegister({
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmVoidId, setConfirmVoidId] = useState<string | null>(null);
 
+  const active = useRef(false), epoch = useRef(0), working = useRef(false), accessEnded = useRef(false);
+  const [denied, setDenied] = useState(false);
+  const callbacks = useRef({ onChanged, onAccessEnded });
+  callbacks.current = { onChanged, onAccessEnded };
+  const clearPrivateAccess = useCallback(() => {
+    if (accessEnded.current) return;
+    accessEnded.current = true;
+    epoch.current++;
+    working.current = false;
+    requests.clear();
+    setBusy(null);
+    setVoidReasons({});
+    setReviewReasons({});
+    setPaidOn({});
+    setConfirmVoidId(null);
+    setSelectedId(null);
+    setSearch("");
+    setDepartmentFilter("all");
+    setProjectFilter("all");
+    setDenied(true);
+    if (callbacks.current.onAccessEnded) callbacks.current.onAccessEnded();
+    else void callbacks.current.onChanged().catch(() => undefined);
+  }, [requests]);
+  useEffect(() => {
+    active.current = true;
+    const stop = watchMemberSession(() => { if (active.current) clearPrivateAccess(); });
+    return () => { active.current = false; epoch.current++; stop(); };
+  }, [clearPrivateAccess]);
+
+  async function refresh(operation: number) {
+    if (!active.current || accessEnded.current || epoch.current !== operation) return;
+    try {
+      await callbacks.current.onChanged();
+    } catch (error) {
+      if (!active.current || accessEnded.current || epoch.current !== operation) return;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+        notify("Finance access ended", "Your purchase register access is no longer available.", { variant: "error", href: null });
+        return;
+      }
+      notify("Could not refresh purchase register", error instanceof Error ? error.message : "Please try again.", {
+        variant: "error", href: null,
+        action: { label: "Refresh", onClick: () => { if (active.current && !accessEnded.current && epoch.current === operation) void refresh(operation); } },
+      });
+    }
+  }
+
   async function run(key: string, fingerprint: string, action: FinanceMutation, success: string, failure: string) {
+    if (!active.current || accessEnded.current || working.current) return false;
+    working.current = true;
+    const operation = ++epoch.current;
     setBusy(key);
     try {
       const saved = await onMutate({ ...action, requestId: requests.idFor(key, fingerprint) });
+      if (!active.current || accessEnded.current || operation !== epoch.current) return false;
       requests.finish(key);
       notify(success, saved.id ? "The purchase register was updated." : "Saved.", { id: key, variant: "success" });
-      await onChanged();
+      await refresh(operation);
       return true;
     } catch (error) {
+      if (!active.current || accessEnded.current || operation !== epoch.current) return false;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+        notify("Finance access ended", "Your purchase register access is no longer available.", { id: key, variant: "error", href: null });
+        return false;
+      }
       const message = error instanceof Error ? error.message : "Please try again.";
       notify(failure, message, {
         id: key,
         variant: "error",
-        action: { label: "Try again", onClick: () => { void run(key, fingerprint, action, success, failure); } },
+        action: { label: "Try again", onClick: () => { if (active.current && !accessEnded.current && operation === epoch.current) void run(key, fingerprint, action, success, failure); } },
       });
       return false;
     } finally {
-      setBusy(null);
+      if (active.current && operation === epoch.current) { working.current = false; setBusy(null); }
     }
   }
 
-  async function download(documentId: string, name: string) {
-    try {
-      const saved = await onMutate({ action: "downloadDocument", requestId: crypto.randomUUID(), documentId });
-      if (!saved.downloadUrl) throw new Error("The file download was not prepared.");
-      const link = document.createElement("a");
-      link.href = saved.downloadUrl;
-      link.download = name;
-      link.rel = "noopener";
-      link.click();
-    } catch (error) {
-      notify("Could not download the file", error instanceof Error ? error.message : "Please try again.", {
-        id: "purchase-download",
-        variant: "error",
-        action: { label: "Try again", onClick: () => { void download(documentId, name); } },
-      });
-    }
-  }
-
-  return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-medium">Purchase register</h2>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="unpaid-only"
-            checked={unpaidOnly}
-            onCheckedChange={(checked) => onToggleUnpaid(checked === true)}
-          />
-          <Label htmlFor="unpaid-only">Unpaid only ({unpaidCount})</Label>
-        </div>
-      </div>
-      {register.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{unpaidOnly ? "No unpaid purchases." : "No purchases in this season."}</p>
-      ) : null}
-      {register.map((row) => {
-        const dateKey = `paid-${row.id}`;
-        const paidDate = paidOn[row.id] ?? today;
-        return (
-          <Card key={row.id}>
-            <CardHeader>
-              <CardTitle className="text-base">{row.publicRef} · {paymentState(row)}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p>{[row.supplierName, row.buyerName, row.requesterName].filter(Boolean).join(" · ")}</p>
-              <p>{row.purchaseDate} · {row.totalNok} NOK</p>
-              <p>{row.justification}</p>
-              {row.voidReason ? <p>Void reason: {row.voidReason}</p> : null}
-              {row.invoice ? (
-                <p>
-                  Invoice {row.documentNumber ?? row.invoice.dueDate ?? "—"}
-                  {row.invoice.dueDate ? ` due ${row.invoice.dueDate}` : ""}
-                  {" · "}
-                  {row.invoice.paid ? `Paid ${row.invoice.paidOn ?? ""}` : "Unpaid"}
-                </p>
-              ) : null}
-              {row.reimbursement ? (
-                <p>Outlay reimbursement · {row.reimbursement.paid ? `Paid ${row.reimbursement.paidOn ?? ""}` : "Unpaid"}</p>
-              ) : null}
-              {row.refundAccount ? <p>Refund account {row.refundAccount}</p> : null}
-              {row.refundPhone ? <p>Refund phone {row.refundPhone}</p> : null}
-              {row.lines.length > 0 ? (
-                <ul className="space-y-1">
-                  {row.lines.map((line) => (
-                    <li key={line.id}>{line.systemName}{line.itemName ? ` · ${line.itemName}` : ""} · {line.description} · {line.amountNok} · allocated {line.allocationNok}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {row.documents.length > 0 ? (
-                <ul className="space-y-1">
-                  {row.documents.map((doc) => (
-                    <li key={doc.id} className="flex flex-wrap items-center gap-2">
-                      <span>{doc.originalName} · {doc.kind}{doc.documentNumber ? ` · ${doc.documentNumber}` : ""}</span>
-                      <Button type="button" size="sm" variant="outline" onClick={() => void download(doc.id, doc.originalName)}>Download</Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {row.exceptions.map((review) => (
-                <div key={review.id} className="space-y-2 rounded-md border p-3">
-                  <p>{EXCEPTION_LABELS[review.kind]} · {review.reviewStatus === "reviewed" ? "Reviewed" : "Open"}</p>
-                  {review.reason ? <p>{review.reason}</p> : null}
-                  {review.reviewStatus === "open" && canAct && row.status === "registered" ? (
-                    <>
-                      <Label htmlFor={`review-${review.id}`}>Review reason</Label>
-                      <Textarea
-                        id={`review-${review.id}`}
-                        value={reviewReasons[review.id] ?? ""}
-                        onChange={(event) => setReviewReasons((current) => ({ ...current, [review.id]: event.target.value }))}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={busy !== null}
-                        onClick={() => {
-                          const reason = reviewReasons[review.id] ?? "";
-                          void run(
-                            `review-${review.id}`,
-                            `${review.id}:${reason}`,
-                            { action: "reviewException", requestId: "", reviewId: review.id, reason },
-                            "Review recorded",
-                            "Could not record the review",
-                          );
-                        }}
-                      >
-                        Record review
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              ))}
-              {canAct && row.status === "registered" ? (
-                <div className="space-y-3">
-                  <p className="text-muted-foreground">Recording a payment does not change recorded spending or open commitments. A review does not approve the purchase or mark it paid.</p>
-                  {(row.invoice || row.reimbursement) ? (
-                    <div className="space-y-2">
-                      <Label htmlFor={dateKey}>Payment date</Label>
-                      <Input id={dateKey} type="date" value={paidDate} onChange={(event) => setPaidOn((current) => ({ ...current, [row.id]: event.target.value }))} />
-                    </div>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    {row.invoice && !row.invoice.paid ? (
-                      <Button type="button" size="sm" disabled={busy !== null} onClick={() => void run(`invoice-${row.id}`, paidDate, { action: "markInvoicePaid", requestId: "", purchaseId: row.id, paidOn: paidDate, expectedRevision: row.revision }, "Invoice marked paid", "Could not mark the invoice paid")}>Mark invoice paid</Button>
-                    ) : null}
-                    {row.invoice?.paid ? (
-                      <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => void run(`invoice-undo-${row.id}`, "undo", { action: "unmarkInvoicePaid", requestId: "", purchaseId: row.id, expectedRevision: row.revision }, "Invoice payment removed", "Could not undo the invoice payment")}>Undo invoice payment</Button>
-                    ) : null}
-                    {row.reimbursement && !row.reimbursement.paid ? (
-                      <Button type="button" size="sm" disabled={busy !== null} onClick={() => void run(`outlay-${row.id}`, paidDate, { action: "markRefundPaid", requestId: "", purchaseId: row.id, paidOn: paidDate, expectedRevision: row.revision }, "Outlay marked reimbursed", "Could not mark the outlay reimbursed")}>Mark outlay reimbursed</Button>
-                    ) : null}
-                    {row.reimbursement?.paid ? (
-                      <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => void run(`outlay-undo-${row.id}`, "undo", { action: "unmarkRefundPaid", requestId: "", purchaseId: row.id, expectedRevision: row.revision }, "Reimbursement removed", "Could not undo the reimbursement")}>Undo reimbursement</Button>
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`void-${row.id}`}>Void reason</Label>
-                    <Textarea
-                      id={`void-${row.id}`}
-                      value={voidReasons[row.id] ?? ""}
-                      onChange={(event) => setVoidReasons((current) => ({ ...current, [row.id]: event.target.value }))}
-                    />
-                    <Dialog open={confirmVoidId === row.id} onOpenChange={(open) => setConfirmVoidId(open ? row.id : null)}>
-                      <DialogTrigger asChild>
-                        <Button type="button" size="sm" variant="outline" disabled={busy !== null}>Void purchase</Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Void {row.publicRef}?</DialogTitle>
-                          <DialogDescription>The purchase will leave the actual and unpaid totals. Its record and files will remain available. This cannot be undone.</DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                          <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                          <Button type="button" onClick={() => {
-                            const reason = voidReasons[row.id] ?? "";
-                            setConfirmVoidId(null);
-                            void run(
-                              `void-${row.id}`,
-                              reason,
-                              { action: "voidPurchase", requestId: "", purchaseId: row.id, reason, expectedRevision: row.revision },
-                              "Purchase voided",
-                              "Could not void the purchase",
-                            );
-                          }}>Confirm void</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        );
-      })}
-    </section>
+  const invoiceActions = useMemo<InvoiceEvidenceActions>(
+    () => ({
+      open: (documentId) =>
+        onMutate({
+          action: "downloadDocument",
+          requestId: crypto.randomUUID(),
+          documentId,
+        }),
+      retry: (documentId, expectedRevision, requestId) =>
+        onMutate({
+          action: "retryInvoiceTransfer",
+          documentId,
+          expectedRevision,
+          requestId,
+        }),
+    }),
+    [onMutate],
   );
+
+  function purchaseDetails(row: FinancePurchaseSummary) {
+    const dateKey = `paid-${row.id}`;
+    const paidDate = paidOn[row.id] ?? today;
+    return (
+      <Card key={row.id} className={presentation === "table" ? "rounded-none border-0 shadow-none" : undefined}>
+        {presentation === "cards" ? <CardHeader>
+          <CardTitle className="text-base">{row.publicRef} · {paymentState(row)}</CardTitle>
+        </CardHeader> : null}
+        <CardContent className="space-y-3 text-sm">
+          <p>{[row.supplierName, row.buyerName, row.requesterName].filter(Boolean).join(" · ")}</p>
+          <p>{row.purchaseDate} · {row.totalNok} NOK</p>
+          <p>{row.justification}</p>
+          {row.voidReason ? <p>Void reason: {row.voidReason}</p> : null}
+          {row.invoice ? (
+            <p>
+              Invoice {row.documentNumber ?? row.invoice.dueDate ?? "—"}
+              {row.invoice.dueDate ? ` due ${row.invoice.dueDate}` : ""}
+              {" · "}
+              {row.invoice.paid ? `Paid ${row.invoice.paidOn ?? ""}` : "Unpaid"}
+            </p>
+          ) : null}
+          {row.reimbursement ? (
+            <p>Outlay reimbursement · {row.reimbursement.paid ? `Paid ${row.reimbursement.paidOn ?? ""}` : "Unpaid"}</p>
+          ) : null}
+          {row.refundAccount ? <p>Refund account {row.refundAccount}</p> : null}
+          {row.refundPhone ? <p>Refund phone {row.refundPhone}</p> : null}
+          {row.lines.length > 0 ? (
+            <ul className="space-y-1">
+              {row.lines.map((line) => (
+                <li key={line.id}>{line.systemName}{line.itemName ? ` · ${line.itemName}` : ""} · {line.description} · {line.amountNok} · allocated {line.allocationNok}</li>
+              ))}
+            </ul>
+          ) : null}
+          {row.documents.length > 0 ? (
+            <ul className="space-y-1">
+              {row.documents.map((doc) => (
+                <li key={doc.id} className="flex flex-wrap items-center gap-2">
+                  <span>{doc.kind}{doc.documentNumber ? ` · ${doc.documentNumber}` : ""}</span>
+                  <InvoiceEvidence
+                    invoice={{
+                      documentId: doc.id, purchaseId: row.id, purchaseRef: row.publicRef,
+                      originalName: doc.originalName, backend: doc.backend ?? "private_storage",
+                      transferStatus: doc.transferStatus ?? "stored", transferRevision: doc.transferRevision,
+                      canRetry: doc.canRetry, viewerUrl: doc.viewerUrl ?? null,
+                    }}
+                    actions={invoiceActions}
+                    onChanged={onChanged}
+                    onAccessEnded={clearPrivateAccess}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {row.exceptions.map((review) => (
+            <div key={review.id} className="space-y-2 rounded-md border p-3">
+              <p>{EXCEPTION_LABELS[review.kind]} · {review.reviewStatus === "reviewed" ? "Reviewed" : "Open"}</p>
+              {review.reason ? <p>{review.reason}</p> : null}
+              {review.reviewStatus === "open" && canAct && row.status === "registered" ? (
+                <>
+                  <Label htmlFor={`review-${review.id}`}>Review reason</Label>
+                  <Textarea
+                    id={`review-${review.id}`}
+                    value={reviewReasons[review.id] ?? ""}
+                    onChange={(event) => setReviewReasons((current) => ({ ...current, [review.id]: event.target.value }))}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      const reason = reviewReasons[review.id] ?? "";
+                      void run(
+                        `review-${review.id}`,
+                        `${review.id}:${reason}`,
+                        { action: "reviewException", requestId: "", reviewId: review.id, reason },
+                        "Review recorded",
+                        "Could not record the review",
+                      );
+                    }}
+                  >
+                    Record review
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          ))}
+          {canAct && row.status === "registered" ? (
+            <div className="space-y-3">
+              <p className="text-muted-foreground">Recording a payment does not change recorded spending or open commitments. A review does not approve the purchase or mark it paid.</p>
+              {(row.invoice || row.reimbursement) ? (
+                <div className="space-y-2">
+                  <Label htmlFor={dateKey}>Payment date</Label>
+                  <Input id={dateKey} type="date" value={paidDate} onChange={(event) => setPaidOn((current) => ({ ...current, [row.id]: event.target.value }))} />
+                </div>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {row.invoice && !row.invoice.paid ? (
+                  <Button type="button" size="sm" disabled={busy !== null} onClick={() => void run(`invoice-${row.id}`, paidDate, { action: "markInvoicePaid", requestId: "", purchaseId: row.id, paidOn: paidDate, expectedRevision: row.revision }, "Invoice marked paid", "Could not mark the invoice paid")}>Mark invoice paid</Button>
+                ) : null}
+                {row.invoice?.paid ? (
+                  <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => void run(`invoice-undo-${row.id}`, "undo", { action: "unmarkInvoicePaid", requestId: "", purchaseId: row.id, expectedRevision: row.revision }, "Invoice payment removed", "Could not undo the invoice payment")}>Undo invoice payment</Button>
+                ) : null}
+                {row.reimbursement && !row.reimbursement.paid ? (
+                  <Button type="button" size="sm" disabled={busy !== null} onClick={() => void run(`outlay-${row.id}`, paidDate, { action: "markRefundPaid", requestId: "", purchaseId: row.id, paidOn: paidDate, expectedRevision: row.revision }, "Outlay marked reimbursed", "Could not mark the outlay reimbursed")}>Mark outlay reimbursed</Button>
+                ) : null}
+                {row.reimbursement?.paid ? (
+                  <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => void run(`outlay-undo-${row.id}`, "undo", { action: "unmarkRefundPaid", requestId: "", purchaseId: row.id, expectedRevision: row.revision }, "Reimbursement removed", "Could not undo the reimbursement")}>Undo reimbursement</Button>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`void-${row.id}`}>Void reason</Label>
+                <Textarea
+                  id={`void-${row.id}`}
+                  value={voidReasons[row.id] ?? ""}
+                  onChange={(event) => setVoidReasons((current) => ({ ...current, [row.id]: event.target.value }))}
+                />
+                <Dialog open={confirmVoidId === row.id} onOpenChange={(open) => setConfirmVoidId(open ? row.id : null)}>
+                  <DialogTrigger asChild>
+                    <Button type="button" size="sm" variant="outline" disabled={busy !== null}>Void purchase</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Void {row.publicRef}?</DialogTitle>
+                      <DialogDescription>The purchase will leave the actual and unpaid totals. Its record and files will remain available. This cannot be undone.</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                      <Button type="button" onClick={() => {
+                        const reason = voidReasons[row.id] ?? "";
+                        setConfirmVoidId(null);
+                        void run(
+                          `void-${row.id}`,
+                          reason,
+                          { action: "voidPurchase", requestId: "", purchaseId: row.id, reason, expectedRevision: row.revision },
+                          "Purchase voided",
+                          "Could not void the purchase",
+                        );
+                      }}>Confirm void</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (denied) return null;
+  const query = search.trim().toLocaleLowerCase();
+  const departmentRows = register.filter(row => departmentFilter === "all" || (row.departmentId ?? "none") === departmentFilter);
+  const departments = [...new Map(register.map(row => [row.departmentId ?? "none", row.departmentName || "No department"])).entries()].sort((a,b) => a[1].localeCompare(b[1]));
+  const projects = [...new Map(departmentRows.map(row => [row.projectId ?? "none", row.projectName || "No project"])).entries()].sort((a,b) => a[1].localeCompare(b[1]));
+  const rows = departmentRows.filter(row => (!unpaidOnly || row.unpaid) && (projectFilter === "all" || (row.projectId ?? "none") === projectFilter)).filter(row => !query || [row.publicRef, row.projectName, row.supplierName, row.buyerName, row.justification, ...row.lines.map(line => line.description)].join(" ").toLocaleLowerCase().includes(query))
+    .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate) || b.publicRef.localeCompare(a.publicRef));
+  return <section className="space-y-4" aria-label="Purchase register">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h2 className={presentation === "table" ? "sr-only" : "text-xl font-medium"}>Purchase register</h2>
+      {presentation === "table" ? <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:flex-1">
+        <Input aria-label="Search purchases" type="search" placeholder="Search purchases…" value={search} onChange={event => setSearch(event.target.value)} className="w-full sm:w-56" />
+        <PurchaseFilter label="Filter by department" value={departmentFilter} allLabel="All departments" options={departments} onChange={value => { setDepartmentFilter(value); setProjectFilter("all"); }} />
+        <PurchaseFilter label="Filter by project" value={projectFilter} allLabel="All projects" options={projects} onChange={setProjectFilter} />
+        {departmentFilter !== "all" || projectFilter !== "all" || query || unpaidOnly ? <Button variant="ghost" size="sm" onClick={() => { setDepartmentFilter("all"); setProjectFilter("all"); setSearch(""); onToggleUnpaid(false); }}>Clear filters</Button> : null}
+      </div> : null}
+      <div className="flex items-center gap-2"><Checkbox id="unpaid-only" checked={unpaidOnly} onCheckedChange={checked => onToggleUnpaid(checked === true)} /><Label htmlFor="unpaid-only">Unpaid only ({unpaidCount})</Label></div>
+    </div>
+    {presentation === "cards" ? register.length ? register.map(purchaseDetails) : <p className="text-sm text-muted-foreground">{unpaidOnly ? "No unpaid purchases." : "No purchases in this season."}</p> :
+    <div className="overflow-hidden rounded-xl border"><Table><TableHeader><TableRow>
+      <TableHead>Purchase</TableHead><TableHead>Project</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Payment</TableHead><TableHead>Invoice</TableHead>
+    </TableRow></TableHeader><TableBody>{rows.map(row => {
+      const description = purchaseTitle(row);
+      const reviewLabels = row.status === "registered" ? [...new Set(row.exceptions.filter(review => review.reviewStatus === "open").map(review => purchaseReviewLabels[review.kind]))] : [];
+      const state = purchasePaymentLabel(row);
+      return <Sheet key={row.id} open={selectedId === row.id} onOpenChange={open => setSelectedId(open ? row.id : null)}>
+        <TableRow className={row.status === "voided" ? "text-muted-foreground" : undefined}>
+          <TableCell className="min-w-48 max-w-xs whitespace-normal"><SheetTrigger asChild><button type="button" aria-label={`Open purchase ${row.publicRef}`} className="rounded-sm text-left font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring">{description || row.publicRef}</button></SheetTrigger><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>{row.publicRef}</span>{reviewLabels.map(label => <Badge key={label} variant={label === "Over budget" || label === "Unbudgeted" ? "destructive" : "secondary"} className={label === "Over budget" || label === "Unbudgeted" ? undefined : "bg-[var(--warning)] text-[var(--warning-foreground)]"}>{label}</Badge>)}</div></TableCell>
+          <TableCell className="max-w-52 whitespace-normal">{row.projectName || "No project"}</TableCell>
+          <TableCell><time dateTime={row.purchaseDate}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.purchaseDate}T12:00:00Z`))}</time></TableCell>
+          <TableCell className="text-right font-medium tabular-nums">{projectBudgetMoney(row.totalNok)}</TableCell>
+          <TableCell><Badge variant="secondary" className={row.status === "voided" ? undefined : row.unpaid ? "bg-[var(--warning)] text-[var(--warning-foreground)]" : "bg-[var(--success)] text-[var(--success-foreground)]"}>{state}</Badge></TableCell>
+          <TableCell><PurchaseInvoice row={row} canLink={canAct} busy={busy !== null} onRun={run} actions={invoiceActions} onChanged={onChanged} onAccessEnded={clearPrivateAccess} /></TableCell>
+        </TableRow>
+        <SheetContent className="gap-0 overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-lg"><PurchasePanel row={row} today={today} canAct={canAct} busy={busy !== null} onRun={run} invoiceActions={invoiceActions} onChanged={onChanged} onAccessEnded={clearPrivateAccess} /></SheetContent>
+      </Sheet>;
+    })}{!rows.length ? <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">{query || departmentFilter !== "all" || projectFilter !== "all" ? "No purchases match your filters." : unpaidOnly ? "No unpaid purchases." : "No purchases in this season."}</TableCell></TableRow> : null}</TableBody></Table></div>}
+  </section>;
 }

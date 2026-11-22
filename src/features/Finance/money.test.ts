@@ -7,7 +7,6 @@ import {
   budgetReference,
   documentReference,
   earmarkReference,
-  exceedsApprovalThreshold,
   formatOre,
   formatOreNb,
   fundingReference,
@@ -53,12 +52,6 @@ describe("finance money and dates", () => {
     expect(oreFromNumber(1.005)).toBe(101n);
     expect(oreFromNumber(2.675)).toBe(268n);
     expect(oreFromNumber(-1.005)).toBe(-101n);
-  });
-
-  it("compares the approval threshold strictly", () => {
-    expect(exceedsApprovalThreshold(500000n, 500000n)).toBe(false);
-    expect(exceedsApprovalThreshold(500001n, 500000n)).toBe(true);
-    expect(exceedsApprovalThreshold(499999n, 500000n)).toBe(false);
   });
 
   it("uses the Oslo calendar and rejects date-times", () => {

@@ -66,10 +66,6 @@ export function oreFromNumber(value: number): bigint {
   return negative ? -ore : ore;
 }
 
-export function exceedsApprovalThreshold(amountOre: bigint, thresholdOre: bigint): boolean {
-  return amountOre > thresholdOre;
-}
-
 export function parseIsoDate(value: string): string {
   const match = ISO_DATE.exec(value);
   if (!match) throw new FinanceMoneyError("Enter a valid date.");

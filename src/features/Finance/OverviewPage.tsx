@@ -1,19 +1,13 @@
+import { budgetPlanLabel } from "./budget-plan-label";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { compareNb } from "./budget-domain";
-import { BudgetSummary, ScenarioList } from "./budget-summary";
+import { BudgetSummary } from "./budget-summary";
 import { financeRoutes } from "./routes";
-import type { PublicEarmarkSummary, PublicOverview } from "./types";
+import type { PublicEarmarkSummary } from "./types";
 
-function budgetLabel(overview: PublicOverview): string {
-  if (overview.budgetStatus === "approved") {
-    return overview.approvedOn ? `Approved budget · ${overview.approvedOn}` : "Approved budget";
-  }
-  if (overview.budgetStatus === "draft") return "Draft budget";
-  return "No season budget";
-}
 
 function earmarkGroups(earmarks: readonly PublicEarmarkSummary[]) {
   const groups = new Map<string, PublicEarmarkSummary[]>();
@@ -50,17 +44,16 @@ export function OverviewBoard() {
   if (!overview) return null;
   const groups = earmarkGroups(overview.publicEarmarks);
   return (
-    <div ref={scroller} data-finance-overview className="max-h-[70vh] space-y-8 overflow-y-auto">
+    <div ref={scroller} data-finance-overview className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {overview.seasonCode ? `Season ${overview.seasonCode}` : "No current season"}
-          {` · ${budgetLabel(overview)}`}
+          {` · ${budgetPlanLabel(overview)}`}
         </p>
         <Button asChild variant="outline" size="sm">
-          <Link to={financeRoutes.budgets}>Budget detail</Link>
+          <Link to={financeRoutes.budgets}>Budgets & Financing</Link>
         </Button>
       </div>
-      {overview.scenarios ? <ScenarioList scenarios={overview.scenarios} /> : null}
       {overview.departments.map((department) => {
         const open = session.expanded[department.departmentKey] === true;
         const panelId = `overview-systems-${department.departmentKey}`;
@@ -90,7 +83,7 @@ export function OverviewBoard() {
             {open ? (
               <div id={panelId} className="space-y-4">
                 {department.systems.map((system) => (
-                  <article key={system.id} className="space-y-1">
+                  <article key={`${department.departmentKey}:${system.id}`} className="space-y-1">
                     <h3 className="text-base font-medium">{system.name}{system.active ? "" : " · Inactive"}</h3>
                     <p className="text-sm text-muted-foreground">{system.code}</p>
                     <BudgetSummary
@@ -125,16 +118,7 @@ export function OverviewBoard() {
           ))}
         </section>
       ) : null}
-      {overview.earmarkSources ? (
-        <section aria-label="Earmark sources" className="space-y-2">
-          <h2 className="text-xl font-medium">Earmark sources</h2>
-          {overview.earmarkSources.map((source) => (
-            <p key={source.id} className="text-sm text-muted-foreground">
-              {source.sourceName}{source.conditions ? ` · ${source.conditions}` : ""}
-            </p>
-          ))}
-        </section>
-      ) : null}
+
     </div>
   );
 }

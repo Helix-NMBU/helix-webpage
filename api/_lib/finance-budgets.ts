@@ -1,13 +1,15 @@
+import {allocatedSystemCatalog} from "../../src/features/Finance/department-allocation.js";
+import { buildBudgetHierarchy, type BudgetHierarchyUnallocated } from "../../src/features/Finance/budget-hierarchy.js";
+import { hasVisibleApprovedFinances } from "../../src/features/Finance/finance-calculations.js";
+import { OPEN_APPROVED_COMMITMENT_ORE, type EffectiveFinancePresence } from "./finance-effective-read.js";
+import { loadBudgetEntryInvoiceReferences } from "./finance-invoices.js";
+import type { WorkspaceIdentity } from "./member-cv-service.js";
 import { createHash } from "node:crypto";
 import type { CvDatabase } from "./member-cv-service.js";
 import { FinanceError } from "./finance-error.js";
 import { formatOre } from "./finance-money.js";
 import { osloToday } from "./finance-money.js";
 import {
-  compareDepartmentOrder,
-  compareNb,
-  differenceOre,
-  effectivePlanOre,
   normalizeItemPatch,
   normalizeManualItem,
   optionalReason,
@@ -22,7 +24,6 @@ import type {
   PublicBudgetItem,
   PublicBudgets,
   PublicDepartmentBudget,
-  UnallocatedBudgetItem,
 } from "./finance-types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,7 +37,7 @@ export type BudgetCaller = {
   capabilities: FinanceCapabilitySet;
 };
 
-type BudgetState = { status: "absent" | "draft" | "approved"; approvedOn: string | null; budgetId: string | null; revision: number };
+type BudgetState = { status: "absent" | "draft" | "approved"; approvedOn: string | null; budgetId: string | null; revision: number } & Partial<EffectiveFinancePresence>;
 
 export function isBudgetMutation(action: string): boolean {
   return BUDGET_ACTIONS.has(action);
@@ -188,6 +189,7 @@ export async function performBudgetMutation(db: CvDatabase, caller: BudgetCaller
 
 type HierarchyRow = {
   department_key: string;
+  allocation_department_key:string; allocation_department_name:string; allocation_sort_order:number;
   department_name: string;
   sort_order: number;
   system_id: string;
@@ -214,195 +216,98 @@ type HierarchyRow = {
   earmark_source: string | null;
   earmark_funding_status: string | null;
   actual_ore: string | null;
+  stored_planned_ore: string | null;
+  commitment_ore: string; purchase_count: number; complete: boolean; approved: boolean;
+  ordinary_priority: PublicBudgetItem["ordinaryPriority"];
+  source: "legacy" | "project"; project_budget_id: string | null; project_id: string | null; project_name: string | null;
+  responsible_department_id: string | null; approved_version_id: string | null;
 };
 
 function ore(value: string | null): bigint {
   return BigInt(value ?? "0");
 }
 
-export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, budget: BudgetState): Promise<PublicBudgets> {
-  const emptyChoices: BudgetChoices = { systems: [], items: [] };
+export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, budget: BudgetState, identity?: WorkspaceIdentity): Promise<PublicBudgets> {
   const base = {
-    viewVersion: caller.viewVersion,
-    seasonCode: caller.seasonCode,
-    budgetStatus: budget.status,
-    approvedOn: budget.approvedOn,
-    revision: budget.revision,
-    departments: [] as PublicDepartmentBudget[],
-    choices: emptyChoices,
+    viewVersion: caller.viewVersion, seasonCode: caller.seasonCode, budgetStatus: budget.status,
+    approvedOn: budget.approvedOn, revision: budget.revision,
+    ...(budget.approvedPresence ? { approvedPresence: budget.approvedPresence } : {}),
+    ...(budget.hasRecordedActuals !== undefined ? { hasRecordedActuals: budget.hasRecordedActuals } : {}),
+    departments: [] as PublicDepartmentBudget[], choices: { systems: [], items: [] } as BudgetChoices,
   };
-  if (!budget.budgetId || (budget.status === "draft" && !caller.capabilities.draftBudgetItems)) return base;
+  if (!budget.budgetId || (!caller.capabilities.draftBudgetItems && !hasVisibleApprovedFinances({ ...budget, budgetStatus: budget.status }))) return base;
   let rows: HierarchyRow[];
   try {
     rows = (await db.query<HierarchyRow>(
-      `select d.department_key, d.name as department_name, d.sort_order,
-              sys.id as system_id, sys.code as system_code, sys.name as system_name, sys.active as system_active,
-              i.id as item_id, i.public_ref, i.description, i.category, i.planned_ore::text as planned_ore,
-              i.priority, i.reuse_status, i.expected_purchase_date::text as expected_purchase_date, i.status,
-              i.note, i.owner_email, i.protected, i.revision, i.earmark_id,
-              part.purpose as earmark_purpose, part.amount_ore::text as earmark_amount_ore, part.conditions as earmark_conditions,
-              fund.source_name as earmark_source, fund.status as earmark_funding_status,
-              coalesce(act.actual_ore, 0)::text as actual_ore
-       from finance.systems sys
-       join identity.departments d on d.department_key = sys.department_key
-       left join finance.budget_items i on i.system_id = sys.id and i.budget_id = $1::uuid
-       left join finance.funding_parts part on part.id = i.earmark_id
-       left join finance.funding fund on fund.id = part.funding_id
-       left join lateral (
-         select coalesce(sum(a.amount_ore), 0) as actual_ore
-         from finance.allocations a
-         join finance.purchase_lines l on l.id = a.line_id
-         join finance.purchases p on p.id = l.purchase_id and p.status = 'registered'
-         where a.budget_item_id = i.id
-       ) act on i.id is not null
-       where i.id is not null or sys.active
-       order by d.sort_order, d.name, d.department_key, sys.name, sys.code`,
-      [budget.budgetId],
+      `select d.department_key,d.name as department_name,d.sort_order,allocation.department_key as allocation_department_key,allocated_department.name as allocation_department_name,allocated_department.sort_order as allocation_sort_order,
+        sys.id as system_id,sys.code as system_code,sys.name as system_name,sys.active as system_active,
+        i.id as item_id,i.public_ref,i.description,i.category,i.planned_ore::text as planned_ore,
+        case when $2::boolean or i.approved_version_id is not null or i.legacy_budget_status='approved'
+          then coalesce(ve.planned_ore,anchor.planned_ore)::text else '0' end as stored_planned_ore,
+        i.priority,i.ordinary_priority,i.reuse_status,i.expected_purchase_date::text as expected_purchase_date,i.status,
+        i.note,case when i.approved_version_id is not null then ve.owner_email else anchor.owner_email end as owner_email,
+        i.protected,i.revision,i.earmark_id,i.source,i.project_budget_id,i.project_id,project.name as project_name,
+        i.responsible_department_id,i.approved_version_id,i.complete,
+        (i.approved_version_id is not null or i.legacy_budget_status='approved') as approved,
+        part.purpose as earmark_purpose,part.amount_ore::text as earmark_amount_ore,part.conditions as earmark_conditions,
+        fund.source_name as earmark_source,fund.status as earmark_funding_status,
+        allocation.actual_ore::text as actual_ore,allocation.purchase_count,allocation.commitment_ore::text as commitment_ore
+       from finance.systems sys join identity.departments d on d.department_key=sys.department_key
+       left join finance.effective_budget_entries i on i.system_id=sys.id and i.budget_id=$1::uuid
+         and ($2::boolean or i.approved_version_id is not null or i.legacy_budget_status='approved' or i.protected
+           or exists(select 1 from finance.registered_allocation_facts actual where actual.budget_item_id=i.id)
+           or ${OPEN_APPROVED_COMMITMENT_ORE}>0)
+       left join finance.department_entry_financials allocation on allocation.entry_id=i.id
+       left join identity.departments allocated_department on allocated_department.department_key=allocation.department_key
+       left join finance.budget_items anchor on anchor.id=i.id
+       left join finance.project_budget_version_entries ve on ve.version_id=i.approved_version_id and ve.entry_id=i.id
+       left join project_management.projects project on project.id=i.project_id
+       left join finance.funding_parts part on part.id=i.earmark_id left join finance.funding fund on fund.id=part.funding_id
+       where i.id is not null or sys.active order by d.sort_order,d.name,d.department_key,sys.name,sys.code,i.public_ref`,
+      [budget.budgetId, caller.capabilities.draftBudgetItems],
     )).rows;
-  } catch (error) {
-    throw mapBudgetError(error);
-  }
-  const departments = new Map<string, PublicDepartmentBudget & { sortOrder: number }>();
+  } catch (error) { throw mapBudgetError(error); }
+  const items: PublicBudgetItem[] = [];
+  const unallocated: BudgetHierarchyUnallocated[] = [];
+  const retainedActuals: { systemId: string; actualNok: string; commitmentNok: string; allocationDepartmentKey:string }[] = [];
+  const privateFinance = caller.capabilities.purchaseRegister && caller.capabilities.filesAndRefunds;
+  const systems = new Map<string, Parameters<typeof buildBudgetHierarchy>[0]["systems"][number]>();
+  const evidence = identity && privateFinance ? await loadBudgetEntryInvoiceReferences(db, identity, rows.flatMap(row => row.item_id && !row.protected ? [row.item_id] : [])) : new Map();
   for (const row of rows) {
-    let department = departments.get(row.department_key);
-    if (!department) {
-      department = {
-        departmentKey: row.department_key,
-        name: row.department_name,
-        sortOrder: Number(row.sort_order),
-        plannedNok: formatOre(0n),
-        actualNok: formatOre(0n),
-        differenceNok: formatOre(0n),
-        unbudgetedNok: formatOre(0n),
-        systems: [],
-      };
-      departments.set(row.department_key, department);
-    }
-    let system = department.systems.find((entry) => entry.id === row.system_id);
-    if (!system) {
-      system = {
-        id: row.system_id,
-        code: row.system_code,
-        name: row.system_name,
-        active: row.system_active,
-        plannedNok: formatOre(0n),
-        actualNok: formatOre(0n),
-        differenceNok: formatOre(0n),
-        unbudgetedNok: formatOre(0n),
-        unbudgetedItemId: null,
-        unbudgetedPublicRef: null,
-        items: [],
-      };
-      department.systems.push(system);
-    }
+    systems.set(row.system_id, { id: row.system_id, code: row.system_code, name: row.system_name, active: row.system_active,
+      departmentKey: row.department_key, departmentName: row.department_name, sortOrder: Number(row.sort_order) });
     if (!row.item_id || !row.public_ref || !row.description || !row.category || !row.priority || !row.reuse_status || !row.status) continue;
-    const planned = ore(row.planned_ore);
-    const actual = ore(row.actual_ore);
-    const unallocated = row.protected === true;
-    const effective = effectivePlanOre(planned, row.status, unallocated);
-    if (unallocated) {
-      system.unbudgetedItemId = row.item_id;
-      system.unbudgetedPublicRef = row.public_ref;
-      if (caller.capabilities.draftBudgetItems) {
-        const detail: UnallocatedBudgetItem = {
-          id: row.item_id,
-          publicRef: row.public_ref,
-          note: row.note,
-          revision: Number(row.revision ?? 0),
-          actualNok: formatOre(actual),
-        };
-        system.unallocated = detail;
-      }
+    const actual = ore(row.actual_ore), effective = ore(row.planned_ore);
+    if (row.protected) {
+      unallocated.push({ id: row.item_id, publicRef: row.public_ref, systemId: row.system_id, allocationDepartmentKey:row.allocation_department_key, actualNok: formatOre(actual),
+        note: row.note, revision: Number(row.revision), commitmentNok: formatOre(ore(row.commitment_ore)) });
       continue;
     }
-    const publicFunding = row.earmark_funding_status === "secured" || row.earmark_funding_status === "received";
-    const showEarmark = caller.capabilities.financing || publicFunding;
+    if (!row.approved && !caller.capabilities.draftBudgetItems) {
+      retainedActuals.push({ systemId: row.system_id, allocationDepartmentKey:row.allocation_department_key, actualNok: formatOre(actual), commitmentNok: formatOre(ore(row.commitment_ore)) });
+      continue;
+    }
+    const showEarmark = caller.capabilities.financing || row.earmark_funding_status === "secured" || row.earmark_funding_status === "received";
     const item: PublicBudgetItem = {
-      id: row.item_id,
-      publicRef: row.public_ref,
-      systemId: row.system_id,
-      systemCode: row.system_code,
-      description: row.description,
-      category: row.category,
-      plannedNok: formatOre(planned),
-      effectivePlanNok: formatOre(effective),
-      actualNok: formatOre(actual),
-      differenceNok: formatOre(differenceOre(effective, actual)),
-      priority: row.priority,
-      reuseStatus: row.reuse_status,
-      expectedPurchaseDate: row.expected_purchase_date,
-      status: row.status,
-      revision: Number(row.revision ?? 0),
-      earmarked: row.priority === "EM",
-      earmarkPurpose: showEarmark ? row.earmark_purpose : null,
-      earmarkAmountNok: showEarmark && row.earmark_amount_ore !== null ? formatOre(ore(row.earmark_amount_ore)) : null,
+      id: row.item_id, publicRef: row.public_ref, systemId: row.system_id, allocationDepartmentKey:row.allocation_department_key, systemCode: row.system_code,
+      description: row.description, category: row.category, plannedNok: formatOre(ore(row.stored_planned_ore)), effectivePlanNok: formatOre(effective),
+      actualNok: formatOre(actual), differenceNok: formatOre(effective-actual), priority: row.priority, ordinaryPriority: row.ordinary_priority,
+      approved: row.approved, source: row.source, reuseStatus: row.reuse_status, expectedPurchaseDate: row.expected_purchase_date,
+      status: row.status, revision: Number(row.revision), earmarked: row.earmark_id !== null,
+      earmarkPurpose: showEarmark ? row.earmark_purpose : null, earmarkAmountNok: showEarmark && row.earmark_amount_ore !== null ? formatOre(ore(row.earmark_amount_ore)) : null,
+      commitmentNok: formatOre(ore(row.commitment_ore)),
+      ...(privateFinance ? { completion: row.complete ? "complete" as const : row.purchase_count > 0 ? "partial" as const : "not_purchased" as const } : {}),
+      ...(identity && privateFinance ? { invoices: evidence.get(row.item_id) ?? [] } : {}),
     };
-    if (caller.capabilities.draftBudgetItems) {
-      item.note = row.note;
-      item.ownerEmail = row.owner_email;
-      item.earmarkId = row.earmark_id;
-    }
-    if (caller.capabilities.financing) {
-      item.earmarkSourceName = row.earmark_source;
-      item.earmarkConditions = row.earmark_conditions;
-    }
-    system.items.push(item);
+    if (caller.capabilities.purchaseRegister) Object.assign(item, { projectBudgetId: row.project_budget_id, projectId: row.project_id, projectName: row.project_name,
+      responsibleDepartmentId: row.responsible_department_id, approvedVersionId: row.approved_version_id });
+    if (caller.capabilities.draftBudgetItems) Object.assign(item, { note: row.note, ownerEmail: row.owner_email, earmarkId: row.earmark_id });
+    if (caller.capabilities.financing) Object.assign(item, { earmarkSourceName: row.earmark_source, earmarkConditions: row.earmark_conditions });
+    items.push(item);
   }
-  const ordered = [...departments.values()].sort(compareDepartmentOrder);
-  const choices: BudgetChoices = { systems: [], items: [] };
-  for (const department of ordered) {
-    department.systems.sort((left, right) => compareNb(left.name, right.name) || compareNb(left.code, right.code));
-    let departmentPlan = 0n;
-    let departmentActual = 0n;
-    let departmentUnbudgeted = 0n;
-    for (const system of department.systems) {
-      system.items.sort((left, right) => compareNb(left.publicRef, right.publicRef));
-      let plan = 0n;
-      let actual = 0n;
-      let unbudgeted = 0n;
-      for (const item of system.items) {
-        plan += item.status === "cancelled" ? 0n : oreFromCanonical(item.plannedNok);
-        actual += oreFromCanonical(item.actualNok);
-        if (item.status !== "cancelled") {
-          choices.items.push({
-            id: item.id,
-            publicRef: item.publicRef,
-            description: item.description,
-            systemId: item.systemId,
-            status: item.status,
-          });
-        }
-      }
-      if (system.unallocated) unbudgeted += oreFromCanonical(system.unallocated.actualNok);
-      else if (system.unbudgetedItemId) {
-        const source = rows.find((row) => row.item_id === system.unbudgetedItemId);
-        unbudgeted += ore(source?.actual_ore ?? null);
-      }
-      actual += unbudgeted;
-      system.plannedNok = formatOre(plan);
-      system.actualNok = formatOre(actual);
-      system.differenceNok = formatOre(plan - actual);
-      system.unbudgetedNok = formatOre(unbudgeted);
-      departmentPlan += plan;
-      departmentActual += actual;
-      departmentUnbudgeted += unbudgeted;
-      if (system.active) {
-        choices.systems.push({
-          id: system.id,
-          code: system.code,
-          name: system.name,
-          departmentKey: department.departmentKey,
-          active: system.active,
-          unbudgetedItemId: system.unbudgetedItemId,
-          unbudgetedPublicRef: system.unbudgetedPublicRef,
-        });
-      }
-    }
-    department.plannedNok = formatOre(departmentPlan);
-    department.actualNok = formatOre(departmentActual);
-    department.differenceNok = formatOre(departmentPlan - departmentActual);
-    department.unbudgetedNok = formatOre(departmentUnbudgeted);
-  }
+  const departments=rows.map(row=>({departmentKey:row.allocation_department_key,departmentName:row.allocation_department_name,sortOrder:Number(row.allocation_sort_order)}));
+  const catalog=allocatedSystemCatalog([...systems.values()],departments,[...items,...unallocated,...retainedActuals].map(item=>({systemId:item.systemId,departmentKey:item.allocationDepartmentKey!})));
+  const hierarchy = buildBudgetHierarchy({ systems: catalog, items, unallocated, includePrivateUnallocated: caller.capabilities.draftBudgetItems, retainedActuals });
   let earmarkChoices: BudgetEarmarkChoice[] | undefined;
   if (caller.capabilities.financing && caller.seasonCode) {
     try {
@@ -426,21 +331,5 @@ export async function loadBudgetHierarchy(db: CvDatabase, caller: BudgetCaller, 
       throw mapBudgetError(error);
     }
   }
-  return {
-    viewVersion: caller.viewVersion,
-    seasonCode: caller.seasonCode,
-    budgetStatus: budget.status,
-    approvedOn: budget.approvedOn,
-    revision: budget.revision,
-    departments: ordered.map(({ sortOrder: _sortOrder, ...department }) => department),
-    choices,
-    ...(earmarkChoices ? { earmarkChoices } : {}),
-  };
-}
-
-function oreFromCanonical(value: string): bigint {
-  const negative = value.startsWith("-");
-  const [whole, fraction = "00"] = value.slice(negative ? 1 : 0).split(".");
-  const oreValue = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0").slice(0, 2));
-  return negative ? -oreValue : oreValue;
+  return { ...base, ...hierarchy, ...(earmarkChoices ? { earmarkChoices } : {}) };
 }

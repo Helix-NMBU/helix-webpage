@@ -1,3 +1,5 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
+import { seedHistoricalSeasonBudget } from "./finance-historical-fixture.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as financeMoney from "../../../api/_lib/finance-money.js";
@@ -92,8 +94,7 @@ async function seasonWithBudget() {
   await sql(`insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true)`);
   await grant(headId, "head_of_finance");
   await grant(financeId, "finance");
-  await call("head", { action: "createBudget", requestId: requestId() });
-  await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+  await seedHistoricalSeasonBudget(sql, headId);
   await sql(
     `insert into finance.budget_items (
       budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,
@@ -170,6 +171,7 @@ beforeAll(async () => {
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   handler = createFinanceHandler(() => createFinanceServices({
     db,
@@ -186,8 +188,11 @@ beforeEach(async () => {
   await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.upload_final_candidates, finance.outbox_attempts, finance.export_objects,
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
       finance.documents, finance.uploads, finance.exception_reviews, finance.purchases,
       finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
@@ -196,6 +201,8 @@ beforeEach(async () => {
       finance.reference_counters, finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 });
@@ -352,14 +359,8 @@ describe("FIN-05 A02 decisions", () => {
   it("returns conflict when approving after a budget line was cancelled, without writing a decision", async () => {
     await seasonWithBudget();
     const { recordId, revisionId } = await draftAndSubmit();
-    const itemRevision = Number((await sql<{ revision: number }>("select revision from finance.budget_items where id = $1::uuid", [itemId]))[0]?.revision ?? 0);
-    expect((await call("head", {
-      action: "cancelItem",
-      requestId: requestId(),
-      expectedRevision: itemRevision,
-      itemId,
-      reason: "Line removed",
-    })).status).toBe(200);
+    // Represent retained historical cancellation; cancelItem is now retired.
+    await sql("update finance.budget_items set status='cancelled',revision=revision+1 where id=$1::uuid", [itemId]);
     const vBefore = await version();
     const cBefore = await counts();
     const decided = await call("head", {
@@ -614,8 +615,8 @@ describe("FIN-05 A05 privacy idempotency and view_versions", () => {
     expect(outbox[0]?.payload?.event).toBeDefined();
   });
 
-  it("still returns 503 for unrelated finance placeholders", async () => {
+  it("uses the migrated export path without requiring unrelated request data", async () => {
     await seasonWithBudget();
-    expect((await call("finance", { action: "exportPurchases", requestId: requestId() })).status).toBe(503);
+    expect((await call("finance", { action: "exportPurchases", requestId: requestId() })).status).toBe(200);
   });
 });

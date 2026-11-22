@@ -66,6 +66,7 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.3",
     "react-slick": "^0.31.0",
+    "recharts": "^3.8.0",
     "resend": "^6.17.2",
     "sanitize-html": "2.18.1",
     "slick-carousel": "^1.8.1",

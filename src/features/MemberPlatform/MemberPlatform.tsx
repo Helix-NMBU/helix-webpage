@@ -44,11 +44,13 @@ import "./member-theme.css";
 
 const loadMemberCV = () => import("../MemberCV/MemberCV");
 const loadCvSections = () => import("../MemberCV/MemberCvSections");
+const FundingApplications = lazy(() => import("../Finance/FundingApplications"));
 const FinanceReviews = lazy(() => import("../PartnerDeals/FinanceReviews"));
 const WonDeals = lazy(() => import("../PartnerDeals/WonDeals").then(module => ({ default: module.WonDeals })));
 const SponsorPipeline = lazy(() => import("../PartnerDeals/Pipeline"));
 const MailWorkspace = lazy(() => import("./MailWorkspace").then(module => ({ default: module.MailWorkspace })));
 const RecruitmentPortal = lazy(() => import("../Recruitment/RecruitmentPortal"));
+const DepartmentBudgetPage = lazy(() => import("../Finance/DepartmentBudgetPage"));
 const FinanceEntry = lazy(() => import("../Finance/FinancePages").then(module => ({ default: module.FinanceEntry })));
 const MembersPage = lazy(() => import("../Workspace/MembersPage").then(module => ({ default: module.MembersPage })));
 const ProjectsPage = lazy(() => import("../Workspace/ProjectsPage").then(module => ({ default: module.ProjectsPage })));
@@ -86,7 +88,11 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
   useEffect(() => {
     let active = true;
     void ensureMemberLanding()
-      .then((next) => {
+      .then(async (next) => {
+        if (import.meta.env.DEV && import.meta.env.MODE === "member-local" && isLocalMemberMode() && next.phase === "signed-in" && ["season", "forecast"].includes(new URLSearchParams(window.location.search).get("financeScenario") ?? "")) {
+          try { const scenarios = await import("../Finance/local-season-scenario"); if (new URLSearchParams(window.location.search).get("financeScenario") === "forecast") await scenarios.prepareLocalPipelineForecastScenario(); else await scenarios.prepareLocalSeasonScenario(); }
+          catch (error) { if (active) notify("Could not prepare test data", error instanceof Error ? error.message : "Try again.", { variant: "error", href: null, action: { label: "Try again", onClick: retryAccess } }); }
+        }
         if (active) setLanding(next);
       })
       .catch(() => {
@@ -191,12 +197,15 @@ export default function MemberPlatform() {
                 <Route path="recruiting" element={<RecruitmentFeatureRoute />} />
                 <Route path="sponsor-pipeline" element={<SponsorPipeline />} />
                 <Route path="partner-deals" element={<WonDeals />} />
+                <Route path="finance/funding-applications" element={<FundingApplications />} />
                 <Route path="finance/sponsor-reviews" element={<FinanceReviews />} />
                 <Route path="finance" element={<FinanceEntry page="overview" />} />
                 <Route path={financeRoutes.purchases} element={<FinanceEntry page="purchases" />} />
                 <Route path="finance/purchases" element={<LegacyMemberRedirect to={financeRoutes.purchases} />} />
+                <Route path="finance/budgets/:budgetDepartmentSlug" element={<DepartmentBudgetPage />} />
                 <Route path="finance/budgets" element={<FinanceEntry page="budgets" />} />
-                <Route path="finance/financing" element={<FinanceEntry page="financing" />} />
+                <Route path="finance/financing" element={<LegacyMemberRedirect to={financeRoutes.budgets} />} />
+                <Route path="finance/funding" element={<FinanceEntry page="financing" />} />
                 <Route path="teams/finance" element={<LegacyMemberRedirect to="/finance" />} />
                 <Route path="teams/finance/budget" element={<LegacyMemberRedirect to="/finance/budgets" />} />
                 <Route path="teams/finance/expenses" element={<LegacyMemberRedirect to={financeRoutes.purchases} />} />

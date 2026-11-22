@@ -11,6 +11,7 @@ import {
   IconCheckbox,
   IconMail,
   IconReceipt,
+  IconWallet,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useLocation } from "react-router-dom";
@@ -74,12 +75,11 @@ export function AppSidebar({
   const financePath = departmentPath("Finance");
   const financeDepartment = workspace?.departments?.find(department => departmentPath(department.name) === financePath);
   const financeItems = finance.access === "allowed" ? [
-    { title: "Financial overview", url: "/finance" },
-    { title: "Budgets", url: "/finance/budgets" },
+    { title: "Spending", url: financeRoutes.overview, icon: IconReceipt },
+    { title: "Budgets & Financing", url: financeRoutes.budgets, icon: IconWallet },
     ...(sponsorPages?.financeReviews ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
-    ...(finance.capabilities?.financing ? [{ title: "Financing", url: "/finance/financing" }] : []),
   ] : [];
-  const financeActive = financeItems.some(item => item.url === location.pathname);
+  const financeActive = financeItems.some(item => item.url === location.pathname) || location.pathname.startsWith(`${financeRoutes.budgets}/`);
   const spaceItems = [
     ...(workspace?.projectAccess
       ? [
@@ -105,11 +105,11 @@ export function AppSidebar({
           isActive: location.pathname === url || location.pathname.startsWith(`${url}/`) || (isBusiness && businessActive) || (isManagement && managementActive) || (isFinance && financeActive),
           subMenuClassName: "border-l-0",
           items: [
-            ...(member ? [
+            ...(member || (isFinance && workspace.canManageProjects) ? [
               { title: "Home", url, icon: IconSmartHome },
               { title: "Tasks", url: `${url}/tasks`, icon: IconCheckbox },
-              { title: "Projects", url: `${url}/projects`, icon: IconCube },
             ] : []),
+            ...(member ? [{ title: "Projects", url: `${url}/projects`, icon: IconCube }] : []),
             ...(isBusiness ? businessItems : []),
             ...(isManagement ? managementItems : []),
             ...(isFinance ? financeItems : []),
@@ -204,7 +204,7 @@ export function AppSidebar({
           collapsible
           onReorder={reorder}
           items={spaceItems}
-          activeUrl={location.pathname}
+          activeUrl={location.pathname.startsWith(`${financeRoutes.budgets}/`) ? financeRoutes.budgets : location.pathname}
           onNavigate={onNavigate}
           disabled={disabled}
         />

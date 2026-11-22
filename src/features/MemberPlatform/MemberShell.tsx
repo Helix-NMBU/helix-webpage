@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { MemberRouteSkeleton } from "./LoadingSkeletons";
 import { IconCube } from "@tabler/icons-react";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "@libs/components/app-sidebar";
 import {
@@ -23,7 +23,8 @@ import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
-import { financePageTitle } from "../Finance/routes";
+import { departmentBudgetPath, financeFundingPath, financePageTitle, financeRoutes } from "../Finance/routes";
+import { useFinanceAccess } from "./FinanceAccess";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { departmentPath } from "../Workspace/types";
 import { MemberPagePreferences } from "./MemberPagePreferences";
@@ -31,6 +32,8 @@ import { MemberPagePreferences } from "./MemberPagePreferences";
 function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const contentScroll = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => { if (contentScroll.current) contentScroll.current.scrollTop = 0; }, [location.pathname]);
   const { setOpenMobile, isMobile } = useSidebar();
   const navigation = useMemberNavigation();
   const [busy, setBusy] = useState(false);
@@ -46,12 +49,16 @@ function Workspace({ children }: { children?: ReactNode }) {
   const seasonOverview = location.pathname === "/season-overview" || location.pathname.startsWith("/project-management");
   const directory = useWorkspace()?.data;
   const department = directory?.departments?.find(item => location.pathname === departmentPath(item.name) || location.pathname.startsWith(`${departmentPath(item.name)}/`));
+  const fundingManagement = location.pathname === financeFundingPath;
+  const budgetDetail = location.pathname.startsWith(`${financeRoutes.budgets}/`);
+  const budgetDirectory = useFinanceAccess().budgets;
+  const budgetDepartment = [...(budgetDirectory?.departments ?? []), ...(directory?.departments ?? [])].find(item => location.pathname === departmentBudgetPath(item.name));
   const project = directory?.projects?.find(item => location.pathname === `/projects/${item.id}`);
   const departmentSubpage = department && location.pathname !== departmentPath(department.name)
     ? location.pathname.slice(departmentPath(department.name).length + 1).split("/")[0]
     : null;
   const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department ? departmentSubpage ? departmentSubpage[0].toUpperCase() + departmentSubpage.slice(1) : department.name : "Departments" : null;
-  const pageTitle = (location.pathname === "/finance/sponsor-reviews" ? "Sponsor funding reviews" : location.pathname === "/sponsor-pipeline" ? "Pipeline" : location.pathname === "/partner-deals" ? "Partner agreements" : null) ?? financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
+  const pageTitle = (location.pathname === "/finance/sponsor-reviews" ? "Sponsor funding reviews" : location.pathname === "/sponsor-pipeline" ? "Pipeline" : location.pathname === "/partner-deals" ? "Partner agreements" : null) ?? (budgetDetail ? budgetDepartment?.name ?? "Department budget" : null) ?? financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"
@@ -131,6 +138,10 @@ function Workspace({ children }: { children?: ReactNode }) {
                         <BreadcrumbSeparator className="hidden lg:block" />
                       </>
                     )}
+                    {(budgetDetail || fundingManagement) && <>
+                      <BreadcrumbItem><BreadcrumbLink asChild><button type="button" disabled={disabled} onClick={event => go(financeRoutes.budgets, event.currentTarget)}>Budgets &amp; Financing</button></BreadcrumbLink></BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>}
                     {taskDetail && <>
                       <BreadcrumbItem><BreadcrumbLink asChild><button type="button" disabled={disabled} onClick={event => go("/tasks", event.currentTarget)}>Tasks</button></BreadcrumbLink></BreadcrumbItem>
                       <BreadcrumbSeparator />
@@ -161,7 +172,7 @@ function Workspace({ children }: { children?: ReactNode }) {
                 </Breadcrumb>
               </div>
             </header>
-            <div className={`flex min-h-0 flex-1 flex-col gap-4 p-4 ${bounded ? "md:overflow-hidden" : "md:overflow-y-auto md:overscroll-none"}`}>
+            <div ref={contentScroll} data-slot="member-page-content" className={`flex min-h-0 flex-1 flex-col gap-4 p-4 ${bounded ? "md:overflow-hidden" : "md:overflow-y-auto md:overscroll-none"}`}>
               <Suspense fallback={<MemberRouteSkeleton />}>{children ?? <Outlet />}</Suspense>
             </div>
           </>

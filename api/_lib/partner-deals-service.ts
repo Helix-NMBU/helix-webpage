@@ -1,3 +1,6 @@
+import { loadFundingApplicationCard, mutateFundingApplication } from "./finance-funding-applications.js";
+import { FinanceError } from "./finance-error.js";
+import type { FundingApplicationCard, FundingApplicationMutationResult } from "../../src/features/Finance/funding-application-types.js";
 import pg from "pg";
 import { MemberCvError } from "./member-cv-error.js";
 import { neonCvServices, type CvDatabase, type WorkspaceIdentity } from "./member-cv-service.js";
@@ -11,6 +14,8 @@ export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; can
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
+  fundingApplicationCard(token: string, dealId: unknown): Promise<{ application: FundingApplicationCard | null }>;
+  saveFundingApplication(token: string, body: Record<string, unknown>): Promise<FundingApplicationMutationResult>;
   load(token: string, view: DealView): Promise<DealWorkspace>;
   reviewNotifications(token: string): Promise<unknown[]>;
   markReviewNotificationsRead(token: string, ids: unknown): Promise<{ ok: true }>;
@@ -36,7 +41,7 @@ export interface DealServices {
 // The shared view never includes pre-won deals or private negotiation notes.
 const readSql = `select caps.pipeline as "canManage",
  coalesce((select jsonb_agg(jsonb_build_object(
-  'id',d.id,'organizationId',d.organization_id,'organizationName',o.name,'title',d.title,'stage',d.stage,
+  'id',d.id,'opportunityKind',coalesce(to_jsonb(d)->>'opportunity_kind','deal'),'organizationId',d.organization_id,'organizationName',o.name,'title',d.title,'stage',d.stage,
   'ownerMemberId',d.owner_member_id,'seasonId',d.primary_season_id,'sponsorLevel',d.sponsor_level,'probability',d.probability,'followUpOn',d.follow_up_on,'createdAt',d.created_at,'contactName',d.contact_name,'contactEmail',d.contact_email,
   'startsOn',d.starts_on,'endsOn',d.ends_on,'agreementLink',d.agreement_link,'revision',d.revision,
   'wonAt',d.won_at,'wonByMemberId',d.won_by_member_id,'cancelledAt',d.cancelled_at,
@@ -80,6 +85,7 @@ function checkSave(value: unknown): Record<string, unknown> {
       (data.id !== undefined && (typeof data.id !== "string" || !Number.isSafeInteger(data.expectedRevision) || Number(data.expectedRevision) < 0))) {
     throw new MemberCvError(400, "Check the deal details and try again.");
   }
+  if (data.opportunityKind !== undefined && !["deal", "grant"].includes(String(data.opportunityKind))) throw new MemberCvError(400, "Choose Deals or Grants.");
   if (data.seasonId != null && typeof data.seasonId !== "string") throw new MemberCvError(400, "Choose a valid season.");
   if (data.probability != null && (typeof data.probability !== "number" || !Number.isInteger(data.probability) || data.probability < 0 || data.probability > 100)) throw new MemberCvError(400, "Enter a probability between 0 and 100.");
   if (data.sponsorLevel != null && !["partner","service","bronze","silver","gold","platinum","main"].includes(String(data.sponsorLevel))) throw new MemberCvError(400, "Choose a valid sponsor level.");
@@ -106,6 +112,7 @@ function errorFor(error: unknown): never {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (message.includes("deal_change_closed_season")) throw new MemberCvError(409,"A closed season still has active records. Ask Finance and Marketing to review it; this change remains unresolved.");
   if (message.includes("deal_change_cancel_finance")) throw new MemberCvError(409,"Ask Finance to retire unreceived funding before reconciling cancellation.");
+  if (message.includes("deal_kind_linked")) throw new MemberCvError(409,"Ask Finance to unlink the funding before changing between Deals and Grants.");
   if (message.includes("deal_change_cancel_invoice")) throw new MemberCvError(409,"Ask Finance to cancel the open invoice task before reconciling cancellation.");
   if (message.includes("deal_invoice_date_required")) throw new MemberCvError(409,"Set an invoice date for each cash contribution before confirming the deal.");
   if (message.includes("deal_change_cancel_task")) throw new MemberCvError(409,"Ask Marketing to cancel open deliverable tasks before reconciling cancellation.");
@@ -154,6 +161,14 @@ function errorFor(error: unknown): never {
 export function createDealServices(deps: { db: CvDatabase; authenticate(token: string): Promise<WorkspaceIdentity> }): DealServices {
   const identity = async (token: string) => deps.authenticate(token);
   return {
+    async fundingApplicationCard(token, dealId) {
+      try { return await loadFundingApplicationCard(deps.db, await identity(token), dealId); }
+      catch (error) { if (error instanceof FinanceError) throw new MemberCvError(error.status, error.message); return errorFor(error); }
+    },
+    async saveFundingApplication(token, body) {
+      try { return await mutateFundingApplication(deps.db, await identity(token), { ...body, action: "saveFundingApplication" }); }
+      catch (error) { if (error instanceof FinanceError) throw new MemberCvError(error.status, error.message); return errorFor(error); }
+    },
     async load(token, view) {
       try {
         if (view !== "pipeline" && view !== "shared") throw new MemberCvError(400, "Choose a valid deal view.");

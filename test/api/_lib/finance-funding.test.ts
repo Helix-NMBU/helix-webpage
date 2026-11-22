@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -132,6 +133,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync(new URL("../../../db/migrations/015_finance_requests.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/016_finance_fulfillment.sql", import.meta.url), "utf8"));
   await pg.exec(readFileSync(new URL("../../../db/migrations/018_finance_unpaid_voids_reviews.sql", import.meta.url), "utf8"));
+  await bootstrapFinanceFeature(pg);
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   handler = createFinanceHandler(() => createFinanceServices({
     db,
@@ -146,8 +148,11 @@ beforeAll(async () => {
 async function resetFinance() {
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
     truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.upload_final_candidates, finance.outbox_attempts, finance.export_objects,
       finance.allocations,
       finance.purchase_lines,
       finance.outlay_reimbursements,
@@ -175,6 +180,8 @@ async function resetFinance() {
       finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 }
@@ -941,4 +948,59 @@ describe("financing and earmarked funding", () => {
     });
     expect(missing).toMatchObject({ status: 404, body: { error: "Funding was not found." } });
   });
+});
+
+it("exposes only active pipeline cash forecast facts to Finance and refreshes them independently of Finance version", async () => {
+  await openSeason(); await grant("head_of_finance");
+  const created=await call({token:"member",body:addFundingBody(nextRequestId(),{...fundingFields,status:"received",receivedDate:"2026-10-01"})});
+  expect(created.status).toBe(200);
+  const fundingId=(created.body as {id:string}).id;
+  const season=(await sql<{id:string}>("select id from finance.seasons where code='S27'")).rows[0].id;
+  const key=(n:number)=>`90909090-0000-4000-8000-${String(n).padStart(12,"0")}`;
+  for(const [n,stage,probability,cancelled] of [[1,"proposal",25,false],[2,"proposal",75,false],[3,"won",null,false],[4,"lost",100,false],[5,"won",100,true],[6,"proposal",100,false],[7,"proposal",100,false],[8,"won",100,false],[9,"won",100,false]] as const){
+    await sql("insert into partner_deals.deals(id,stage,probability,cancelled_at) values($1,$2,$3,case when $4 then now() else null end)",[key(n),stage,probability,cancelled]);
+    await sql("insert into partner_deals.contributions(id,deal_id,season_id,kind,amount_ore,invoice_date,retired_at,pending_change_id) values($1,$2,$3,$4,10000,'2027-02-01',case when $5 then now() else null end,$6)",[key(n+100),key(n),season,n===8?"product":"cash",n===6,n===7?key(999):null]);
+  }
+  await sql("insert into partner_deals.funding_links values($1,$2)",[key(109),fundingId]);
+  const denied=await call({query:{action:"financing"},token:"admin"}); expect(denied.status).toBe(403);
+  const current=await version();
+  const response=await call({query:{action:"financing",knownVersion:String(current)},token:"member"});
+  expect(response.status).toBe(200);
+  const rows=(response.body as {pipelineForecast:Array<Record<string,unknown>>}).pipelineForecast;
+  expect(rows.map(row=>row.confidence)).toEqual(["low","medium","high"]);
+  expect(rows[0]).toEqual({contributionId:key(101),fundingId:null,amountNok:"100.00",confidence:"low",invoiceDate:"2027-02-01"});
+  expect(JSON.stringify(rows)).not.toContain("negotiation"); expect(JSON.stringify(rows)).not.toContain("contact");
+  await sql("update partner_deals.deals set probability=100 where id=$1",[key(1)]);
+  expect(await version()).toBe(current);
+  const fresh=await call({query:{action:"financing",knownVersion:String(current)},token:"member"});
+  expect((fresh.body as {pipelineForecast:Array<{confidence:string}>}).pipelineForecast[0].confidence).toBe("high");
+});
+
+it("lists current Won cash with invoice-task status and refreshes task completion without a Finance revision", async () => {
+  await openSeason(); await grant("head_of_finance");
+  const season = (await sql<{id:string}>("select id from finance.seasons where code='S27'")).rows[0].id;
+  const key = (n:number) => `80808080-0000-4000-8000-${String(n).padStart(12,"0")}`;
+  await sql("insert into partner.organizations(id,name) values($1,'Agreed sponsor')",[key(1)]);
+  for (const [n,stage,cancelled,retired,pending,kind] of [[1,"won",false,false,false,"cash"],[2,"proposal",false,false,false,"cash"],[3,"won",true,false,false,"cash"],[4,"won",false,true,false,"cash"],[5,"won",false,false,true,"cash"],[6,"won",false,false,false,"product"],[7,"won",false,false,false,"cash"]] as const) {
+    await sql("insert into partner_deals.deals(id,organization_id,title,stage,cancelled_at) values($1,$2,'Season agreement',$3,case when $4 then now() else null end)",[key(n+10),key(1),stage,cancelled]);
+    await sql("insert into partner_deals.contributions(id,deal_id,season_id,kind,amount_ore,retired_at,pending_change_id) values($1,$2,$3,$4,125075,case when $5 then now() else null end,$6)",[key(n+20),key(n+10),season,kind,retired,pending?key(999):null]);
+  }
+  // An unrelated contribution task must not imply this contribution was invoiced.
+  await sql("insert into project_management.tasks(id,status,completed_at) values($1,'done','2026-11-21T23:30:00Z'),($2,'todo',null)",[key(31),key(32)]);
+  await sql("insert into partner_deals.task_links(deal_id,task_id,season_id,kind,contribution_id) values($1,$2,$3,'invoice',$4),($1,$5,$3,'invoice',$6)",[key(11),key(31),season,key(999),key(32),key(21)]);
+  const current = await version();
+  const read = async () => {
+    const result = await call({query:{action:"financing",knownVersion:String(current)},token:"member"});
+    expect(result.status).toBe(200);
+    return (result.body as {wonIncome:Array<{contributionId:string;amountNok:string;invoiceSent:boolean;invoiceSentOn:string|null}>}).wonIncome;
+  };
+  const before = await read();
+  expect(before).toHaveLength(2);
+  expect(before.every(row=>!row.invoiceSent)).toBe(true);
+  expect(before.find(row=>row.contributionId===key(21))?.amountNok).toBe("1250.75");
+  await sql("update project_management.tasks set status='done',completed_at='2026-11-21T23:30:00Z' where id=$1",[key(32)]);
+  expect(await version()).toBe(current);
+  expect((await read()).find(row=>row.contributionId===key(21))).toMatchObject({invoiceSent:true,invoiceSentOn:"2026-11-22"});
+  await sql("update project_management.tasks set status='todo' where id=$1",[key(32)]);
+  expect((await read()).find(row=>row.contributionId===key(21))).toMatchObject({invoiceSent:false,invoiceSentOn:null});
 });

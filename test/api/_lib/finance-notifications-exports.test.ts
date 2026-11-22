@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature, historicalPrivateInvoice } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -120,9 +121,10 @@ beforeAll(async () => {
     create role authenticated;
     create role anonymous;
   `);
-  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql", "021_finance_final_candidate_ledger.sql"]) {
+  for (const file of ["011_finance_core.sql", "012_finance_season_budgets.sql", "013_finance_funding.sql", "014_finance_register_purchases.sql", "015_finance_requests.sql", "017_finance_notifications_exports.sql", "018_finance_unpaid_voids_reviews.sql", "020_finance_processing_guards.sql", "021_finance_final_candidate_ledger.sql", "067_finance_retire_purchase_threshold.sql"]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   db = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
   storage = createMemoryFinanceStorage();
   sent = [];
@@ -166,8 +168,11 @@ async function resetFinance() {
   };
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
-    truncate table finance.upload_final_candidates,
+    truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.upload_final_candidates,
       finance.outbox_attempts,
       finance.export_objects,
       finance.allocations,
@@ -197,6 +202,8 @@ async function resetFinance() {
       finance.audit_log
     restart identity cascade;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
   wireServices();
@@ -207,7 +214,7 @@ afterAll(async () => { await pg.close(); });
 
 async function seedSeason() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
-  await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+  await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'finance', true, 'Test profile')", [operatorId, financeId]);
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test profile')", [operatorId, headId]);
   await sql("select finance.set_member_grant($1::uuid, $2::uuid, 'business', true, 'Test profile')", [operatorId, businessId]);
@@ -299,12 +306,12 @@ async function insertPurchase(options: {
     await sql("insert into finance.outlay_reimbursements (purchase_id) values ($1::uuid)", [purchaseId]);
   }
   const sha = createHash("sha256").update(options.ref).digest("hex");
-  await sql(
+  await historicalPrivateInvoice(pg, () => sql(
     `insert into finance.documents (
        purchase_id, public_ref, kind, original_name, content_type, byte_size, content_sha256, storage_key
      ) values ($1::uuid, $2, $3, $4, 'application/pdf', 8, $5, $6)`,
     [purchaseId, `${options.ref}-D1`, options.method === "invoice" ? "invoice" : "receipt", "receipt.pdf", sha, `${requesterId}/final/${purchaseId}/${sha.slice(0, 32)}`],
-  );
+  ));
   await pg.exec("commit");
   for (const recipient of [financeId, headId]) {
     await sql(
@@ -316,6 +323,19 @@ async function insertPurchase(options: {
   }
   return purchaseId;
 }
+
+it("preserves ordinary pre-071 private invoices and restores all new-upload guards", async () => {
+  await seedSeason();
+  const purchaseId = await insertPurchase({ ref: "2026-0042", method: "invoice", totalOre: "10000" });
+  const rows = await sql<{ requester_member_id: string; import_source: string | null; storage_backend: string }>(
+    "select p.requester_member_id,p.import_source,d.storage_backend from finance.purchases p join finance.documents d on d.purchase_id=p.id where p.id=$1::uuid", [purchaseId]);
+  expect(rows).toEqual([{ requester_member_id: requesterId, import_source: null, storage_backend: "private_storage" }]);
+  expect((await sql("select * from finance.invoice_transfers")).length).toBe(0);
+  const guards = await sql<{ tgname: string; tgenabled: string }>("select tgname,tgenabled from pg_trigger where tgrelid='finance.documents'::regclass and tgname in ('documents_verified_transfer','documents_enqueue_transfer') order by tgname");
+  expect(guards).toHaveLength(2);
+  expect(guards.every(guard => guard.tgenabled === "O")).toBe(true);
+  await expect(sql("insert into finance.documents(purchase_id,public_ref,kind,original_name,content_type,byte_size,content_sha256,storage_key) values($1::uuid,'UNVERIFIED','invoice','invoice.pdf','application/pdf',8,repeat('a',64),'unverified/staging')", [purchaseId])).rejects.toThrow(/verified finalized upload/);
+});
 
 describe("FIN-10 local delivery policy", () => {
   it("requires an explicit allowlist outside production and does not treat a missing switch as permission to send", () => {
@@ -539,13 +559,14 @@ describe("FIN-10-A01 outbox delivery", () => {
       "requester.user@example.test",
     ]);
     const registration = sent.find((message) => message.subject.includes("2026-0042"));
-    expect(registration?.subject.startsWith("[Unpaid invoice] [Above approval limit NOK 5000.00]")).toBe(true);
+    expect(registration?.subject).toBe("[Unpaid invoice] Purchase 2026-0042 registered");
     expect(registration?.text).toContain("2026-0042");
     expect(registration?.text).toContain("quantity");
     expect(registration?.text).toContain("NOK");
     expect(registration?.text).toContain("unbudgeted");
     expect(registration?.text).toContain("over_budget");
-    expect(registration?.text).toContain("approval limit");
+    expect(registration?.text).not.toContain("approval limit");
+    expect(registration?.text).toContain("Historical record:");
     expect(registration?.text).toContain(FINANCE_SIGN_IN_LINE);
     expect(registration?.html).toContain(FINANCE_PURCHASES_PATH);
     for (const message of sent) privateMaterial(`${message.subject}\n${message.text}\n${message.html}`);
@@ -774,7 +795,8 @@ describe("FIN-10-A03 and FIN-10-A04 export", () => {
     expect(csv).toContain("current");
     expect(csv).toContain("unpaid");
     expect(csv).toContain("unreimbursed");
-    expect(csv).toContain("at_registration");
+    expect(csv).not.toContain("above_limit");
+    expect(csv).not.toContain("at_registration");
     expect(csv).not.toContain("http");
     expect(csv).not.toContain("memory://");
     const replay = await call({ token: "finance", body: { action: "exportPurchases", requestId } });

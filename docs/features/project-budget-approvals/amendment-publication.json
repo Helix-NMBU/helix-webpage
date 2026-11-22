@@ -1,0 +1,128 @@
+{
+  "revision": 2,
+  "status": "approved_published_verified",
+  "parent": "HELIX-75",
+  "new_child": "PBA-10",
+  "changed_existing_child": "HELIX-84",
+  "milestoneId": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+  "approvedDraftHashes": {
+    "spec.md": "fc3ba22dbcb011b5ef6117749e6c4c6e85debff26a54bc0afbc21df76733c72e",
+    "tickets.md": "66599cc93441a5656a1fbb65b7601eac3a2e2692fa6eb5be83fd998e2ff917d5",
+    "issues/pba-10-department-budget-packages.md": "a13b95a38dff922b4d29c90a3fe0ebf0709347e5de1849a8a1d6a744f8853d59",
+    "issues/pba-09-integration-and-migration-verification.md": "5c6d9c9e38e3902a49356e2551698cb3875bcaa28d259adfee6b0c6d6b8deead"
+  },
+  "approval": {
+    "date": "2026-11-20",
+    "answer": "Approve, publish and continue delivery",
+    "questionReference": "call_c0495d31e75742dfb50caf8ff29b82e6"
+  },
+  "publication": {
+    "newIssue": {
+      "id": "HELIX-85",
+      "uuid": "59208f2b-ebed-4d31-829f-c7ad3b072dbd",
+      "url": "https://linear.app/helixnmbu/issue/HELIX-85/pba-10-submit-and-approve-department-budget-packages"
+    },
+    "readbackVerified": true,
+    "readbacks": [
+      {
+        "id": "HELIX-75",
+        "uuid": "6c5f6546-f279-400e-95a9-489eb64ea248",
+        "updatedAt": "2026-11-20T12:41:02.767Z",
+        "status": "Backlog",
+        "parentId": null,
+        "milestone": {
+          "id": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+          "name": "Finance"
+        },
+        "labels": [],
+        "blockedBy": [],
+        "blocks": []
+      },
+      {
+        "id": "HELIX-84",
+        "uuid": "ea44edf0-a14d-4e12-a3e7-24e86d97cc66",
+        "updatedAt": "2026-11-20T12:41:10.132Z",
+        "status": "Backlog",
+        "parentId": "HELIX-75",
+        "milestone": {
+          "id": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+          "name": "Finance"
+        },
+        "labels": [
+          "ready-for-agent"
+        ],
+        "blockedBy": [
+          "HELIX-85",
+          "HELIX-77",
+          "HELIX-83"
+        ],
+        "blocks": []
+      },
+      {
+        "id": "HELIX-85",
+        "uuid": "59208f2b-ebed-4d31-829f-c7ad3b072dbd",
+        "updatedAt": "2026-11-20T12:38:30.569Z",
+        "status": "Backlog",
+        "parentId": "HELIX-75",
+        "milestone": {
+          "id": "eb62b788-596a-4920-ab8d-cfda9aa53cc0",
+          "name": "Finance"
+        },
+        "labels": [
+          "ready-for-agent"
+        ],
+        "blockedBy": [
+          "HELIX-83"
+        ],
+        "blocks": [
+          "HELIX-84"
+        ]
+      }
+    ],
+    "childCount": 10
+  },
+  "publishedDocumentHashes": {
+    "spec.md": "68df4c31436e12297b6cd99b3077f651bbcc8005c45169a6366de1a367018af8",
+    "tickets.md": "cf7f8cc34ea970005bd4bcec9cec373850215281a397961fadeed56f70cc9aca",
+    "issues/pba-10-department-budget-packages.md": "34e8379065b1599d815b5362f6757c81d7c1e7b7fcd44fa8df181cb1b75828fe",
+    "issues/pba-09-integration-and-migration-verification.md": "e9e7d19fa81868ade99544ce49d0ded29f20491d8947dd783babd8469db34986"
+  },
+  "userAddenda": [
+    {
+      "date": "2026-11-20",
+      "decision": "D16",
+      "exactRequest": "Also, i dont remember if i stated it, but on the departments homepage then there should be a widget that displays the allocated budget to that department and a easy overview of just how its spread on what projects. so people can see at a glance within the department",
+      "scope": "Department homepage allocated-budget widget and project breakdown, included in PBA-10",
+      "authorization": "Direct user implementation request; no additional approval or allocation-policy change"
+    },
+    {
+      "date": "2026-11-20",
+      "decision": "D17",
+      "exactRequest": "A member should still be able to see the allocated project budget, just not be able to request changes",
+      "scope": "Read-only current approved project budget for current project members, with pending/private details and all mutations excluded",
+      "authorization": "Direct user implementation instruction; prior approval hashes preserved"
+    },
+    {
+      "date": "2026-11-21",
+      "decision": "D18",
+      "exactRequest": "Notes:\n\n- Refresh budgets should not have to exist. I expect the budget showing to be the one up to date.\n- \"Department . S27 . Verision\" that small text can be removed.\n- Budget vs spend can be made into a widget on the right hand side also with a circle progress. See attached image for reference.\n  - If no budget is set up then have the widget show something like, draft a budget",
+      "exactFollowup": "let's have the budget widget at the bottom of the right side area. not the top",
+      "scope": "Project sidebar budget/spending circle at the bottom, permission-aware empty state and automatic current-budget freshness",
+      "authorization": "Direct user implementation request; original approval hashes and approval policies preserved"
+    },
+    {
+      "date": "2026-11-21",
+      "decision": "D18 presentation follow-up",
+      "exactRequest": "Have the budget status pill have a color that fits. Move it so it's at the right side. same level height as the \"budget\" title",
+      "scope": "Semantic status colors and project title-row right alignment",
+      "authorization": "Direct user presentation request; existing approval hashes and workflows preserved"
+    },
+    {
+      "date": "2026-11-21",
+      "decision": "D19",
+      "exactRequest": "Can we make a \"pill\" for budget on the department home page like we have on project. And then rather remove the right side widghet on the right side on the home of a department page.",
+      "scope": "Department Budget tab replaces the Home sidebar allocation widget, with existing public/member and private/reviewer reads kept separate",
+      "authorization": "Direct user implementation request; D16 placement superseded, original approval hashes and data/approval grants preserved"
+    }
+  ]
+}

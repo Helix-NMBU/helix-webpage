@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FinanceCapabilitySet, PublicBudgets, PurchasesView } from "./types";
 
 const notify = vi.hoisted(() => vi.fn());
+const localGate=vi.hoisted(()=>({local:false}));
+vi.mock("../MemberPlatform/local-mode",()=>({isLocalMemberMode:()=>localGate.local}));
 const session = vi.hoisted(() => ({
   capabilities: {
     registerActual: true,
@@ -31,6 +33,9 @@ vi.mock("../MemberPlatform/FinanceAccess", () => ({
 }));
 vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => notify }));
 
+// This suite covers the retained request/legacy form. Project purchase behavior
+// and authorization are covered separately by the project purchase suites.
+vi.mock("./ProjectPurchaseLauncher", () => ({ ProjectPurchaseLauncher: () => <div>Project purchase launcher</div> }));
 import { PurchasesBoard } from "./PurchasesPage";
 
 describe("PurchasesPage", () => {
@@ -38,7 +43,10 @@ describe("PurchasesPage", () => {
   let root: Root;
 
   beforeEach(() => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     notify.mockReset();
+    localGate.local=false;
+    session.budgets={viewVersion:1,seasonCode:"S27",budgetStatus:"approved",approvedOn:"2026-10-01",revision:1,departments:[],choices:{systems:[],items:[]}};
     session.capabilities = { registerActual: true, purchaseRegister: false } as FinanceCapabilitySet;
     session.purchases = { ownRequests: [], viewVersion: 1 };
     session.mutate.mockReset();
@@ -115,10 +123,19 @@ describe("PurchasesPage", () => {
     await act(async () => {
       root.render(<PurchasesBoard />);
     });
-    expect(container.textContent).toContain("Register a purchase");
+    expect(container.textContent).toContain("Other purchases and optional approvals");
     expect(container.textContent).toContain("Line amount is the total in NOK");
     expect(container.textContent).not.toContain("Purchase register");
     expect(container.textContent).not.toContain("Finance tools");
+  });
+
+  it.each([false,true])("enables canonical active-system registration with a Draft ledger and project approval=%s",async(projectBudgets)=>{
+    session.budgets={...session.budgets,budgetStatus:"draft",approvedOn:null,approvedPresence:{legacyBudget:false,projectBudgets},choices:{systems:[{id:"system",code:"SYS",name:"System",departmentKey:"mechanical",active:true,unbudgetedItemId:null,unbudgetedPublicRef:null}],items:[]}};
+    await act(async()=>root.render(<PurchasesBoard/>));
+    const register=[...container.querySelectorAll("button")].find(button=>button.textContent==="Register purchase")!;expect(register.disabled).toBe(false);
+  });
+  it("uses the existing scoped project launcher for local registration without exposing unsupported generic upload actions",async()=>{
+    localGate.local=true;await act(async()=>root.render(<PurchasesBoard/>));expect(container.textContent).toContain("Project purchase launcher");expect(container.textContent).not.toContain("Other purchases and optional approvals");expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 
   it("keeps different upload IDs for files with the same name", async () => {
@@ -184,6 +201,15 @@ describe("PurchasesPage", () => {
     const savedCalls = session.mutate.mock.calls.map(([body]) => body).filter((body) => body.action === "registerPurchase") as Array<{ requestId: string }>;
     expect(savedCalls).toHaveLength(2); expect(savedCalls[0].requestId).toBe(savedCalls[1].requestId);
     expect(notify).toHaveBeenCalledWith("Purchase registered", "Reference: 2026-0042.", expect.any(Object));
+  });
+
+  it.each([
+    [{pending:1,transferring:0,stored:0,needsAttention:0},"Invoice evidence is awaiting confirmed Drive storage.","success"],
+    [{pending:0,transferring:0,stored:0,needsAttention:1},"Some invoice transfers need attention.","warning"],
+  ] as const)("reports saved generic purchases honestly with invoice evidence %j",async(invoiceEvidence,description,variant)=>{
+    session.mutate.mockImplementation(async(body:{action:string})=>body.action==="registerPurchase"?{ok:true,id:"purchase",publicRef:"2026-0042",warnings:[],errors:[],invoiceEvidence}:{ok:true,warnings:[],errors:[]});
+    await act(async()=>root.render(<PurchasesBoard/>));await act(async()=>{container.querySelector("form")?.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));});
+    expect(notify).toHaveBeenCalledWith("Purchase registered",`Reference: 2026-0042. ${description}`,expect.objectContaining({variant}));
   });
 
   it("removes an upload before authorization returns and ignores its late completion", async () => {

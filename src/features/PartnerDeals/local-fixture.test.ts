@@ -28,6 +28,23 @@ describe('local sponsor workflow',()=>{
   expect(task).toBeDefined();expect(localTaskDealId(task.id)).toBe(deal.id);
   await projects.mutate({action:'set_status',id:task.id,expectedRevision:task.revision,status:'done',blockedReason:''});
   expect(localWonDeals().deals[0].tasks.find(t=>t.id===task.id)?.status).toBe('done');
+  // Completing marketing work never means an invoice was sent.
+  expect((await createFinanceApi({current:null}).financing()).wonIncome).toMatchObject([{invoiceSent:false}]);
+  const invoice=workspace.tasks.find(t=>t.title==='Invoice Example partner')!;
+  const completed=await projects.mutate({action:'set_status',id:invoice.id,expectedRevision:invoice.revision,status:'done',blockedReason:''});
+  const sent=(await createFinanceApi({current:null}).financing()).wonIncome!;
+  expect(sent).toHaveLength(1);expect(sent[0]).toMatchObject({sourceName:'Example partner',amountNok:'1000.00',invoiceSent:true});
+  expect(sent[0].invoiceSentOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await projects.mutate({action:'set_status',id:invoice.id,expectedRevision:completed.tasks.find(t=>t.id===invoice.id)!.revision,status:'todo',blockedReason:''});
+  expect((await createFinanceApi({current:null}).financing()).wonIncome).toMatchObject([{invoiceSent:false,invoiceSentOn:null}]);
+ });
+ it('awards grants as grant funding without generating an invoice project or task',async()=>{
+  const repo=pipelineRepository(),organizationId=await repo.createOrganization('NU grant fund');
+  await repo.save({organizationId,opportunityKind:'grant',title:'NU application',stage:'proposal',ownerMemberId:null,contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',negotiationNotes:'',contributions:[{seasonId:'s27',kind:'cash',description:'Award',amountOre:'2000000',invoiceDate:null}],deliverables:[]});
+  const grant=(await repo.load()).deals[0];await repo.confirmWon(grant.id,grant.revision);await repo.confirmWon(grant.id,grant.revision);
+  expect(readLocalPartnerState().tasks).toHaveLength(0);expect(readLocalPartnerState().projects).toHaveLength(0);
+  expect(localSponsorFunding()).toMatchObject([{fundingType:'grant',status:'secured',amountNok:'20000.00'}]);
+  expect((await createFinanceApi({current:null}).financing()).wonIncome).toMatchObject([{opportunityKind:'grant',invoiceSent:false}]);
  });
  it('denies local fixture reads and writes when signed out or outside development mode',async()=>{
   const repo=pipelineRepository();env.signedIn=false;

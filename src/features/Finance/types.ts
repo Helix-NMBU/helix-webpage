@@ -1,3 +1,5 @@
+import type { FinanceInvoiceRecoveryRow, InvoiceEvidenceSummary } from "./invoice-types.js";
+import type { InvoiceStorageBackend, InvoiceTransferStatus, OrdinaryBudgetPriority, ProjectBudgetCompletion, ProjectBudgetInvoiceReference } from "./project-budget-types.js";
 export const FINANCE_PROFILES = ["business", "finance", "head_of_finance"] as const;
 export type FinanceProfile = (typeof FINANCE_PROFILES)[number];
 
@@ -28,6 +30,9 @@ export type FinanceFieldError = {
 export type FinanceWarning = { message: string };
 
 export type BudgetItemPriority = "P1" | "P2" | "P3" | "P4" | "EM";
+/** Read projection only; manual entry validation retains BudgetItemPriority. */
+export type EffectiveBudgetItemPriority = BudgetItemPriority | "P0";
+export type FinanceApprovalPresence = { legacyBudget: boolean; projectBudgets: boolean };
 export type BudgetItemReuse = "new" | "reuse" | "inspect" | "consumable";
 export type BudgetItemStatus = "planned" | "active" | "done" | "cancelled";
 export type BudgetStatus = "draft" | "approved";
@@ -40,7 +45,7 @@ export type PurchaseStatus = "registered" | "voided";
 export type DocumentKind = "receipt" | "invoice";
 export type RequestStatus = "draft" | "submitted" | "rejected" | "approved" | "closed" | "cancelled";
 export type RequestDecisionKind = "approved" | "rejected";
-export type ExceptionKind = "missing_approval" | "overrun" | "line_mismatch" | "dated_before_approval";
+export type ExceptionKind = "missing_approval" | "overrun" | "line_mismatch" | "dated_before_approval" | "budget_overrun" | "unbudgeted";
 export type OutboxStatus = "pending" | "sent" | "failed" | "uncertain";
 
 export type FinanceCapabilitiesResponse = {
@@ -49,7 +54,8 @@ export type FinanceCapabilitiesResponse = {
   profiles: FinanceProfile[];
   capabilities: FinanceCapabilitySet;
   seasonCode: string | null;
-  approvalThresholdNok: string | null;
+  /** Retained as null for clients predating retirement of the amount-based policy. */
+  approvalThresholdNok: null;
   today: string;
 };
 
@@ -106,6 +112,8 @@ export type PublicOverview = {
   seasonCode: string | null;
   budgetStatus: "absent" | BudgetStatus;
   approvedOn: string | null;
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
   departments: PublicDepartmentSummary[];
   publicEarmarks: PublicEarmarkSummary[];
   scenarios?: FundingScenario[];
@@ -113,6 +121,8 @@ export type PublicOverview = {
 };
 
 export type PublicBudgetItem = {
+  /** Accounting department; systemId retains physical identity. */
+  allocationDepartmentKey?: string;
   id: string;
   publicRef: string;
   systemId: string;
@@ -123,7 +133,17 @@ export type PublicBudgetItem = {
   effectivePlanNok: string;
   actualNok: string;
   differenceNok: string;
-  priority: BudgetItemPriority;
+  priority: EffectiveBudgetItemPriority;
+  ordinaryPriority?: OrdinaryBudgetPriority | null;
+  approved?: boolean;
+  source?: "legacy" | "project";
+  projectBudgetId?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  responsibleDepartmentId?: string | null;
+  approvedVersionId?: string | null;
+  completion?: ProjectBudgetCompletion;
+  invoices?: ProjectBudgetInvoiceReference[];
   reuseStatus: BudgetItemReuse;
   expectedPurchaseDate: string | null;
   status: BudgetItemStatus;
@@ -213,6 +233,8 @@ export type PublicBudgets = {
   seasonCode: string | null;
   budgetStatus: "absent" | BudgetStatus;
   approvedOn: string | null;
+  approvedPresence?: FinanceApprovalPresence;
+  hasRecordedActuals?: boolean;
   revision: number;
   departments: PublicDepartmentBudget[];
   choices: BudgetChoices;
@@ -257,6 +279,11 @@ export type PurchaseRegisterDocument = {
   kind: DocumentKind;
   documentNumber: string | null;
   originalName: string;
+  backend?: InvoiceStorageBackend;
+  transferStatus?: InvoiceTransferStatus;
+  transferRevision?: number | null;
+  viewerUrl?: string | null;
+  canRetry?: boolean;
 };
 
 export type PurchaseExceptionReview = {
@@ -270,6 +297,10 @@ export type PurchaseExceptionReview = {
 };
 
 export type FinancePurchaseSummary = {
+  departmentId?: string | null;
+  departmentName?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
   id: string;
   publicRef: string;
   status: PurchaseStatus;
@@ -452,12 +483,35 @@ export type FundingScenario = {
   shortfallNok: string;
 };
 
+export type PipelineIncomeRecord = {
+  contributionId: string;
+  fundingId: string | null;
+  amountNok: string;
+  confidence: "low" | "medium" | "high" | null;
+  invoiceDate: string | null;
+};
+
+export type WonIncomeRecord = {
+  opportunityKind?: "deal" | "grant";
+  contributionId: string;
+  dealId: string;
+  title: string;
+  sourceName: string;
+  amountNok: string;
+  fundingId: string | null;
+  plannedInvoiceDate: string | null;
+  invoiceSent: boolean;
+  invoiceSentOn: string | null;
+};
+
 export type FinancingView = {
   viewVersion: number;
   seasonCode: string | null;
   funding: FundingRecord[];
   parts: FundingPartRecord[];
   scenarios: FundingScenario[];
+  pipelineForecast?: PipelineIncomeRecord[];
+  wonIncome?: WonIncomeRecord[];
 };
 
 export type FinanceUnchanged = { unchanged: true; viewVersion: number };
@@ -601,7 +655,10 @@ export type FinanceMutation =
   | (MutationBase & { action: "reviseRequest"; requestRecordId: string; request: RequestInput })
   | (MutationBase & { action: "decideRequest"; requestRecordId: string; revisionId: string; decision: RequestDecisionKind; reason: string; approvedOreByLine?: Record<string, string> })
   | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string; releasedNok: string })
+  | (MutationBase & { action: "linkPurchaseInvoice"; purchaseId: string; viewerUrl: string })
   | (MutationBase & { action: "downloadDocument"; documentId: string })
+  | (MutationBase & { action: "continueInvoiceTransfers"; purchaseId: string })
+  | (MutationBase & { action: "retryInvoiceTransfer"; documentId: string; expectedRevision: number })
   | (MutationBase & { action: "downloadExport"; exportId: string })
   | (MutationBase & { action: "exportPurchases" })
   | (MutationBase & { action: "retryOutbox"; outboxId?: string; reconciliation?: "sent" | "not_sent" | "still_unknown" })
@@ -649,6 +706,7 @@ export type BudgetImportPreview = {
 };
 
 export type FinanceMutationResult = {
+  departmentPackageId?: string;
   ok: true;
   viewVersion: number;
   id?: string;
@@ -660,17 +718,23 @@ export type FinanceMutationResult = {
   stagingKey?: string;
   expiresAt?: string;
   downloadUrl?: string;
+  viewerUrl?: string;
+  invoiceEvidence?: InvoiceEvidenceSummary;
+  /** Stored owning purchase for invoice recovery continuation; id remains the app document ID. */
+  purchaseId?: string;
   exportFile?: FinanceExportFile;
   recovery?: FinanceRecoverySummary;
   importPreview?: BudgetImportPreview;
 };
 
 export type FinanceRecoveryView = {
+  invoiceTransfers?: FinanceInvoiceRecoveryRow[];
+  invoiceNextCursor?: string | null;
   deliveries: { id: string; eventType: string; recipient: string | null; status: string; safeError: string | null; attemptCount: number; updatedAt: string; lastClaimedAt: string | null; providerMessageId: string | null }[];
   uploads: { id: string; owner: string | null; status: string; commitState: string; referenced: boolean; candidateCount: number; createdAt: string; expiresAt: string }[];
   deliveryNextCursor: string | null;
   uploadNextCursor: string | null;
 };
 
-export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot"] as const;
+export const FINANCE_READ_ACTIONS = ["capabilities", "version", "overview", "budgets", "purchases", "financing", "recovery", "bankSnapshot", "projectBudgets", "projectBudget", "projectPurchaseContext", "fundingApplications", "fundingApplication", "fundingApplicationBudgetContext", "projectFundingProposals", "departmentBudgetPreview", "departmentBudgetPackages", "departmentBudgetPackage", "departmentHomeBudget"] as const;
 export type FinanceReadAction = (typeof FINANCE_READ_ACTIONS)[number];

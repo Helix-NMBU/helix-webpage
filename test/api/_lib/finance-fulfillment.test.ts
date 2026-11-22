@@ -1,3 +1,4 @@
+import { bootstrapFinanceFeature } from "./finance-feature-bootstrap.js";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
@@ -76,8 +77,13 @@ async function seasonWithBudget() {
   await sql("select finance.configure_current_season($1::uuid, 'S27', 'Planning season', '2026-08-01', '2027-07-31')", [operatorId]);
   await sql(`insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true)`);
   await grant(headId, "head_of_finance");
-  await call("head", { action: "createBudget", requestId: requestId() });
-  await call("head", { action: "approveBudget", requestId: requestId(), expectedRevision: 0 });
+  // Retained request fulfillment uses genuine historical season approval.
+  // Active season-level create/approve APIs are retired by project budgets.
+  await sql(`insert into finance.budgets (
+    season_id, public_ref, status, approved_by_member_id, approved_on,
+    created_by_member_id, updated_by_member_id
+  ) select id, 'B-S27', 'approved', $1::uuid, '2026-10-01', $1::uuid, $1::uuid
+    from finance.seasons where code='S27'`, [headId]);
   await sql(
     `insert into finance.budget_items (
       budget_id, system_id, public_ref, description, category, planned_ore, priority, reuse_status, status, protected,
@@ -209,9 +215,11 @@ beforeAll(async () => {
     "016_finance_fulfillment.sql",
     "018_finance_unpaid_voids_reviews.sql",
     "021_finance_final_candidate_ledger.sql",
+    "067_finance_retire_purchase_threshold.sql",
   ]) {
     await pg.exec(readFileSync(new URL(`../../../db/migrations/${file}`, import.meta.url), "utf8"));
   }
+  await bootstrapFinanceFeature(pg);
   const { createMemoryFinanceStorage } = await import("./finance-storage-mock.js");
   financeStorage = createMemoryFinanceStorage();
   const db: CvDatabase = { query: async <T>(query: string, params?: unknown[]) => ({ rows: (await pg.query<T>(query, params)).rows }) };
@@ -231,8 +239,11 @@ beforeEach(async () => {
   await pg.exec("rollback").catch(() => undefined);
   await pg.exec(`
     alter table finance.audit_log disable trigger user;
+    alter table finance.project_budget_decisions disable trigger user;
+    alter table finance.funding_application_events disable trigger user;
     update finance.requests set submitted_revision_id = null, approved_revision_id = null;
-    truncate table finance.upload_final_candidates,
+    truncate table
+      finance.department_budget_package_decisions, finance.department_budget_package_members, finance.department_budget_packages, finance.invoice_retry_requests, finance.invoice_transfer_events, finance.invoice_transfers, finance.funding_application_events, finance.funding_budget_proposals, finance.budget_obligations, finance.funding_applications, finance.project_budget_completion, finance.project_budget_decisions, finance.project_budget_version_entries, finance.project_budget_entries, finance.project_budget_versions, finance.project_budgets, finance.outbox_attempts, finance.export_objects, finance.upload_final_candidates,
       finance.allocations, finance.purchase_lines, finance.outlay_reimbursements, finance.invoice_obligations,
       finance.documents, finance.uploads, finance.exception_reviews, finance.purchases,
       finance.request_draft_lines, finance.request_lines, finance.request_decisions, finance.request_revisions, finance.requests,
@@ -241,6 +252,8 @@ beforeEach(async () => {
       finance.reference_counters, finance.audit_log
     restart identity;
     alter table finance.audit_log enable trigger user;
+    alter table finance.project_budget_decisions enable trigger user;
+    alter table finance.funding_application_events enable trigger user;
     update finance.view_versions set version = 0 where singleton;
   `);
 });
@@ -386,10 +399,10 @@ describe("FIN-07 A03 idempotency and view_versions", () => {
   });
 });
 
-describe("FIN-07 A04 immutable exception facts and threshold", () => {
-  it("stores dated_before_approval and uses strict threshold without tolerance", async () => {
+describe("FIN-07 A04 immutable exception facts after threshold retirement", () => {
+  it("stores dated_before_approval but never creates amount-based missing approval", async () => {
     await seasonWithBudget();
-    await sql("select finance.configure_approval_threshold($1::uuid, 500000)", [operatorId]);
+    await sql("insert into finance.settings (setting_key, setting_value, description, updated_by_member_id) values ('approval_threshold_ore', '500000'::jsonb, 'Historical threshold fixture', $1::uuid) on conflict (setting_key) do update set setting_value = excluded.setting_value", [operatorId]);
     const { recordId, lineId } = await approveRequest();
     await sql("update finance.request_decisions set decided_at = '2026-10-20T12:00:00Z' where revision_id = (select approved_revision_id from finance.requests where id = $1::uuid)", [recordId]);
     expect((await registerLinked(recordId, lineId!, "100.00", "2026-10-19")).status).toBe(200);
@@ -428,7 +441,7 @@ describe("FIN-07 A04 immutable exception facts and threshold", () => {
     });
     expect(over.status).toBe(200);
     const missing = await sql<{ kind: string }>("select kind from finance.exception_reviews where kind = 'missing_approval'");
-    expect(missing.length).toBe(1);
+    expect(missing).toEqual([]);
   });
 
   it("uses Oslo calendar for dated_before_approval near midnight (session UTC)", async () => {

@@ -32,7 +32,7 @@ beforeAll(async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'project_manager')",[id(1)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'lead' from project_management.departments where name='Finance'",[id(2)]);
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[id(3)]);
- for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review','054_partner_manual_finance_review','055_partner_manual_review_gate']) await db.exec(read(n));
+ for(const n of ['011_finance_core','012_finance_season_budgets','013_finance_funding','024_financials_member_role','035_partner_deals','037_partner_deal_funding','038_partner_won_handoff','039_partner_deal_funding_recovery','041_project_current_season','042_partner_funding_hardening','043_partner_finance_review','044_partner_due_invoices','045_partner_finance_review_unlink','046_partner_agreement_changes','047_partner_invoice_history','048_partner_review_notifications','049_partner_added_items','050_partner_change_reconciliation','051_won_finance_recovery','052_partner_manual_history','053_partner_manual_review','054_partner_manual_finance_review','055_partner_manual_review_gate','056_partner_deal_sponsor_level','059_imported_partner_deals','060_imported_partner_finance_review','075_partner_grants']) await db.exec(read(n));
  await db.exec("alter table partner_deals.deals add column if not exists primary_season_id uuid");
  await db.exec(`insert into partner_deals.member_grants values('${id(2)}','finance',true),('${id(3)}','marketing',true);
  insert into finance.seasons(id,code,name,start_date,end_date,status,created_by_member_id,updated_by_member_id) values('${id(20)}','S27','S27','2026-08-01','2027-07-31','active','${id(1)}','${id(1)}'),('${id(21)}','S28','S28','2027-08-01','2028-07-31','planning','${id(1)}','${id(1)}');
@@ -180,4 +180,37 @@ it('attaches only added cash when an earlier funded season is closed',async()=>{
  await db.query('select partner_deals.attach_change_funding($1,$2,$3)',[id(1),id(171),change]);
  expect((await db.query('select * from partner_deals.funding_links where contribution_id=$1',[added])).rows).toHaveLength(1);
  expect((await db.query<{status:string}>('select status from finance.funding where id=$1',[old.id])).rows[0].status).toBe(old.status);
+});
+
+it('persists and awards grants without invoice dates or invoice tasks, including scheduler retries',async()=>{
+ await db.query("update finance.seasons set status='active' where id=$1",[id(20)]);
+ await db.query("update finance.settings set setting_value='\"S27\"' where setting_key='current_season'");
+ const service=dealService(0);
+ const {id:organizationId}=await service.createOrganization('test','NU grant award');
+ const {id:grantId}=await service.save('test',{opportunityKind:'grant',organizationId,title:'NU research award',stage:'proposal',ownerMemberId:id(1),contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',negotiationNotes:'',contributions:[{seasonId:id(20),kind:'cash',amountOre:'5000000',invoiceDate:null}],deliverables:[]});
+ await expect(dealService(3).confirmWon('test',grantId,0,true)).rejects.toMatchObject({status:403});
+ await service.confirmWon('test',grantId,0,true); await service.confirmWon('test',grantId,0,true);
+ expect((await service.load('test','pipeline')).deals.find(value=>(value as {id:string}).id===grantId)).toMatchObject({opportunityKind:'grant',stage:'won'});
+ const linked=(await db.query<{funding_type:string;status:string}>("select f.funding_type,f.status from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id join partner_deals.contributions c on c.id=l.contribution_id where c.deal_id=$1",[grantId])).rows;
+ expect(linked).toEqual([{funding_type:'grant',status:'secured'}]);
+ await db.query("select partner_deals.materialize_invoices_on('2026-11-22')");
+ await db.query("select partner_deals.materialize_invoices_on('2026-11-22')");
+ expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind in ('invoice','finance_review')",[grantId])).rows).toHaveLength(0);
+ expect((await db.query("select * from project_management.projects where name='NU grant award invoicing'")).rows).toHaveLength(0);
+ await expect(service.save('test',{id:grantId,expectedRevision:1,opportunityKind:'deal',organizationId,title:'Changed',stage:'proposal',ownerMemberId:id(1),contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',negotiationNotes:'',contributions:[],deliverables:[]})).rejects.toMatchObject({status:409});
+});
+
+it('adds current-season grant funding through a reviewed amendment without materializing invoice work',async()=>{
+ const service=dealService(0);
+ const {id:organizationId}=await service.createOrganization('test','Research programme');
+ const {id:grantId}=await service.save('test',{opportunityKind:'grant',organizationId,title:'Research programme award',stage:'proposal',ownerMemberId:id(1),contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',negotiationNotes:'',contributions:[],deliverables:[]});
+ await service.confirmWon('test',grantId,0,true);
+ const terms={title:'Research programme award',contactName:'',contactEmail:'',startsOn:null,endsOn:null,agreementLink:'',cashChanges:[],inKindChanges:[],deliverableChanges:[],newCash:[{id:id(990),seasonId:id(20),amountOre:'100000',invoiceDate:''}],newInKind:[],newDeliverables:[]};
+ const change=await service.recordAgreementChange('test',grantId,1,'amendment','Add the funding award',terms,true);
+ await service.resolveAgreementChange('test',change.id,'Reviewed award',true,false);
+ const rows=(await db.query<{funding_type:string}>("select f.funding_type from finance.funding f join partner_deals.funding_links l on l.funding_id=f.id where l.contribution_id=$1",[id(990)])).rows;
+ expect(rows).toEqual([{funding_type:'grant'}]);
+ expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind='invoice'",[grantId])).rows).toHaveLength(0);
+ await db.query("select partner_deals.materialize_invoices_on('2026-11-22')");
+ expect((await db.query("select * from partner_deals.task_links where deal_id=$1 and kind='invoice'",[grantId])).rows).toHaveLength(0);
 });

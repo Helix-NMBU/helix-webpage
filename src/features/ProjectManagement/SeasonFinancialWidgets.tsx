@@ -1,3 +1,4 @@
+import { BudgetRing, budgetUsage } from "../Finance/BudgetRing";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
@@ -8,7 +9,8 @@ import { CvRequestError } from "../MemberCV/repository";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { financeRoutes } from "../Finance/routes";
 import { getDepartmentIcon } from "../Workspace/department-icons";
-import { nokToOre } from "../Finance/finance-calculations";
+import { hasVisibleApprovedFinances, nokToOre } from "../Finance/finance-calculations";
+import { budgetPlanLabel } from "../Finance/budget-plan-label";
 import { loadSeasonFinancialSummary, SeasonFinancialRequestError } from "./season-financials-repository";
 import type { SeasonFinancialDepartment, SeasonFinancialSummary, SeasonMoneyFlow } from "./season-financials-types";
 
@@ -24,29 +26,10 @@ function snapshotDate(value: string): string {
   return `${parts.find(part => part.type === "day")?.value}. ${parts.find(part => part.type === "month")?.value}`;
 }
 
-function usage(actual: string, planned: string): number {
-  const a = nokToOre(actual), p = nokToOre(planned);
-  if (p <= 0n) return a > 0n ? 100 : 0;
-  return Number(a >= p ? 100n : a <= 0n ? 0n : a * 100n / p);
-}
-
-function BudgetRing({ planned, actual }: { planned: string; actual: string }) {
-  const planOre = nokToOre(planned), actualOre = nokToOre(actual);
-  const over = actualOre > planOre;
-  const percent = usage(actual, planned);
-  const label = planOre === 0n ? (over ? "Over" : "—") : over ? "Over" : `${percent}%`;
-  const details = `Recorded spending ${money(actual)} of budget ${money(planned)}${over ? ", over budget" : planOre === 0n ? ", percentage unavailable for a zero budget" : `, ${percent}% used`}`;
-  return <div role="img" aria-label={details} className="relative grid size-32 shrink-0 place-items-center sm:size-40">
-    <svg viewBox="0 0 100 100" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted" />
-      <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" pathLength="100" strokeDasharray={`${percent} 100`} className={over ? "text-destructive" : "text-primary"} />
-    </svg><span className="text-lg font-medium tabular-nums" aria-hidden="true">{label}</span>
-  </div>;
-}
 
 function DepartmentRow({ department }: { department: SeasonFinancialDepartment }) {
   const Icon = getDepartmentIcon(department.name);
-  const percent = usage(department.actualNok, department.plannedNok);
+  const percent = budgetUsage(department.actualNok, department.plannedNok);
   const over = nokToOre(department.actualNok) > nokToOre(department.plannedNok);
   const label = `${department.name}: ${money(department.actualNok)} spent of ${money(department.plannedNok)} allocated${over ? ", over budget" : ""}${nokToOre(department.unbudgetedNok) > 0n ? `, ${money(department.unbudgetedNok)} unbudgeted` : ""}`;
   return <li className="grid grid-cols-[minmax(0,1fr)_minmax(4rem,1fr)] items-center gap-4 py-2">
@@ -126,9 +109,11 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
     return () => { active.current = false; generation.current++; inFlight.current = null; if (pending.current) { window.clearTimeout(pending.current.timer); pending.current.controller.abort(); pending.current = null; } window.clearInterval(timer); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVisibility); };
   }, [userId, refresh]);
   const mismatch = !!summary?.seasonCode && summary.seasonCode !== season;
-  const visible = summary && !mismatch && (summary.budgetStatus === "approved" || summary.budgetStatus === "draft");
-  const budgetDetail = mismatch ? `Finance is set to ${summary.seasonCode}, not ${season}.` : summary?.budgetStatus === "draft-hidden" ? "Draft budget is restricted." : summary?.budgetStatus === "absent" ? "No season budget yet." : summary?.budgetStatus === "draft" ? "Draft budget" : "Approved budget";
-  const budgetDisplay = stale && summary?.budgetStatus === "absent" && !mismatch ? "Last checked: no season budget." : budgetDetail;
+  const effectiveFinances = summary && hasVisibleApprovedFinances(summary);
+  const hasApprovedPlan = summary && (summary.budgetStatus === "approved" || summary.approvedPresence?.legacyBudget || summary.approvedPresence?.projectBudgets);
+  const visible = summary && !mismatch && (effectiveFinances || summary.budgetStatus === "draft");
+  const budgetDetail = mismatch ? `Finance is set to ${summary.seasonCode}, not ${season}.` : effectiveFinances ? budgetPlanLabel({ ...summary, approvedOn: null }) : summary?.budgetStatus === "draft-hidden" ? "Draft budget is restricted." : summary?.budgetStatus === "absent" ? "No season budget yet." : summary?.budgetStatus === "draft" ? "Draft budget" : "Approved budget";
+  const budgetDisplay = stale && summary?.budgetStatus === "absent" && !effectiveFinances && !mismatch ? "Last checked: no season budget." : budgetDetail;
   const bank = summary?.bank;
   const snapshot = bank?.status === "available" ? bank.snapshot : null;
   const flow = summary?.moneyFlow;
@@ -155,7 +140,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
         <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] md:gap-8">
           <div className="flex flex-col gap-4">
             <CardHeader className="px-0"><CardTitle className="text-base font-medium">Budget and spending</CardTitle><CardDescription>Season and department spending against allocated budgets.</CardDescription></CardHeader>
-            {(!summary || summary.budgetStatus !== "approved" || mismatch || stale) && <p className="text-sm text-muted-foreground">{summary ? (summary.budgetStatus === "approved" && !mismatch ? "Last loaded values." : budgetDisplay) : "Unavailable"}{stale && summary && summary.budgetStatus !== "approved" && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</p>}
+            {(!summary || !hasApprovedPlan || summary.approvedPresence?.projectBudgets || mismatch || stale) && <p className="text-sm text-muted-foreground">{summary ? (stale && visible ? "Last loaded values." : budgetDisplay) : "Unavailable"}{stale && summary && !visible && (summary.budgetStatus !== "absent" || mismatch) ? " · Last loaded value" : ""}</p>}
             <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
               <div className="flex flex-col items-center gap-5">
                 {visible && summary.plannedNok !== null && summary.actualNok !== null && <BudgetRing planned={summary.plannedNok} actual={summary.actualNok} />}

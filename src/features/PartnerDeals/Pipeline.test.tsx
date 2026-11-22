@@ -47,10 +47,13 @@ describe("Pipeline",()=>{
   await act(async()=>saveButton.click());
   expect(save).toHaveBeenCalledWith(expect.objectContaining({id:"one",expectedRevision:3,sponsorLevel:"silver"}));
  });
- it("saves a probability choice without changing the deal stage",async()=>{
+ it("saves a confidence choice without changing the deal stage",async()=>{
   await render();
-  await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Probability for Engine deal"]')!.click());
-  await act(async()=>button("Over 50%").click());
+  await act(async()=>container.querySelector<HTMLButtonElement>('[aria-label="Edit Confidence for Engine deal"]')!.click());
+  const confidence = document.querySelector<HTMLButtonElement>('[aria-label="Confidence"]')!;
+  await act(async()=>confidence.dispatchEvent(new KeyboardEvent("keydown",{key:" ",bubbles:true})));
+  const medium = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item=>item.textContent === "Medium")!;
+  await act(async()=>medium.click());
   expect(save).toHaveBeenCalledWith(expect.objectContaining({probability:75,stage:"lead",contributions:expect.arrayContaining([expect.objectContaining({id:"contribution-1",invoiceDate:"2026-11-01"})])}));
   expect(confirmWon).not.toHaveBeenCalled();
  });
@@ -138,4 +141,22 @@ describe("Pipeline",()=>{
   await expect(repo.confirmWon("deal-id",8)).rejects.toMatchObject({status:409,code:"funding_possible_duplicate"});
  });
  it("sends only the explicit confirmation operation to the server",async()=>{const fetcher=vi.fn().mockResolvedValue({ok:true,json:async()=>({})});const repo=createPipelineRepository(async()=>"token",fetcher);await repo.confirmWon("deal-id",8);expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({action:"confirmWon",dealId:"deal-id",expectedRevision:8,confirmed:true});});
+ it("separates Deals and Grants and opens a grant draft without an invoice date field",async()=>{
+  load.mockResolvedValueOnce({...data,deals:[deal,{...deal,id:"grant",opportunityKind:"grant",title:"NU funding application",deliverables:[]}]});
+  await render();
+  expect(container.querySelector('[role="article"][aria-label="Engine deal"]')).not.toBeNull();
+  expect(container.querySelector('[role="article"][aria-label="NU funding application"]')).toBeNull();
+  const grants=container.querySelector<HTMLButtonElement>('[role="tab"][data-state="inactive"]')!;
+  await act(async()=>grants.dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true})));
+  expect(grants.getAttribute("aria-selected")).toBe("true");
+  expect(container.querySelector('[role="article"][aria-label="Engine deal"]')).toBeNull();
+  expect(container.querySelector('[role="article"][aria-label="NU funding application"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="Approved"]')).not.toBeNull();
+  await act(async()=>button("New grant").click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("New grant");
+  expect(document.querySelector('[aria-label="Opportunity type"]')?.textContent).toBe("Grant");
+  await act(async()=>button("Add contribution").click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("Invoice date");
+ });
+
 });

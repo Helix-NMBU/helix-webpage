@@ -1,10 +1,29 @@
+import { watchMemberSession } from "../MemberCV/session";
+import { InvoiceEvidence } from "./InvoiceEvidence";
+import type { InvoiceEvidenceActions } from "./invoice-repository";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@libs/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@libs/components/ui/card";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
-import { createFinanceApi, FinanceRequestError } from "./repository";
+import { createFinanceApi } from "./repository";
 import type { FinanceRecoveryView } from "./types";
+
+const invoiceFailures: Record<string, string> = {
+  configuration_missing: "Finance must finish the shared Drive setup.",
+  provider_unavailable: "Google Drive is unavailable. Try again later.",
+  provider_permission: "The invoice service cannot access the shared Drive folder. Ask Finance to check access.",
+  provider_mismatch: "The stored file could not be verified. Ask Finance to review it.",
+  source_unavailable: "The saved upload is unavailable. Ask Finance to recover it.",
+  source_mismatch: "The saved upload could not be verified. Ask Finance to review it.",
+  transfer_uncertain: "The transfer result is uncertain. Retry to check its status.",
+};
+const invoiceFailureMessage = (value: string) => Object.prototype.hasOwnProperty.call(invoiceFailures, value) ? invoiceFailures[value] : "Invoice storage needs attention. Ask Finance to check the transfer.";
 
 /** Operational records are read only while the current member holds a Finance grant. */
 export function FinanceRecoveryPanel() {
@@ -13,67 +32,231 @@ export function FinanceRecoveryPanel() {
   const owner = useRef<string | null>(null);
   const api = useMemo(() => createFinanceApi(owner), []);
   const [data, setData] = useState<FinanceRecoveryView | null>(null);
+  const [denied, setDenied] = useState(false);
+  const accessEnded = useRef(false);
+  const retryAuthority = useRef(session.retry);
+  retryAuthority.current = session.retry;
   const [busy, setBusy] = useState(false);
   const [deliveryPages, setDeliveryPages] = useState([""]);
   const [uploadPages, setUploadPages] = useState([""]);
+  const [invoicePages, setInvoicePages] = useState([""]);
+  const working = useRef(false),
+    writeEpoch = useRef(0);
   const generation = useRef(0);
   const active = useRef(false);
   const retryIds = useRef(new Map<string, string>());
-  const allowed = Boolean(session.capabilities?.purchaseRegister && session.access === "allowed");
+  const allowed = Boolean(
+    session.capabilities?.purchaseRegister && session.access === "allowed",
+  );
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
   const deliveryAfter = deliveryPages[deliveryPages.length - 1];
   const uploadAfter = uploadPages[uploadPages.length - 1];
+  const invoiceAfter = invoicePages[invoicePages.length - 1];
+  const scope = useMemo(
+    () => Symbol("finance-recovery-page"),
+    [allowed, deliveryAfter, uploadAfter, invoiceAfter],
+  );
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const clearPrivateAccess = useCallback(() => {
+    if (accessEnded.current) return;
+    accessEnded.current = true;
+    generation.current++;
+    writeEpoch.current++;
+    working.current = false;
+    retryIds.current.clear();
+    setBusy(false);
+    setData(null);
+    setDeliveryPages([""]);
+    setUploadPages([""]);
+    setInvoicePages([""]);
+    setDenied(true);
+    retryAuthority.current();
+  }, []);
+  useEffect(() => watchMemberSession(() => { if (active.current) clearPrivateAccess(); }, undefined, owner), [clearPrivateAccess]);
+  const invoiceActions = useMemo<InvoiceEvidenceActions>(
+    () => ({
+      open: (documentId) =>
+        session.mutate({
+          action: "downloadDocument",
+          documentId,
+          requestId: crypto.randomUUID(),
+        }),
+      retry: (documentId, expectedRevision, requestId) =>
+        session.mutate({
+          action: "retryInvoiceTransfer",
+          documentId,
+          expectedRevision,
+          requestId,
+        }),
+    }),
+    [session.mutate],
+  );
 
   const load = useCallback(async () => {
-    if (!active.current || !allowedRef.current) return;
+    if (
+      !active.current || accessEnded.current ||
+      !allowedRef.current ||
+      currentScope.current !== scope
+    )
+      return;
     const current = ++generation.current;
-    setData(null);
     try {
-      const view = await api.recovery(deliveryAfter || undefined, uploadAfter || undefined);
-      if (active.current && allowedRef.current && generation.current === current) setData(view);
+      const view = await api.recovery(
+        deliveryAfter || undefined,
+        uploadAfter || undefined,
+        invoiceAfter || undefined,
+      );
+      if (
+        active.current &&
+        allowedRef.current &&
+        currentScope.current === scope &&
+        generation.current === current
+      )
+        setData(view);
     } catch (error) {
-      if (!active.current || !allowedRef.current || generation.current !== current) return;
-      setData(null);
-      if (error instanceof FinanceRequestError && (error.status === 401 || error.status === 403)) session.retry();
-      notify("Could not load finance recovery", error instanceof Error ? error.message : "Please try again.", {
-        id: "finance-recovery-read", variant: "error", action: { label: "Try again", onClick: () => { void load(); } },
-      });
+      if (!active.current || !allowedRef.current || accessEnded.current) return;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+        notify("Finance access ended", "Your Finance access is no longer available.", { id: "finance-recovery-read", variant: "error", href: null });
+        return;
+      }
+      if (currentScope.current !== scope || generation.current !== current) return;
+      notify(
+        "Could not load finance recovery",
+        error instanceof Error ? error.message : "Please try again.",
+        {
+          id: "finance-recovery-read",
+          variant: "error",
+          action: {
+            label: "Try again",
+            onClick: () => {
+              if (
+                active.current && !accessEnded.current &&
+                allowedRef.current && generation.current === current &&
+                currentScope.current === scope
+              )
+                void load();
+            },
+          },
+        },
+      );
     }
-  }, [api, notify, session.retry, deliveryAfter, uploadAfter]);
+  }, [
+    api,
+    notify,
+    clearPrivateAccess,
+    deliveryAfter,
+    uploadAfter,
+    invoiceAfter,
+    scope,
+  ]);
 
   useEffect(() => {
     active.current = true;
-    if (allowed) void load();
-    else { generation.current += 1; retryIds.current.clear(); setData(null); setDeliveryPages([""]); setUploadPages([""]); }
-    return () => { active.current = false; generation.current += 1; };
+    working.current = false;
+    setBusy(false);
+    setData(null);
+    if (allowed && !accessEnded.current) void load();
+    else {
+      generation.current += 1;
+      retryIds.current.clear();
+      setData(null);
+      setDeliveryPages([""]);
+      setUploadPages([""]);
+      setInvoicePages([""]);
+    }
+    return () => {
+      active.current = false;
+      generation.current += 1;
+      writeEpoch.current++;
+    };
   }, [allowed, load]);
 
+  const lastViewVersion = useRef(session.viewVersion);
+  useEffect(() => {
+    if (lastViewVersion.current === session.viewVersion) return;
+    lastViewVersion.current = session.viewVersion;
+    if (!working.current) void load();
+  }, [session.viewVersion, load]);
+
   async function reconcile(action: Record<string, unknown>) {
+    if (
+      working.current ||
+      !active.current || accessEnded.current ||
+      !allowedRef.current ||
+      currentScope.current !== scope
+    )
+      return;
+    const operation = ++writeEpoch.current;
+    working.current = true;
     const key = JSON.stringify(action);
     const requestId = retryIds.current.get(key) ?? crypto.randomUUID();
     retryIds.current.set(key, requestId);
     setBusy(true);
     try {
       const result = await session.mutate({ ...action, requestId });
+      if (
+        !active.current ||
+        !allowedRef.current ||
+        currentScope.current !== scope ||
+        writeEpoch.current !== operation
+      )
+        return;
       retryIds.current.delete(key);
-      notify("Recovery updated", result.recovery?.message ?? "The recovery record was updated.", { id: "finance-recovery", variant: "success" });
+      notify(
+        "Recovery updated",
+        result.recovery?.message ?? "The recovery record was updated.",
+        { id: "finance-recovery", variant: "success" },
+      );
       await load();
     } catch (error) {
-      notify("Could not update recovery", error instanceof Error ? error.message : "Please try again.", {
-        id: "finance-recovery", variant: "error", action: { label: "Try again", onClick: () => { void reconcile(action); } },
-      });
-    } finally { setBusy(false); }
+      if (!active.current || !allowedRef.current || accessEnded.current) return;
+      const status = error && typeof error === "object" && "status" in error ? Number(error.status) : 0;
+      if (status === 401 || status === 403) {
+        clearPrivateAccess();
+        notify("Finance access ended", "Your Finance access is no longer available.", { id: "finance-recovery", variant: "error", href: null });
+        return;
+      }
+      if (currentScope.current !== scope || writeEpoch.current !== operation) return;
+      notify(
+        "Could not update recovery",
+        error instanceof Error ? error.message : "Please try again.",
+        {
+          id: "finance-recovery",
+          variant: "error",
+          action: {
+            label: "Try again",
+            onClick: () => {
+              if (
+                active.current &&
+                allowedRef.current &&
+                currentScope.current === scope &&
+                writeEpoch.current === operation
+              )
+                void reconcile(action);
+            },
+          },
+        },
+      );
+    } finally {
+      if (operation === writeEpoch.current) {
+        working.current = false;
+        if (active.current) setBusy(false);
+      }
+    }
   }
 
-  if (!allowed) return null;
+  if (!allowed || denied) return null;
   return (
     <Card>
-      <CardHeader><CardTitle>Delivery and upload recovery</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Delivery, upload and invoice recovery</CardTitle></CardHeader>
       <CardContent className="space-y-5">
         <p className="text-sm text-muted-foreground">Check the provider or storage outcome before recording a result. Each page shows up to 50 records.</p>
         <Button type="button" variant="outline" size="sm" onClick={() => { void load(); }} disabled={busy}>Refresh recovery</Button>
-        {data && data.deliveries.length === 0 && data.uploads.length === 0 ? <p>No delivery or upload records need attention.</p> : null}
+        {data && data.deliveries.length === 0 && data.uploads.length === 0 && !data.invoiceTransfers?.length ? <p>No delivery, upload or invoice records need attention.</p> : null}
         <h3 className="font-medium">Deliveries</h3>
         {data?.deliveries.map((row) => (
           <div key={row.id} className="space-y-2 rounded-md border p-3">
@@ -111,6 +294,47 @@ export function FinanceRecoveryPanel() {
           <span>Page {uploadPages.length}</span>
           <Button type="button" variant="outline" size="sm" disabled={busy || !data.uploadNextCursor} onClick={() => setUploadPages((pages) => [...pages, data.uploadNextCursor!])}>Next uploads</Button>
         </div> : null}
+        <h3 className="font-medium">Invoice transfers</h3>
+        {data?.invoiceTransfers?.map((row) => (
+          <div key={row.documentId} className="space-y-2 rounded-md border p-3">
+            <p className="text-sm">{row.purchaseRef}</p>
+            <InvoiceEvidence
+              invoice={row}
+              actions={invoiceActions}
+              onChanged={load}
+              onAccessEnded={clearPrivateAccess}
+            />
+            <p className="text-sm text-muted-foreground">
+              {row.attempts} attempts · Updated {row.updatedAt}
+              {row.safeError ? ` · ${invoiceFailureMessage(row.safeError)}` : ""}
+            </p>
+          </div>
+        ))}
+        {data ? (
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || invoicePages.length === 1}
+              onClick={() => setInvoicePages((pages) => pages.slice(0, -1))}
+            >
+              Previous invoices
+            </Button>
+            <span>Page {invoicePages.length}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy || !data.invoiceNextCursor}
+              onClick={() =>
+                setInvoicePages((pages) => [...pages, data.invoiceNextCursor!])
+              }
+            >
+              Next invoices
+            </Button>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
