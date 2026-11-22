@@ -1,0 +1,5 @@
+import { expect, it } from "vitest";
+import { normalizeInvoiceDriveUrl } from "./invoice-link";
+it.each(["https://drive.google.com/file/d/abc_123/view?usp=sharing","https://drive.google.com/open?id=abc_123","https://drive.google.com/file/d/abc_123/preview"])("normalizes file references: %s", url => expect(normalizeInvoiceDriveUrl(url)).toBe("https://drive.google.com/file/d/abc_123/view"));
+it("preserves a required Drive resource key", () => expect(normalizeInvoiceDriveUrl("https://drive.google.com/file/d/abc/view?resourcekey=key-123&usp=sharing")).toBe("https://drive.google.com/file/d/abc/view?resourcekey=key-123"));
+it.each(["https://drive.google.com/drive/folders/abc", "https://drive.google.com.evil.test/file/d/abc/view", "http://drive.google.com/file/d/abc/view", "javascript:alert(1)", "https://user:password@drive.google.com/file/d/abc/view", "https://drive.google.com/file/d/abc/view?access_token=secret", "not a link"])("rejects invalid destinations: %s", url => expect(()=>normalizeInvoiceDriveUrl(url)).toThrow("Google Drive file link"));

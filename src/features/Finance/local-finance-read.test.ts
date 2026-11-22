@@ -472,3 +472,34 @@ it("keeps the project summary spending aligned with registered, unbudgeted and v
   expect((await budgets.load({ projectId: binding.projectId })).budgets[0]).toMatchObject({ actualNok: "25.25", unbudgetedNok: "25.25" });
   expect(await budgets.detail(budget.id)).toMatchObject({ actualNok: "25.25", unbudgetedNok: "25.25" });
 });
+
+it("persists a manually supplied Drive reference in purchases and budget entries without changing costs or upload jobs", async () => {
+  const fixture = await fundingFixture();
+  const saved = await registration(fixture.budget.approvedVersion!.entries[0].entryId, "120.00", "invoice");
+  const client = api(), before = await client.purchases(), row = before.register!.find(purchase=>purchase.id===saved.id)!;
+  const previous = localStorage.getItem("helix-project-purchases-local-v1")!;
+  const beforeEvidence = JSON.parse(previous).evidence;
+  const change = {action:"linkPurchaseInvoice" as const,requestId:crypto.randomUUID(),purchaseId:row.id,expectedRevision:row.revision,viewerUrl:"https://drive.google.com/open?id=manual-invoice-file"};
+  await client.mutate(change); const replay = await client.mutate(change); expect(replay.ok).toBe(true);
+  const after=(await client.purchases()).register!.find(purchase=>purchase.id===row.id)!;
+  expect(after).toMatchObject({totalNok:row.totalNok,unpaid:row.unpaid,revision:row.revision+1});
+  expect(after.invoice).toEqual(row.invoice);
+  expect((await fixture.budgets.detail(fixture.budget.id)).approvedVersion!.entries[0].invoices?.some(invoice => invoice.documentId === `purchase:${row.id}`)).toBe(true);
+  expect(after.documents.find(document=>document.id===`purchase:${row.id}`)).toMatchObject({viewerUrl:"https://drive.google.com/file/d/manual-invoice-file/view",transferStatus:"stored",canRetry:false});
+  expect(JSON.parse(localStorage.getItem("helix-project-purchases-local-v1")!).evidence).toEqual(beforeEvidence);
+  expect((await client.mutate({action:"downloadDocument",documentId:`purchase:${row.id}`,requestId:crypto.randomUUID()})).viewerUrl).toBe("https://drive.google.com/file/d/manual-invoice-file/view");
+  await expect(client.mutate({...change,requestId:crypto.randomUUID()})).rejects.toMatchObject({status:409});
+  const correction={...change,requestId:crypto.randomUUID(),expectedRevision:after.revision,viewerUrl:"https://drive.google.com/file/d/corrected-invoice/view"};
+  await client.mutate(correction);expect((await client.mutate(correction)).ok).toBe(true);
+  const corrected=(await client.purchases()).register!.find(purchase=>purchase.id===row.id)!;
+  expect(corrected).toMatchObject({totalNok:row.totalNok,unpaid:row.unpaid,revision:after.revision+1});
+  expect(corrected.documents.find(document=>document.id===`purchase:${row.id}`)?.viewerUrl).toBe(correction.viewerUrl);
+  expect((await client.mutate({action:"downloadDocument",documentId:`purchase:${row.id}`,requestId:crypto.randomUUID()})).viewerUrl).toBe(correction.viewerUrl);
+  const detail=await fixture.budgets.detail(fixture.budget.id);
+  expect(detail.approvedVersion!.entries[0].invoices?.find(invoice=>invoice.documentId===`purchase:${row.id}`)?.viewerUrl).toBe(correction.viewerUrl);
+  const stored=JSON.parse(localStorage.getItem("helix-project-purchases-local-v1")!);
+  expect(stored.evidence).toEqual(beforeEvidence);
+  expect(stored.audit.at(-1)).toMatchObject({previousInvoiceUrl:"https://drive.google.com/file/d/manual-invoice-file/view",invoiceUrl:correction.viewerUrl});
+  window.history.replaceState({},"","/?financeRole=business");
+  await expect(client.mutate({...change,requestId:crypto.randomUUID(),expectedRevision:after.revision})).rejects.toMatchObject({status:403});
+});

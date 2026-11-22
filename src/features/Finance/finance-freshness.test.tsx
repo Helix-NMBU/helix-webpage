@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FinanceAccessProvider, useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { FinanceEntry } from "./FinancePages";
 import { FinanceRequestError } from "./repository";
-import type { FinanceCapabilitiesResponse, FinancingView, PublicOverview } from "./types";
+import type { FinanceCapabilitiesResponse, FinancingView, PublicOverview, FinancePurchaseSummary } from "./types";
 
 const api = vi.hoisted(() => ({
   capabilities: vi.fn(),
@@ -170,7 +170,7 @@ describe("FIN-09-A04 overview", () => {
 });
 
 describe("FIN-09-A05 public overview", () => {
-  it("hides scenarios and source conditions until the profile may see financing", async () => {
+  it("keeps funding scenarios and source conditions off Spending when financing access is granted", async () => {
     await renderOverview();
     expect(container.textContent).not.toContain("Now");
     expect(container.textContent).not.toContain("Earmark sources");
@@ -213,12 +213,12 @@ describe("FIN-09-A05 public overview", () => {
       earmarkSources: [{ id: "part", sourceName: "Synthetic source", conditions: "Internal condition" }],
     });
     await act(async () => window.dispatchEvent(new Event("focus")));
-    expect(container.textContent).toContain("Now");
-    expect(container.textContent).toContain("Realistic");
-    expect(container.textContent).toContain("Optimistic");
-    expect(container.textContent).toContain("Synthetic source");
-    expect(container.textContent).toContain("Internal condition");
-    expect(container.textContent).toContain("Unrestricted remainder -150.00");
+    expect(container.textContent).not.toContain("Now");
+    expect(container.textContent).not.toContain("Realistic");
+    expect(container.textContent).not.toContain("Optimistic");
+    expect(container.textContent).not.toContain("Synthetic source");
+    expect(container.textContent).not.toContain("Internal condition");
+    expect(container.textContent).not.toContain("Unrestricted remainder -150.00");
     expect(container.textContent).not.toMatch(/\bbank\b/i);
   });
 });
@@ -458,14 +458,60 @@ describe("FIN-09-A06 freshness", () => {
       budgetStatus: "approved",
       approvedOn: "2026-10-27",
       revision: version,
-      departments: [],
+      departments: [{ departmentKey: "updated-department", name: "Updated department allocation", plannedNok: "0.00", actualNok: "7.00", differenceNok: "-7.00", unbudgetedNok: "7.00", systems: [] }],
       choices: { systems: [], items: [] },
     });
     await act(async () => button("Open budgets")!.click());
-    await act(async () => button("Season budget")!.click());
-    expect(container.textContent).toContain("Approved budget · 2026-10-27");
-    expect(container.textContent).not.toContain("Approved budget · 2026-10-01");
+    expect(container.textContent).toContain("Updated department allocation");
+    expect(container.textContent).toContain("NOK 7.00");
+    expect(session.budgets?.approvedOn).toBe("2026-10-27");
     expect(session.budgets?.viewVersion).toBe(version);
     expect(session.overview?.viewVersion).toBe(version);
   });
+});
+
+
+describe("Spending purchase access", () => {
+  it("loads the Finance register only with permission and removes it when that permission ends", async () => {
+    const purchase: FinancePurchaseSummary = {
+      id: "purchase", publicRef: "PUR-1", status: "registered", buyerName: "Buyer",
+      supplierName: "Register-only supplier", projectId: "project", projectName: "Register-only project", requesterMemberId: null, requesterName: null,
+      paymentMethod: "team_account", purchaseDate: "2026-10-26", justification: "Workshop cost",
+      documentKind: "receipt", documentNumber: "REC-1", revision: 1, voidReason: null,
+      totalNok: "19.00", refundAccount: null, refundPhone: null, unpaid: false,
+      invoice: null, reimbursement: null, lines: [], exceptions: [], documents: [],
+    };
+    api.purchases.mockResolvedValue({ viewVersion: 2, ownRequests: [], register: [purchase], unpaidCount: 0 });
+    await renderOverview();
+    expect(api.purchases).not.toHaveBeenCalled();
+    api.capabilities.mockResolvedValue({ ...member, viewVersion: 2, profiles: ["finance"], capabilities: { ...member.capabilities, purchaseRegister: true } });
+    api.overview.mockResolvedValue(overview("19.00", 2));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(api.purchases).toHaveBeenCalledWith(undefined, false);
+    expect(container.textContent).toContain("Purchase register");
+    expect(container.textContent).toContain("Register-only project");
+    expect(container.textContent).not.toContain("Zebra workshop");
+    expect(button("Show systems")).toBeUndefined();
+    expect(button("Mark invoice paid")).toBeUndefined();
+    api.capabilities.mockResolvedValue({ ...member, viewVersion: 3 });
+    api.overview.mockResolvedValue(overview("19.00", 3));
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(container.textContent).not.toContain("Register-only project");
+    expect(container.textContent).not.toContain("Purchase register");
+    expect(session.purchases).toBeNull();
+  });
+});
+
+
+it("automatically reloads visible Finance figures after a remote version change without a refresh control", async () => {
+  vi.useFakeTimers();
+  try {
+    await renderOverview();
+    expect(container.textContent).toContain("Actual 19.00");
+    api.capabilities.mockResolvedValue({ ...member, viewVersion: 2 });
+    api.overview.mockResolvedValue(overview("27.00", 2));
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(container.textContent).toContain("Actual 27.00");
+    expect(container.textContent).not.toContain("Actual 19.00");
+  } finally { vi.useRealTimers(); }
 });

@@ -1,3 +1,4 @@
+import { linkPurchaseInvoice } from "./finance-invoice-links.js";
 import { hasPrivateProjectBudgetReadScope, loadMemberApprovedProjectBudgetWorkspace, loadMemberApprovedProjectBudgetDetail } from "./finance-project-budget-member-read.js";
 import {loadDepartmentHomeBudget} from "./finance-department-home.js";
 import {isDepartmentBudgetPackageMutation,loadDepartmentBudgetPreview,loadDepartmentBudgetPackages,loadDepartmentBudgetPackage,mutateDepartmentBudgetPackage} from "./finance-department-packages.js";
@@ -27,6 +28,8 @@ import { loadFinanceRecovery, performDeliveryMutation } from "./finance-recovery
 import { deliverPending } from "./finance-outbox.js";
 import { FinanceError } from "./finance-error.js";
 import { applyFundingMutation } from "./finance-funding.js";
+import { loadWonIncome } from "./finance-income-read.js";
+import { loadPipelineIncomeForecast } from "./finance-pipeline-forecast.js";
 import { loadFundingRecords } from "./finance-funding-read.js";
 import { loadFundingScenarios, loadOverview } from "./finance-summary.js";
 import { osloToday } from "./finance-money.js";
@@ -325,6 +328,10 @@ export function createFinanceServices(deps: {
           const loaded = await loadPurchaseRegister(query, current.seasonCode, unpaidOnly);
           const evidence = await loadPurchaseInvoiceReferences(db, await deps.authenticate(token), loaded.register.map(p => p.id));
           for (const purchase of loaded.register) for (const document of purchase.documents) { const ref = evidence.get(document.id); if (ref) Object.assign(document, ref); }
+          for (const purchase of loaded.register) {
+            const linked = evidence.get(`purchase:${purchase.id}`);
+            if (linked) purchase.documents.push({ id: linked.documentId, publicRef: `${purchase.publicRef}-link`, kind: purchase.documentKind, documentNumber: purchase.documentNumber, ...linked });
+          }
           view.register = loaded.register;
           view.unpaidCount = loaded.unpaidCount;
         } else {
@@ -334,23 +341,23 @@ export function createFinanceServices(deps: {
       }
       return presentPurchases(view, current.capabilities);
     },
-    async financing(token, knownVersion) {
+    async financing(token, _knownVersion) {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const current = await context(token);
         if (!current.capabilities.financing) throw new FinanceError(403, "Financing access is required.");
-        const same = unchanged(current, knownVersion);
-        if (same) return same;
         if (!current.seasonCode) {
-          return { viewVersion: current.viewVersion, seasonCode: null, funding: [], parts: [], scenarios: [] };
+          return { viewVersion: current.viewVersion, seasonCode: null, funding: [], parts: [], scenarios: [], pipelineForecast: [], wonIncome: [] };
         }
         try {
           const today = osloToday();
-          const [loaded, scenarios] = await Promise.all([
+          const [loaded, scenarios, pipelineForecast, wonIncome] = await Promise.all([
             loadFundingRecords(db.query.bind(db), current.seasonCode, today, current.capabilities.draftBudgetItems),
             loadFundingScenarios(db.query.bind(db), current.seasonCode, current.capabilities.draftBudgetItems),
+            loadPipelineIncomeForecast(db.query.bind(db), current.seasonCode),
+            loadWonIncome(db.query.bind(db), current.seasonCode),
           ]);
           if ((await context(token)).viewVersion === current.viewVersion) {
-            return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios };
+            return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios, pipelineForecast, wonIncome };
           }
         } catch (error) {
           if (error instanceof FinanceError) throw error;
@@ -360,6 +367,7 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
+      if (body.action === "linkPurchaseInvoice") return linkPurchaseInvoice(db, await deps.authenticate(token), body);
       if(isDepartmentBudgetPackageMutation(body.action)){
         const result=await mutateDepartmentBudgetPackage(db,await deps.authenticate(token),body);
         await dispatchEvent(result,body.action==="sendDepartmentBudgetPackage"?"department_package.submitted":body.action==="approveDepartmentBudgetPackage"?"department_package.approved":"department_package.returned");return result;

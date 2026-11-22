@@ -1,21 +1,18 @@
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@libs/components/ui/collapsible";
-import { Button } from "@libs/components/ui/button";
 import { Badge } from "@libs/components/ui/badge";
 import {
   Table,
   TableBody,
+  TableFooter,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@libs/components/ui/table";
 import type { DepartmentBudgetPlanVersion } from "./department-budget-types";
-import { InvoiceEvidence } from "./InvoiceEvidence";
+import { InvoiceLinks } from "./InvoiceEvidence";
+import { formatOre } from "./money";
 import {
+  canonicalNokOre,
   PROJECT_BUDGET_FIELD_LABELS,
   projectBudgetDiff,
   projectBudgetMoney,
@@ -44,6 +41,13 @@ export function DepartmentProjectBudgetReview({
 }) {
   const comparison = projectBudgetDiff(approved, proposed),
     live = new Map(evidence.map((entry) => [entry.entryId, entry]));
+  const rows = comparison.entries.map(change => {
+    const previousAmount = change.before && change.before.status !== "cancelled" ? canonicalNokOre(change.before.plannedNok) : 0n;
+    const nextAmount = change.after && change.after.status !== "cancelled" ? canonicalNokOre(change.after.plannedNok) : 0n;
+    return { ...change, previousAmount, amountChange: nextAmount - previousAmount };
+  }).sort((a, b) => Number(a.kind === "unchanged") - Number(b.kind === "unchanged"));
+  const totalAmountChange = rows.reduce((sum, row) => sum + row.amountChange, 0n);
+  const signedMoney = (amount: bigint) => `${amount > 0n ? "+ " : amount < 0n ? "− " : ""}${projectBudgetMoney(formatOre(amount < 0n ? -amount : amount))}`;
   const planSystems = new Map(
     [...(approved?.entries ?? []), ...(proposed?.entries ?? [])].map(
       (entry) => [entry.systemId, entry.systemName ?? entry.systemId],
@@ -56,7 +60,7 @@ export function DepartmentProjectBudgetReview({
     unchanged: "Unchanged",
   };
   const value = (field: ProjectBudgetDiffField, text: string | null) => {
-    if (text === null || text === "") return "None";
+    if (text === null || text === "") return "—";
     if (field === "systemId")
       return (
         systems.find((system) => system.id === text)?.name ??
@@ -69,24 +73,6 @@ export function DepartmentProjectBudgetReview({
   };
   return (
     <div className="min-w-0 space-y-4">
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-muted-foreground">Last approved</dt>
-          <dd>
-            {approved
-              ? projectBudgetMoney(comparison.approvedTotalNok)
-              : "No approved budget"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Package allocation</dt>
-          <dd>{projectBudgetMoney(comparison.proposedTotalNok)}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Net change</dt>
-          <dd>{projectBudgetMoney(comparison.netTotalNok)}</dd>
-        </div>
-      </dl>
       {comparison.entries.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No approved or included entries.
@@ -97,74 +83,41 @@ export function DepartmentProjectBudgetReview({
             <TableRow>
               <TableHead>Entry</TableHead>
               <TableHead>Change</TableHead>
-              <TableHead>System</TableHead>
               <TableHead>Current priority</TableHead>
-              <TableHead className="text-right">Package plan</TableHead>
+              <TableHead className="text-right">Previous amount</TableHead>
+              <TableHead className="text-right">Amount change</TableHead>
               <TableHead className="text-right">Current actual</TableHead>
-              <TableHead>Fulfillment and invoices</TableHead>
+              <TableHead>Fulfillment</TableHead>
+              <TableHead>Invoice</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {comparison.entries.map((change) => {
+            {rows.map((change) => {
               const entry = change.after ?? change.before!,
                 actual = live.get(change.entryId);
-              const fields =
-                change.changes.length > 0 ? (
-                  <dl className="mt-3 space-y-2 text-xs">
-                    {change.changes.map((field) => (
-                      <div key={field.field}>
-                        <dt className="font-medium">
-                          {PROJECT_BUDGET_FIELD_LABELS[field.field]}
-                        </dt>
-                        <dd className="mt-1 break-words">
-                          <span className="text-muted-foreground">
-                            Previous:
-                          </span>{" "}
-                          {value(field.field, field.before)}
-                          <br />
-                          <span className="text-muted-foreground">
-                            Package:
-                          </span>{" "}
-                          {value(field.field, field.after)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                ) : null;
+              const { previousAmount, amountChange } = change;
+              const detailChanges = change.kind === "changed" ? change.changes.filter(field => field.field !== "plannedNok") : [];
+              const fields = detailChanges.length ? (
+                <dl className="mt-2 space-y-2 text-xs">
+                  {detailChanges.map((field) => (
+                    <div key={field.field}>
+                      <dt className="font-medium">{PROJECT_BUDGET_FIELD_LABELS[field.field]}</dt>
+                      <dd className="mt-1 break-words"><span className="text-muted-foreground">{value(field.field, field.before)}</span>{" → "}{value(field.field, field.after)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null;
               return (
-                <TableRow key={change.entryId}>
+                <TableRow key={change.entryId} data-change={change.kind} className={change.kind !== "unchanged" ? "bg-[var(--warning)]/10" : undefined}>
                   <TableCell className="min-w-56 max-w-sm whitespace-normal">
                     <span className="font-medium">{entry.description}</span>
-                    {fields &&
-                    (change.kind === "added" || change.kind === "removed") ? (
-                      <Collapsible className="mt-2">
-                        <CollapsibleTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto whitespace-normal px-0 text-xs"
-                            aria-label={`View ${change.kind === "added" ? "new" : "removed"} entry details for ${entry.description}`}
-                          >
-                            View {change.kind === "added" ? "new" : "removed"}{" "}
-                            entry details
-                          </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>{fields}</CollapsibleContent>
-                      </Collapsible>
-                    ) : (
-                      fields
-                    )}
+                    {(change.kind === "added" || change.kind === "removed") && entry.note ? <p className="mt-1 text-xs text-muted-foreground">{entry.note}</p> : null}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{label[change.kind]}</Badge>
+                  <TableCell className="min-w-28 max-w-xs whitespace-normal">
+                    <Badge variant="outline" className={change.kind === "changed" ? "border-transparent bg-[var(--warning)] text-[var(--warning-foreground)]" : change.kind === "added" ? "border-transparent bg-[var(--success)] text-[var(--success-foreground)]" : change.kind === "removed" ? "border-destructive/30 bg-destructive/10 text-destructive" : undefined}>{label[change.kind]}</Badge>
+                    {fields}
                   </TableCell>
-                  <TableCell className="max-w-xs whitespace-normal">
-                    {systems.find((system) => system.id === entry.systemId)
-                      ?.name ??
-                      entry.systemName ??
-                      entry.systemId}
-                  </TableCell>
+
                   <TableCell>
                     {actual?.priority ?? entry.priority}
                     {actual && actual.priority !== entry.priority ? (
@@ -173,65 +126,34 @@ export function DepartmentProjectBudgetReview({
                       </span>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    {change.after ? (
-                      change.after.status === "cancelled" ? (
-                        <>
-                          <span>Cancelled</span>
-                          <span className="mt-1 block text-xs text-muted-foreground">
-                            Stored {projectBudgetMoney(change.after.plannedNok)}
-                          </span>
-                        </>
-                      ) : (
-                        projectBudgetMoney(change.after.plannedNok)
-                      )
-                    ) : (
-                      <>
-                        <span>Removed</span>
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          Previous{" "}
-                          {projectBudgetMoney(change.before!.plannedNok)}
-                        </span>
-                      </>
-                    )}
+                  <TableCell className="text-right whitespace-nowrap tabular-nums">
+                    {change.before ? projectBudgetMoney(formatOre(previousAmount)) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap tabular-nums font-medium">
+                    {amountChange === 0n ? <span className="text-muted-foreground">—</span> : signedMoney(amountChange)}
                   </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     {actual
                       ? projectBudgetMoney(actual.actualNok)
                       : "Unavailable"}
                   </TableCell>
+                  <TableCell className="whitespace-normal text-xs text-muted-foreground">
+                    {actual ? actual.completion === "complete" ? "Complete" : actual.completion === "partial" ? "Partially purchased" : "Not purchased" : "No purchase facts available"}
+                  </TableCell>
                   <TableCell className="max-w-xs whitespace-normal">
-                    {actual ? (
-                      <>
-                        <span>
-                          {actual.completion === "complete"
-                            ? "Complete"
-                            : actual.completion === "partial"
-                              ? "Partially purchased"
-                              : "Not purchased"}
-                        </span>
-                        {actual.invoices?.length ? (
-                          <ul className="mt-2 space-y-2">
-                            {actual.invoices.map((invoice) => (
-                              <li key={invoice.documentId}>
-                                <InvoiceEvidence
-                                  invoice={invoice}
-                                  onChanged={onEvidenceChanged}
-                                  onAccessEnded={onAccessEnded}
-                                />
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </>
-                    ) : (
-                      "No purchase facts available"
-                    )}
+                    {actual?.invoices?.length ? <InvoiceLinks invoices={actual.invoices} onChanged={onEvidenceChanged} onAccessEnded={onAccessEnded} /> : actual && (actual.completion !== "not_purchased" || canonicalNokOre(actual.actualNok) > 0n) ? <span className="text-xs text-muted-foreground">Invoice not found</span> : <span className="text-xs text-muted-foreground">—</span>}
                   </TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
+          <TableFooter className="border-t-2 border-foreground/30 [&_td]:pt-3 [&_th]:pt-3">
+            <TableRow>
+              <TableHead scope="row" colSpan={4}>Total amount change</TableHead>
+              <TableCell className="text-right whitespace-nowrap font-semibold tabular-nums">{signedMoney(totalAmountChange)}</TableCell>
+              <TableCell colSpan={3} />
+            </TableRow>
+          </TableFooter>
         </Table>
       )}
     </div>

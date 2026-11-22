@@ -1,5 +1,5 @@
 import { publishFinanceUpdate } from "./finance-events";
-import type { LocalRecordedPurchase } from "./local-finance-projection";
+import { localPurchaseWarningKind, type LocalRecordedPurchase } from "./local-finance-projection";
 import type { LocalInvoiceFact } from "./invoice-local";
 import {
   isLocalMemberMode,
@@ -251,7 +251,7 @@ export function createLocalProjectPurchaseRepository(): ProjectPurchaseRepositor
       purchases.records ??= {};
       purchases.records[id] = {id,publicRef,projectId:change.projectId,responsibleDepartmentId:change.responsibleDepartmentId,requesterMemberId:actor,purchase:change.purchase,
         approval:purchase.lines.flatMap(line=>{const entry=budget?.approvedVersion?.entries.find(item=>item.entryId===line.budgetItemId);return entry?[{entryId:entry.entryId,approvedVersionId:budget!.approvedVersionId,earmarkId:entry.earmarkId??null}]:[];}),
-        reviewFacts:checked.warnings.map((warning,index)=>({id:`${id}-review-${index+1}`,kind:warning.message.toLowerCase().includes("unbudgeted")?"unbudgeted" as const:"budget_overrun" as const,reviewStatus:"open" as const,facts:{message:warning.message},reason:null,actorMemberId:null,reviewedAt:null}))};
+        reviewFacts:checked.warnings.map((warning,index)=>({id:`${id}-review-${index+1}`,kind:localPurchaseWarningKind(warning.message,purchase.lines.some(line=>line.unbudgeted)),reviewStatus:"open" as const,facts:{message:warning.message},reason:null,actorMemberId:null,reviewedAt:null}))};
       purchases.requests[key] = { fingerprint, result };
       save(value, purchases);
       publishFinanceUpdate();

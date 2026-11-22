@@ -2,12 +2,14 @@
 
 Feature: `project-budget-approvals`
 Revision: 2
-Status: approved revision 2, with direct user addenda D16, D17, D18 and D19
+Status: approved revision 2, with direct user addenda D16–D20
 Prepared: 19 November 2026; amended: 20 November 2026
 Tracker: Linear, team `HELIX`, project `P-HELIX-4`, existing Finance milestone `eb62b788-596a-4920-ab8d-cfda9aa53cc0`
 Parent: [HELIX-75](https://linear.app/helixnmbu/issue/HELIX-75/project-budgets-approvals-and-purchase-tracking), related to HELIX-34 and HELIX-63.
 Scope: [scope.md](scope.md), confirmed decisions D1 through D19.
 Ticket plan: [tickets.md](tickets.md). Individual drafts are in [issues/](issues/).
+
+Latest direct UI and workflow refinements: [Finance workspace addendum D20](finance-workspace-addendum.md).
 
 ## Approval contract
 

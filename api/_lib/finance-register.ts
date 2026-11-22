@@ -13,6 +13,10 @@ import type {
 type Query = <T>(sql: string, params?: unknown[]) => Promise<{ rows: T[] }>;
 
 type RegisterRow = {
+  department_id: string | null;
+  department_name: string | null;
+  project_id: string | null;
+  project_name: string | null;
   id: string;
   public_ref: string;
   status: PurchaseStatus;
@@ -75,7 +79,7 @@ export async function loadPurchaseRegister(
     [seasonCode],
   );
   const loaded = await query<RegisterRow>(
-    `select p.id, p.public_ref, p.status, p.buyer_name, p.supplier_name, p.requester_member_id,
+    `select p.id, p.responsible_department_id as department_id, department.name as department_name, p.project_id, project.name as project_name, p.public_ref, p.status, p.buyer_name, p.supplier_name, p.requester_member_id,
             m.full_name as requester_name, p.payment_method, p.purchase_date::text as purchase_date,
             p.justification, p.document_kind, p.document_number, p.revision, p.void_reason,
             coalesce(sum(l.amount_ore), 0)::text as total_ore, p.refund_account, p.refund_phone,
@@ -87,11 +91,13 @@ export async function loadPurchaseRegister(
             (select o.paid_on::text from finance.outlay_reimbursements o where o.purchase_id = p.id) as outlay_paid_on
      from finance.purchases p
      join finance.seasons s on s.id = p.season_id
+     left join project_management.departments department on department.id = p.responsible_department_id
+     left join project_management.projects project on project.id = p.project_id
      left join identity.members m on m.id = p.requester_member_id
      left join finance.purchase_lines l on l.purchase_id = p.id
      where s.code = $1
        and ($2::boolean is not true or finance.purchase_has_unsettled_obligation(p.id))
-     group by p.id, m.full_name
+     group by p.id, m.full_name, project.name, department.name
      order by p.public_ref desc`,
     [seasonCode, unpaidOnly],
   );
@@ -170,6 +176,10 @@ export async function loadPurchaseRegister(
       }));
     return {
       id: row.id,
+      departmentId: row.department_id ?? null,
+      departmentName: row.department_name ?? null,
+      projectId: row.project_id ?? null,
+      projectName: row.project_name ?? null,
       publicRef: row.public_ref,
       status: row.status,
       buyerName: row.buyer_name,

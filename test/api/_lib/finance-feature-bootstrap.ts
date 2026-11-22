@@ -29,6 +29,15 @@ export async function bootstrapFinanceFeature(pg: ProjectBudgetTestDatabase) {
   const db = { exec: (sql: string) => pg.exec(sql), query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
   const exists = async (name: string) => (await pg.query<{ present: boolean }>("select to_regclass($1) is not null as present", [name])).rows[0].present;
   if (!(await exists("partner_deals.space_access"))) await setupFundingPipelineFixture(db);
+  await pg.exec(`
+    alter table partner_deals.deals add column if not exists probability integer, add column if not exists cancelled_at timestamptz, add column if not exists organization_id uuid;
+    create schema if not exists partner;
+    create table if not exists partner.organizations(id uuid primary key,name text);
+    create table if not exists project_management.tasks(id uuid primary key,status text,completed_at timestamptz);
+    create table if not exists partner_deals.task_links(deal_id uuid,task_id uuid,season_id uuid,kind text,contribution_id uuid);
+    create table if not exists partner_deals.contributions(id uuid primary key,deal_id uuid,season_id uuid,kind text,amount_ore bigint,invoice_date date,retired_at timestamptz,pending_change_id uuid);
+    create table if not exists partner_deals.funding_links(contribution_id uuid primary key,funding_id uuid);
+  `);
   const canonical = read("016_fixed_departments.sql").match(/create or replace function project_management\.canonical_department[\s\S]*?\$\$;/)?.[0];
   if (!canonical) throw new Error("Missing actual canonical department function.");
   await pg.exec(canonical);
@@ -40,6 +49,8 @@ export async function bootstrapFinanceFeature(pg: ProjectBudgetTestDatabase) {
   if (!(await exists("finance.upload_final_candidates"))) await pg.exec(read("021_finance_final_candidate_ledger.sql"));
   if (!(await pg.query<{ present: boolean }>("select exists(select 1 from information_schema.columns where table_schema='finance' and table_name='purchases' and column_name='import_source') as present")).rows[0].present) await pg.exec(read("065_finance_historical_purchases.sql"));
   await applyProjectBudgetMigrations(db);
+  await pg.exec(read("076_purchase_invoice_links.sql"));
+  await pg.exec(read("077_correct_purchase_invoice_links.sql"));
 }
 
 /** Insert an explicitly pre-071 private invoice without inventing import or payment facts.

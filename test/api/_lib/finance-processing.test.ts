@@ -948,3 +948,48 @@ describe("FIN-08 purchase register, settlement, void, and review", () => {
     expect(await reviewRows(reviewId)).toEqual(before);
   });
 });
+
+it("returns each purchase's actual project while keeping older unassigned purchases explicit", async () => {
+  await seasonWithBudget();
+  const saved = await registerPurchase(); expect(saved.status).toBe(200);
+  expect(registerOf((await read("finance")).body)[0]).toMatchObject({ projectId: null, projectName: null, departmentId: null, departmentName: null });
+  const projectId = crypto.randomUUID();
+  await sql("insert into project_management.projects(id,season,name,lead_ids,departments) values($1,'S27','Chassis development','{}',array['Mechanical & Production'])", [projectId]);
+  const departmentId = crypto.randomUUID();
+  await sql("insert into project_management.departments(id,season,name) values($1,'S27','Mechanical & Production')", [departmentId]);
+  await sql("update finance.purchases set project_id=$1,responsible_department_id=$3 where id=$2", [projectId, saved.body.id, departmentId]);
+  expect(registerOf((await read("finance")).body)[0]).toMatchObject({ projectId, projectName: "Chassis development", departmentId, departmentName: "Mechanical & Production" });
+});
+
+it("links an existing invoice with Finance authority, audit and idempotency without changing money or transfer jobs", async () => {
+  await seasonWithBudget();
+  const saved = await registerPurchase({paymentMethod:"invoice",documentKind:"invoice",invoiceDueDate:"2026-12-01"}); expect(saved.status).toBe(200);
+  const purchaseId=saved.body.id!;
+  const before=registerOf((await read("finance")).body)[0];
+  const transfers=await sql("select document_id,status,revision from finance.invoice_transfers order by document_id");
+  const change={action:"linkPurchaseInvoice",purchaseId,expectedRevision:0,requestId:requestId(),viewerUrl:"https://drive.google.com/open?id=actual-file-123&usp=sharing"};
+  expect((await call("business",change)).status).toBe(403);
+  expect((await call("finance",{...change,requestId:requestId(),viewerUrl:"https://drive.google.com/drive/folders/not-a-file"})).status).toBe(400);
+  const linked=await call("finance",change); expect(linked.status).toBe(200);
+  const currentVersion=await version(); expect(await call("finance",change)).toEqual(linked); expect(await version()).toBe(currentVersion);
+  expect((await call("finance",{...change,viewerUrl:"https://drive.google.com/file/d/different-file/view"})).status).toBe(409);
+  const after=registerOf((await read("finance")).body)[0];
+  expect(after).toMatchObject({totalNok:before.totalNok,unpaid:before.unpaid,revision:1});
+  expect(after.invoice).toEqual(before.invoice); expect(after.reimbursement).toEqual(before.reimbursement);
+  const reference=after.documents.find(doc=>doc.id===`purchase:${purchaseId}`)!;
+  expect(reference).toMatchObject({backend:"google_drive",transferStatus:"stored",canRetry:false,viewerUrl:"https://drive.google.com/file/d/actual-file-123/view"});
+  expect(await sql("select document_id,status,revision from finance.invoice_transfers order by document_id")).toEqual(transfers);
+  expect((await sql("select * from finance.audit_log where entity='purchase' and entity_id=$1 and field_name='invoice_viewer_url'",[purchaseId])).length).toBe(1);
+  expect((await call("finance",{action:"downloadDocument",requestId:requestId(),documentId:`purchase:${purchaseId}`})).body).toMatchObject({viewerUrl:"https://drive.google.com/file/d/actual-file-123/view"});
+  const correction={...change,requestId:requestId(),expectedRevision:1,viewerUrl:"https://drive.google.com/file/d/corrected-file/view"};
+  expect((await call("finance",{...correction,expectedRevision:0})).status).toBe(409);
+  const corrected=await call("finance",correction);expect(corrected.status).toBe(200);expect(await call("finance",correction)).toEqual(corrected);
+  const updated=registerOf((await read("finance")).body)[0];expect(updated).toMatchObject({revision:2,totalNok:before.totalNok,unpaid:before.unpaid});expect(updated.invoice).toEqual(before.invoice);
+  expect(updated.documents.find(doc=>doc.id===`purchase:${purchaseId}`)?.viewerUrl).toBe(correction.viewerUrl);
+  expect((await call("finance",{action:"downloadDocument",requestId:requestId(),documentId:`purchase:${purchaseId}`})).body).toMatchObject({viewerUrl:correction.viewerUrl});
+  expect(await sql("select document_id,status,revision from finance.invoice_transfers order by document_id")).toEqual(transfers);
+  const audit=await sql("select * from finance.audit_log where entity='purchase' and entity_id=$1 and field_name='invoice_viewer_url' order by occurred_at",[purchaseId]);
+  expect(audit).toHaveLength(2);expect(audit).toEqual(expect.arrayContaining([expect.objectContaining({old_value:"https://drive.google.com/file/d/actual-file-123/view",new_value:correction.viewerUrl})]));
+  await sql("select finance.set_member_grant($1::uuid,$2::uuid,'finance',false,'Test revoked')",[operatorId,financeId]);
+  expect((await call("finance",{action:"downloadDocument",requestId:requestId(),documentId:`purchase:${purchaseId}`})).status).toBe(403);
+});

@@ -33,6 +33,7 @@ beforeAll(async()=>{
  await pg.exec(readFileSync(new URL("../../../db/migrations/056_partner_deal_sponsor_level.sql",import.meta.url),"utf8"));
  await pg.exec(`alter table partner_deals.deals add column cancelled_at timestamptz; alter table partner_deals.contributions add column retired_at timestamptz; alter table partner_deals.contributions add column pending_change_id uuid; alter table partner_deals.deliverables add column retired_at timestamptz; alter table partner_deals.deliverables add column pending_change_id uuid; create table finance.funding(id uuid,status text,revision integer,received_date date); create table partner_deals.funding_links(contribution_id uuid,funding_id uuid); create table partner_deals.manual_reconciliation_items(change_id uuid,kind text,item_id uuid); create table partner_deals.agreement_changes(id uuid,deal_id uuid,kind text,reason text,before_terms jsonb,proposed_terms jsonb,status text,created_at timestamptz,resolved_at timestamptz,withdrawn_at timestamptz,resolution_note text); create table partner_deals.manual_funding_reviews(id uuid,contribution_id uuid,note text,reviewed_at timestamptz); create function partner_deals.manual_finance_review_ready(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_needs_review(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_review_token(uuid) returns text language sql as $$ select null::text $$; create function partner_deals.linked_funding_mismatch(uuid) returns boolean language sql as $$ select false $$; create table partner_deals.separate_funding_approvals(contribution_id uuid,candidate_snapshot jsonb); create function partner_deals.funding_candidate_snapshot(uuid) returns jsonb language sql as $$ select '[]'::jsonb $$; create table partner_deals.finance_reviews(contribution_id uuid,organization_name text,season_id uuid,amount_ore bigint,status text); create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid,contribution_id uuid);`);
  await pg.exec(readFileSync(new URL("../../../db/migrations/059_imported_partner_deals.sql",import.meta.url),"utf8"));
+ await pg.exec(readFileSync(new URL("../../../db/migrations/075_partner_grants.sql",import.meta.url),"utf8").split("-- END CLASSIFICATION SAVE")[0]+"\ncommit;");
  await pg.exec(`insert into partner_deals.member_grants values ('${business}','business',true),('${marketing}','marketing',true);`);
  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  services=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});
@@ -114,6 +115,19 @@ describe("partner deals access and persistence",()=>{
   await expect(pg.query("select partner_deals.confirm_won($1,$2,$3,$4,0)",[business,identities.get(business)!.googleSub,identities.get(business)!.email,id])).rejects.toThrow(/deal_invoice_date_required/);
   expect((await pg.query<{stage:string}>("select stage from partner_deals.deals where id=$1",[id])).rows[0].stage).toBe("lead");
  });
+
+it("persists grant classification and preserves it when older clients omit the field",async()=>{
+ const {id:organizationId}=await services.createOrganization(business,"Grant source");
+ const grant={...input(),organizationId,opportunityKind:"grant",contributions:[{seasonId:season,kind:"cash",amountOre:"10000",invoiceDate:null}],deliverables:[]};
+ const {id}=await services.save(business,grant);
+ expect((await services.load(business,"pipeline")).deals.find(value=>(value as {id:string}).id===id)).toMatchObject({opportunityKind:"grant"});
+ const {opportunityKind:_kind,...older}=grant;
+ await services.save(business,{...older,id,expectedRevision:0,title:"Updated grant"});
+ expect((await pg.query<{opportunity_kind:string}>("select opportunity_kind from partner_deals.deals where id=$1",[id])).rows[0].opportunity_kind).toBe("grant");
+ await expect(services.save(business,{...grant,opportunityKind:"unknown"})).rejects.toMatchObject({status:400});
+ await expect(services.save(marketing,grant)).rejects.toMatchObject({status:403});
+});
+
  it("rechecks account and grant revocation",async()=>{
   await pg.query("update partner_deals.member_grants set active=false where member_id=$1",[marketing]);
   await expect(services.load(marketing,"shared")).rejects.toMatchObject({status:403});

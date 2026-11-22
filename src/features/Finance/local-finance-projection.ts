@@ -35,7 +35,13 @@ import type {
   PurchaseStatus,
 } from "./types";
 
+/** Local validation warnings use these phrases instead of the API's typed exception codes. */
+export function localPurchaseWarningKind(message: string, hasUnbudgetedLines = false): "unbudgeted" | "budget_overrun" {
+  return /not in the budget|unbudgeted/i.test(message) || (hasUnbudgetedLines && /unallocated item/i.test(message)) ? "unbudgeted" : "budget_overrun";
+}
+
 export interface LocalRecordedPurchase {
+  invoiceViewerUrl?: string | null;
   id: string;
   publicRef: string;
   projectId: string;
@@ -68,6 +74,7 @@ export interface LocalFinanceProjectionInput {
     departmentName: string;
     sortOrder: number;
   }>;
+  projects?: Array<{ id: string; name: string }>;
   budgets: ProjectBudgetDetail[];
   purchases: LocalRecordedPurchase[];
   invoices: ProjectBudgetInvoiceReference[];
@@ -219,7 +226,7 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
             .get(purchase.id)!
             .lines.some((line) => line.budgetItemId === id)
         )
-          for (const documentId of purchase.purchase.uploadIds) {
+          for (const documentId of [...purchase.purchase.uploadIds, `purchase:${purchase.id}`]) {
             const ref = invoiceMap.get(documentId);
             if (ref) refs.set(documentId, ref);
           }
@@ -595,6 +602,10 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
         : null;
     return {
       id: record.id,
+      departmentId: record.responsibleDepartmentId || null,
+      departmentName: input.departments?.find(department => department.id === record.responsibleDepartmentId)?.departmentName ?? input.budgets.find(budget => budget.responsibleDepartmentId === record.responsibleDepartmentId)?.responsibleDepartmentName ?? null,
+      projectId: record.projectId || null,
+      projectName: input.projects?.find(project => project.id === record.projectId)?.name ?? input.budgets.find(budget => budget.projectId === record.projectId)?.projectName ?? null,
       publicRef: record.publicRef,
       status: record.status ?? "registered",
       buyerName: purchase.buyerName,
@@ -633,7 +644,7 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
         amountNok: formatOre(line.amountOre),
         allocationNok: formatOre(line.amountOre),
       })),
-      documents: purchase.uploadIds.flatMap((id, index) => {
+      documents: [...purchase.uploadIds, `purchase:${record.id}`].flatMap((id, index) => {
         const ref = invoiceMap.get(id);
         return ref
           ? [
@@ -652,7 +663,10 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
             ]
           : [];
       }),
-      exceptions: record.reviewFacts ?? [],
+      exceptions: (record.reviewFacts ?? []).map(review =>
+        review.kind === "budget_overrun" && typeof review.facts.message === "string"
+          ? { ...review, kind: localPurchaseWarningKind(review.facts.message, purchase.lines.some(line => line.unbudgeted)) }
+          : review),
     };
   });
   return {

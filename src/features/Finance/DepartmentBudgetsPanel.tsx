@@ -258,7 +258,9 @@ function DepartmentPackageReasonDialog({
   onReasonChange,
   onOpenChange,
   onSubmit,
+  decisionMode = false,
 }: {
+  decisionMode?: boolean;
   action: ReasonAction;
   permitted: boolean;
   open: boolean;
@@ -270,7 +272,7 @@ function DepartmentPackageReasonDialog({
 }) {
   const returning = action === "returnDepartmentBudgetPackage",
     label = returning
-      ? "Return department package"
+      ? decisionMode ? "Decline budget" : "Return department package"
       : "Withdraw department package";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -285,9 +287,7 @@ function DepartmentPackageReasonDialog({
         <DialogHeader>
           <DialogTitle>{label}</DialogTitle>
           <DialogDescription>
-            The whole active package becomes unavailable for approval. Included
-            candidates return to Draft and must pass both reviews again.
-            Previous approved budgets stay usable.
+            {decisionMode ? "Declining returns all included project changes to Draft. Add a comment explaining what needs to be updated. Previously approved budgets remain usable." : "The whole active package becomes unavailable for approval. Included candidates return to Draft and must pass both reviews again. Previous approved budgets stay usable."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -298,7 +298,7 @@ function DepartmentPackageReasonDialog({
           }}
         >
           <div className="space-y-2">
-            <Label htmlFor="department-package-reason">Reason</Label>
+            <Label htmlFor="department-package-reason">{decisionMode ? "Comment" : "Reason"}</Label>
             <Textarea
               id="department-package-reason"
               autoFocus
@@ -318,7 +318,7 @@ function DepartmentPackageReasonDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={busy || !permitted}>
-              {returning ? "Return to Draft" : "Withdraw to Draft"}
+              {returning ? decisionMode ? "Decline budget" : "Return to Draft" : "Withdraw to Draft"}
             </Button>
           </DialogFooter>
         </form>
@@ -331,7 +331,11 @@ export function DepartmentBudgetsPanel({
   departmentId,
   repository: provided,
   systems = [],
+  reviewPackageId,
+  onDecided,
 }: {
+  reviewPackageId?: string;
+  onDecided?: () => void;
   departmentId?: string;
   repository?: DepartmentBudgetRepository;
   systems?: ProjectBudgetSystemChoice[];
@@ -342,7 +346,7 @@ export function DepartmentBudgetsPanel({
   );
   const identity = useMemo(
     () => Symbol("department-budget-scope"),
-    [repository, departmentId],
+    [repository, departmentId, reviewPackageId],
   );
   const currentIdentity = useRef(identity);
   currentIdentity.current = identity;
@@ -503,7 +507,7 @@ export function DepartmentBudgetsPanel({
     mutationGeneration.current++;
     busyRef.current = false;
     setBusy(false);
-    selectedRef.current = null;
+    selectedRef.current = reviewPackageId ?? null;
     attempt.current = null;
     reasonTarget.current = null;
     setQueue(null);
@@ -534,7 +538,7 @@ export function DepartmentBudgetsPanel({
       window.removeEventListener(MEMBER_ACCESS_CHANGED, onAccessChanged);
       window.clearInterval(timer);
     };
-  }, [clearPrivate, load, repository]);
+  }, [clearPrivate, load, repository, reviewPackageId]);
   const selectedDepartment = departmentId ?? departmentSelection;
   const available = queue?.departments.find(
     (department) => department.id === selectedDepartment,
@@ -630,6 +634,7 @@ export function DepartmentBudgetsPanel({
         { variant: "success", href: null },
       );
       await load();
+      if (valid(captured, authorization) && (change.action === "approveDepartmentBudgetPackage" || change.action === "returnDepartmentBudgetPackage")) onDecided?.();
     } catch (error) {
       if (valid(captured, authorization))
         handleError(error, "Could not save department decision");
@@ -641,12 +646,29 @@ export function DepartmentBudgetsPanel({
     }
   }
   if (denied) return null;
+  const approveAction = detail?.status === "finance_pending" &&
+            detail.capabilities.canApproveFinance ? (
+              <Button
+                disabled={busy || dirtyRef.current}
+                onClick={() =>
+                  void mutate({
+                    action: "approveDepartmentBudgetPackage",
+                    packageId: detail.id,
+                    expectedRevision: detail.revision,
+                    requestId: crypto.randomUUID(),
+                  })
+                }
+              >
+                {reviewPackageId ? "Approve budget" : "Approve whole department budget"}
+              </Button>
+            ) : null;
   return (
     <section
       aria-label="Department budget submissions"
       aria-busy={loading || busy}
       className="min-w-0 space-y-6"
     >
+      {!reviewPackageId ? <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-medium">Department budget submissions</h2>
@@ -859,43 +881,31 @@ export function DepartmentBudgetsPanel({
             : "No department submissions yet."}
         </p>
       ) : null}
+      </> : loading && !detail ? <p className="text-sm text-muted-foreground">Loading budget decision…</p> : null}
       {detail ? (
         <section
           aria-label="Fixed department package"
-          className="min-w-0 space-y-6 rounded-lg border p-4"
+          className={reviewPackageId ? "min-w-0 space-y-4" : "min-w-0 space-y-6 rounded-lg border p-4"}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="text-lg font-medium">
+              {!reviewPackageId ? <h3 className="text-lg font-medium">
                 {detail.snapshot.departmentName} · {detail.snapshot.seasonCode}
-              </h3>
+              </h3> : null}
               <p className="mt-1 text-sm text-muted-foreground">
                 Submitted {new Date(detail.submittedAt).toLocaleString("en-GB")}{" "}
                 · {statusLabel[detail.status]}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              {!reviewPackageId ? <p className="mt-1 text-sm text-muted-foreground">
                 Plan and readiness are fixed at submission. Current actuals and
                 invoices can refresh independently.
-              </p>
+              </p> : null}
             </div>
-            {detail.status === "finance_pending" &&
-            detail.capabilities.canApproveFinance ? (
-              <Button
-                disabled={busy || dirtyRef.current}
-                onClick={() =>
-                  void mutate({
-                    action: "approveDepartmentBudgetPackage",
-                    packageId: detail.id,
-                    expectedRevision: detail.revision,
-                    requestId: crypto.randomUUID(),
-                  })
-                }
-              >
-                Approve whole department budget
-              </Button>
-            ) : null}
+            {!reviewPackageId ? approveAction : null}
           </div>
+          {reviewPackageId ? <p className="text-sm text-muted-foreground">{detail.status !== "finance_pending" ? `This submission is ${statusLabel[detail.status].toLowerCase()}.` : detail.capabilities.canApproveFinance || detail.capabilities.canReturn ? `Decide the whole department package of ${projectBudgetMoney(detail.snapshot.proposedTotalNok)}. Declining requires a comment and returns the included changes to Draft. Previously approved budgets remain usable.` : "Only Head of Finance can approve or decline this budget."}</p> : null}
           <div className="flex flex-wrap gap-2">
+            {reviewPackageId ? approveAction : null}
             {(
               [
                 "returnDepartmentBudgetPackage",
@@ -905,11 +915,12 @@ export function DepartmentBudgetsPanel({
               <DepartmentPackageReasonDialog
                 key={action}
                 action={action}
+                decisionMode={!!reviewPackageId}
                 permitted={
                   detail.status === "finance_pending" &&
                   (action === "returnDepartmentBudgetPackage"
                     ? detail.capabilities.canReturn
-                    : detail.capabilities.canWithdraw)
+                    : !reviewPackageId && detail.capabilities.canWithdraw)
                 }
                 open={reasonAction === action}
                 busy={busy}
@@ -951,14 +962,14 @@ export function DepartmentBudgetsPanel({
               />
             ))}
           </div>
-          <DepartmentBudgetSnapshotView
+          {!reviewPackageId ? <DepartmentBudgetSnapshotView
             snapshot={detail.snapshot}
             systems={systems}
             evidence={detail.evidence}
             onEvidenceChanged={() => refreshDetail(detail.id)}
             onAccessEnded={clearPrivate}
-          />
-          {detail.decisions.length ? (
+          /> : null}
+          {!reviewPackageId && detail.decisions.length ? (
             <section
               aria-label="Department package history"
               className="space-y-2 border-t pt-4"

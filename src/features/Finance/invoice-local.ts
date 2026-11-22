@@ -1,3 +1,6 @@
+import { capabilitiesForProfiles } from "./access";
+import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
+import { normalizeInvoiceDriveUrl } from "./invoice-link";
 import { localInvoiceReference } from "./local-invoice-reference";
 import {
   isLocalMemberMode,
@@ -15,6 +18,7 @@ export type LocalInvoiceFact = FinanceInvoiceRecoveryRow & {
   projectId: string;
 };
 type LocalState = {
+  records?: Record<string, {projectId:string;invoiceViewerUrl?:string|null}>;
   evidence?: Record<string, LocalInvoiceFact>;
   invoiceRetries?: Record<
     string,
@@ -57,7 +61,7 @@ function facts(state: LocalState) {
     ])
       for (const entry of version?.entries ?? [])
         for (const row of entry.invoices ?? []) {
-          if (row.backend !== "google_drive" || result[row.documentId])
+          if (row.documentId.startsWith("purchase:") || row.backend !== "google_drive" || result[row.documentId])
             continue;
           result[row.documentId] = {
             ...row,
@@ -74,7 +78,8 @@ function facts(state: LocalState) {
 }
 async function allowed(row: {projectId:string}, write: boolean) {
   guard();
-  if (localMemberHasFinancials()) return;
+  const selectedProfile = localFinanceProfileSelection();
+  if (localMemberHasFinancials() && selectedProfile !== null && capabilitiesForProfiles([selectedProfile ?? "finance"]).filesAndRefunds) return;
   const workspace = await createLocalProjectBudgetRepository().load({
     projectId: row.projectId,
   });
@@ -109,6 +114,12 @@ export function createLocalInvoiceEvidenceApi(): InvoiceEvidenceActions {
   guard();
   return {
     async open(documentId) {
+      if (documentId.startsWith("purchase:")) {
+        const purchase = read().records?.[documentId.slice(9)];
+        if (!purchase?.invoiceViewerUrl) fail("Invoice not found.",404);
+        await allowed(purchase,false);
+        return {viewerUrl:normalizeInvoiceDriveUrl(purchase.invoiceViewerUrl)};
+      }
       const row = facts(read())[documentId];
       if (!row) {
         for(const budget of budgets().budgets)for(const version of [budget.approvedVersion,budget.pendingVersion,...(budget.historyVersions??[])])for(const entry of version?.entries??[]) {

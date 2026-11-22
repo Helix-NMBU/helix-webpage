@@ -225,6 +225,7 @@ describe("canonical local Finance projection", () => {
       "9150.25",
     ]);
     expect(JSON.stringify(view)).not.toContain("99999.00");
+    expect(view.purchases.register[0]).toMatchObject({ projectId: "project", projectName: "Project" });
     expect(view.purchases.register[0].totalNok).toBe("3500.00"); // Quantity is not multiplied into line totals.
   });
   it("allocates complete project plans and actuals to their owners while retaining physical system identity once in choices", () => {
@@ -607,4 +608,19 @@ describe("canonical local Finance projection", () => {
     });
     expect(view.financing.scenarios[0].restrictedCoverNok).toBe("120.00"); // All 80 incurred + current remaining 40, regardless of spend deadline.
   });
+});
+
+it("names the purchase project even when it has no budget and keeps missing project identity explicit", () => {
+  const data = input(); data.projects = [{ id: "project", name: "Chassis development" }]; data.departments = [{ id: "department", departmentKey: "mechanical", departmentName: "Mechanical & Production", sortOrder: 0 }]; data.purchases = [purchase("purchase", null, "100.00")];
+  expect(projectLocalFinance(data).purchases.register[0]).toMatchObject({ projectId: "project", projectName: "Chassis development", departmentId: "department", departmentName: "Mechanical & Production" });
+  data.projects = [];
+  expect(projectLocalFinance(data).purchases.register[0].projectName).toBeNull();
+});
+
+it("corrects older local unbudgeted warning labels without changing recorded review facts", () => {
+  const data = input(); const recorded = purchase("purchase", null, "100.00");
+  recorded.reviewFacts = [{ id: "review", kind: "budget_overrun", reviewStatus: "open", facts: { message: "Line 1 is recorded as not in the budget." }, reason: null, actorMemberId: null, reviewedAt: null }];
+  data.purchases = [recorded];
+  expect(projectLocalFinance(data).purchases.register[0].exceptions[0].kind).toBe("unbudgeted");
+  expect(recorded.reviewFacts[0].kind).toBe("budget_overrun");
 });

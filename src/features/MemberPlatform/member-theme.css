@@ -51,6 +51,10 @@ html[data-member-theme] body:has(.member-platform) {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --warning: #fbbf24;
+  --warning-foreground: #1f2937;
+  --success: #15803d;
+  --success-foreground: #fff;
   --destructive-foreground: #fff;
   --platform-canvas: var(--muted);
   --color-destructive: var(--destructive);
@@ -89,6 +93,10 @@ html[data-member-theme="dark"] body:has(.member-platform) {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --warning: #fbbf24;
+  --warning-foreground: #1f2937;
+  --success: #34d399;
+  --success-foreground: #052e16;
   --destructive-foreground: #fff;
   --platform-canvas: var(--muted);
   --color-destructive: var(--destructive);

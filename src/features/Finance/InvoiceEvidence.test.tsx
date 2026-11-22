@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InvoiceEvidence, invoiceEvidenceMessage } from "./InvoiceEvidence";
+import { InvoiceEvidence, InvoiceLinks, invoiceEvidenceMessage } from "./InvoiceEvidence";
 import type { InvoiceEvidenceActions } from "./invoice-repository";
 import type { ProjectBudgetInvoiceReference } from "./project-budget-types";
 const notify = vi.hoisted(() => vi.fn());
@@ -32,10 +32,11 @@ const defer = <T,>() => {
   });
   return { promise, resolve, reject };
 };
-async function render() {
+async function render(compact = false) {
   await act(async () =>
     root.render(
       <InvoiceEvidence
+        compact={compact}
         invoice={invoice}
         actions={actions}
         onChanged={changed}
@@ -332,4 +333,52 @@ describe("provider-aware invoice evidence", () => {
     expect(actions.retry).toHaveBeenCalledOnce();
     expect(container.textContent).not.toContain("Retry invoice transfer");
   });
+});
+
+describe("budget invoice links", () => {
+  it.each(["pending", "transferring", "needs_attention"] as const)("shows Invoice not found for an unconfirmed %s transfer without offering retries", async transferStatus => {
+    invoice.transferStatus = transferStatus;
+    await render(true);
+    expect(container.textContent).toBe("Invoice not found");
+    expect(container.querySelector("a,button")).toBeNull();
+    expect(actions.open).not.toHaveBeenCalled(); expect(actions.retry).not.toHaveBeenCalled();
+  });
+  it("shows a hyperlink only for confirmed Drive evidence and reauthorizes a normal click", async () => {
+    invoice.transferStatus = "stored";
+    await render(true);
+    const link = container.querySelector("a")!;
+    expect(link.textContent).toBe("View invoice");
+    expect(link.href).toBe("https://drive.google.com/file/d/untrusted-metadata/view");
+    expect(link.target).toBe("_blank"); expect(link.rel).toContain("noopener");
+    await act(async () => link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    expect(actions.open).toHaveBeenCalledWith("document");
+    expect(clicked[0].href).toBe("https://drive.google.com/file/d/authorized-file/view");
+    expect(actions.retry).not.toHaveBeenCalled();
+  });
+  it.each([null, "javascript:alert(1)", "https://other.example/file", "https://drive.google.com/file/d/id/view?access_token=secret"])("shows Invoice not found if the stored invoice has a missing or invalid link: %s", async viewerUrl => {
+    invoice = { ...invoice, transferStatus: "stored", viewerUrl };
+    await render(true); expect(container.textContent).toBe("Invoice not found"); expect(container.querySelector("a")).toBeNull();
+  });
+  it("shows Invoice not found for a private file without a confirmed Drive reference", async () => {
+    invoice = { ...invoice, backend: "private_storage", transferStatus: "stored" };
+    await render(true); expect(container.textContent).toBe("Invoice not found"); expect(container.querySelector("a,button")).toBeNull();
+  });
+  it("clears a confirmed invoice hyperlink when access ends", async () => {
+    invoice.transferStatus = "stored";
+    let end!: () => void; actions.watchSession = callback => { end = callback; return () => {}; };
+    await render(true); expect(container.querySelector("a")).not.toBeNull();
+    await act(async () => end()); expect(container.querySelector("a")).toBeNull(); expect(container.textContent).toBe("");
+  });
+});
+
+it("shows a single missing-file label for several unavailable invoices and retains every confirmed Drive link", async () => {
+  const first = { ...invoice, documentId: "first", transferStatus: "stored" as const };
+  const second = { ...invoice, documentId: "second", originalName: "Second.pdf" };
+  const third = { ...invoice, documentId: "third", originalName: "Third.pdf" };
+  await act(async () => root.render(<InvoiceLinks invoices={[second, third]} actions={actions} />));
+  expect(container.textContent).toBe("Invoice not found");
+  await act(async () => root.render(<InvoiceLinks invoices={[first, second, third, { ...first, documentId: "fourth" }]} actions={actions} />));
+  expect(container.querySelectorAll("a")).toHaveLength(2);
+  expect(container.textContent).not.toContain("Invoice not found");
+  expect(actions.open).not.toHaveBeenCalled(); expect(actions.retry).not.toHaveBeenCalled();
 });

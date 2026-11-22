@@ -266,6 +266,7 @@ export function ensureLocalFundingFixtures() {
     organizationId: org,
     organizationName: "Workshop foundation",
     title: "Workshop equipment application",
+    opportunityKind: "grant",
     stage: "proposal",
     ownerMemberId: null,
     seasonId: "s27",

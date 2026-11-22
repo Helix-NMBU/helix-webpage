@@ -297,6 +297,10 @@ export type PurchaseExceptionReview = {
 };
 
 export type FinancePurchaseSummary = {
+  departmentId?: string | null;
+  departmentName?: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
   id: string;
   publicRef: string;
   status: PurchaseStatus;
@@ -479,12 +483,35 @@ export type FundingScenario = {
   shortfallNok: string;
 };
 
+export type PipelineIncomeRecord = {
+  contributionId: string;
+  fundingId: string | null;
+  amountNok: string;
+  confidence: "low" | "medium" | "high" | null;
+  invoiceDate: string | null;
+};
+
+export type WonIncomeRecord = {
+  opportunityKind?: "deal" | "grant";
+  contributionId: string;
+  dealId: string;
+  title: string;
+  sourceName: string;
+  amountNok: string;
+  fundingId: string | null;
+  plannedInvoiceDate: string | null;
+  invoiceSent: boolean;
+  invoiceSentOn: string | null;
+};
+
 export type FinancingView = {
   viewVersion: number;
   seasonCode: string | null;
   funding: FundingRecord[];
   parts: FundingPartRecord[];
   scenarios: FundingScenario[];
+  pipelineForecast?: PipelineIncomeRecord[];
+  wonIncome?: WonIncomeRecord[];
 };
 
 export type FinanceUnchanged = { unchanged: true; viewVersion: number };
@@ -628,6 +655,7 @@ export type FinanceMutation =
   | (MutationBase & { action: "reviseRequest"; requestRecordId: string; request: RequestInput })
   | (MutationBase & { action: "decideRequest"; requestRecordId: string; revisionId: string; decision: RequestDecisionKind; reason: string; approvedOreByLine?: Record<string, string> })
   | (MutationBase & { action: "closeRequest"; requestRecordId: string; reason: string; releasedNok: string })
+  | (MutationBase & { action: "linkPurchaseInvoice"; purchaseId: string; viewerUrl: string })
   | (MutationBase & { action: "downloadDocument"; documentId: string })
   | (MutationBase & { action: "continueInvoiceTransfers"; purchaseId: string })
   | (MutationBase & { action: "retryInvoiceTransfer"; documentId: string; expectedRevision: number })

@@ -1,3 +1,6 @@
+import { normalizeInvoiceDriveUrl, purchaseInvoiceReference } from "./invoice-link";
+import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
+import { capabilitiesForProfiles } from "./access";
 import {
   isLocalMemberMode,
   localMemberSignedIn,
@@ -7,7 +10,7 @@ import {
   localMemberHasSeasonOverview,
 } from "../MemberPlatform/member-access-api";
 import { initialLocalWorkspace } from "../ProjectManagement/local-repository";
-import { localSponsorFunding } from "../PartnerDeals/local-fixture";
+import { localWonIncome, localPipelineIncomeForecast, localSponsorFunding } from "../PartnerDeals/local-fixture";
 import { canonicalDepartment } from "../ProjectManagement/departments";
 import {
   projectLocalFinance,
@@ -59,6 +62,8 @@ export interface LocalPurchaseState {
     entryId?: string;
     purchaseId?: string;
     reason?: string;
+    previousInvoiceUrl?: string | null;
+    invoiceUrl?: string | null;
   }>;
   mutations?: Record<
     string,
@@ -76,6 +81,7 @@ export interface LocalPurchaseState {
         | "invoicePaidOn"
         | "refundPaid"
         | "refundPaidOn"
+        | "invoiceViewerUrl"
       >
     >
   >;
@@ -187,6 +193,10 @@ function readFacts(bankVersion: number): LocalFinanceProjectionInput {
     purchases.set(record.id, record);
   }
   const invoices = new Map<string, ProjectBudgetInvoiceReference>();
+  for (const purchase of purchases.values()) if (purchase.invoiceViewerUrl) {
+    const reference = purchaseInvoiceReference(purchase.id,purchase.publicRef,purchase.invoiceViewerUrl);
+    invoices.set(reference.documentId,reference);
+  }
   for (const budget of budgets.budgets)
     for (const version of [
       ...(budget.historyVersions ?? []),
@@ -243,6 +253,7 @@ function readFacts(bankVersion: number): LocalFinanceProjectionInput {
       departmentKey: departmentKey(department.name),
       sortOrder: index,
     })),
+    projects: workspace.projects.map(project => ({ id: project.id, name: project.name })),
     budgets: budgets.budgets,
     purchases: [...purchases.values()],
     invoices: [...invoices.values()],
@@ -277,7 +288,8 @@ export function loadLocalProjectBudgetFinancials(projectId: string) {
 
 export function loadLocalFinanceViews(bankVersion: number) {
   guard("finance");
-  return projectLocalFinance(readFacts(bankVersion));
+  const views = projectLocalFinance(readFacts(bankVersion));
+  return { ...views, financing: { ...views.financing, pipelineForecast: localPipelineIncomeForecast(views.financing.seasonCode), wonIncome: localWonIncome(views.financing.seasonCode) } };
 }
 /** Explicit allowlist: no invoice references, item IDs, application context or private funding fields. */
 export function loadLocalSeasonFinances(
@@ -336,6 +348,7 @@ export function mutateLocalPurchase(
 ): FinanceMutationResult {
   guard("finance");
   const purchaseActions = [
+    "linkPurchaseInvoice",
     "voidPurchase",
     "markInvoicePaid",
     "unmarkInvoicePaid",
@@ -351,6 +364,10 @@ export function mutateLocalPurchase(
   const fail = (message: string, status = 400): never => {
     throw Object.assign(new Error(message), { status });
   };
+  if (action.action === "linkPurchaseInvoice") {
+    const selectedProfile = localFinanceProfileSelection();
+    if (selectedProfile === null || !capabilitiesForProfiles([selectedProfile ?? "finance"]).filesAndRefunds) fail("Finance access is required.",403);
+  }
   if (typeof action.requestId !== "string" || !action.requestId)
     fail("A request ID is required.");
   const state = saved<LocalPurchaseState>(PURCHASES, {}),
@@ -385,7 +402,16 @@ export function mutateLocalPurchase(
   if (action.action === "voidPurchase" || action.action === "reviewException")
     if (reason.length < 3 || reason.length > 500)
       fail("Enter a reason of up to 500 characters.");
-  if (action.action === "reviewException") {
+  let previousInvoiceUrl: string | null = null;
+  if (action.action === "linkPurchaseInvoice") {
+    previousInvoiceUrl = current.invoiceViewerUrl ?? facts.invoices.find(invoice => invoice.purchaseId === current.id && invoice.backend === "google_drive" && invoice.transferStatus === "stored" && invoice.viewerUrl)?.viewerUrl ?? null;
+    try { current.invoiceViewerUrl = normalizeInvoiceDriveUrl(String(action.viewerUrl ?? "")); } catch(error) { fail((error as Error).message); }
+    const reference = purchaseInvoiceReference(current.id,current.publicRef,current.invoiceViewerUrl!);
+    const lines = normalizePurchaseInput(current.purchase).purchase!.lines;
+    for (const budget of budgets.budgets) for (const version of [budget.approvedVersion,budget.pendingVersion,...(budget.historyVersions ?? [])]) for (const entry of version?.entries ?? []) {
+      if (lines.some(line => line.budgetItemId === (entry.budgetItemId ?? entry.entryId))) entry.invoices=[...(entry.invoices ?? []).filter(invoice => invoice.documentId !== reference.documentId),reference];
+    }
+  } else if (action.action === "reviewException") {
     const review = current.reviewFacts!.find((r) => r.id === action.reviewId)!;
     if (review.reviewStatus !== "open")
       fail("This exception has already been reviewed.", 409);
@@ -500,6 +526,7 @@ export function mutateLocalPurchase(
   state.audit.push({
     action: String(action.action),
     purchaseId: current.id,
+    ...(action.action === "linkPurchaseInvoice" ? { previousInvoiceUrl, invoiceUrl: current.invoiceViewerUrl } : {}),
     ...(reason ? { reason } : {}),
   });
   budgets.version++;

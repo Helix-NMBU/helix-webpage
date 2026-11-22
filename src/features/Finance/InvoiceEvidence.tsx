@@ -2,7 +2,7 @@ import {
   isLocalMemberMode,
   localMemberSignedIn,
 } from "../MemberPlatform/local-mode";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Badge } from "@libs/components/ui/badge";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
@@ -50,6 +50,30 @@ function permittedUrl(value: string | undefined, drive: boolean): string {
     );
   return url.href;
 }
+export function confirmedDriveUrl(invoice: ProjectBudgetInvoiceReference): string | null {
+  if (invoice.backend !== "google_drive" || invoice.transferStatus !== "stored") return null;
+  try { return permittedUrl(invoice.viewerUrl ?? undefined, true); }
+  catch { return null; }
+}
+
+/** Several purchase documents can share one budget entry; show a missing-file label once. */
+export function InvoiceLinks({ invoices, ...props }: { invoices: ProjectBudgetInvoiceReference[] } & Pick<ComponentProps<typeof InvoiceEvidence>, "actions" | "onChanged" | "onAccessEnded">) {
+  let missingShown = false;
+  // A corrected purchase reference supersedes original attachments in invoice links.
+  // Original files remain available in purchase details and retain their transfer history.
+  const corrected = new Set(invoices.filter(invoice => invoice.documentId.startsWith("purchase:") && confirmedDriveUrl(invoice)).map(invoice => invoice.purchaseId));
+  const effective = invoices.filter(invoice => invoice.documentId.startsWith("purchase:") || !corrected.has(invoice.purchaseId));
+  const confirmed = effective.filter(invoice => confirmedDriveUrl(invoice));
+  const visible = confirmed.length ? confirmed : effective;
+  return <span className="inline-flex flex-wrap items-center gap-2">{visible.map(invoice => {
+    if (!confirmedDriveUrl(invoice)) {
+      if (missingShown) return null;
+      missingShown = true;
+    }
+    return <InvoiceEvidence key={invoice.documentId} compact invoice={invoice} {...props} />;
+  })}</span>;
+}
+
 const labels = {
   pending: "Transfer pending",
   transferring: "Transferring to Drive",
@@ -61,11 +85,13 @@ export function InvoiceEvidence({
   actions: provided,
   onChanged,
   onAccessEnded,
+  compact = false,
 }: {
   invoice: ProjectBudgetInvoiceReference;
   actions?: InvoiceEvidenceActions;
   onChanged?: () => Promise<void>;
   onAccessEnded?: () => void;
+  compact?: boolean;
 }) {
   const actions = useMemo(
     () => provided ?? createInvoiceEvidenceApi(),
@@ -80,6 +106,7 @@ export function InvoiceEvidence({
       invoice.transferStatus,
       invoice.transferRevision,
       invoice.canRetry,
+      invoice.viewerUrl,
     ],
   );
   const lifetime = useMemo(() => Symbol("invoice-subscription"), [actions, invoice.documentId]);
@@ -297,6 +324,10 @@ export function InvoiceEvidence({
     }
   }
   if (denied) return null;
+  if (compact) {
+    const viewerUrl = confirmedDriveUrl(invoice);
+    return viewerUrl ? <a href={viewerUrl} target="_blank" rel="noopener noreferrer" title={invoice.originalName} aria-label={`View invoice ${invoice.originalName}`} aria-disabled={busy || undefined} className="text-xs font-medium text-primary underline underline-offset-4 hover:opacity-80 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-ring" onClick={event => { event.preventDefault(); if (!busy) void run("open"); }}>View invoice</a> : <span className="text-xs text-muted-foreground">Invoice not found</span>;
+  }
   return (
     <div
       className="flex flex-wrap items-center gap-2 text-sm"
@@ -306,7 +337,7 @@ export function InvoiceEvidence({
       {(drive || !ready) && (
         <Badge variant="secondary">
           {drive
-            ? labels[invoice.transferStatus]
+            ? invoice.documentId.startsWith("purchase:") ? "Linked in Drive" : labels[invoice.transferStatus]
             : invoice.transferStatus === "needs_attention"
               ? "Needs attention"
               : "Evidence pending"}

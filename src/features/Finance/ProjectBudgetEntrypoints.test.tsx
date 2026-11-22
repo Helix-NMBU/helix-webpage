@@ -101,7 +101,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("project budget entry points", () => {
-  it("shows the Finance project queue while the legacy season view is loading and retains its access gate", async () => {
+  it("shows the dashboard loading state without private queues and retains its Finance gate", async () => {
     window.history.replaceState({}, "", "/?budgetRole=finance");
     await act(async () =>
       root.render(
@@ -110,11 +110,8 @@ describe("project budget entry points", () => {
         </MemoryRouter>,
       ),
     );
-    expect(
-      container.querySelector('[aria-label="Project budgets"]')
-        ?.textContent,
-    ).toContain("Sent to approval (Department lead)");
-    expect(container.textContent).toContain("Season budget");
+    expect(container.querySelector('[aria-label="Loading budget dashboard"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Project budgets"]')).toBeNull();
     expect(container.textContent).not.toContain("Review department submission");
     expect(access.pages).toContain("budgets");
     access.allowed = false;

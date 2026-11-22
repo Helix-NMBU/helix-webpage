@@ -15,6 +15,7 @@ vi.mock("../MemberPlatform/MemberNotifications", () => ({
   useNotify: () => notify,
 }));
 vi.mock("./InvoiceEvidence", () => ({
+  InvoiceLinks: ({ invoices }: { invoices: { originalName: string; documentId: string }[] }) => <>{invoices.map(invoice => <button key={invoice.documentId}>{invoice.originalName}</button>)}</>,
   InvoiceEvidence: ({ invoice }: { invoice: { originalName: string } }) => (
     <button>{invoice.originalName}</button>
   ),
@@ -269,9 +270,9 @@ describe("department package interface", () => {
       "Changed",
       "NOK 100.00",
       "NOK 120.00",
-      "Previous:",
-      "Package:",
-      "Electronics system",
+      "Previous amount",
+      "Amount change",
+      "+ NOK 20.00",
       "NOK 60.00",
       "Invoice.pdf",
     ])
@@ -532,5 +533,42 @@ describe("department package interface", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
     expect(repo.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("department page decision dialog", () => {
+  const showDecision = async (onDecided = vi.fn()) => {
+    await act(async () => root.render(<DepartmentBudgetsPanel departmentId="dep" reviewPackageId="packet" repository={repo} onDecided={onDecided} />));
+    return onDecided;
+  };
+  it("loads the pinned submission directly and approves it with its current revision", async () => {
+    const onDecided = await showDecision();
+    expect(repo.detail).toHaveBeenCalledWith("packet");
+    expect(container.textContent).toContain("Approve budget"); expect(container.textContent).toContain("Decline budget");
+    expect(container.textContent).not.toContain("Refresh submissions"); expect(container.textContent).not.toContain("All associated projects");
+    expect(container.textContent).not.toContain("Review package");
+    await click("Approve budget");
+    expect(repo.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "approveDepartmentBudgetPackage", packageId: "packet", expectedRevision: 4 }));
+    expect(onDecided).toHaveBeenCalledTimes(1);
+  });
+  it("requires a comment to decline and returns the fixed whole package to Draft", async () => {
+    const onDecided = await showDecision();
+    await click("Decline budget");
+    const form = document.querySelector("[role=dialog] form")!;
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(repo.mutate).not.toHaveBeenCalled(); expect(notify).toHaveBeenCalledWith("Enter a reason", expect.any(String), expect.any(Object));
+    await act(async () => reason("  Update supplier quotes  "));
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(repo.mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "returnDepartmentBudgetPackage", packageId: "packet", expectedRevision: 4, reason: "Update supplier quotes" }));
+    expect(onDecided).toHaveBeenCalledTimes(1);
+  });
+  it("keeps ordinary Finance read-only and clears the decision after access ends", async () => {
+    detail.capabilities = { canSubmit: false, canApproveFinance: false, canReturn: false, canWithdraw: false };
+    await showDecision();
+    expect(container.textContent).toContain("Only Head of Finance can approve or decline");
+    expect(container.textContent).not.toContain("Approve budget"); expect(container.textContent).not.toContain("Decline budget");
+    expect(repo.mutate).not.toHaveBeenCalled();
+    await act(async () => sessionEnd?.());
+    expect(container.textContent).toBe("");
   });
 });

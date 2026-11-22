@@ -97,6 +97,8 @@ describe("dedicated local project purchase fixtures", () => {
       [],
     );
     expect(result.warnings.length).toBeGreaterThan(0);
+    const recorded = JSON.parse(localStorage.getItem("helix-project-purchases-local-v1")!).records[result.id!];
+    expect(recorded.reviewFacts.every((review: {kind:string}) => review.kind === "unbudgeted")).toBe(true);
   });
   it("retains partial orders and evidence by stable ID, completes explicitly and reopens on another purchase", async () => {
     let budget = await approved();

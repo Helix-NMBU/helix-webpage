@@ -115,6 +115,8 @@ function reference(row: EvidenceRow): ProjectBudgetInvoiceReference {
 const fields = `d.id::text document_id,d.purchase_id::text,p.public_ref purchase_ref,d.original_name,d.storage_backend,t.status,t.revision,d.drive_viewer_url,
  finance.invoice_document_access($1::uuid,$2,$3,d.id,true) can_retry,
  (t.status in ('pending','needs_attention') or (t.status='transferring' and t.lease_until<=clock_timestamp())) retry_ready`;
+const linkedFields = `'purchase:'||p.id::text document_id,p.id::text purchase_id,p.public_ref purchase_ref,'Linked invoice'::text original_name,
+ 'google_drive'::text storage_backend,'stored'::text status,null::integer revision,to_jsonb(p)->>'invoice_viewer_url' drive_viewer_url,false can_retry,false retry_ready`;
 export async function loadBudgetEntryInvoiceReferences(
   db: CvDatabase,
   identity: WorkspaceIdentity,
@@ -128,7 +130,11 @@ export async function loadBudgetEntryInvoiceReferences(
       `select distinct a.budget_item_id::text entry_id,${fields}
  from finance.allocations a join finance.purchase_lines l on l.id=a.line_id join finance.purchases p on p.id=l.purchase_id
  join finance.documents d on d.purchase_id=p.id left join finance.invoice_transfers t on t.document_id=d.id
- where a.budget_item_id=any($4::uuid[]) and finance.invoice_document_access($1::uuid,$2,$3,d.id,false) order by d.id::text`,
+ where a.budget_item_id=any($4::uuid[]) and finance.invoice_document_access($1::uuid,$2,$3,d.id,false)
+ union all select distinct a.budget_item_id::text entry_id,${linkedFields}
+ from finance.allocations a join finance.purchase_lines l on l.id=a.line_id join finance.purchases p on p.id=l.purchase_id
+ where a.budget_item_id=any($4::uuid[]) and to_jsonb(p)->>'invoice_viewer_url' is not null and finance.invoice_document_access($1::uuid,$2,$3,p.id,false)
+ order by document_id`,
       [...actor(identity), entryIds],
     )
   ).rows;
@@ -150,7 +156,8 @@ export async function loadPurchaseInvoiceReferences(
   for (const row of (
     await db.query<EvidenceRow>(
       `select ${fields} from finance.documents d join finance.purchases p on p.id=d.purchase_id
- left join finance.invoice_transfers t on t.document_id=d.id where d.purchase_id=any($4::uuid[]) and finance.invoice_document_access($1::uuid,$2,$3,d.id,false)`,
+ left join finance.invoice_transfers t on t.document_id=d.id where d.purchase_id=any($4::uuid[]) and finance.invoice_document_access($1::uuid,$2,$3,d.id,false)
+ union all select ${linkedFields} from finance.purchases p where p.id=any($4::uuid[]) and to_jsonb(p)->>'invoice_viewer_url' is not null and finance.invoice_document_access($1::uuid,$2,$3,p.id,false)`,
       [...actor(identity), purchaseIds],
     )
   ).rows)
@@ -194,6 +201,13 @@ export async function openInvoice(
   identity: WorkspaceIdentity,
   documentId: unknown,
 ): Promise<FinanceMutationResult> {
+  if (typeof documentId === "string" && documentId.startsWith("purchase:")) {
+    const purchaseId = await access(db, identity, documentId.slice(9));
+    const row = (await db.query<{viewer_url:string|null}>("select to_jsonb(p)->>'invoice_viewer_url' as viewer_url from finance.purchases p where id=$1::uuid",[purchaseId])).rows[0];
+    if (!row?.viewer_url) throw new FinanceError(404,"Invoice not found.");
+    await access(db, identity, purchaseId);
+    return {ok:true,viewVersion:await viewVersion(db),viewerUrl:row.viewer_url,warnings:[],errors:[]};
+  }
   const id = await access(db, identity, documentId);
   const row = (
     await db.query<{

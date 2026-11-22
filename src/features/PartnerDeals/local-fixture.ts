@@ -1,6 +1,7 @@
 import { isLocalMemberMode, localMemberSignedIn } from '../MemberPlatform/local-mode';
 import { formatOre } from '../Finance/money';
-import type { FundingRecord } from '../Finance/types';
+import { dealConfidence } from "./confidence";
+import type { WonIncomeRecord, PipelineIncomeRecord, FundingRecord } from '../Finance/types';
 import type { Project, Task } from '../ProjectManagement/types';
 import type { Deal, Organization, PipelineData, Season } from './types';
 
@@ -46,7 +47,7 @@ export function addLocalWonEffects(state:LocalState,deal:Deal) {
   for(const item of deal.deliverables) addTask(group,item.title,item.description,item.dueDate,item.ownerMemberId,'marketing',item.id??null,null);
  }
  const cash=deal.contributions.find(c=>c.kind==='cash'&&c.seasonId===season.id);
- if(cash){const group=addProject(`${deal.organizationName} invoicing`,'operations','Finance');addTask(group,`Invoice ${deal.organizationName}`,'Review the agreement and invoice the partner.',cash.invoiceDate,null,'invoice',null,season.id);}
+ if(cash&&deal.opportunityKind!=="grant"){const group=addProject(`${deal.organizationName} invoicing`,'operations','Finance');addTask(group,`Invoice ${deal.organizationName}`,'Review the agreement and invoice the partner.',cash.invoiceDate,null,'invoice',null,season.id);}
 }
 /** Merge once by identity; retain any task status edited through the workspace. */
 export function localPartnerWorkspace(existing:{projects:Project[];tasks:Task[]}) {
@@ -70,6 +71,30 @@ export function localWonDeals() {
 export function localSponsorFunding():FundingRecord[] {
  const state=readLocalPartnerState();const active=localSeasons.find(s=>s.status==='active')!;
  return state.deals.filter(d=>d.stage==='won').flatMap(deal=>deal.contributions.filter(c=>c.kind==='cash'&&c.seasonId===active.id&&c.amountOre).map((c,index)=>({
-  id:c.id!,publicRef:`F-${active.code}-${(state.deals.indexOf(deal)*100+index+1).toString().padStart(3,'0')}`,sourceName:deal.organizationName,ownerName:'Alex Example',fundingType:'sponsor_cash' as const,amountNok:formatOre(BigInt(c.amountOre!)),status:'secured' as const,confidence:null,expectedDate:null,receivedDate:null,ownerEmail:null,reportingRequired:false,agreementLink:deal.agreementLink||null,note:null,revision:0,earmarkedNok:'0.00',unrestrictedNok:formatOre(BigInt(c.amountOre!)),linkedItemCount:0,
+  id:c.id!,publicRef:`F-${active.code}-${(state.deals.indexOf(deal)*100+index+1).toString().padStart(3,'0')}`,sourceName:deal.organizationName,ownerName:'Alex Example',fundingType:deal.opportunityKind==="grant"?"grant" as const:'sponsor_cash' as const,amountNok:formatOre(BigInt(c.amountOre!)),status:'secured' as const,confidence:null,expectedDate:null,receivedDate:null,ownerEmail:null,reportingRequired:false,agreementLink:deal.agreementLink||null,note:null,revision:0,earmarkedNok:'0.00',unrestrictedNok:formatOre(BigInt(c.amountOre!)),linkedItemCount:0,
  })));
+}
+
+/** Minimal forecast projection; callers enforce Finance access separately from pipeline editing. */
+export function localPipelineIncomeForecast(seasonCode: string | null): PipelineIncomeRecord[] {
+ const state=readLocalPartnerState();
+ const season=localSeasons.find(item=>item.code===seasonCode);
+ if(!season)return [];
+ return state.deals.filter(deal=>deal.stage!=="lost"&&!deal.cancelledAt).flatMap(deal=>deal.contributions.filter(c=>c.kind==="cash"&&c.seasonId===season.id&&c.amountOre&&!((c as {retiredAt?:string|null;pendingChangeId?:string|null}).retiredAt)&&!((c as {pendingChangeId?:string|null}).pendingChangeId)).map(c=>({contributionId:c.id??`${deal.id}:${c.seasonId}`,fundingId:c.sponsorReceipt?.fundingId??(deal.stage==="won"?c.id??null:null),amountNok:formatOre(BigInt(c.amountOre!)),confidence:deal.stage==="won"?"high":dealConfidence(deal.probability),invoiceDate:c.invoiceDate})));
+}
+
+/** Mirror the agreed cash and invoice-task facts without exposing negotiation details. */
+export function localWonIncome(seasonCode: string | null): WonIncomeRecord[] {
+ const state=readLocalPartnerState();
+ const season=localSeasons.find(item=>item.code===seasonCode);
+ if(!season)return [];
+ const saved=localStorage.getItem(PROJECT_KEY),workspace=saved?JSON.parse(saved) as {tasks:Task[]}:null;
+ return state.deals.filter(deal=>deal.stage==="won"&&!deal.cancelledAt).flatMap(deal=>deal.contributions.filter(c=>c.kind==="cash"&&c.seasonId===season.id&&c.amountOre&&!((c as {retiredAt?:string|null}).retiredAt)&&!((c as {pendingChangeId?:string|null}).pendingChangeId)).map(c=>{
+  const links=state.taskLinks.filter(item=>item.kind==="invoice"&&item.dealId===deal.id&&item.seasonId===c.seasonId);
+  const link=links.find(item=>item.contributionId===c.id)??links.find(item=>!item.contributionId);
+  const task=link?(workspace?.tasks.find(item=>item.id===link.taskId)??state.tasks.find(item=>item.id===link.taskId)):undefined;
+  const sent=task?.status==="done";
+  const sentOn=sent&&task.completedAt?new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Oslo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(task.completedAt)):null;
+  return {opportunityKind:deal.opportunityKind??"deal",contributionId:c.id??`${deal.id}:${c.seasonId}`,dealId:deal.id,title:deal.title,sourceName:deal.organizationName,amountNok:formatOre(BigInt(c.amountOre!)),fundingId:c.sponsorReceipt?.fundingId??c.id??null,plannedInvoiceDate:c.invoiceDate,invoiceSent:sent,invoiceSentOn:sentOn};
+ }));
 }

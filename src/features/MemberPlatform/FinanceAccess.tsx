@@ -40,6 +40,7 @@ type FinanceState = {
 type FinanceSession = FinanceState & {
   bankSnapshot: () => Promise<BankSnapshot | null>;
   retry: () => void;
+  refresh: () => Promise<void>;
   loadPage: (page: FinancePageId, options?: { requestRecordId?: string; unpaidOnly?: boolean }) => Promise<void>;
   mutate: (body: Record<string, unknown>) => Promise<FinanceMutationResult>;
   setExpanded: (id: string, open: boolean) => void;
@@ -271,8 +272,8 @@ export function FinanceAccessProvider({ children, userId }: { children: ReactNod
     else dirtyIds.current.delete(id);
   }, []);
   const value = useMemo(
-    () => ({ ...state, bankSnapshot, retry, loadPage, mutate, setExpanded, setFormDirty }),
-    [state, bankSnapshot, retry, loadPage, mutate, setExpanded, setFormDirty],
+    () => ({ ...state, bankSnapshot, retry, refresh: revalidate, loadPage, mutate, setExpanded, setFormDirty }),
+    [state, bankSnapshot, retry, revalidate, loadPage, mutate, setExpanded, setFormDirty],
   );
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;
 }

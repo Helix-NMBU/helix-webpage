@@ -50,7 +50,7 @@ function financeResponse(url: string): Response {
     : action === "overview"
       ? { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, departments: [], publicEarmarks: [] }
       : action === "budgets"
-        ? { viewVersion: 0, seasonCode: null, budgetStatus: "absent", departments: [] }
+        ? { viewVersion: 0, seasonCode: null, budgetStatus: "absent", approvedOn: null, revision: 1, departments: [], choices: { systems: [], items: [] } }
         : action === "purchases"
           ? { viewVersion: 0, ownRequests: [] }
           : {};
@@ -382,8 +382,9 @@ describe("internal member platform", () => {
     expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();
     expect(container.textContent).not.toContain("Expenses");
     await act(async () => router.navigate("/finance/financing"));
-    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/finance"));
-    await vi.waitFor(() => expect(container.textContent).toContain("No season is configured yet"));
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/finance/budgets"));
+    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Budgets & Financing"));
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=financing"))).toBe(false);
     expect(container.textContent).not.toContain("Hidden Supplier");
     await act(async () => router.navigate("/teams/finance/budget?season=S27#items"));
     expect(router.state.location.pathname).toBe("/finance/budgets");
@@ -394,6 +395,29 @@ describe("internal member platform", () => {
     expect(router.state.location.search).toBe("?view=open");
     expect(router.state.location.hash).toBe("#claims");
     await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=projectBudgets"))).toBe(true));
+  });
+
+  it("opens a department budget from its dashboard card and returns through the parent breadcrumb", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/finance/budgets");
+    const href = "/finance/budgets/mechanical-and-production";
+    await vi.waitFor(() => expect(container.querySelector(`a[href="${href}"]`)).not.toBeNull());
+    const scrollArea = container.querySelector<HTMLElement>('[data-slot="member-page-content"]')!;
+    scrollArea.scrollTop = 300;
+    await act(async () => container.querySelector<HTMLAnchorElement>(`a[href="${href}"]`)!.click());
+    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Mechanical & Production"));
+    expect(router.state.location.pathname).toBe(href);
+    expect(scrollArea.scrollTop).toBe(0);
+    const breadcrumb = container.querySelector('[aria-label="breadcrumb"]')!;
+    expect(breadcrumb.textContent).toContain("Budgets & Financing");
+    expect(breadcrumb.textContent).toContain("Mechanical & Production");
+    const parent = [...breadcrumb.querySelectorAll("button")].find(button => button.textContent === "Budgets & Financing")!;
+    scrollArea.scrollTop = 300;
+    await act(async () => parent.click());
+    expect(scrollArea.scrollTop).toBe(0);
+    expect(router.state.location.pathname).toBe("/finance/budgets");
+    expect(container.querySelector("h1")?.textContent).toBe("Budgets & Financing");
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => /action=(departmentBudgetPackages|projectBudgets)/.test(String(url)))).toBe(false);
   });
 
   it("preserves finance pages as member login destinations", () => {

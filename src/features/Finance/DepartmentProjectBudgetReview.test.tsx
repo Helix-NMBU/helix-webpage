@@ -8,6 +8,7 @@ import type {
   ProjectBudgetVersion,
 } from "./project-budget-types";
 vi.mock("./InvoiceEvidence", () => ({
+  InvoiceLinks: ({ invoices }: { invoices: { originalName: string; documentId: string }[] }) => <>{invoices.map(invoice => <button key={invoice.documentId}>{invoice.originalName}</button>)}</>,
   InvoiceEvidence: ({ invoice }: { invoice: { originalName: string } }) => (
     <button>{invoice.originalName}</button>
   ),
@@ -67,7 +68,7 @@ afterEach(() => {
   container.remove();
   vi.unstubAllGlobals();
 });
-it("shows every project entry with New, Changed, Removed and unchanged values, preserving physical systems", async () => {
+it("shows every project entry with New, Changed, Removed and unchanged values, without the redundant System column", async () => {
   const before = version(
       [entry("changed"), entry("removed"), entry("unchanged")],
       "300.00",
@@ -93,26 +94,31 @@ it("shows every project entry with New, Changed, Removed and unchanged values, p
   );
   const rows = [...container.querySelectorAll("tbody tr")];
   expect(rows).toHaveLength(4);
+  expect(container.textContent).not.toContain("Last approved");
+  expect(container.textContent).not.toContain("Package allocation");
+  expect(container.textContent).not.toContain("Net change");
+  expect(container.querySelector("tfoot")?.textContent).toContain("Total amount change− NOK 49.75");
+  expect([...container.querySelectorAll("th")].map(cell => cell.textContent)).not.toContain("System");
   for (const text of [
     "New",
     "Changed",
     "Removed",
     "Unchanged",
-    "NOK 300.00",
-    "NOK 250.25",
-    "NOK -49.75",
-    "Previous:",
-    "Package:",
+    "Previous amount",
+    "Amount change",
+    "+ NOK 20.25",
     "Quote updated",
-    "Other department system",
   ])
     expect(container.textContent).toContain(text);
   expect(
     rows.find((row) => row.textContent?.startsWith("removed"))?.textContent,
   ).toContain("NOK 100.00");
-  expect(
-    rows.find((row) => row.textContent?.startsWith("unchanged"))?.textContent,
-  ).toContain("Unchanged");
+  expect(rows.find(row => row.getAttribute("data-change") === "changed")?.children[3].textContent).toBe("NOK 100.00");
+  expect(rows.find(row => row.getAttribute("data-change") === "changed")?.children[4].textContent).toBe("+ NOK 20.25");
+  expect(rows.find(row => row.getAttribute("data-change") === "unchanged")?.children[4].textContent).toBe("—");
+  expect(container.textContent).not.toContain("Previous:");
+  expect(container.textContent).not.toContain("Package:");
+  expect(rows.find(row => row.getAttribute("data-change") === "changed")?.children[0].querySelector("dl")).toBeNull();
 });
 it("refreshes actuals and all invoice evidence without mutating the fixed plan or its diff", async () => {
   const approved = version([entry("Frame")], "100.00"),
@@ -156,7 +162,7 @@ it("refreshes actuals and all invoice evidence without mutating the fixed plan o
   await act(async () => render("60.00"));
   await act(async () => render("85.00"));
   expect(container.textContent).toContain("NOK 85.00");
-  expect(container.textContent).toContain("NOK 120.00");
+  expect(container.textContent).toContain("+ NOK 20.00");
   expect(container.textContent).not.toContain("9,999");
   expect(container.textContent).toContain("Partially purchased");
   expect(container.querySelectorAll("button")).toHaveLength(2);
@@ -173,14 +179,10 @@ it("compares a first submission without inventing an approved version", async ()
       />,
     ),
   );
-  expect(container.textContent).toContain("No approved budget");
+  expect(container.querySelector("tbody tr")?.children[3].textContent).toBe("—");
   expect(container.textContent).toContain("New");
-  await act(async () => {
-    [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "View new entry details")!
-      .click();
-  });
-  expect(container.textContent).toContain("Previous: None");
+  expect(container.querySelector("tbody tr dl")).toBeNull();
+  expect(container.textContent).not.toContain("Previous: None");
   expect(container.textContent).toContain("NOK 100.00");
 });
 
@@ -210,7 +212,7 @@ it("shows a newly awarded live P0 priority without rewriting the submitted plan 
   );
   expect(container.textContent).toContain("Current priority");
   expect(
-    container.querySelector("tbody tr")?.children[3].textContent,
+    container.querySelector("tbody tr")?.children[2].textContent,
   ).toContain("P0");
   expect(container.textContent).toContain("Submitted priority P2");
   expect(
@@ -221,7 +223,7 @@ it("shows a newly awarded live P0 priority without rewriting the submitted plan 
   expect(JSON.stringify({ approved, proposed })).toBe(pinned);
 });
 
-it("keeps New and Removed rows compact while native disclosures retain full fields and focus", async () => {
+it("shows new and removed entries directly without empty before-and-after fields", async () => {
   const approved = version(
       [entry("Removed control", { note: "Keep historical specification" })],
       "100.00",
@@ -249,24 +251,32 @@ it("keeps New and Removed rows compact while native disclosures retain full fiel
   const rows = [...container.querySelectorAll("tbody tr")],
     removed = rows.find((row) => row.textContent?.includes("Removed control"))!,
     added = rows.find((row) => row.textContent?.includes("New control"))!;
-  expect(removed.textContent).toContain("Previous NOK 100.00");
-  expect(added.children[4].textContent).toContain("NOK 500.00");
+  expect(removed.children[3].textContent).toBe("NOK 100.00");
+  expect(removed.textContent).toContain("Keep historical specification");
+  expect(added.children[3].textContent).toBe("—");
+  expect(added.children[4].textContent).toBe("+ NOK 500.00");
+  expect(removed.children[4].textContent).toBe("− NOK 100.00");
   expect(removed.querySelector("dl")).toBeNull();
   expect(added.querySelector("dl")).toBeNull();
   for (const row of [removed, added]) {
-    const trigger = row.querySelector("button")!;
-    expect(trigger.tagName).toBe("BUTTON");
-    expect(trigger.getAttribute("type")).toBe("button");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    trigger.focus();
-    await act(async () => trigger.click());
-    expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(row.querySelector("dl")?.textContent).toContain("Previous:");
-    expect(row.querySelector("dl")?.textContent).toContain("Package:");
-    expect(document.activeElement).toBe(trigger);
-    await act(async () => trigger.click());
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    expect(row.querySelector("dl")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(row.querySelector("button")).toBeNull();
+    expect(row.textContent).not.toContain("Previous:");
+    expect(row.textContent).not.toContain("Package:");
+    expect(row.textContent).not.toContain("None");
   }
+});
+
+it.each([
+  { before: entry("Control"), after: entry("Control", { plannedNok: "80.10" }), previous: "NOK 100.00", delta: "− NOK 19.90" },
+  { before: entry("Control"), after: entry("Control", { status: "cancelled" }), previous: "NOK 100.00", delta: "− NOK 100.00" },
+  { before: entry("Control", { status: "cancelled" }), after: entry("Control", { plannedNok: "50.25" }), previous: "NOK 0.00", delta: "+ NOK 50.25" },
+  { before: entry("Control"), after: entry("Control", { note: "New quote" }), previous: "NOK 100.00", delta: "—" },
+])("compares effective allocation for decreases, cancellation, reinstatement and non-amount edits ($delta)", async ({ before, after, previous, delta }) => {
+  await act(async () => root.render(<DepartmentProjectBudgetReview approved={version([before], "100.00")} proposed={version([after], after.plannedNok)} systems={systems} evidence={[]} />));
+  const cells = container.querySelector("tbody tr")!.children;
+  expect(cells[3].textContent).toBe(previous); expect(cells[4].textContent).toBe(delta);
+  expect(container.querySelector("tfoot tr")?.children[1].textContent).toBe(delta === "—" ? "NOK 0.00" : delta);
+  expect(cells[0].querySelector("dl")).toBeNull();
+  expect(container.textContent).not.toContain("Previous:"); expect(container.textContent).not.toContain("Package:");
+  if (after.note) expect(cells[1].textContent).toContain("New quote");
 });
