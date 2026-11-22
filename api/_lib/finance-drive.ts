@@ -1,23 +1,9 @@
 import { createHash } from "node:crypto";
-import { importPKCS8, SignJWT } from "jose";
+import { createFinanceGoogleAuth } from "./finance-google-auth.js";
+import { InvoiceTransferError } from "./finance-transfer-error.js";
 
-const SCOPE = "https://www.googleapis.com/auth/drive.file";
-const TOKEN = "https://oauth2.googleapis.com/token";
 const API = "https://www.googleapis.com/drive/v3/files";
-export class InvoiceTransferError extends Error {
-  constructor(
-    public readonly safeError:
-      | "configuration_missing"
-      | "provider_unavailable"
-      | "provider_permission"
-      | "provider_mismatch"
-      | "source_unavailable"
-      | "source_mismatch"
-      | "transfer_uncertain",
-  ) {
-    super(safeError);
-  }
-}
+export { InvoiceTransferError } from "./finance-transfer-error.js";
 export interface InvoiceSource {
   documentId: string;
   fileId: string;
@@ -113,36 +99,17 @@ export function createFinanceDrive(
   env: NodeJS.ProcessEnv = process.env,
   fetcher: typeof fetch = fetch,
 ): FinanceDrive | null {
-  const raw = env.FINANCE_GOOGLE_SERVICE_ACCOUNT_JSON,
-    driveId = env.FINANCE_INVOICE_SHARED_DRIVE_ID,
-    folderId = env.FINANCE_INVOICE_FOLDER_ID;
-  if (!raw || !driveId || !folderId) return null;
-  let credential: {
-    type?: string;
-    client_email?: string;
-    private_key?: string;
-    private_key_id?: string;
-    token_uri?: string;
-    subject?: string;
-    sub?: string;
-  };
-  try {
-    credential = JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  const driveId = env.FINANCE_INVOICE_SHARED_DRIVE_ID,
+    folderId = env.FINANCE_INVOICE_FOLDER_ID,
+    auth = createFinanceGoogleAuth(env, fetcher);
   if (
-    credential.type !== "service_account" ||
-    !credential.client_email?.endsWith(".gserviceaccount.com") ||
-    !credential.private_key ||
-    credential.subject ||
-    credential.sub ||
-    (credential.token_uri && credential.token_uri !== TOKEN) ||
+    !auth ||
+    !driveId ||
+    !folderId ||
     !/^[\w-]{5,200}$/.test(driveId) ||
     !/^[\w-]{5,200}$/.test(folderId)
   )
     return null;
-  let cached: { token: string; until: number } | undefined;
   function timeout(deadline?: number) {
     if (deadline && deadline <= Date.now())
       throw new InvoiceTransferError("provider_unavailable");
@@ -150,69 +117,20 @@ export function createFinanceDrive(
       Math.max(1, Math.min(5000, (deadline ?? Date.now() + 5000) - Date.now())),
     );
   }
-  async function accessToken(deadline?: number) {
-    if (cached && cached.until > Date.now() + 30_000) return cached.token;
-    try {
-      const key = await importPKCS8(credential.private_key!, "RS256");
-      const assertion = await new SignJWT({ scope: SCOPE })
-        .setProtectedHeader({
-          alg: "RS256",
-          ...(credential.private_key_id
-            ? { kid: credential.private_key_id }
-            : {}),
-        })
-        .setIssuer(credential.client_email!)
-        .setAudience(TOKEN)
-        .setIssuedAt()
-        .setExpirationTime("5m")
-        .sign(key);
-      const response = await fetcher(TOKEN, {
-        method: "POST",
-        redirect: "error",
-        signal: timeout(deadline),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-          assertion,
-        }),
-      });
-      if (!response.ok) throw new InvoiceTransferError("provider_permission");
-      const value = (await response.json()) as {
-        access_token?: string;
-        expires_in?: number;
-        scope?: string;
-        token_type?: string;
-      };
-      if (
-        !value.access_token ||
-        (value.scope && value.scope !== SCOPE) ||
-        (value.token_type && value.token_type.toLowerCase() !== "bearer")
-      )
-        throw new InvoiceTransferError("provider_permission");
-      cached = {
-        token: value.access_token,
-        until:
-          Date.now() + Math.min(Number(value.expires_in) || 300, 3600) * 1000,
-      };
-      return cached.token;
-    } catch (e) {
-      if (e instanceof InvoiceTransferError) throw e;
-      throw new InvoiceTransferError("provider_unavailable");
-    }
-  }
   async function request(
     url: string | URL,
     init: RequestInit = {},
     deadline?: number,
   ) {
     try {
+      const token = await auth!.accessToken(deadline);
       return await fetcher(url, {
         ...init,
         redirect: "error",
         signal: timeout(deadline),
         headers: {
           ...init.headers,
-          Authorization: `Bearer ${await accessToken(deadline)}`,
+          Authorization: `Bearer ${token}`,
         },
       });
     } catch (e) {
