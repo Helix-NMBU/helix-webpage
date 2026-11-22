@@ -14,9 +14,9 @@ const compactMoney = (nok: number) => new Intl.NumberFormat("en", { notation: "c
 const monthLabel = (timestamp: number) => new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(timestamp);
 const chartConfig = {
   received: { label: "Received", color: "var(--primary)" },
-  high: { label: "Realistic", theme: { light: "oklch(0.52 0.14 160)", dark: "oklch(0.75 0.15 160)" } },
-  medium: { label: "Moderate", theme: { light: "oklch(0.65 0.16 65)", dark: "oklch(0.8 0.15 75)" } },
-  low: { label: "Optimistic", theme: { light: "oklch(0.55 0.2 305)", dark: "oklch(0.75 0.18 305)" } },
+  high: { label: "Realistic", color: "var(--forecast-realistic)" },
+  medium: { label: "Moderate", color: "var(--forecast-moderate)" },
+  low: { label: "Optimistic", color: "var(--forecast-optimistic)" },
 } satisfies ChartConfig;
 
 export function SeasonIncomeChart({ budgets, financing, today }: { budgets: PublicBudgets; financing: FinancingView; today: string }) {

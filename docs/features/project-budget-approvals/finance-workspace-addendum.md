@@ -18,6 +18,7 @@ Direct user instructions, 21–22 November 2026. These refine approved specifica
 - Forecasts use planned invoice dates and cumulative confidence scenarios: Realistic includes High, Moderate includes High and Medium, Optimistic includes all three. Replace Probability controls with Low, Medium and High confidence. Forecast colors differ from received-income blue. Remove the old chart header, received total, timeline link and approved-goals helper text.
 - Financing replaces Funding records and bank balance and the Season budget editor on this page. List money-in sources and won opportunities. Source is the deal/grant name, with organization secondary.
 - Pipeline offers Deals and Grants. Won cash deals generate the existing invoicing task; grants do not. Completed invoicing tasks determine Invoice sent. Deal financing status is Ready to invoice, Invoice sent or Received. Approved unpaid grants show Awaiting payment; paid grants show Received. No redundant Invoice sent column.
+- Existing funding correction, creation, restoration and earmark operations remain available to authorized users through Manage financing, a secondary page linked from the compact Financing section. Reconciliation correction links use that page.
 
 ## Spending and invoice corrections
 

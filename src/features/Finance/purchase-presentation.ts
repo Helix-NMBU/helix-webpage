@@ -1,3 +1,4 @@
+import type { ProjectBudgetInvoiceReference } from "./project-budget-types";
 import type { FinanceMutation, ExceptionKind, FinancePurchaseSummary } from "./types";
 
 export const purchaseReviewLabels: Record<ExceptionKind, string> = {
@@ -15,3 +16,9 @@ export function purchaseDateLabel(value: string | null) {
 }
 
 export type PurchaseActionRunner = (key: string, fingerprint: string, action: FinanceMutation, success: string, failure: string) => Promise<boolean>;
+
+export function purchaseInvoiceReferences(row: FinancePurchaseSummary): ProjectBudgetInvoiceReference[] {
+  return row.documents.map(doc => ({ documentId: doc.id, purchaseId: row.id, purchaseRef: row.publicRef,
+    originalName: doc.originalName, backend: doc.backend ?? "private_storage", transferStatus: doc.transferStatus ?? "stored",
+    transferRevision: doc.transferRevision, canRetry: doc.canRetry, viewerUrl: doc.viewerUrl ?? null }));
+}

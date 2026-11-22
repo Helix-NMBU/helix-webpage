@@ -386,6 +386,9 @@ describe("internal member platform", () => {
     await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Budgets & Financing"));
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=financing"))).toBe(false);
     expect(container.textContent).not.toContain("Hidden Supplier");
+    await act(async () => router.navigate("/finance/funding"));
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/finance"));
+    expect(container.textContent).not.toContain("Add funding");
     await act(async () => router.navigate("/teams/finance/budget?season=S27#items"));
     expect(router.state.location.pathname).toBe("/finance/budgets");
     expect(router.state.location.search).toBe("?season=S27");

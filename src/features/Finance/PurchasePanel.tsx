@@ -13,7 +13,7 @@ import { PurchaseInvoice } from "./PurchaseInvoice";
 import { InvoiceEvidence } from "./InvoiceEvidence";
 import type { InvoiceEvidenceActions } from "./invoice-repository";
 import { projectBudgetMoney } from "./project-budget-diff";
-import { purchaseDateLabel, purchasePaymentLabel, purchaseReviewLabels, purchaseTitle, type PurchaseActionRunner } from "./purchase-presentation";
+import { purchaseInvoiceReferences, purchaseDateLabel, purchasePaymentLabel, purchaseReviewLabels, purchaseTitle, type PurchaseActionRunner } from "./purchase-presentation";
 import type { FinancePurchaseSummary } from "./types";
 
 type Props = { row: FinancePurchaseSummary; today: string; canAct: boolean; busy: boolean; onRun: PurchaseActionRunner; invoiceActions: InvoiceEvidenceActions; onChanged: () => Promise<void>; onAccessEnded: () => void };
@@ -30,9 +30,7 @@ export function PurchasePanel({ row, today, canAct, busy, onRun, invoiceActions,
   const active = row.status === "registered";
   const openReviews = active ? row.exceptions.filter(review => review.reviewStatus === "open") : [];
   const reviewGroups = [...new Set(openReviews.map(review => purchaseReviewLabels[review.kind]))].map(label => ({ label, reviews: openReviews.filter(review => purchaseReviewLabels[review.kind] === label) }));
-  const invoices = row.documents.map(doc => ({ documentId: doc.id, purchaseId: row.id, purchaseRef: row.publicRef,
-    originalName: doc.originalName, backend: doc.backend ?? "private_storage" as const, transferStatus: doc.transferStatus ?? "stored" as const,
-    transferRevision: doc.transferRevision, canRetry: doc.canRetry, viewerUrl: doc.viewerUrl ?? null }));
+  const invoices = purchaseInvoiceReferences(row);
 
   function paymentAction(kind: "invoice" | "outlay", paid: boolean) {
     if (!canAct || !active || paid) return null;

@@ -10,4 +10,3 @@ export const dashboardBudgetFixture = (items = [item("P0", "100.00"), item("P1",
   departments: [{ departmentKey: "mechanical", name: "Mechanical & Production", plannedNok: "1500.75", actualNok: "80.00", differenceNok: "1420.75", unbudgetedNok: "0.00", systems: [{ id: "system", code: "SYS", name: "Frame", active: true, plannedNok: "1500.75", actualNok: "80.00", differenceNok: "1420.75", unbudgetedNok: "0.00", unbudgetedItemId: null, unbudgetedPublicRef: null, items }] }],
 });
 export const funding = (id: string, amount: string, date: string | null, status: FundingRecord["status"] = "received"): FundingRecord => ({ id, publicRef: id, sourceName: id, ownerName: "Finance", fundingType: "grant", amountNok: amount, status, confidence: null, expectedDate: null, receivedDate: date, ownerEmail: null, reportingRequired: false, agreementLink: null, note: null, revision: 1, earmarkedNok: "0.00", unrestrictedNok: amount, linkedItemCount: 0 });
-

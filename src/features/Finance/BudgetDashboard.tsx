@@ -57,6 +57,6 @@ export function BudgetDashboard() {
   return <div className="space-y-8">
     {session.capabilities?.financing ? !session.financing ? <Skeleton aria-label="Loading season income" className="h-96 rounded-xl" /> : budgets.seasonCode || session.financing.seasonCode ? <SeasonIncomeChart budgets={budgets} financing={session.financing} today={session.today ?? osloToday()} /> : <Card><CardContent><p className="text-sm text-muted-foreground">Season income will appear when a season is configured.</p></CardContent></Card> : null}
     <DepartmentBudgetCards budgets={budgets} />
-    {session.capabilities?.financing ? <FinancingIncome financing={session.financing} /> : null}
+    {session.capabilities?.financing ? <FinancingIncome financing={session.financing} canManage={Boolean(session.capabilities?.manageFunding)} /> : null}
   </div>;
 }

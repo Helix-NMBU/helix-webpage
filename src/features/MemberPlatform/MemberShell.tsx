@@ -23,7 +23,7 @@ import { useNotify } from "./MemberNotifications";
 import { signOutMember } from "../MemberCV/session";
 import { useMemberNavigation } from "./MemberNavigation";
 import { previewPage } from "./workspace-preview-data";
-import { departmentBudgetPath, financePageTitle, financeRoutes } from "../Finance/routes";
+import { departmentBudgetPath, financeFundingPath, financePageTitle, financeRoutes } from "../Finance/routes";
 import { useFinanceAccess } from "./FinanceAccess";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { departmentPath } from "../Workspace/types";
@@ -49,6 +49,7 @@ function Workspace({ children }: { children?: ReactNode }) {
   const seasonOverview = location.pathname === "/season-overview" || location.pathname.startsWith("/project-management");
   const directory = useWorkspace()?.data;
   const department = directory?.departments?.find(item => location.pathname === departmentPath(item.name) || location.pathname.startsWith(`${departmentPath(item.name)}/`));
+  const fundingManagement = location.pathname === financeFundingPath;
   const budgetDetail = location.pathname.startsWith(`${financeRoutes.budgets}/`);
   const budgetDirectory = useFinanceAccess().budgets;
   const budgetDepartment = [...(budgetDirectory?.departments ?? []), ...(directory?.departments ?? [])].find(item => location.pathname === departmentBudgetPath(item.name));
@@ -137,7 +138,7 @@ function Workspace({ children }: { children?: ReactNode }) {
                         <BreadcrumbSeparator className="hidden lg:block" />
                       </>
                     )}
-                    {budgetDetail && <>
+                    {(budgetDetail || fundingManagement) && <>
                       <BreadcrumbItem><BreadcrumbLink asChild><button type="button" disabled={disabled} onClick={event => go(financeRoutes.budgets, event.currentTarget)}>Budgets &amp; Financing</button></BreadcrumbLink></BreadcrumbItem>
                       <BreadcrumbSeparator />
                     </>}

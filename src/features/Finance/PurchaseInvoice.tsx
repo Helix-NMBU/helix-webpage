@@ -7,7 +7,7 @@ import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { confirmedDriveUrl, InvoiceLinks } from "./InvoiceEvidence";
 import { normalizeInvoiceDriveUrl } from "./invoice-link";
 import type { InvoiceEvidenceActions } from "./invoice-repository";
-import type { PurchaseActionRunner } from "./purchase-presentation";
+import { purchaseInvoiceReferences, type PurchaseActionRunner } from "./purchase-presentation";
 import type { FinancePurchaseSummary } from "./types";
 
 type Props = { row: FinancePurchaseSummary; canLink: boolean; busy: boolean; onRun: PurchaseActionRunner; actions: InvoiceEvidenceActions; onChanged: () => Promise<void>; onAccessEnded: () => void };
@@ -15,7 +15,7 @@ export function PurchaseInvoice({ row, canLink, busy, onRun, actions, onChanged,
   const [open, setOpen] = useState(false), [url, setUrl] = useState("");
   const [editingRevision, setEditingRevision] = useState(row.revision);
   const notify = useNotify();
-  const invoices = row.documents.map(doc => ({ documentId: doc.id, purchaseId: row.id, purchaseRef: row.publicRef, originalName: doc.originalName, backend: doc.backend ?? "private_storage" as const, transferStatus: doc.transferStatus ?? "stored" as const, transferRevision: doc.transferRevision, canRetry: doc.canRetry, viewerUrl: doc.viewerUrl ?? null }));
+  const invoices = purchaseInvoiceReferences(row);
   const currentUrl = invoices.find(invoice => invoice.documentId.startsWith("purchase:") && confirmedDriveUrl(invoice))?.viewerUrl ?? invoices.map(confirmedDriveUrl).find(Boolean) ?? "";
   const editable = canLink && row.status === "registered";
   async function save(event: FormEvent) {
