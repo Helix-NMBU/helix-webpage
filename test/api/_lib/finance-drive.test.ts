@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
+import { createServer } from "node:http";
 import { decodeJwt } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -50,6 +51,49 @@ function fixture(
   return { drive: createFinanceDrive(env, fetcher as typeof fetch)!, calls };
 }
 describe("dedicated Drive invoice adapter", () => {
+  it("reads real HTTP 308 progress with Location without following a redirect", async () => {
+    let requests = 0;
+    const server = createServer((_request, response) => {
+      requests++;
+      response.writeHead(308, {
+        Range: "bytes=0-3",
+        Location: "https://attacker.invalid/upload",
+      });
+      response.end();
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string")
+        throw new Error("Missing test port");
+      const { drive, calls } = fixture((_url, init) =>
+        fetch(`http://127.0.0.1:${address.port}/session`, init),
+      );
+      const session =
+        "https://www.googleapis.com/upload/drive/v3/files?upload_id=session1";
+      expect(await drive.upload(session, new Uint8Array(4), 0, 8)).toEqual({
+        done: false,
+        confirmedBytes: 4,
+      });
+      expect(await drive.probe(session, 8)).toEqual({
+        done: false,
+        confirmedBytes: 4,
+      });
+      expect(requests).toBe(2);
+      expect(
+        calls
+          .filter((c) => c.url.hostname === "www.googleapis.com")
+          .every((c) => c.init.redirect === "manual"),
+      ).toBe(true);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
   it("uses only drive.file service JWT without delegated subject or broad Workspace credentials", async () => {
     const { drive, calls } = fixture(() =>
       Response.json({ ids: ["allocatedFile"] }),

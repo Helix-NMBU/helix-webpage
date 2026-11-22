@@ -14,6 +14,7 @@ const env = {
 };
 const accessType = "urn:ietf:params:oauth:token-type:access_token";
 const driveScope = "https://www.googleapis.com/auth/drive.file";
+const metadataScope = "https://www.googleapis.com/auth/drive.metadata.readonly";
 function fixture(
   overrides: { sts?: unknown; iam?: unknown; status?: number } = {},
 ) {
@@ -89,7 +90,7 @@ describe("production invoice workload identity", () => {
     });
     expect(calls[2].init.signal?.aborted).toBe(false);
   });
-  it("exchanges runtime identity and impersonates only the configured account with drive.file", async () => {
+  it("exchanges runtime identity and impersonates only the configured account with per-file writes and read-only metadata", async () => {
     const { auth, oidc, calls } = fixture();
     expect(oidc).not.toHaveBeenCalled();
     expect(await auth.accessToken()).toBe("drive-only");
@@ -114,7 +115,7 @@ describe("production invoice workload identity", () => {
       Authorization: "Bearer intermediate",
     });
     expect(JSON.parse(String(calls[1].init.body))).toEqual({
-      scope: [driveScope],
+      scope: [driveScope, metadataScope],
       lifetime: "600s",
     });
     expect(

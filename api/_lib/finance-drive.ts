@@ -126,7 +126,7 @@ export function createFinanceDrive(
       const token = await auth!.accessToken(deadline);
       return await fetcher(url, {
         ...init,
-        redirect: "error",
+        redirect: init.redirect ?? "error",
         signal: timeout(deadline),
         headers: {
           ...init.headers,
@@ -264,6 +264,9 @@ export function createFinanceDrive(
           sessionUrl(uri),
           {
             method: "PUT",
+            // Google returns HTTP 308 with Location for incomplete uploads.
+            // Read its progress response without ever following that Location.
+            redirect: "manual",
             headers: {
               "Content-Length": "0",
               "Content-Range": `bytes */${size}`,
@@ -280,6 +283,9 @@ export function createFinanceDrive(
           sessionUrl(uri),
           {
             method: "PUT",
+            // Google returns HTTP 308 with Location for incomplete uploads.
+            // Read its progress response without ever following that Location.
+            redirect: "manual",
             headers: {
               "Content-Length": String(bytes.byteLength),
               "Content-Range": `bytes ${offset}-${offset + bytes.byteLength - 1}/${total}`,
