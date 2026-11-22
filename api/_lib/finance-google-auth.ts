@@ -3,6 +3,8 @@ import { importPKCS8, SignJWT } from "jose";
 import { InvoiceTransferError } from "./finance-transfer-error.js";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_METADATA_SCOPE =
+  "https://www.googleapis.com/auth/drive.metadata.readonly";
 const TOKEN = "https://oauth2.googleapis.com/token";
 const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
 
@@ -143,10 +145,13 @@ export function createFinanceGoogleAuth(
           )
             throw new InvoiceTransferError("provider_permission");
           // The intermediate token can call IAM only under the service-account binding.
-          // Only the final, drive.file-scoped token is returned to the Drive adapter.
+          // Per-file writes remain narrow; read-only metadata permits validating the existing folder.
           const generated = await post(
             `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(email!)}:generateAccessToken`,
-            JSON.stringify({ scope: [DRIVE_SCOPE], lifetime: "600s" }),
+            JSON.stringify({
+              scope: [DRIVE_SCOPE, DRIVE_METADATA_SCOPE],
+              lifetime: "600s",
+            }),
             {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token.access_token}`,
