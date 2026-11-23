@@ -279,9 +279,9 @@ export function loadLocalProjectBudgetFinancials(projectId: string) {
   const itemIds = new Set(projected.items.map(item => item.id));
   const allocated = projected.items.filter(item => item.projectId === projectId)
     .reduce((total, item) => total + nokToOre(item.actualNok), 0n);
-  const unbudgeted = facts.purchases.filter(purchase => purchase.projectId === projectId && (!purchase.status || purchase.status === "registered"))
-    .reduce((total, purchase) => total + (normalizePurchaseInput(purchase.purchase).purchase?.lines ?? [])
-      .filter(line => line.unbudgeted || !line.budgetItemId || !itemIds.has(line.budgetItemId))
+  const unbudgeted = facts.purchases.filter(purchase => !purchase.status || purchase.status === "registered")
+    .reduce((total, purchase) => total + (normalizePurchaseInput(purchase.purchase,{management:purchase.purchase.lines.some(line=>!line.systemId||line.projectId!==undefined)}).purchase?.lines ?? [])
+      .filter(line => (line.projectId??purchase.projectId)===projectId && (line.unbudgeted || !line.budgetItemId || !itemIds.has(line.budgetItemId)))
       .reduce((amount, line) => amount + line.amountOre, 0n), 0n);
   return { actualNok: formatOre(allocated + unbudgeted), unbudgetedNok: formatOre(unbudgeted) };
 }

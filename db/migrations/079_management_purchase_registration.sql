@@ -76,7 +76,7 @@ returns jsonb language plpgsql set search_path=pg_catalog as $$
 <<registration>>
 declare
  season_row finance.seasons%rowtype; purchase_id uuid:=gen_random_uuid(); ref text; ordinal bigint;
- line jsonb; line_id uuid; line_number integer:=0; project uuid; item uuid; item_row finance.budget_items%rowtype;
+ line jsonb; effective_system uuid; line_id uuid; line_number integer:=0; project uuid; item uuid;
  upload_id uuid; upload_row finance.uploads%rowtype; document_number integer:=0; response jsonb; warnings jsonb:='[]';
  amount bigint;
 begin
@@ -108,13 +108,13 @@ begin
    if amount<=0 or (line->>'quantity')::numeric<=0 then raise exception 'FINANCE|invalid|Enter positive line amounts and quantities.'; end if;
    if project is not null and not exists(select 1 from project_management.projects p where p.id=project and p.season=season_row.code and p_actor=any(p.lead_ids)) then raise exception 'FINANCE|denied|Choose a current project you lead.|projectId'; end if;
    if item is not null then
-     select anchor.* into item_row from finance.budget_items anchor join finance.effective_budget_entries i on i.id=anchor.id join finance.budgets b on b.id=i.budget_id
+     select i.system_id into effective_system from finance.budget_items anchor join finance.effective_budget_entries i on i.id=anchor.id join finance.budgets b on b.id=i.budget_id
        join finance.systems sys on sys.id=i.system_id and sys.active
        where i.id=item and i.project_id=project and project is not null and b.season_id=season_row.id and (i.approved_version_id is not null or i.legacy_budget_status='approved') and not i.protected and i.status<>'cancelled' for update of anchor;
      if not found then raise exception 'FINANCE|conflict|Choose an approved entry in this project.|budgetItemId'; end if;
-   else item_row:=null; end if;
+   else effective_system:=null; end if;
    insert into finance.purchase_lines(purchase_id,public_ref,system_id,budget_item_id,project_id,unbudgeted,description,quantity,amount_ore)
-   values(purchase_id,ref||'-L'||line_number,item_row.system_id,item,project,item is null,line->>'description',(line->>'quantity')::numeric,amount) returning id into line_id;
+   values(purchase_id,ref||'-L'||line_number,effective_system,item,project,item is null,line->>'description',(line->>'quantity')::numeric,amount) returning id into line_id;
    if item is not null then
      insert into finance.allocations(line_id,budget_item_id,public_ref,amount_ore) values(line_id,item,ref||'-L'||line_number||'-A1',amount);
    end if;
@@ -155,7 +155,7 @@ $$;
 
 create function finance.link_management_purchase(p_actor uuid,p_sub text,p_email text,p_line uuid,p_project uuid,p_item uuid,p_revision integer)
 returns jsonb language plpgsql set search_path=pg_catalog as $$
-declare line finance.purchase_lines%rowtype; purchase finance.purchases%rowtype; entry finance.budget_items%rowtype; prior jsonb;
+declare line finance.purchase_lines%rowtype; purchase finance.purchases%rowtype; effective_system uuid; prior jsonb;
 begin
  perform finance.lock_management_actor(p_actor,p_sub,p_email);
  if not exists(select 1 from project_management.projects p where p.id=p_project and p.season=project_management.current_season() and p_actor=any(p.lead_ids)) then raise exception 'FINANCE|denied|Choose a current project you lead.'; end if;
@@ -168,13 +168,13 @@ begin
  if line.system_id is not null or (line.project_id is not null and line.project_id<>p_project)
    or (line.project_id is null and purchase.requester_member_id<>p_actor) then raise exception 'FINANCE|denied|This purchase is already allocated or belongs to another member.'; end if;
  if p_item is not null then
-   select anchor.* into entry from finance.budget_items anchor join finance.effective_budget_entries i on i.id=anchor.id join finance.budgets b on b.id=i.budget_id
+   select i.system_id into effective_system from finance.budget_items anchor join finance.effective_budget_entries i on i.id=anchor.id join finance.budgets b on b.id=i.budget_id
      join finance.systems sys on sys.id=i.system_id and sys.active
      where i.id=p_item and i.project_id=p_project and b.season_id=purchase.season_id and (i.approved_version_id is not null or i.legacy_budget_status='approved') and not i.protected and i.status<>'cancelled' for update of anchor;
    if not found then raise exception 'FINANCE|conflict|Choose an approved budget entry in this project.'; end if;
  end if;
  prior:=jsonb_build_object('projectId',line.project_id,'budgetItemId',line.budget_item_id);
- update finance.purchase_lines set project_id=p_project,system_id=entry.system_id,budget_item_id=p_item,unbudgeted=p_item is null where id=p_line;
+ update finance.purchase_lines set project_id=p_project,system_id=effective_system,budget_item_id=p_item,unbudgeted=p_item is null where id=p_line;
  if p_item is not null then
    insert into finance.allocations(line_id,budget_item_id,public_ref,amount_ore) values(p_line,p_item,line.public_ref||'-A1',line.amount_ore);
 

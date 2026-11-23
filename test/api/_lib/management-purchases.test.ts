@@ -77,6 +77,7 @@ it('links the same expense to a led project later and rejects forged assignments
  expect((await service(0).load('test')).purchases).toMatchObject([{id:savedLine,projectId:id(400),amountNok:'6000.01',revision:1}]);
  expect((await db.query('select * from finance.purchases')).rows).toHaveLength(1);
  expect((await db.query('select * from finance.documents')).rows).toHaveLength(1);
+ const exported=await buildPurchaseExport(db,'S27');expect(exported.csv).toContain('Fabrication');
 });
 it('assigns explicit approved entries to projects and allocates a previously recorded expense only once',async()=>{
  await db.query("insert into identity.member_roles(member_id,role_key) values($1,'financials')",[id(2)]);
@@ -117,13 +118,19 @@ it('records one payment and one receipt across multiple project budget entries e
  expect((await db.query<{amount:string;entries:number}>('select sum(a.amount_ore)::text as amount,count(distinct a.budget_item_id)::integer as entries from finance.allocations a join finance.purchase_lines l on l.id=a.line_id where l.purchase_id=$1',[result.id])).rows).toEqual([{amount:'25000',entries:2}]);
 });
 it('uses the current approved project version and retains its provenance on registration',async()=>{
+ await db.query("insert into finance.systems(id,department_key,code,name) select $1,department_key,'SYS-FABNEW','Revised fabrication system' from finance.systems where id=$2",[id(415),id(411)]);
  await db.query("insert into finance.project_budget_versions(id,project_budget_id,version_number,status,department_approved_by,department_approved_at,approved_by,approved_at,created_by_member_id) values($1,$2,1,'draft',$3,now(),$3,now(),$3)",[id(430),id(420),id(2)]);
- await db.query("insert into finance.project_budget_version_entries(version_id,entry_id,system_id,description,category,planned_ore,ordinary_priority,reuse_status,status) values($1,$2,$3,'Approved replacement description','material',2000000,'P2','new','active')",[id(430),id(412),id(411)]);
+ await db.query("insert into finance.project_budget_version_entries(version_id,entry_id,system_id,description,category,planned_ore,ordinary_priority,reuse_status,status) values($1,$2,$3,'Approved replacement description','material',2000000,'P2','new','active')",[id(430),id(412),id(415)]);
  await db.query("update finance.project_budget_versions set status='approved' where id=$1",[id(430)]);
  await db.query('update finance.project_budgets set approved_version_id=$1 where id=$2',[id(430),id(420)]);
- const choices=await service(0).load('test');expect(choices.items).toMatchObject([{id:id(412),description:'Approved replacement description',plannedNok:'20000.00'}]);expect(choices.items.some(item=>item.id===id(414))).toBe(false);
+ const choices=await service(0).load('test');expect(choices.items).toMatchObject([{id:id(412),systemId:id(415),description:'Approved replacement description',plannedNok:'20000.00'}]);expect(choices.items.some(item=>item.id===id(414))).toBe(false);
  const result=await service(0).mutate('test',{action:'registerManagementPurchase',requestId:crypto.randomUUID(),purchase:{buyerName:'Manager',supplierName:'Supplier',purchaseDate:'2026-11-01',justification:'Purchase against the approved version',paymentMethod:'team_account',documentKind:'receipt',lines:[{systemId:'',projectId:id(400),budgetItemId:id(412),unbudgeted:false,description:'Approved materials',quantity:'1',amountNok:'100.00'}],uploadIds:[await evidence()]}});
- expect((await db.query('select approved_version_id,budget_authority from finance.purchase_lines where purchase_id=$1',[result.id])).rows).toMatchObject([{approved_version_id:id(430),budget_authority:'project_approved'}]);
+ expect((await db.query('select approved_version_id,budget_authority,system_id from finance.purchase_lines where purchase_id=$1',[result.id])).rows).toMatchObject([{approved_version_id:id(430),budget_authority:'project_approved',system_id:id(415)}]);
+ const unallocated=await service(0).mutate('test',{action:'registerManagementPurchase',requestId:crypto.randomUUID(),purchase:{buyerName:'Manager',supplierName:'Supplier',purchaseDate:'2026-11-01',justification:'Expense linked after registration',paymentMethod:'team_account',documentKind:'receipt',lines:[{systemId:'',projectId:null,budgetItemId:null,unbudgeted:true,description:'Later allocation',quantity:'1',amountNok:'25.00'}],uploadIds:[await evidence()]}});
+ const line=(await service(0).load('test')).purchases.find(line=>line.purchaseId===unallocated.id)!;
+ await service(0).mutate('test',{action:'linkManagementPurchase',requestId:crypto.randomUUID(),lineId:line.id,projectId:id(400),budgetItemId:id(412),expectedRevision:0});
+ expect((await db.query('select system_id,approved_version_id from finance.purchase_lines where id=$1',[line.id])).rows).toMatchObject([{system_id:id(415),approved_version_id:id(430)}]);
+
 });
 it('rechecks membership and project leads instead of using cached roles or choices',async()=>{
  await expect(service(1).load('test')).rejects.toMatchObject({status:403});

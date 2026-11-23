@@ -111,10 +111,10 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      left join finance.systems s on s.id = l.system_id
      left join finance.effective_budget_entries i on i.id = l.budget_item_id
      left join identity.departments physical_department on physical_department.department_key=s.department_key
-     left join finance.project_budgets current_header on current_header.project_id=p.project_id and current_header.season_id=p.season_id
+     left join finance.project_budgets current_header on current_header.project_id=coalesce(l.project_id,p.project_id) and current_header.season_id=p.season_id
      left join project_management.departments recorded_department on recorded_department.id=p.responsible_department_id
      left join project_management.departments owner on owner.id=case when i.source='project' then i.responsible_department_id when l.unbudgeted then coalesce(current_header.responsible_department_id,p.responsible_department_id) end
-     left join project_management.projects project on project.id=case when i.source='project' then i.project_id when l.unbudgeted then p.project_id end
+     left join project_management.projects project on project.id=coalesce(i.project_id,l.project_id,p.project_id)
      where season.code = $1
      order by l.public_ref`,
     [seasonCode],

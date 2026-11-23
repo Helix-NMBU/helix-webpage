@@ -175,7 +175,6 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
   async function readInvoice(actor: WorkspaceIdentity, taskId: string): Promise<InvoiceProgress | null> {
     const query = "select partner_deals.invoice_progress($1::uuid,$2,$3,$4::uuid) as value";
     const args = [actor.userId, actor.googleSub, actor.email, taskId];
-    await deps.db.query(query, args);
     const result = await deps.db.query<{ value: InvoiceProgress | null }>(query, args);
     return result.rows[0]?.value ?? null;
   }
