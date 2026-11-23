@@ -18,4 +18,8 @@ The reviewed feature commit was `4f865f88a1276ab1e78095dc69d995be8f0637e0`. Revi
 
 ## Release prerequisites
 
-Production's migration ledger was inspected read-only and ends at `077_correct_purchase_invoice_links.sql`. Apply only `078_partner_invoice_progress.sql` and `079_management_purchase_registration.sql`, preserving their checksums in the ledger, before deploying this application revision. These migrations add invoice progress and Management intake functions, permit unassigned purchase lines, and retain the existing allocation-total invariant for assigned lines. They do not create member accounts, memberships, purchases, or funding receipts.
+Production migrations `078_partner_invoice_progress.sql` and `079_management_purchase_registration.sql` were applied atomically on 23 November 2026 after explicit user approval. Before application, a production transaction rehearsed both migrations and rolled back successfully. Neon had no free branch slots for another validation branch.
+
+The migration ledger matches both repository checksums. Verification preserved all 11 member records, eight purchases, eight purchase lines, eight allocations, and all document records. Registered actuals remain NOK 40,350.31, total funding remains NOK 224,237.33, and received funding remains NOK 134,237.33. The invoice-progress and purchase-registration functions, nullable unassigned system, and Finance label were read back successfully. No test purchase or payment was created in production.
+
+Both independent reviewers verified that their findings were resolved in `64d7b4650eae2a280de4881618526686a1ed92ca`, with no remaining concrete issue in those fixes.
