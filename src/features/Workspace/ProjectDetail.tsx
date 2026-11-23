@@ -1,3 +1,5 @@
+import { ProjectPurchases } from "../Finance/ProjectPurchases";
+import { isManagementMember } from "../Finance/purchase-access";
 import { ProjectBudgetsPanel } from "../Finance/ProjectBudgetsPanel";
 import { canManageProject } from "../ProjectManagement/permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -429,6 +431,7 @@ export function ProjectDetail({
                     <span className="text-muted-foreground">{formatDate(project.startDate ?? null)} – {formatDate(project.deadline)}</span>
                   </div>
                   <button type="button" onClick={() => selectTab("activity")} className="w-full rounded-xl border px-4 py-5 text-sm text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View project activity</button>
+                  {isManagementMember(directory) && project.leadIds?.includes(directory.viewerId) && <ProjectPurchases projectId={project.id} />}
                 </section>
               ) : tab === "budget" ? (
                 <ProjectBudgetsPanel projectId={project.id} title="Budget" />

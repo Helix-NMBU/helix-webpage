@@ -66,10 +66,8 @@ export function AppSidebar({
   const managementPath = departmentPath("Management");
   const managementDepartment = workspace?.departments?.find(department => departmentPath(department.name) === managementPath);
   const recruitingAllowed = featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed";
-  const purchasesAllowed = finance.access === "allowed" && (finance.capabilities?.ownRequests || finance.capabilities?.registerActual);
   const managementItems = [
     ...(recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : []),
-    ...(purchasesAllowed ? [{ title: "Purchases", url: financeRoutes.purchases, icon: IconReceipt }] : []),
   ];
   const managementActive = managementItems.some(item => item.url === location.pathname);
   const financePath = departmentPath("Finance");
@@ -77,7 +75,6 @@ export function AppSidebar({
   const financeItems = finance.access === "allowed" ? [
     { title: "Spending", url: financeRoutes.overview, icon: IconReceipt },
     { title: "Budgets & Financing", url: financeRoutes.budgets, icon: IconWallet },
-    ...(sponsorPages?.financeReviews ? [{ title: "Sponsor funding reviews", url: "/finance/sponsor-reviews" }] : []),
   ] : [];
   const financeActive = financeItems.some(item => item.url === location.pathname) || location.pathname.startsWith(`${financeRoutes.budgets}/`);
   const spaceItems = [

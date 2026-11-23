@@ -14,7 +14,6 @@ import { formatOre } from "../Finance/money";
 import { DealEditor } from "./DealEditor";
 import { FundingRecovery } from "./FundingRecovery";
 import { InlineDealFields } from "./InlineDealFields";
-import { SponsorReceipt } from "./SponsorReceipt";
 import { pipelineRepository, PipelineError } from "./repository";
 import { editableDeal, stageLabels, stages, type Deal, type DealInput, type DealStage, type PipelineData, type PipelineRepository, type OpportunityKind } from "./types";
 
@@ -39,25 +38,6 @@ export function SponsorPipeline({repository}:{repository?:PipelineRepository}) {
  async function renamePartner(id:string,revision:number,name:string){setBusy(true);try{await repo.renameOrganization(id,revision,name);await refresh();notify("Partner updated","The partner name has been saved.",{variant:"success",href:null});return true;}catch(error){report(error,"Could not update partner");return false;}finally{setBusy(false);}}
  async function move(deal:Deal,stage:DealStage){if(busy||deal.stage===stage)return;if(deal.stage==="won"){notify("Won deal cannot be moved","Review the agreement before changing a won deal.",{variant:"warning",href:null});return;}if(stage==="won"){setReviewFunding(false);setConfirm(deal);return;}await save(editableDeal(deal,stage));}
  async function requestFinanceReview() { if(!confirm)return;setBusy(true);try{await repo.requestFinanceReview(confirm.id,confirm.revision);notify("Finance review requested","Finance can review the matching funding. Return to this deal to check the result.",{variant:"success",href:null});setConfirm(null);await refresh();}catch(error){report(error,"Could not request Finance review");}finally{setBusy(false);} }
- async function reviewPaymentFunding(deal: Deal) {
-   setBusy(true);
-   try {
-     await repo.requestFinanceReview(deal.id, deal.revision);
-     notify("Finance review requested", "Link the funding record before setting a payment date.", {
-       variant: "success", href: null,
-       action: { label: "Open sponsor funding reviews", onClick: () => navigate("/finance/sponsor-reviews") },
-     });
-     await refresh();
-   } catch (error) {
-     if (error instanceof PipelineError && error.code === "funding_no_matches") {
-       notify("No matching sponsor funding", "Check the season, sponsor name and amount in Financing before requesting a link.", {
-         variant: "warning", href: null, action: { label: "Open Financing", onClick: () => navigate("/finance/financing") },
-       });
-     } else report(error, "Could not request funding review");
-   } finally {
-     setBusy(false);
-   }
- }
  async function win(){if(!confirm)return;setBusy(true);try{await repo.confirmWon(confirm.id,confirm.revision);setConfirm(null);notify(confirm.opportunityKind==="grant"?"Grant approved":"Deal won",confirm.opportunityKind==="grant"?"The awarded funding is ready to track in Financing.":"The agreement handoff has been started.",{variant:"success",href:null});await refresh();}catch(error){
   if(error instanceof PipelineError && ["funding_possible_duplicate","funding_mismatch"].includes(error.code ?? "")) {
    notify("Review existing funding", data?.canReviewFunding ? "Funding needs review before confirming this deal." : "Request a limited review from Finance before confirming.", {variant:"warning",href:null,...(data?.canReviewFunding ? {action:{label:"Review funding",onClick:()=>setReviewFunding(true)}} : {action:{label:"Request review",onClick:()=>void requestFinanceReview()}})});
@@ -113,21 +93,7 @@ export function SponsorPipeline({repository}:{repository?:PipelineRepository}) {
            >
              <CardContent className="grid gap-3 p-3.5"><div><button type="button" data-board-drag-handle className="text-left text-sm font-medium hover:underline" onClick={()=>deal.stage==="won"?navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`):setEditor(deal)}>{deal.title}</button>{deal.cancelledAt&&<p className="mt-1 text-xs text-muted-foreground">Cancelled</p>}<InlineDealFields deal={deal} data={data} members={members} busy={busy} onSave={save} onWonEdit={()=>notify("Review agreement changes","Changes to a won deal need review.",{variant:"warning",href:null,action:{label:"Open agreement",onClick:()=>navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`)}})} onInvalid={message=>notify("Check deal details",message,{variant:"error",href:null})}/>{deal.financeReviews?.length ? <p className="mt-1 text-xs text-muted-foreground">Finance review: {deal.financeReviews.some(r=>r.status==="stale")?"Needs review":deal.financeReviews.some(r=>r.status==="pending")?"Pending":"Resolved"}</p> : null}</div>
  {data.canManage && <FundingApplicationCard deal={deal} seasons={data.seasons} onChanged={refresh} />}
- {data.canReviewFunding && deal.contributions.map(contribution => {
-  const receipt = contribution.sponsorReceipt;
-  if (!receipt || !contribution.amountOre || !contribution.seasonCode) return null;
-  return receipt.fundingId !== null ? (
-    <SponsorReceipt
-      key={receipt.fundingId}
-      receipt={receipt}
-      amountOre={contribution.amountOre}
-      season={contribution.seasonCode}
-      onRecorded={() => void refresh()}
-    />
-  ) : <Button key={contribution.id} type="button" size="sm" variant="outline" disabled={busy} onClick={() => void reviewPaymentFunding(deal)}>
-    Review sponsor funding · {contribution.seasonCode}
-  </Button>;
- })}
+
  {deal.stage!=="won"&&<label className="grid gap-1 text-xs text-muted-foreground">Stage<Select value={deal.stage} disabled={busy} onValueChange={value=>void move(deal,value as DealStage)}><SelectTrigger aria-label={`Stage for ${deal.title}`} className="w-full" size="sm"><SelectValue/></SelectTrigger><SelectContent>{stages.map(s=><SelectItem key={s} value={s}>{deal.opportunityKind==="grant"&&s==="won"?"Approved":stageLabels[s]}</SelectItem>)}</SelectContent></Select></label>}<div className="flex items-center gap-3 pt-1 text-muted-foreground">{deal.agreementLink?<a href={deal.agreementLink} target="_blank" rel="noopener noreferrer" aria-label={`Open agreement for ${deal.title}`} className="rounded hover:text-foreground focus-visible:outline focus-visible:outline-2"><IconFileDescription size={15} stroke={1.5}/></a>:<button type="button" aria-label={`Edit agreement for ${deal.title}`} onClick={()=>deal.stage==="won"?navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`):setEditor(deal)} className="rounded hover:text-foreground focus-visible:outline focus-visible:outline-2"><IconFileDescription size={15} stroke={1.5}/></button>}<button type="button" aria-label={`Open deliverables for ${deal.title}`} onClick={()=>deal.stage==="won"?navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`):setEditor(deal)} className="rounded hover:text-foreground focus-visible:outline focus-visible:outline-2"><IconCheckbox size={15} stroke={1.5}/></button><button type="button" aria-label={`Open deal notes for ${deal.title}`} onClick={()=>deal.stage==="won"?navigate(`/partner-deals?deal=${encodeURIComponent(deal.id)}`):setEditor(deal)} className="rounded hover:text-foreground focus-visible:outline focus-visible:outline-2"><IconMessage size={15} stroke={1.5}/></button>{deal.createdAt&&!Number.isNaN(Date.parse(deal.createdAt))&&<span className="ml-auto inline-flex items-center gap-1 text-xs"><IconClock size={14} stroke={1.5} aria-hidden="true"/><span aria-label={`Created ${Math.max(0,Math.floor((Date.now()-Date.parse(deal.createdAt))/86400000))} days ago`}>{Math.max(0,Math.floor((Date.now()-Date.parse(deal.createdAt))/86400000))}d</span></span>}</div></CardContent>
            </BoardTransferCard>
          ))}

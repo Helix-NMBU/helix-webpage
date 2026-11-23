@@ -103,6 +103,11 @@ export function localPurchaseObligations(
 }
 /** Build canonical read facts, then use exactly the same hierarchy/scenario presenters as the server. */
 export function projectLocalFinance(input: LocalFinanceProjectionInput) {
+  // A real incurred cost may await its first physical system/budget allocation.
+  const unassignedSystem='unassigned-purchases';
+  if(input.purchases.some(record=>record.purchase.lines.some(line=>!line.systemId))){
+    input={...input,systems:[...input.systems,{id:unassignedSystem,code:'UNASSIGNED',name:'Awaiting budget allocation',departmentKey:unassignedSystem,departmentName:'Unassigned purchases',sortOrder:9999,active:true}],purchases:input.purchases.map(record=>({...record,purchase:{...record.purchase,lines:record.purchase.lines.map(line=>({...line,systemId:line.systemId||unassignedSystem}))}}))};
+  }
   const departmentsById = new Map(
     (input.departments ?? []).map((department) => [department.id, department]),
   );
@@ -130,7 +135,7 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
   );
   const normalized = new Map(
     input.purchases.map((p) => {
-      const value = normalizePurchaseInput(p.purchase);
+      const value = normalizePurchaseInput(p.purchase,{management:p.purchase.lines.some(line=>line.systemId===unassignedSystem)});
       if (!value.purchase || value.errors.length)
         throw new Error("Stored purchase data could not be read.");
       return [p.id, value.purchase] as const;
@@ -642,7 +647,7 @@ export function projectLocalFinance(input: LocalFinanceProjectionInput) {
           : null,
         description: line.description,
         amountNok: formatOre(line.amountOre),
-        allocationNok: formatOre(line.amountOre),
+        allocationNok: line.systemId===unassignedSystem ? "0.00" : formatOre(line.amountOre),
       })),
       documents: [...purchase.uploadIds, `purchase:${record.id}`].flatMap((id, index) => {
         const ref = invoiceMap.get(id);

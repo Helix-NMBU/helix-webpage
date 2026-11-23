@@ -107,10 +107,10 @@ export async function loadPurchaseRegister(
       purchase_id: string; id: string; public_ref: string; system_name: string; item_name: string | null;
       description: string; amount_ore: string; allocation_ore: string;
     }>(
-      `select pl.purchase_id, pl.id, pl.public_ref, sys.name as system_name, bi.description as item_name,
+      `select pl.purchase_id, pl.id, pl.public_ref, coalesce(sys.name, 'Awaiting budget allocation') as system_name, bi.description as item_name,
               pl.description, pl.amount_ore::text as amount_ore, coalesce(sum(a.amount_ore), 0)::text as allocation_ore
        from finance.purchase_lines pl
-       join finance.systems sys on sys.id = pl.system_id
+       left join finance.systems sys on sys.id = pl.system_id
        left join finance.budget_items bi on bi.id = pl.budget_item_id
        left join finance.allocations a on a.line_id = pl.id
        where pl.purchase_id = any($1::uuid[])

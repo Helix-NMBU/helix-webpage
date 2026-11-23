@@ -14,7 +14,7 @@ const roleOptions: PlatformRole[] = [
   { key: "department_lead", label: "Department Lead" },
   { key: "team_member", label: "Team Member" },
   { key: "platform_administrator", label: "Platform administrator" },
-  { key: "financials", label: "Financials" },
+  { key: "financials", label: "Finance" },
 ];
 const departmentOptions: AccessDepartment[] = [
   { id: "finance", name: "Finance" },

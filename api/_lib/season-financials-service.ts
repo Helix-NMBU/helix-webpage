@@ -60,13 +60,13 @@ export function createSeasonFinancialServices(deps: {
           let departments: SeasonFinancialDepartment[] = [];
           let plannedNok: string | null = null;
           let actualNok: string | null = null;
-          if (visible && before.season_code) {
+          if (before.season_code) {
             const summaries = await loadDepartmentSummaries(deps.db.query.bind(deps.db), before.season_code, before.draft_allowed);
             const catalog = (await deps.db.query<{ department_key: string; name: string }>(
               "select department_key, name from identity.departments order by sort_order, name, department_key",
             )).rows;
             const byKey = new Map(summaries.map((entry) => [entry.departmentKey, entry]));
-            departments = catalog.map(({ department_key: departmentKey, name }) => {
+            departments = visible ? catalog.map(({ department_key: departmentKey, name }) => {
               const entry = byKey.get(departmentKey);
               return {
                 departmentKey, name,
@@ -75,9 +75,11 @@ export function createSeasonFinancialServices(deps: {
                 unbudgetedNok: entry?.unbudgetedNok ?? "0.00",
                 systems: (entry?.systems ?? []).map(({ id, code, name: systemName, active, plannedNok, actualNok, unbudgetedNok }) => ({ id, code, name: systemName, active, plannedNok, actualNok, unbudgetedNok })),
               };
-            });
-            plannedNok = formatOre(departments.reduce((sum, item) => sum + nokToOre(item.plannedNok), 0n));
-            actualNok = formatOre(departments.reduce((sum, item) => sum + nokToOre(item.actualNok), 0n));
+            }) : [];
+            const unassigned = summaries.find(entry => entry.departmentKey === "unassigned-purchases");
+            if (unassigned) departments.push({ ...unassigned, systems: [] });
+            plannedNok = visible ? formatOre(departments.reduce((sum, item) => sum + nokToOre(item.plannedNok), 0n)) : null;
+            actualNok = visible || unassigned ? formatOre(departments.reduce((sum, item) => sum + nokToOre(item.actualNok), 0n)) : null;
           }
           // The snapshot is independent of the season and its absence is not a zero.
           // A bank read failure must not suppress otherwise available budget totals.

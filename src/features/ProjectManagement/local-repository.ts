@@ -4,7 +4,7 @@ import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { addDays, osloDate, validateProjectMilestones, validateProject, validateTask, validateMilestoneChanges, validateDepartment } from "./model";
 import { canonicalDepartment, fixedDepartmentRecords, fixedProjectDepartments } from "./departments";
 import { progressEvent } from "./progress";
-import { localPartnerWorkspace } from "../PartnerDeals/local-fixture";
+import { localInvoiceProgress, localPartnerWorkspace } from "../PartnerDeals/local-fixture";
 import { ProjectRequestError } from "./repository";
 import { TASK_CATEGORIES, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
 
@@ -67,6 +67,12 @@ export function createLocalProjectRepository(): ProjectRepository {
       const workspace = projectMemberWorkspace(original);
       const collection = mutation.action === "save_department" ? workspace.departments : (mutation.action === "save_project" || mutation.action === "delete_project") ? workspace.projects : workspace.tasks;
       const current = collection.find(item => item.id === mutation.id);
+      const completing=mutation.action==='set_status'&&mutation.status==='done'||mutation.action==='save_task'&&mutation.task.status==='done'||mutation.action==='estimate_history';
+      if(completing&&(current as Task|undefined)?.status!=='done'){
+        const invoice=localInvoiceProgress(mutation.id);
+        if(invoice&&(!invoice.sentDate||!invoice.receivedDate))throw new ProjectRequestError('Open the invoice task and record both the invoice sent date and payment received date before marking it done.',409);
+      }
+
       if ((current?.revision ?? 0) !== mutation.expectedRevision) throw new ProjectRequestError("This item changed in another session. Reload before saving again.", 409);
       const now = new Date().toISOString();
       if (mutation.action === "delete_task" || mutation.action === "delete_project") {

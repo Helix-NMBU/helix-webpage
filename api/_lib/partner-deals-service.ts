@@ -1,3 +1,5 @@
+import type { InvoiceProgress, InvoiceProgressInput } from "../../src/features/PartnerDeals/invoice-progress-types.js";
+import { parseInvoiceProgress } from "./partner-invoice-validation.js";
 import { loadFundingApplicationCard, mutateFundingApplication } from "./finance-funding-applications.js";
 import { FinanceError } from "./finance-error.js";
 import type { FundingApplicationCard, FundingApplicationMutationResult } from "../../src/features/Finance/funding-application-types.js";
@@ -14,6 +16,8 @@ export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; can
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
+  invoiceProgress(token: string, taskId: unknown): Promise<InvoiceProgress | null>;
+  saveInvoiceProgress(token: string, input: unknown): Promise<InvoiceProgress | null>;
   fundingApplicationCard(token: string, dealId: unknown): Promise<{ application: FundingApplicationCard | null }>;
   saveFundingApplication(token: string, body: Record<string, unknown>): Promise<FundingApplicationMutationResult>;
   load(token: string, view: DealView): Promise<DealWorkspace>;
@@ -110,6 +114,14 @@ function errorFor(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+  if (message.includes("invoice_completion_required")) throw new MemberCvError(409, "Record the invoice sent date and payment received date in the invoice task before marking it done. Reopen a completed task before clearing either date.");
+  if (message.includes("invoice_payment_forbidden")) throw new MemberCvError(403, "Finance access is required to record money received.");
+  if (message.includes("invoice_forbidden")) throw new MemberCvError(403, "You do not have access to update this invoice task.");
+  if (message.includes("invoice_closed")) throw new MemberCvError(403, "This invoice belongs to a closed season.");
+  if (message.includes("invoice_funding_required")) throw new MemberCvError(409, "Review the linked sponsor funding in Financing before recording payment.");
+  if (message.includes("invoice_conflict")) throw new MemberCvError(409, "The invoice or payment changed. Reload the task before saving again.");
+  if (message.includes("invoice_invalid_date")) throw new MemberCvError(400, "Choose valid invoice dates that are not in the future.");
+
   if (message.includes("deal_change_closed_season")) throw new MemberCvError(409,"A closed season still has active records. Ask Finance and Marketing to review it; this change remains unresolved.");
   if (message.includes("deal_change_cancel_finance")) throw new MemberCvError(409,"Ask Finance to retire unreceived funding before reconciling cancellation.");
   if (message.includes("deal_kind_linked")) throw new MemberCvError(409,"Ask Finance to unlink the funding before changing between Deals and Grants.");
@@ -160,6 +172,14 @@ function errorFor(error: unknown): never {
 }
 export function createDealServices(deps: { db: CvDatabase; authenticate(token: string): Promise<WorkspaceIdentity> }): DealServices {
   const identity = async (token: string) => deps.authenticate(token);
+  async function readInvoice(actor: WorkspaceIdentity, taskId: string): Promise<InvoiceProgress | null> {
+    const query = "select partner_deals.invoice_progress($1::uuid,$2,$3,$4::uuid) as value";
+    const args = [actor.userId, actor.googleSub, actor.email, taskId];
+    await deps.db.query(query, args);
+    const result = await deps.db.query<{ value: InvoiceProgress | null }>(query, args);
+    return result.rows[0]?.value ?? null;
+  }
+
   return {
     async fundingApplicationCard(token, dealId) {
       try { return await loadFundingApplicationCard(deps.db, await identity(token), dealId); }
@@ -168,6 +188,21 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
     async saveFundingApplication(token, body) {
       try { return await mutateFundingApplication(deps.db, await identity(token), { ...body, action: "saveFundingApplication" }); }
       catch (error) { if (error instanceof FinanceError) throw new MemberCvError(error.status, error.message); return errorFor(error); }
+    },
+    async invoiceProgress(token, taskId) {
+      try {
+        if (typeof taskId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId)) throw new MemberCvError(400, "Choose a valid task.");
+        return await readInvoice(await identity(token), taskId);
+      } catch (error) { return errorFor(error); }
+    },
+    async saveInvoiceProgress(token, value) {
+      try {
+        const input: InvoiceProgressInput = parseInvoiceProgress(value);
+        const actor = await identity(token);
+        await deps.db.query("select partner_deals.save_invoice_progress($1::uuid,$2,$3,$4::uuid,$5::integer,$6::integer,$7::date,$8::date)",
+          [actor.userId, actor.googleSub, actor.email, input.taskId, input.expectedRevision, input.fundingRevision, input.sentDate, input.receivedDate]);
+        return await readInvoice(actor, input.taskId);
+      } catch (error) { return errorFor(error); }
     },
     async load(token, view) {
       try {

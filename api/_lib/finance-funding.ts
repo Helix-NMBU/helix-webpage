@@ -27,6 +27,7 @@ function messageOf(error: unknown): string {
 }
 
 export function mapFundingDatabaseError(error: unknown): FinanceError {
+  if (messageOf(error).includes("invoice_completion_required")) return new FinanceError(409, "Reopen the completed invoice task before clearing its recorded payment.");
   if (error instanceof FinanceError) return error;
   const message = messageOf(error);
   const code = codeOf(error);

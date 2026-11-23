@@ -40,6 +40,7 @@ export function createFinanceHandler(getServices: () => FinanceServices = neonFi
       const services = getServices();
       if (req.method === "GET") {
         const action = req.query.action;
+        if (action === "managementPurchases" && services.managementPurchases) return res.status(200).json(await services.managementPurchases(token));
         if (typeof action !== "string" || !FINANCE_READ_ACTIONS.includes(action as FinanceReadAction)) throw new FinanceError(400, "Unknown request.");
         const version = knownVersion(req.query.knownVersion);
         if(action==="departmentHomeBudget")return res.status(200).json(await services.departmentHomeBudget(token,req.query.departmentId));
