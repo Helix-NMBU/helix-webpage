@@ -44,6 +44,7 @@ const workspaceSql = `select project_management.is_department_manager(viewer.id)
 function projectError(error: unknown): never {
   if (error instanceof MemberCvError) throw error;
   const message = error instanceof Error ? error.message : "";
+  if (message.includes("invoice_completion_required")) throw new MemberCvError(409, "Open the invoice task and record both the invoice sent date and payment received date before marking it done.");
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   if (message.includes("project_p0_obligation_history")) throw new MemberCvError(409, "This project has active P0 purchase obligations and retained financial history. Keep it for reference.");
   if (message.includes("project_financial_history_assignment")) throw new MemberCvError(409, "This project has financial history. Keep its season, responsible department and the departments used by its budget. Create a new project if the work belongs to another season or department.");

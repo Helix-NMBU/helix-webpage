@@ -1,3 +1,32 @@
+/* Include body-portaled menus and dialogs. Utilities still take precedence for
+   drag handles, resize rails and text editing. Public pages keep their defaults. */
+@layer base {
+  :where(html[data-member-theme]) :where(
+    button, a[href], summary, select,
+    input[type="button"], input[type="submit"], input[type="reset"], input[type="image"], input[type="color"],
+    input[type="checkbox"], input[type="radio"], input[type="file"],
+    [role="button"], [role="link"], [role="tab"], [role="option"],
+    [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"],
+    [role="checkbox"], [role="radio"], [role="switch"],
+    [role="combobox"]:not(input):not(textarea)
+  ):not(:disabled):not([aria-disabled="true"]):not([data-disabled]:not([data-disabled="false"])) {
+    cursor: pointer;
+  }
+
+  :where(html[data-member-theme]) input[type="file"]:not(:disabled)::file-selector-button {
+    cursor: pointer;
+  }
+
+  /* Only toggle labels act like buttons; text-field labels keep their cursor. */
+  :where(html[data-member-theme]) :where(
+    label:has(:is(input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="switch"]):not(:disabled):not([aria-disabled="true"])),
+    label[for]:has(+ :is(input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="switch"]):not(:disabled):not([aria-disabled="true"])),
+    :is(input[type="checkbox"], input[type="radio"], [role="checkbox"], [role="switch"]):not(:disabled):not([aria-disabled="true"]) + label[for]
+  ) {
+    cursor: pointer;
+  }
+}
+
 .member-platform.portal-root {
   font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;

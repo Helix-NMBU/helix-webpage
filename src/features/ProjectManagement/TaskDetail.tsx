@@ -1,3 +1,4 @@
+import { InvoiceTaskProgress } from "../PartnerDeals/InvoiceTaskProgress";
 import { canManageTask, canUpdateTaskStatus } from "./permissions";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -149,6 +150,7 @@ function TaskDetail({ taskId, repository: supplied, loadPartnerDeal }: { taskId:
       <article tabIndex={0} aria-label="Task content" className="min-w-0 space-y-7 px-2 pb-8 pt-4 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:px-6">
         <h1 className="max-w-4xl break-words text-2xl font-semibold tracking-tight">{canUpdate ? <button type="button" className="rounded text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" title="Edit task details" onClick={() => setEditing(true)}>{task.title}</button> : task.title}</h1>
         <p className="max-w-4xl whitespace-pre-wrap break-words text-base leading-7 text-foreground/90">{task.description || "No description yet."}</p>
+        <InvoiceTaskProgress taskId={task.id} />
       </article>
       <aside tabIndex={0} aria-label="Task properties" className="min-w-0 space-y-3 md:min-h-0 md:overflow-y-auto md:overscroll-y-contain md:pb-2 md:pr-2">
         <PropertyWidget title="Properties">

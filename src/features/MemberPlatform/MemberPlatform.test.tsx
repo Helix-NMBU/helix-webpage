@@ -159,7 +159,7 @@ describe("internal member platform", () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Toggle Business & Marketing pages"]')?.click();
       container.querySelector<HTMLButtonElement>('[aria-label="Toggle Finance pages"]')?.click();
     });
-    for (const href of ["/sponsor-pipeline", "/partner-deals", "/finance/sponsor-reviews"]) {
+    for (const href of ["/sponsor-pipeline", "/partner-deals"]) {
       expect(container.querySelector(`a[href="${href}"]`)).not.toBeNull();
     }
     await act(async () => router.navigate("/notifications"));
@@ -204,9 +204,9 @@ describe("internal member platform", () => {
     const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.textContent).toContain("Department access");
     expect(dialog.textContent).toContain("Space access");
-    for (const space of ["Season Overview", "Recruiting", "Financials"]) expect(dialog.textContent).toContain(space);
+    for (const space of ["Season Overview", "Recruiting", "Finance"]) expect(dialog.textContent).toContain(space);
     expect(dialog.textContent).not.toContain("Assigned Helix Position");
-    const adminLabel = [...dialog.querySelectorAll("label")].find(label => label.textContent === "Financials")!;
+    const adminLabel = [...dialog.querySelectorAll("label")].find(label => label.textContent === "Finance" && label.querySelector('[role="checkbox"]'))!;
     await act(async () => adminLabel.querySelector<HTMLButtonElement>('[role="checkbox"]')!.click());
     await act(async () => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/member-access", expect.objectContaining({
@@ -376,9 +376,7 @@ describe("internal member platform", () => {
     await act(async () => finance.click());
     expect(container.querySelector('a[href="/finance/budgets"]')).not.toBeNull();
     expect(container.querySelector('a[href="/finance/purchases"]')).toBeNull();
-    const management = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Management")!;
-    await act(async () => management.click());
-    expect(container.querySelector('a[href="/departments/management/purchases"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/departments/management/purchases"]')).toBeNull();
     expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();
     expect(container.textContent).not.toContain("Expenses");
     await act(async () => router.navigate("/finance/financing"));
@@ -394,10 +392,10 @@ describe("internal member platform", () => {
     expect(router.state.location.search).toBe("?season=S27");
     expect(router.state.location.hash).toBe("#items");
     await act(async () => router.navigate("/teams/finance/expenses?view=open#claims"));
-    expect(router.state.location.pathname).toBe("/departments/management/purchases");
-    expect(router.state.location.search).toBe("?view=open");
-    expect(router.state.location.hash).toBe("#claims");
-    await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=projectBudgets"))).toBe(true));
+    expect(router.state.location.pathname).toBe("/departments");
+    expect(router.state.location.search).toBe("");
+    expect(router.state.location.hash).toBe("");
+
   });
 
   it("opens a department budget from its dashboard card and returns through the parent breadcrumb", async () => {

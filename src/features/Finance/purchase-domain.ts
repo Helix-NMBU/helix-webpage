@@ -9,6 +9,7 @@ export const MAX_PURCHASE_FILES = 15;
 export const MAX_PURCHASE_FILE_BYTES = 10 * 1024 * 1024;
 
 export type NormalizedPurchaseLine = {
+  projectId?: string | null;
   systemId: string;
   budgetItemId: string | null;
   unbudgeted: boolean;
@@ -83,9 +84,11 @@ export function verifyFileSignature(bytes: Uint8Array, fileName: string, content
   return false;
 }
 
-function normalizeLine(raw: PurchaseLineInput, lineNumber: number, errors: FinanceFieldError[]): NormalizedPurchaseLine | null {
+function normalizeLine(raw: PurchaseLineInput, lineNumber: number, errors: FinanceFieldError[], management = false): NormalizedPurchaseLine | null {
   const systemId = typeof raw.systemId === "string" && UUID.test(raw.systemId) ? raw.systemId : "";
-  if (!systemId) errors.push(field("systemId", "Choose a system.", lineNumber));
+  if (!systemId && !management) errors.push(field("systemId", "Choose a system.", lineNumber));
+  const projectId = typeof raw.projectId === "string" && UUID.test(raw.projectId) ? raw.projectId : null;
+  if (management && raw.projectId && !projectId) errors.push(field("projectId", "Choose a valid project.", lineNumber));
   const unbudgeted = raw.unbudgeted === true;
   let budgetItemId: string | null = null;
   if (!unbudgeted) {
@@ -110,11 +113,12 @@ function normalizeLine(raw: PurchaseLineInput, lineNumber: number, errors: Finan
   }
   let requestLineId: string | null = null;
   if (typeof raw.requestLineId === "string" && UUID.test(raw.requestLineId)) requestLineId = raw.requestLineId;
-  if (!systemId || !description || amountOre === null || amountOre <= 0n || !Number.isFinite(quantityValue) || quantityValue <= 0) return null;
-  return { systemId, budgetItemId, unbudgeted, requestLineId, description, quantity: String(quantityValue), amountOre };
+  if (management && budgetItemId && !projectId) errors.push(field("projectId", "Choose the project for this budget entry.", lineNumber));
+  if ((!systemId && !management) || !description || amountOre === null || amountOre <= 0n || !Number.isFinite(quantityValue) || quantityValue <= 0) return null;
+  return { ...(management ? { projectId } : {}), systemId, budgetItemId, unbudgeted, requestLineId, description, quantity: String(quantityValue), amountOre };
 }
 
-export function normalizePurchaseInput(raw: PurchaseInput): { purchase: NormalizedPurchase | null; errors: FinanceFieldError[] } {
+export function normalizePurchaseInput(raw: PurchaseInput, options: { management?: boolean } = {}): { purchase: NormalizedPurchase | null; errors: FinanceFieldError[] } {
   const errors: FinanceFieldError[] = [];
   const buyerName = typeof raw.buyerName === "string" ? raw.buyerName.trim() : "";
   const supplierName = typeof raw.supplierName === "string" ? raw.supplierName.trim() : "";
@@ -177,7 +181,8 @@ export function normalizePurchaseInput(raw: PurchaseInput): { purchase: Normaliz
   if (uploadIds.length > MAX_PURCHASE_FILES) errors.push(field("files", "You can attach at most 15 files."));
   const linesInput = Array.isArray(raw.lines) ? raw.lines : [];
   if (linesInput.length < 1) errors.push(field("lines", "Add at least one purchase line."));
-  const lines = linesInput.map((line, index) => normalizeLine(line, index + 1, errors)).filter((line): line is NormalizedPurchaseLine => line !== null);
+  if (linesInput.length > 50) errors.push(field("lines", "Use at most 50 purchase lines."));
+  const lines = linesInput.map((line, index) => normalizeLine(line, index + 1, errors, options.management)).filter((line): line is NormalizedPurchaseLine => line !== null);
   const documentNumber = typeof raw.documentNumber === "string" && raw.documentNumber.trim() ? raw.documentNumber.trim() : null;
   if (errors.length) return { purchase: null, errors };
   return {

@@ -200,7 +200,7 @@ export default function MemberPlatform() {
                 <Route path="finance/funding-applications" element={<FundingApplications />} />
                 <Route path="finance/sponsor-reviews" element={<FinanceReviews />} />
                 <Route path="finance" element={<FinanceEntry page="overview" />} />
-                <Route path={financeRoutes.purchases} element={<FinanceEntry page="purchases" />} />
+                <Route path={financeRoutes.purchases} element={<Navigate to="/departments/management" replace />} />
                 <Route path="finance/purchases" element={<LegacyMemberRedirect to={financeRoutes.purchases} />} />
                 <Route path="finance/budgets/:budgetDepartmentSlug" element={<DepartmentBudgetPage />} />
                 <Route path="finance/budgets" element={<FinanceEntry page="budgets" />} />

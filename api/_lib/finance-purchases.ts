@@ -230,7 +230,7 @@ async function validatePurchase(db: CvDatabase, caller: PurchaseCaller, purchase
   return { purchase: normalized.purchase, warnings: related.warnings };
 }
 
-async function verifyPurchaseEvidence(
+export async function verifyPurchaseEvidence(
   db: CvDatabase,
   storage: FinanceObjectStorage | null,
   memberId: string,
@@ -299,6 +299,7 @@ export async function performPurchaseMutation(
   caller: PurchaseCaller,
   body: Record<string, unknown>,
   project?: PurchaseProjectScope,
+  options: { reserveFinalCandidate?: (uploadId: string, key: string, digest: string, byteSize: number) => Promise<void> } = {},
 ): Promise<FinanceMutationResult> {
   const action = body.action;
   const projectParams = project ? [caller.memberId, project.googleSub, project.email, project.projectId, project.departmentId] : [];
@@ -390,7 +391,8 @@ export async function performPurchaseMutation(
     const finalKey = storage.finalKey(caller.memberId, uploadId);
     try {
       // Record the key before object I/O, including writes whose outcome is unknown.
-      await db.query(
+      if (options.reserveFinalCandidate) await options.reserveFinalCandidate(uploadId, finalKey, digest, expectedSize);
+      else await db.query(
         project ? "select finance.reserve_project_upload_final_candidate($1::uuid,$2,$3,$4::uuid,$5::uuid,$6::uuid,$7,$8,$9::bigint)"
           : "select finance.reserve_upload_final_candidate($1::uuid, $2::uuid, $3, $4, $5::bigint)",
         [...(project ? projectParams : [caller.memberId]), uploadId, finalKey, digest, expectedSize],

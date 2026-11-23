@@ -1,3 +1,5 @@
+import type { PublicDepartmentSummary } from "./finance-types.js";
+import { formatOre } from "./finance-money.js";
 import {allocatedSystemCatalog} from "../../src/features/Finance/department-allocation.js";
 import { OPEN_APPROVED_COMMITMENT_ORE } from "./finance-effective-read.js";
 import {
@@ -56,7 +58,7 @@ function ore(value: string | null | undefined): bigint {
   return BigInt(value ?? "0");
 }
 
-async function loadFacts(query: Query, seasonCode: string, includeDraftItems: boolean): Promise<{ items: ItemRow[]; systems: SystemRow[]; funding: FundingFact[]; parts: FundingPartFact[] }> {
+async function loadFacts(query: Query, seasonCode: string, includeDraftItems: boolean): Promise<{ items: ItemRow[]; systems: SystemRow[]; funding: FundingFact[]; parts: FundingPartFact[]; unassignedOre: bigint }> {
   // All subqueries execute in one PostgreSQL statement snapshot, including on a pooled connection.
   // Decimal values are cast to text before JSON aggregation to preserve integer precision.
   const result = await query<{
@@ -64,6 +66,7 @@ async function loadFacts(query: Query, seasonCode: string, includeDraftItems: bo
     systems: SystemRow[];
     funding: { id: string; status: FundingStatus; confidence: FundingConfidence | null; amount_ore: string }[];
     parts: { id: string; funding_id: string; amount_ore: string }[];
+    unassigned_ore?: string;
   }>(
     `select
       coalesce((select jsonb_agg(to_jsonb(items) order by items.id) from (
@@ -108,12 +111,16 @@ async function loadFacts(query: Query, seasonCode: string, includeDraftItems: bo
        join finance.funding f on f.id = p.funding_id
        join finance.seasons s on s.id = f.season_id
        where s.code = $1
-       ) parts), '[]'::jsonb) as parts`,
+       ) parts), '[]'::jsonb) as parts,
+      (select coalesce(sum(l.amount_ore),0)::text from finance.purchase_lines l
+        join finance.purchases p on p.id=l.purchase_id and p.status='registered'
+        join finance.seasons s on s.id=p.season_id where s.code=$1 and l.system_id is null) as unassigned_ore`,
     [seasonCode, includeDraftItems],
   );
   const facts = result.rows[0];
   if (!facts) throw new Error("Could not load finance scenario facts.");
   return {
+    unassignedOre: ore(facts.unassigned_ore),
     items: facts.items,
     systems: facts.systems,
     funding: facts.funding.map((row) => ({ id: row.id, status: row.status, confidence: row.confidence, amountOre: ore(row.amount_ore) })),
@@ -162,14 +169,22 @@ function publicScenario(scenario: ReturnType<typeof calculateScenarios>[number])
 
 // The Season Overview receives a deliberately narrower projection in its own service.
 // Reuse the same item/system calculations as Financials without exposing scenarios.
+function withUnassigned(departments: PublicDepartmentSummary[], amount: bigint): PublicDepartmentSummary[] {
+  if (amount === 0n) return departments;
+  return [...departments, { departmentKey: "unassigned-purchases", name: "Unassigned purchases", plannedNok: "0.00", actualNok: formatOre(amount), differenceNok: formatOre(-amount), usedFraction: null, commitmentNok: "0.00", unbudgetedNok: formatOre(amount), systems: [] }];
+}
+function scenarioItems(facts: Awaited<ReturnType<typeof loadFacts>>): BudgetItemFact[] {
+  // This calculation-only cost bucket represents incurred expenses, without creating a budget entry.
+  return [...facts.items.map(toItemFact), ...(facts.unassignedOre > 0n ? [{ id: "unassigned-purchases", priority: "P1" as const, status: "active" as const, plannedOre: 0n, actualOre: facts.unassignedOre, commitmentOre: 0n, unallocated: true, earmarkId: null, earmarkAmountOre: null, funding: null }] : [])];
+}
 export async function loadDepartmentSummaries(query: Query, seasonCode: string, includeDraftItems: boolean) {
   const facts = await loadFacts(query, seasonCode, includeDraftItems);
-  return buildDepartmentSummaries(departmentFacts(facts.systems, facts.items));
+  return withUnassigned(buildDepartmentSummaries(departmentFacts(facts.systems, facts.items)), facts.unassignedOre);
 }
 
 export async function loadFundingScenarios(query: Query, seasonCode: string, includeDraftItems: boolean): Promise<FundingScenario[]> {
   const facts = await loadFacts(query, seasonCode, includeDraftItems);
-  return calculateScenarios(facts.items.map(toItemFact), facts.funding, facts.parts).map(publicScenario);
+  return calculateScenarios(scenarioItems(facts), facts.funding, facts.parts).map(publicScenario);
 }
 
 export async function loadOverview(query: Query, input: {
@@ -217,8 +232,8 @@ export async function loadOverview(query: Query, input: {
       )
       : Promise.resolve({ rows: [] as { id: string; source_name: string; conditions: string | null }[] }),
   ]);
-  const scenarios = facts ? calculateScenarios(facts.items.map(toItemFact), facts.funding, facts.parts).map(publicScenario) : [];
-  const departments = facts && input.showAggregates ? buildDepartmentSummaries(departmentFacts(facts.systems, facts.items)) : [];
+  const scenarios = facts ? calculateScenarios(scenarioItems(facts), facts.funding, facts.parts).map(publicScenario) : [];
+  const departments = withUnassigned(facts && input.showAggregates ? buildDepartmentSummaries(departmentFacts(facts.systems, facts.items)) : [], facts?.unassignedOre ?? 0n);
   return presentFinanceOverview({
     viewVersion: input.viewVersion,
     seasonCode,
@@ -230,7 +245,7 @@ export async function loadOverview(query: Query, input: {
     publicEarmarks,
     scenarios,
     earmarkSources: sources.rows.map((row) => ({ id: row.id, sourceName: row.source_name, conditions: row.conditions })),
-    showAggregates: input.showAggregates,
+    showAggregates: input.showAggregates || (facts?.unassignedOre ?? 0n) > 0n,
     showPrivate: input.showPrivate,
   });
 }

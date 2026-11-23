@@ -564,6 +564,7 @@ export type FundingPartInput = {
 };
 
 export type PurchaseLineInput = {
+  projectId?: string | null;
   systemId: string;
   budgetItemId?: string | null;
   unbudgeted?: boolean;

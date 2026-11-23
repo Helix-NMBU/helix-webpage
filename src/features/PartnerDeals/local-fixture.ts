@@ -1,5 +1,7 @@
+import type { InvoiceProgress, InvoiceProgressInput } from "./invoice-progress-types";
+import { localMemberHasFinancials } from "../MemberPlatform/member-access-api";
 import { isLocalMemberMode, localMemberSignedIn } from '../MemberPlatform/local-mode';
-import { formatOre } from '../Finance/money';
+import { formatOre, osloToday } from '../Finance/money';
 import { dealConfidence } from "./confidence";
 import type { WonIncomeRecord, PipelineIncomeRecord, FundingRecord } from '../Finance/types';
 import type { Project, Task } from '../ProjectManagement/types';
@@ -7,7 +9,7 @@ import type { Deal, Organization, PipelineData, Season } from './types';
 
 const KEY='helix-member-local-partner-deals-v1';
 const PROJECT_KEY='helix-member-local-projects-v1';
-type LocalTaskLink = { taskId:string; dealId:string; kind:'marketing'|'invoice'; deliverableId:string|null; seasonId:string|null; contributionId?:string|null };
+type LocalTaskLink = { taskId:string; dealId:string; kind:'marketing'|'invoice'; deliverableId:string|null; seasonId:string|null; contributionId?:string|null; invoiceProgress?: Pick<InvoiceProgress, 'sentDate' | 'receivedDate' | 'revision' | 'fundingRevision'> };
 type LocalState = { organizations:Organization[]; deals:Deal[]; projects:Project[]; tasks:Task[]; taskLinks:LocalTaskLink[]; version:number };
 export const localSeasons:Season[]=[{id:'s27',code:'S27',name:'Season 2027',startDate:'2026-08-01',endDate:'2027-07-31',status:'active'},{id:'s28',code:'S28',name:'Season 2028',startDate:'2027-08-01',endDate:'2028-07-31',status:'planning'}];
 function assertLocal() {
@@ -58,6 +60,28 @@ export function localPartnerWorkspace(existing:{projects:Project[];tasks:Task[]}
 export function localTaskDealId(taskId:string):string|null {
  const state=readLocalPartnerState();return state.taskLinks.find(link=>link.taskId===taskId)?.dealId??null;
 }
+export function localInvoiceProgress(taskId:string):InvoiceProgress|null {
+ const link=readLocalPartnerState().taskLinks.find(link=>link.taskId===taskId&&link.kind==='invoice');
+ if(!link)return null;
+ return {...(link.invoiceProgress??{sentDate:null,receivedDate:null,revision:0,fundingRevision:0}),canRecordSent:true,canRecordPayment:localMemberHasFinancials(),hasFunding:true};
+}
+export function saveLocalInvoiceProgress(input:InvoiceProgressInput):InvoiceProgress {
+ const state=readLocalPartnerState();const link=state.taskLinks.find(link=>link.taskId===input.taskId&&link.kind==='invoice');
+ const previous=localInvoiceProgress(input.taskId);
+ if(!link||!previous)throw new Error('This invoice task is unavailable.');
+ if(previous.revision!==input.expectedRevision||previous.fundingRevision!==input.fundingRevision)throw new Error('The invoice or payment changed. Reload the task before saving again.');
+ for(const value of [input.sentDate,input.receivedDate])if(value!==null){
+  const date=new Date(`${value}T12:00:00Z`);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||value<'2000-01-01'||value>osloToday()||!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==value)throw new Error('Choose valid invoice dates that are not in the future.');
+ }
+ const paymentChanged=previous.receivedDate!==input.receivedDate;
+ if(paymentChanged&&!previous.canRecordPayment)throw new Error('Finance access is required to record money received.');
+ const saved=localStorage.getItem(PROJECT_KEY);const task=(saved?JSON.parse(saved) as {tasks:Task[]}:null)?.tasks.find(task=>task.id===input.taskId)??state.tasks.find(task=>task.id===input.taskId);
+ if(task?.status==='done'&&(!input.sentDate||!input.receivedDate))throw new Error('Reopen the completed invoice task before clearing either date.');
+ link.invoiceProgress={sentDate:input.sentDate,receivedDate:input.receivedDate,revision:previous.revision+1,fundingRevision:(previous.fundingRevision??0)+(paymentChanged?1:0)};
+ writeLocalPartnerState(state);
+ return localInvoiceProgress(input.taskId)!;
+}
 export function localWonDeals() {
  const state=readLocalPartnerState();
  const saved=localStorage.getItem(PROJECT_KEY);const workspace=saved?JSON.parse(saved) as {tasks:Task[]}:null;
@@ -70,9 +94,10 @@ export function localWonDeals() {
 }
 export function localSponsorFunding():FundingRecord[] {
  const state=readLocalPartnerState();const active=localSeasons.find(s=>s.status==='active')!;
- return state.deals.filter(d=>d.stage==='won').flatMap(deal=>deal.contributions.filter(c=>c.kind==='cash'&&c.seasonId===active.id&&c.amountOre).map((c,index)=>({
-  id:c.id!,publicRef:`F-${active.code}-${(state.deals.indexOf(deal)*100+index+1).toString().padStart(3,'0')}`,sourceName:deal.organizationName,ownerName:'Alex Example',fundingType:deal.opportunityKind==="grant"?"grant" as const:'sponsor_cash' as const,amountNok:formatOre(BigInt(c.amountOre!)),status:'secured' as const,confidence:null,expectedDate:null,receivedDate:null,ownerEmail:null,reportingRequired:false,agreementLink:deal.agreementLink||null,note:null,revision:0,earmarkedNok:'0.00',unrestrictedNok:formatOre(BigInt(c.amountOre!)),linkedItemCount:0,
- })));
+ return state.deals.filter(d=>d.stage==='won').flatMap(deal=>deal.contributions.filter(c=>c.kind==='cash'&&c.seasonId===active.id&&c.amountOre).map((c,index)=>{
+  const progress=state.taskLinks.find(link=>link.kind==='invoice'&&link.dealId===deal.id&&link.seasonId===c.seasonId)?.invoiceProgress;
+  return {id:c.id!,publicRef:`F-${active.code}-${(state.deals.indexOf(deal)*100+index+1).toString().padStart(3,'0')}`,sourceName:deal.organizationName,ownerName:'Alex Example',fundingType:deal.opportunityKind==="grant"?"grant" as const:'sponsor_cash' as const,amountNok:formatOre(BigInt(c.amountOre!)),status:progress?.receivedDate?'received' as const:'secured' as const,confidence:null,expectedDate:null,receivedDate:progress?.receivedDate??null,ownerEmail:null,reportingRequired:false,agreementLink:deal.agreementLink||null,note:null,revision:progress?.fundingRevision??0,earmarkedNok:'0.00',unrestrictedNok:formatOre(BigInt(c.amountOre!)),linkedItemCount:0};
+ }));
 }
 
 /** Minimal forecast projection; callers enforce Finance access separately from pipeline editing. */
@@ -93,8 +118,8 @@ export function localWonIncome(seasonCode: string | null): WonIncomeRecord[] {
   const links=state.taskLinks.filter(item=>item.kind==="invoice"&&item.dealId===deal.id&&item.seasonId===c.seasonId);
   const link=links.find(item=>item.contributionId===c.id)??links.find(item=>!item.contributionId);
   const task=link?(workspace?.tasks.find(item=>item.id===link.taskId)??state.tasks.find(item=>item.id===link.taskId)):undefined;
-  const sent=task?.status==="done";
-  const sentOn=sent&&task.completedAt?new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Oslo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(task.completedAt)):null;
+  const sent=!!link?.invoiceProgress?.sentDate||(!link?.invoiceProgress&&task?.status==="done");
+  const sentOn=link?.invoiceProgress?.sentDate??(sent&&task?.completedAt?new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Oslo",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(task.completedAt)):null);
   return {opportunityKind:deal.opportunityKind??"deal",contributionId:c.id??`${deal.id}:${c.seasonId}`,dealId:deal.id,title:deal.title,sourceName:deal.organizationName,amountNok:formatOre(BigInt(c.amountOre!)),fundingId:c.sponsorReceipt?.fundingId??c.id??null,plannedInvoiceDate:c.invoiceDate,invoiceSent:sent,invoiceSentOn:sentOn};
  }));
 }

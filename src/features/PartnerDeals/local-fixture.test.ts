@@ -4,7 +4,7 @@ const env=vi.hoisted(()=>({local:true,signedIn:true}));
 vi.mock('../MemberPlatform/local-mode',()=>({isLocalMemberMode:()=>env.local,localMemberSignedIn:()=>env.signedIn}));
 vi.mock('../MemberPlatform/member-access-api',()=>({localMemberHasFinancials:()=>true,localMemberHasPartnerSpace:()=>env.local&&env.signedIn}));
 import { pipelineRepository, createPipelineRepository } from './repository';
-import { localSponsorFunding, localTaskDealId, localWonDeals, readLocalPartnerState } from './local-fixture';
+import { saveLocalInvoiceProgress, localSponsorFunding, localTaskDealId, localWonDeals, readLocalPartnerState } from './local-fixture';
 import { createLocalProjectRepository } from '../ProjectManagement/local-repository';
 import { editableDeal } from './types';
 import { createFinanceApi } from '../Finance/repository';
@@ -31,12 +31,15 @@ describe('local sponsor workflow',()=>{
   // Completing marketing work never means an invoice was sent.
   expect((await createFinanceApi({current:null}).financing()).wonIncome).toMatchObject([{invoiceSent:false}]);
   const invoice=workspace.tasks.find(t=>t.title==='Invoice Example partner')!;
+  await expect(projects.mutate({action:'set_status',id:invoice.id,expectedRevision:invoice.revision,status:'done',blockedReason:''})).rejects.toThrow('record both');
+  saveLocalInvoiceProgress({taskId:invoice.id,expectedRevision:0,fundingRevision:0,sentDate:'2026-11-01',receivedDate:'2026-11-02'});
   const completed=await projects.mutate({action:'set_status',id:invoice.id,expectedRevision:invoice.revision,status:'done',blockedReason:''});
   const sent=(await createFinanceApi({current:null}).financing()).wonIncome!;
   expect(sent).toHaveLength(1);expect(sent[0]).toMatchObject({sourceName:'Example partner',amountNok:'1000.00',invoiceSent:true});
   expect(sent[0].invoiceSentOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await projects.mutate({action:'set_status',id:invoice.id,expectedRevision:completed.tasks.find(t=>t.id===invoice.id)!.revision,status:'todo',blockedReason:''});
-  expect((await createFinanceApi({current:null}).financing()).wonIncome).toMatchObject([{invoiceSent:false,invoiceSentOn:null}]);
+  expect((await createFinanceApi({current:null}).financing()).wonIncome).toMatchObject([{invoiceSent:true,invoiceSentOn:'2026-11-01'}]);
+  expect(localSponsorFunding()).toMatchObject([{status:'received',receivedDate:'2026-11-02'}]);
  });
  it('awards grants as grant funding without generating an invoice project or task',async()=>{
   const repo=pipelineRepository(),organizationId=await repo.createOrganization('NU grant fund');

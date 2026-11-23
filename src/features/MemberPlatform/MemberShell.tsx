@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { MemberRouteSkeleton } from "./LoadingSkeletons";
-import { IconCube } from "@tabler/icons-react";
+import { IconCube, IconReceipt } from "@tabler/icons-react";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppSidebar } from "@libs/components/app-sidebar";
@@ -28,6 +28,9 @@ import { useFinanceAccess } from "./FinanceAccess";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { departmentPath } from "../Workspace/types";
 import { MemberPagePreferences } from "./MemberPagePreferences";
+import { RegisterPurchaseDialog } from "../Finance/RegisterPurchaseDialog";
+import { isManagementMember } from "../Finance/purchase-access";
+import { Button } from "@libs/components/ui/button";
 
 function Workspace({ children }: { children?: ReactNode }) {
   const location = useLocation();
@@ -105,7 +108,8 @@ function Workspace({ children }: { children?: ReactNode }) {
         onSignOut={() => void logout()}
         disabled={disabled}
       />
-      <SidebarInset className="member-workspace-content min-w-0 md:h-[calc(100svh-1rem)] md:min-h-0 md:overflow-clip md:border md:border-border/70">
+      <div className="flex min-w-0 flex-1 flex-col md:m-2 md:ml-0 md:h-[calc(100svh-1rem)] md:min-h-0 md:peer-data-[state=collapsed]:ml-2">
+      <SidebarInset className="member-workspace-content min-w-0 md:min-h-0 md:overflow-clip md:rounded-xl md:border md:border-border/70 md:shadow-sm">
         {mail ? (
           <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             <Suspense fallback={<MemberRouteSkeleton />}>{children ?? <Outlet />}</Suspense>
@@ -178,6 +182,10 @@ function Workspace({ children }: { children?: ReactNode }) {
           </>
         )}
       </SidebarInset>
+      {isManagementMember(directory) && <footer aria-label="Purchase registration" className="flex h-8 shrink-0 items-center justify-end px-1">
+        <RegisterPurchaseDialog><Button type="button" variant="ghost" size="xs" className="gap-1.5 px-1.5 font-normal text-muted-foreground" disabled={disabled}><IconReceipt aria-hidden="true" className="size-3.5" />Register a purchase</Button></RegisterPurchaseDialog>
+      </footer>}
+      </div>
     </>
   );
 }

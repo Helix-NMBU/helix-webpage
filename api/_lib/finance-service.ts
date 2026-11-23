@@ -1,3 +1,5 @@
+import { createManagementPurchaseServices, MANAGEMENT_PURCHASE_ACTIONS } from "./management-purchases.js";
+import type { ManagementPurchaseChoices } from "../../src/features/Finance/management-purchase-types.js";
 import { linkPurchaseInvoice } from "./finance-invoice-links.js";
 import { hasPrivateProjectBudgetReadScope, loadMemberApprovedProjectBudgetWorkspace, loadMemberApprovedProjectBudgetDetail } from "./finance-project-budget-member-read.js";
 import {loadDepartmentHomeBudget} from "./finance-department-home.js";
@@ -59,6 +61,7 @@ type FlagsRow = FinanceCapabilitySet & { profiles: FinanceProfile[] };
 type Context = { memberId: string; viewVersion: number; seasonCode: string | null; approvalThresholdNok: null; capabilities: FinanceCapabilitySet; profiles: FinanceProfile[] };
 
 export interface FinanceServices {
+  managementPurchases?(token: string): Promise<ManagementPurchaseChoices>;
   departmentHomeBudget(token:string,departmentId:unknown):Promise<DepartmentHomeBudget>;
   departmentBudgetPreview(token:string,departmentId:unknown):Promise<DepartmentBudgetPreview>;
   departmentBudgetPackages(token:string,departmentId?:unknown):Promise<DepartmentBudgetPackageQueue>;
@@ -98,6 +101,7 @@ export function createFinanceServices(deps: {
 }): FinanceServices {
   const { db } = deps;
   const financeStorage = deps.financeStorage === undefined ? null : deps.financeStorage;
+  const managementPurchases = createManagementPurchaseServices({db,authenticate:deps.authenticate,storage:financeStorage});
   const invoiceDispatcher = { storage: financeStorage, drive: deps.financeDrive ?? null, budgetMs: deps.invoiceBudgetMs };
   async function dispatchInvoices(identity: WorkspaceIdentity, result: FinanceMutationResult) {
     if (!result.id) return result;
@@ -229,6 +233,7 @@ export function createFinanceServices(deps: {
     async projectPurchaseContext(token, projectId, departmentId) {
       return loadProjectPurchaseContext(db, await deps.authenticate(token), projectId, departmentId);
     },
+    managementPurchases: managementPurchases.load,
     async bankSnapshot(token) {
       await context(token);
       return loadBankSnapshot(db);
@@ -367,6 +372,14 @@ export function createFinanceServices(deps: {
       throw new FinanceError(409, "Finance changed while loading financing. Please try again.");
     },
     async mutate(token, body) {
+      if (MANAGEMENT_PURCHASE_ACTIONS.has(String(body.action))) {
+        let result = await managementPurchases.mutate(token, body);
+        if (body.action === "registerManagementPurchase") {
+          result = await dispatchInvoices(await deps.authenticate(token), result);
+          await dispatchEvent(result, "purchase_registered");
+        }
+        return result;
+      }
       if (body.action === "linkPurchaseInvoice") return linkPurchaseInvoice(db, await deps.authenticate(token), body);
       if(isDepartmentBudgetPackageMutation(body.action)){
         const result=await mutateDepartmentBudgetPackage(db,await deps.authenticate(token),body);

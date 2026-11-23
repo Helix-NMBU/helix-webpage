@@ -97,7 +97,7 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
   )).rows;
   const lines = (await db.query<LineExportRow>(
     `select l.purchase_id, l.public_ref, l.description, l.quantity::text as quantity, l.amount_ore::text as amount_ore,
-            l.unbudgeted, s.code as system_code, i.public_ref as budget_item_ref,
+            l.unbudgeted, coalesce(s.code, 'UNASSIGNED') as system_code, i.public_ref as budget_item_ref,
             coalesce(owner.name,physical_department.name) as budget_department,project.name as project_name,recorded_department.name as purchase_department,
             case
               when i.id is null then null
@@ -108,13 +108,13 @@ export async function buildPurchaseExport(db: CvDatabase, seasonCode: string): P
      from finance.purchase_lines l
      join finance.purchases p on p.id = l.purchase_id
      join finance.seasons season on season.id = p.season_id
-     join finance.systems s on s.id = l.system_id
+     left join finance.systems s on s.id = l.system_id
      left join finance.effective_budget_entries i on i.id = l.budget_item_id
-     join identity.departments physical_department on physical_department.department_key=s.department_key
-     left join finance.project_budgets current_header on current_header.project_id=p.project_id and current_header.season_id=p.season_id
+     left join identity.departments physical_department on physical_department.department_key=s.department_key
+     left join finance.project_budgets current_header on current_header.project_id=coalesce((to_jsonb(l)->>'project_id')::uuid,p.project_id) and current_header.season_id=p.season_id
      left join project_management.departments recorded_department on recorded_department.id=p.responsible_department_id
      left join project_management.departments owner on owner.id=case when i.source='project' then i.responsible_department_id when l.unbudgeted then coalesce(current_header.responsible_department_id,p.responsible_department_id) end
-     left join project_management.projects project on project.id=case when i.source='project' then i.project_id when l.unbudgeted then p.project_id end
+     left join project_management.projects project on project.id=coalesce(i.project_id,(to_jsonb(l)->>'project_id')::uuid,p.project_id)
      where season.code = $1
      order by l.public_ref`,
     [seasonCode],

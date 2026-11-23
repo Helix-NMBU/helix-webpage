@@ -1,3 +1,4 @@
+import { loadLocalFinanceViews, loadLocalProjectBudgetFinancials } from './local-finance-read';
 import { createLocalProjectBudgetRepository } from "./project-budget-local";
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -502,4 +503,23 @@ it("persists a manually supplied Drive reference in purchases and budget entries
   expect(stored.audit.at(-1)).toMatchObject({previousInvoiceUrl:"https://drive.google.com/file/d/manual-invoice-file/view",invoiceUrl:correction.viewerUrl});
   window.history.replaceState({},"","/?financeRole=business");
   await expect(client.mutate({...change,requestId:crypto.randomUUID(),expectedRevision:after.revision})).rejects.toMatchObject({status:403});
+});
+
+it('counts Management costs before allocation and after linking each line to a project',async()=>{
+  const {budget,system}=await fundingFixture();
+  const purchase:PurchaseInput={buyerName:'Alex Example',supplierName:'Supplier',paymentMethod:'team_account',purchaseDate:osloToday(),justification:'Management material purchase',documentKind:'receipt',uploadIds:['00000000-0000-4000-8000-000000009911'],lines:[{systemId:'',projectId:null,budgetItemId:null,unbudgeted:true,description:'Materials',quantity:'1',amountNok:'12.34'}]};
+  const record={id:'00000000-0000-4000-8000-000000009910',publicRef:'2026-M001',projectId:'',responsibleDepartmentId:'',requesterMemberId:null,purchase};
+  localStorage.setItem('helix-project-purchases-local-v1',JSON.stringify({records:{[record.id]:record}}));
+  expect(loadLocalFinanceViews(0).purchases.register.find(row=>row.id===record.id)?.totalNok).toBe('12.34');
+  expect(loadLocalProjectBudgetFinancials(budget.projectId).actualNok).toBe('0.00');
+  record.purchase.lines[0].projectId=budget.projectId;
+  localStorage.setItem('helix-project-purchases-local-v1',JSON.stringify({records:{[record.id]:record}}));
+  expect(loadLocalProjectBudgetFinancials(budget.projectId)).toEqual({actualNok:'12.34',unbudgetedNok:'12.34'});
+  Object.assign(record.purchase.lines[0],{systemId:system.id,budgetItemId:budget.approvedVersion!.entries[0].budgetItemId,unbudgeted:false});
+  localStorage.setItem('helix-project-purchases-local-v1',JSON.stringify({records:{[record.id]:record}}));
+  // Linking updates the approved entry's stored actual in the local purchase repository.
+  const budgetState=JSON.parse(localStorage.getItem('helix-project-budgets-local-v1')!);
+  budgetState.budgets.find((item:{id:string})=>item.id===budget.id).approvedVersion.entries[0].actualNok='12.34';
+  localStorage.setItem('helix-project-budgets-local-v1',JSON.stringify(budgetState));
+  expect(loadLocalProjectBudgetFinancials(budget.projectId)).toEqual({actualNok:'12.34',unbudgetedNok:'0.00'});
 });
