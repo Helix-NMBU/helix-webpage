@@ -100,3 +100,22 @@ it("keeps a draft and requires review of the latest revision before retry",async
  expect(document.body.textContent).toContain("Updated by colleague");expect(button("Save proposed amendment").disabled).toBe(true);await act(async()=>button("I reviewed the latest agreement").click());await act(async()=>button("Save proposed amendment").click());
  expect(JSON.parse(request.mock.calls[2][1].body)).toMatchObject({expectedRevision:3,reason:"Keep my draft"});await act(async()=>root.unmount());el.remove();
 });
+
+it("adds missing tier commitments to a proposed amendment without replacing agreed or retired terms", async () => {
+ const request=vi.fn().mockResolvedValue({ok:true,json:async()=>({id:"change"})});vi.stubGlobal("fetch",request);
+ const templates=[{title:"Logo on car",description:"Display the logo"},{title:"LinkedIn post",description:"Publish one post"},{title:"CV bank",description:"Provide access"}];
+ const existing={...deal,deliverables:[{id:"logo",title:"Logo on car",description:"Existing placement",dueDate:null},{id:"cv",title:"CV bank",description:"Removed",dueDate:null,retiredAt:"now"}]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async () => root.render(<AgreementChanges deal={existing} tierTemplates={templates} canManage onReload={()=>{}}/>));
+ await act(async () => button("Propose amendment").click());
+ await act(async () => button("Add missing tier deliverables").click());
+ expect(button("Add missing tier deliverables")).toBeUndefined();
+ const reason=[...document.querySelectorAll("label")].find(label=>label.textContent?.includes("Reason"))!.querySelector("textarea")!;
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(reason,"Track the agreed tier work");reason.dispatchEvent(new Event("input",{bubbles:true}));});
+ await act(async()=>button("Save proposed amendment").click());
+ const command=JSON.parse(request.mock.calls[0][1].body);
+ expect(command.action).toBe("recordAgreementChange");
+ expect(command.terms.newDeliverables).toEqual([expect.objectContaining({title:"LinkedIn post",description:"Publish one post",dueDate:null})]);
+ expect(command.terms.deliverableChanges).toEqual([expect.objectContaining({id:"logo",title:"Logo on car",description:"Existing placement"})]);
+ await act(async()=>root.unmount());el.remove();
+});

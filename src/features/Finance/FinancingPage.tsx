@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { Button } from "@libs/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@libs/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@libs/components/ui/empty";
 import { Input } from "@libs/components/ui/input";
@@ -12,6 +12,10 @@ import { Textarea } from "@libs/components/ui/textarea";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { ScenarioList } from "./budget-summary";
+import { Badge } from "@libs/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
+import { formatOre, parseNokToOre } from "./money";
 import { FinanceRequestError } from "./repository";
 import {
   FUNDING_CONFIDENCE,
@@ -102,6 +106,10 @@ export function FinancingPage() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const showDeletedId = useId();
   const canEdit = Boolean(session.capabilities?.manageFunding && session.seasonCode);
   useEffect(() => {
@@ -109,7 +117,13 @@ export function FinancingPage() {
     return () => session.setFormDirty("financing-editor", false);
   }, [editor, session.setFormDirty]);
   const records = session.financing?.funding ?? [];
-  const visible = records.filter((record) => showDeleted || record.status !== "deleted");
+  const active = records.filter(record => record.status !== "deleted");
+  const visible = records.filter(record => (showDeleted || record.status !== "deleted")
+    && (statusFilter === "all" || record.status === statusFilter)
+    && [record.sourceName, record.ownerName, record.publicRef, fundingTypeLabel(record.fundingType)].some(value => value.toLowerCase().includes(query.trim().toLowerCase())));
+  const selectedRecord = records.find(record => record.id === selectedId);
+  const totalFor = (statuses: FundingStatus[]) => `${formatOre(active.filter(record => statuses.includes(record.status)).reduce((sum, record) => sum + (parseNokToOre(record.amountNok) ?? 0n), 0n))} NOK`;
+  function rememberFocus(target: HTMLElement) { returnFocus.current = target; }
   const partsFor = (fundingId: string) => session.financing?.parts.filter((part) => part.fundingId === fundingId) ?? [];
 
   useEffect(() => {
@@ -236,41 +250,61 @@ export function FinancingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Switch id={showDeletedId} checked={showDeleted} onCheckedChange={setShowDeleted} />
-          <Label htmlFor={showDeletedId}>Show deleted funding</Label>
-        </div>
-        {canEdit ? <Button type="button" onClick={() => setEditor({ kind: "funding", mode: "create", requestId: crypto.randomUUID(), values: emptyFunding(), errors: {} })} disabled={editor !== null || saving}>Add funding</Button> : null}
+      <dl className="grid gap-4 sm:grid-cols-3">
+        {([
+          ["Received", totalFor(["received"]), "Money received this season"],
+          ["Awaiting payment", totalFor(["secured"]), "Confirmed funding still to arrive"],
+          ["Potential funding", totalFor(["prospect", "applied"]), "Prospects and applications"],
+        ] as const).map(([label, value, description]) => <div key={label} className="rounded-xl border bg-card p-5">
+          <dt className="text-sm text-muted-foreground">{label}</dt><dd className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value}</dd><dd className="mt-1 text-sm text-muted-foreground">{description}</dd>
+        </div>)}
+      </dl>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div><h2 className="text-lg font-semibold">Funding sources</h2><p className="text-sm text-muted-foreground">Track payments and open a source to manage its details or earmarked funds.</p></div>
+        {canEdit ? <Button type="button" onClick={event => { rememberFocus(event.currentTarget); setEditor({ kind: "funding", mode: "create", requestId: crypto.randomUUID(), values: emptyFunding(), errors: {} }); }} disabled={editor !== null || saving}>Add funding</Button> : null}
       </div>
-      {session.financing && session.financing.scenarios.length > 0 ? <ScenarioList scenarios={session.financing.scenarios} /> : null}
-      {editor ? <EditorForm editor={editor} saving={saving} formRef={formRef} onSubmit={submit} onChange={setEditor} onCancel={() => setEditor(null)} /> : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <Input aria-label="Search funding" placeholder="Search sources or owners…" className="sm:max-w-xs" value={query} onChange={event => setQuery(event.target.value)} />
+        <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger aria-label="Filter funding by status" className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem>{FUNDING_STATUSES.filter(status => status !== "deleted").map(status => <SelectItem key={status} value={status}>{fundingStatusLabel(status)}</SelectItem>)}</SelectContent></Select>
+        <div className="flex items-center gap-2 sm:ml-auto"><Switch id={showDeletedId} checked={showDeleted} onCheckedChange={setShowDeleted} /><Label htmlFor={showDeletedId}>Show deleted funding</Label></div>
+      </div>
+      <Dialog open={Boolean(editor || selectedRecord)} onOpenChange={open => { if (!open && !saving) { setEditor(null); setSelectedId(null); } }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" onPointerDownOutside={event => { if (editor) event.preventDefault(); }} onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }}>
+          <DialogHeader><DialogTitle>{editor ? editor.kind === "funding" ? editor.mode === "create" ? "Add funding" : "Edit funding" : editor.mode === "create" ? "Add earmarked part" : "Edit earmarked part" : selectedRecord?.sourceName}</DialogTitle><DialogDescription>{editor ? "Save your changes or cancel to return to the funding source." : "Funding details, payment dates and earmarked funds."}</DialogDescription></DialogHeader>
+          {editor ? <EditorForm editor={editor} saving={saving} formRef={formRef} onSubmit={submit} onChange={setEditor} onCancel={() => setEditor(null)} /> : selectedRecord ? <FundingCard
+            record={selectedRecord} parts={partsFor(selectedRecord.id)} canEdit={canEdit && !saving}
+            onEdit={() => setEditor({ kind: "funding", mode: "edit", requestId: crypto.randomUUID(), fundingId: selectedRecord.id, expectedRevision: selectedRecord.revision, values: fundingValues(selectedRecord), errors: {} })}
+            onAddPart={() => setEditor({ kind: "part", mode: "create", requestId: crypto.randomUUID(), fundingId: selectedRecord.id, fundingLabel: selectedRecord.sourceName, expectedRevision: selectedRecord.revision, values: { purpose: "", amountNok: "", spendBy: "", conditions: "" }, errors: {} })}
+            onEditPart={part => setEditor({ kind: "part", mode: "edit", requestId: crypto.randomUUID(), fundingId: selectedRecord.id, fundingLabel: selectedRecord.sourceName, partId: part.id, expectedRevision: part.revision, values: { purpose: part.purpose, amountNok: part.amountNok, spendBy: part.spendBy ?? "", conditions: part.conditions ?? "" }, errors: {} })}
+            onDelete={() => { void runStatus(selectedRecord, "deleteFunding"); setSelectedId(null); }}
+            onRestore={() => { void runStatus(selectedRecord, "restoreFunding"); setSelectedId(null); }}
+          /> : null}
+        </DialogContent>
+      </Dialog>
       {visible.length === 0 ? (
         <Empty className="min-h-72 border border-solid">
           <EmptyHeader>
-            <EmptyTitle>{records.length > 0 ? "Deleted funding is hidden" : "No funding records yet"}</EmptyTitle>
+            <EmptyTitle>{query || statusFilter !== "all" ? "No matching funding" : records.length > 0 ? "Deleted funding is hidden" : "No funding records yet"}</EmptyTitle>
             <EmptyDescription>
-              {session.seasonCode ? `Season ${session.seasonCode} ${records.length > 0 ? "has deleted funding you can reveal." : "has no funding yet. Funding can be recorded before a budget exists."}` : "An operator has not configured the current season."}
+              {query || statusFilter !== "all" ? "Try another search or clear the filters." : session.seasonCode ? `Season ${session.seasonCode} ${records.length > 0 ? "has deleted funding you can reveal." : "has no funding yet. Funding can be recorded before a budget exists."}` : "An operator has not configured the current season."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="space-y-4">
-          {visible.map((record) => (
-            <FundingCard
-              key={record.id}
-              record={record}
-              parts={partsFor(record.id)}
-              canEdit={canEdit && editor === null && !saving}
-              onEdit={() => setEditor({ kind: "funding", mode: "edit", requestId: crypto.randomUUID(), fundingId: record.id, expectedRevision: record.revision, values: fundingValues(record), errors: {} })}
-              onAddPart={() => setEditor({ kind: "part", mode: "create", requestId: crypto.randomUUID(), fundingId: record.id, fundingLabel: record.sourceName, expectedRevision: record.revision, values: { purpose: "", amountNok: "", spendBy: "", conditions: "" }, errors: {} })}
-              onEditPart={(part) => setEditor({ kind: "part", mode: "edit", requestId: crypto.randomUUID(), fundingId: record.id, fundingLabel: record.sourceName, partId: part.id, expectedRevision: part.revision, values: { purpose: part.purpose, amountNok: part.amountNok, spendBy: part.spendBy ?? "", conditions: part.conditions ?? "" }, errors: {} })}
-              onDelete={() => { void runStatus(record, "deleteFunding"); }}
-              onRestore={() => { void runStatus(record, "restoreFunding"); }}
-            />
-          ))}
+        <div className="overflow-hidden rounded-xl border bg-card">
+          <Table aria-label="Funding sources"><TableHeader><TableRow>
+            <TableHead className="pl-4">Source</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="hidden text-right lg:table-cell">Earmarked</TableHead><TableHead className="hidden md:table-cell">Expected / received</TableHead><TableHead className="hidden lg:table-cell">Owner</TableHead><TableHead><span className="sr-only">Actions</span></TableHead>
+          </TableRow></TableHeader><TableBody>{visible.map(record => <TableRow key={record.id}>
+            <TableCell className="py-4 pl-4"><div className="font-medium">{record.sourceName}</div><div className="mt-1 text-xs text-muted-foreground">{fundingTypeLabel(record.fundingType)} · {record.publicRef}</div></TableCell>
+            <TableCell><Badge variant={record.status === "received" ? "default" : record.status === "rejected" || record.status === "deleted" ? "outline" : "secondary"}>{fundingStatusLabel(record.status)}</Badge></TableCell>
+            <TableCell className="text-right tabular-nums">{record.amountNok} NOK</TableCell><TableCell className="hidden text-right tabular-nums lg:table-cell">{record.earmarkedNok} NOK</TableCell>
+            <TableCell className="hidden text-muted-foreground md:table-cell">{record.receivedDate ?? record.expectedDate ?? "No date set"}</TableCell><TableCell className="hidden lg:table-cell">{record.ownerName}</TableCell>
+            <TableCell className="text-right"><Button type="button" size="sm" variant="ghost" aria-label={`View funding from ${record.sourceName}`} onClick={event => { rememberFocus(event.currentTarget); setSelectedId(record.id); }}>View funding</Button></TableCell>
+          </TableRow>)}</TableBody></Table>
+          <p className="border-t px-4 py-3 text-xs text-muted-foreground">{visible.length} {visible.length === 1 ? "source" : "sources"}</p>
         </div>
       )}
+      {session.financing && session.financing.scenarios.length > 0 ? <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-medium">Funding scenarios</summary><div className="pt-4"><ScenarioList scenarios={session.financing.scenarios} /></div></details> : null}
     </div>
   );
 }
@@ -303,20 +337,20 @@ function EditorForm({ editor, saving, formRef, onSubmit, onChange, onCancel }: {
   onChange: (editor: Editor) => void;
   onCancel: () => void;
 }) {
-  const title = editor.kind === "funding" ? (editor.mode === "create" ? "Add funding" : "Edit funding") : (editor.mode === "create" ? "Add earmarked part" : "Edit earmarked part");
+
+  useEffect(() => { formRef.current?.querySelector<HTMLInputElement>("input")?.focus(); }, [formRef]);
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
+    <Card className="border-0 py-0 shadow-none ring-0">
+      <CardHeader className="px-0">
         <CardDescription>
-          {editor.kind === "part" ? `This part stays with ${editor.fundingLabel}. Parts are not deleted from here.` : "Amounts stay exact. An earmark above the funding total is saved and reported."}
+          {editor.kind === "part" ? `This part stays with ${editor.fundingLabel}. Parts are not deleted from here.` : "Record the amount, payment status and person responsible."}
         </CardDescription>
       </CardHeader>
       <form ref={formRef} onSubmit={onSubmit} autoComplete="off">
-        <CardContent className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="grid gap-4 px-0 sm:grid-cols-2">
           {editor.kind === "funding" ? <FundingFields editor={editor} onChange={onChange} /> : <PartFields editor={editor} onChange={onChange} />}
         </CardContent>
-        <CardFooter className="flex flex-wrap gap-2">
+        <CardFooter className="mt-6 flex flex-wrap gap-2 px-0">
           <Button type="submit" disabled={saving} aria-busy={saving}>{editor.kind === "funding" ? "Save funding" : "Save part"}</Button>
           <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>Cancel</Button>
         </CardFooter>
@@ -354,36 +388,41 @@ function FundingFields({ editor, onChange }: { editor: Extract<Editor, { kind: "
           <SelectContent>{FUNDING_STATUSES.map((status) => <SelectItem key={status} value={status}>{fundingStatusLabel(status)}</SelectItem>)}</SelectContent>
         </Select>
       </Field>
-      <Field id="funding-confidence" label="Confidence" error={error.confidence}>
-        <Select value={values.confidence || "none"} onValueChange={(value) => set("confidence", value === "none" ? "" : value)}>
-          <SelectTrigger id="funding-confidence" className="w-full"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">None</SelectItem>
-            {FUNDING_CONFIDENCE.map((confidence) => <SelectItem key={confidence} value={confidence}>{fundingStatusLabel(confidence)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field id="funding-expected" label="Expected date" error={error.expectedDate}>
+      {values.status !== "received" || error.expectedDate ? <Field id="funding-expected" label="Expected date" error={error.expectedDate}>
         <Input id="funding-expected" type="date" value={values.expectedDate} onChange={(event) => set("expectedDate", event.target.value)} {...describedBy("funding-expected", error.expectedDate)} />
-      </Field>
-      <Field id="funding-received" label="Received date" error={error.receivedDate}>
+      </Field> : null}
+      {values.status === "received" || error.receivedDate ? <Field id="funding-received" label="Received date" error={error.receivedDate}>
         <Input id="funding-received" type="date" value={values.receivedDate} onChange={(event) => set("receivedDate", event.target.value)} {...describedBy("funding-received", error.receivedDate)} />
-      </Field>
-      <Field id="funding-email" label="Owner email" error={error.ownerEmail}>
-        <Input id="funding-email" type="email" value={values.ownerEmail} onChange={(event) => set("ownerEmail", event.target.value)} {...describedBy("funding-email", error.ownerEmail)} />
-      </Field>
-      <Field id="funding-link" label="Agreement link" error={error.agreementLink}>
-        <Input id="funding-link" type="url" value={values.agreementLink} onChange={(event) => set("agreementLink", event.target.value)} {...describedBy("funding-link", error.agreementLink)} />
-      </Field>
-      <div className="flex items-center gap-3 sm:col-span-2">
-        <Checkbox id="funding-reporting" checked={values.reportingRequired} onCheckedChange={(checked) => set("reportingRequired", checked === true)} />
-        <Label htmlFor="funding-reporting">Reporting required</Label>
-      </div>
-      <div className="sm:col-span-2">
-        <Field id="funding-note" label="Note" error={error.note}>
-          <Textarea id="funding-note" value={values.note} onChange={(event) => set("note", event.target.value)} {...describedBy("funding-note", error.note)} />
-        </Field>
-      </div>
+      </Field> : null}
+      <details className="rounded-lg border p-4 sm:col-span-2" open={["confidence", "ownerEmail", "agreementLink", "note"].some(key => error[key]) ? true : undefined}>
+        <summary className="cursor-pointer text-sm font-medium">Additional details</summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field id="funding-confidence" label="Confidence" error={error.confidence}>
+            <Select value={values.confidence || "none"} onValueChange={(value) => set("confidence", value === "none" ? "" : value)}>
+              <SelectTrigger id="funding-confidence" className="w-full" {...describedBy("funding-confidence", error.confidence)}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {FUNDING_CONFIDENCE.map((confidence) => <SelectItem key={confidence} value={confidence}>{fundingStatusLabel(confidence)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field id="funding-email" label="Owner email" error={error.ownerEmail}>
+            <Input id="funding-email" type="email" value={values.ownerEmail} onChange={(event) => set("ownerEmail", event.target.value)} {...describedBy("funding-email", error.ownerEmail)} />
+          </Field>
+          <Field id="funding-link" label="Agreement link" error={error.agreementLink}>
+            <Input id="funding-link" type="url" value={values.agreementLink} onChange={(event) => set("agreementLink", event.target.value)} {...describedBy("funding-link", error.agreementLink)} />
+          </Field>
+          <div className="flex items-center gap-3 sm:col-span-2">
+            <Checkbox id="funding-reporting" checked={values.reportingRequired} onCheckedChange={(checked) => set("reportingRequired", checked === true)} />
+            <Label htmlFor="funding-reporting">Reporting required</Label>
+          </div>
+          <div className="sm:col-span-2">
+            <Field id="funding-note" label="Note" error={error.note}>
+              <Textarea id="funding-note" value={values.note} onChange={(event) => set("note", event.target.value)} {...describedBy("funding-note", error.note)} />
+            </Field>
+          </div>
+        </div>
+      </details>
     </>
   );
 }
@@ -430,7 +469,6 @@ function FundingCard({ record, parts, canEdit, onEdit, onAddPart, onEditPart, on
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{record.sourceName}</CardTitle>
         <CardDescription>{record.publicRef} · {fundingTypeLabel(record.fundingType)} · {fundingStatusLabel(record.status)}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">

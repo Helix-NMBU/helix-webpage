@@ -162,17 +162,39 @@ afterEach(async () => {
 describe("financing page", () => {
   it("shows funding totals, linked parts, and a negative remainder", async () => {
     await render();
-    expect(container.textContent).toContain("Example source");
-    expect(container.textContent).toContain("1000.00 NOK");
-    expect(container.textContent).toContain("-500.00 NOK. Unrestricted remainder is negative.");
-    expect(container.textContent).toContain("Frame work");
-    expect(container.textContent).toContain("Private condition text");
-    expect(container.textContent).toContain("System Frame");
-    expect(container.textContent).toContain("Must return 1100.00 NOK");
-    expect(container.textContent).toContain("Frame tube (BI-S27-001)");
-    expect(container.textContent).not.toContain("Retired source");
+    expect(document.body.textContent).toContain("Example source");
+    expect(document.body.textContent).toContain("1000.00 NOK");
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    await click("View funding");
+    expect(document.body.textContent).toContain("-500.00 NOK. Unrestricted remainder is negative.");
+    expect(document.body.textContent).toContain("Frame work");
+    expect(document.body.textContent).toContain("Private condition text");
+    expect(document.body.textContent).toContain("System Frame");
+    expect(document.body.textContent).toContain("Must return 1100.00 NOK");
+    expect(document.body.textContent).toContain("Frame tube (BI-S27-001)");
+    expect(document.body.textContent).not.toContain("Retired source");
     expect(button("Delete part")).toBeUndefined();
-    expect(container.textContent).not.toContain("Delete part");
+    expect(document.body.textContent).not.toContain("Delete part");
+  });
+
+  it("filters the source list without changing season totals", async () => {
+    api.financing.mockResolvedValue(view([funding, {...funding,id:"received",sourceName:"Paid sponsor",status:"received",amountNok:"2000.00"}, deleted]));
+    await render();
+    const search = document.querySelector<HTMLInputElement>('[aria-label="Search funding"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(search,"paid");
+      search.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    expect(container.querySelector("tbody")?.textContent).toContain("Paid sponsor");
+    expect(container.querySelector("tbody")?.textContent).not.toContain("Example source");
+    expect(container.querySelector("dl")?.textContent).toContain("Received2000.00 NOK");
+    expect(container.querySelector("dl")?.textContent).toContain("Awaiting payment1000.00 NOK");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(search,"unknown");
+      search.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    expect(container.textContent).toContain("No matching funding");
+    expect(api.mutate).not.toHaveBeenCalled();
   });
 
   it("reveals and restores deleted funding without a part delete control", async () => {
@@ -180,7 +202,9 @@ describe("financing page", () => {
     const toggle = document.querySelector<HTMLButtonElement>("[role='switch']");
     expect(toggle).toBeTruthy();
     await act(async () => toggle!.click());
-    expect(container.textContent).toContain("Retired source");
+    expect(document.body.textContent).toContain("Retired source");
+    const retired = document.querySelector<HTMLButtonElement>('[aria-label="View funding from Retired source"]')!;
+    await act(async () => retired.click());
     await click("Restore funding");
     expect(api.mutate).toHaveBeenCalledWith(expect.objectContaining({
       action: "restoreFunding",
@@ -193,11 +217,11 @@ describe("financing page", () => {
   it("keeps an invalid funding form in place and recovers from a failed save", async () => {
     api.financing.mockResolvedValue(view([]));
     await render();
-    expect(container.textContent).toContain("No funding records yet");
+    expect(document.body.textContent).toContain("No funding records yet");
     await click("Add funding");
     await submit();
     expect(api.mutate).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Enter a source name.");
+    expect(document.body.textContent).toContain("Enter a source name.");
     expect(document.getElementById("funding-source")?.getAttribute("aria-invalid")).toBe("true");
     expect(notify).toHaveBeenCalledWith("Could not save financing", expect.any(String), expect.objectContaining({ variant: "error" }));
 
@@ -210,7 +234,7 @@ describe("financing page", () => {
     await submit();
     expect((document.getElementById("funding-amount") as HTMLInputElement).value).toBe("1000.00");
     expect(document.getElementById("funding-amount")?.getAttribute("aria-invalid")).toBe("true");
-    expect(container.textContent).toContain("Enter an amount greater than zero.");
+    expect(document.body.textContent).toContain("Enter an amount greater than zero.");
     const retry = notify.mock.calls.find((call) => call[0] === "Could not save financing" && call[2]?.action?.label === "Try again")?.[2].action.onClick as () => void;
     api.mutate.mockResolvedValueOnce(saved);
     api.financing.mockResolvedValue(view([funding], [part], saved.viewVersion));
@@ -222,8 +246,9 @@ describe("financing page", () => {
 
   it("edits a part, warns when the part exceeds the funding, and soft-deletes the source", async () => {
     await render();
+    await click("View funding");
     await click("Edit part");
-    expect(container.textContent).toContain("Parts are not deleted from here.");
+    expect(document.body.textContent).toContain("Parts are not deleted from here.");
     await fill("part-purpose", "Frame repair");
     await fill("part-amount", "1500.00");
     api.mutate.mockResolvedValueOnce({
@@ -253,6 +278,7 @@ describe("financing page", () => {
 
   it("keeps the form and asks to delete on its own when another field changed", async () => {
     await render();
+    await click("View funding");
     await click("Edit funding");
     await fill("funding-note", "Changed note");
     await act(async () => document.getElementById("funding-status")!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
@@ -266,7 +292,7 @@ describe("financing page", () => {
       "Delete on its own, or save your other changes first.",
       expect.objectContaining({ variant: "error" }),
     );
-    expect(container.textContent).toContain("Delete on its own, or save your other changes first.");
+    expect(document.body.textContent).toContain("Delete on its own, or save your other changes first.");
     expect((document.getElementById("funding-note") as HTMLTextAreaElement).value).toBe("Changed note");
     expect(document.getElementById("funding-status")?.getAttribute("aria-invalid")).toBe("true");
     expect(document.querySelector("form")).not.toBeNull();
@@ -274,6 +300,7 @@ describe("financing page", () => {
 
   it("reloads the current financing when a duplicate request conflicts and shows no error", async () => {
     await render();
+    await click("View funding");
     await click("Edit funding");
     await fill("funding-source", "Updated source");
     api.mutate.mockRejectedValueOnce(new FinanceRequestError("This request was already used with different details.", 409));
@@ -282,11 +309,12 @@ describe("financing page", () => {
     expect(notify.mock.calls.some((call) => call[2]?.variant === "error")).toBe(false);
     expect(document.querySelector("form")).toBeNull();
     expect(api.financing).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("Current source");
+    expect(document.body.textContent).toContain("Current source");
   });
 
   it("keeps unsaved edits when a newer financing view arrives", async () => {
     await render();
+    await click("View funding");
     await click("Edit funding");
     await fill("funding-source", "Updated source");
     api.capabilities.mockResolvedValue({ ...business, viewVersion: 5 });
@@ -309,7 +337,8 @@ describe("financing page", () => {
       capabilities: { ...business.capabilities, manageFunding: false },
     });
     await render();
-    expect(container.textContent).toContain("Example source");
+    expect(document.body.textContent).toContain("Example source");
+    await click("View funding");
     expect(button("Add funding")).toBeUndefined();
     expect(button("Edit funding")).toBeUndefined();
     expect(button("Delete funding")).toBeUndefined();
@@ -322,7 +351,7 @@ describe("financing page", () => {
       capabilities: { ...business.capabilities, financing: false, manageFunding: false },
     });
     await render();
-    expect(container.textContent).toContain("Public finance");
+    expect(document.body.textContent).toContain("Public finance");
     expect(notify).toHaveBeenCalledWith("Financing access required", expect.any(String), expect.objectContaining({ variant: "error" }));
   });
 });

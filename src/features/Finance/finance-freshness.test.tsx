@@ -305,7 +305,8 @@ describe("FIN-09-A06 freshness", () => {
       { path: "/finance", element: <p>Public finance</p> },
     ], { initialEntries: ["/finance/financing"] });
     await act(async () => root.render(<RouterProvider router={router} />));
-    await act(async () => button("Edit funding")!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="View funding from Synthetic source"]')!.click());
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Edit funding")!.click());
     const input = document.getElementById("funding-source") as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Updated source");

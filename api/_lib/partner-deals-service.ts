@@ -46,7 +46,7 @@ export interface DealServices {
 const readSql = `select caps.pipeline as "canManage",
  coalesce((select jsonb_agg(jsonb_build_object(
   'id',d.id,'opportunityKind',coalesce(to_jsonb(d)->>'opportunity_kind','deal'),'organizationId',d.organization_id,'organizationName',o.name,'title',d.title,'stage',d.stage,
-  'ownerMemberId',d.owner_member_id,'seasonId',d.primary_season_id,'sponsorLevel',d.sponsor_level,'probability',d.probability,'followUpOn',d.follow_up_on,'createdAt',d.created_at,'contactName',d.contact_name,'contactEmail',d.contact_email,
+  'ownerMemberId',d.owner_member_id,'seasonId',d.primary_season_id,'seasonCode',(select s.code from finance.seasons s where s.id=d.primary_season_id),'sponsorLevel',d.sponsor_level,'probability',d.probability,'followUpOn',d.follow_up_on,'createdAt',d.created_at,'contactName',d.contact_name,'contactEmail',d.contact_email,
   'startsOn',d.starts_on,'endsOn',d.ends_on,'agreementLink',d.agreement_link,'revision',d.revision,
   'wonAt',d.won_at,'wonByMemberId',d.won_by_member_id,'cancelledAt',d.cancelled_at,
   'changes',coalesce((select jsonb_agg(jsonb_build_object('id',ac.id,'kind',ac.kind,'reason',ac.reason,'beforeTerms',ac.before_terms,'proposedTerms',ac.proposed_terms,'status',ac.status,'createdAt',ac.created_at,'resolvedAt',ac.resolved_at,'withdrawnAt',ac.withdrawn_at,'resolutionNote',ac.resolution_note,'manualItems',coalesce((select jsonb_agg(jsonb_build_object('kind',mr.kind,'itemId',mr.item_id)) from partner_deals.manual_reconciliation_items mr where mr.change_id=ac.id),'[]'::jsonb)) order by ac.created_at,ac.id) from partner_deals.agreement_changes ac where ac.deal_id=d.id),'[]'::jsonb),

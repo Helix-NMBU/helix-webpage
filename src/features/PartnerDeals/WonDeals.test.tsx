@@ -2,9 +2,11 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { WonDeals, type WonDeal } from "./WonDeals";
 const notify = vi.fn();
+beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); });
+async function section(el: HTMLElement, name: string) { await act(async () => el.querySelector<HTMLButtonElement>(`[role="tab"][data-slot="tabs-trigger"][id$="trigger-${name}"]`)!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }))); }
 vi.mock("../MemberCV/session",()=>({memberSessionToken:async()=>"test-token"}));
 vi.mock("../MemberPlatform/MemberNotifications",()=>({ useNotify: () => notify }));
 it("shows agreed contributions and work, but only links authorized tasks",async()=>{
@@ -16,11 +18,15 @@ it("shows agreed contributions and work, but only links authorized tasks",async(
  const button=[...el.querySelectorAll('button')].find(x=>x.textContent==='View agreement')!;
  await act(async()=>button.click());
  expect(el.textContent).toContain('1 250,00 NOK');
- expect(el.textContent).toContain('Estimated value: 20,00 NOK');
+
  expect(el.textContent).toContain('Logo on car');
  expect(el.querySelector('a[href="/tasks/visible"]')).not.toBeNull();
  expect(el.querySelector('a[href="/tasks/private"]')).toBeNull();
+ await section(el, "contributions");
+ expect(el.textContent).toContain('Estimated value: 20,00 NOK');
+ await section(el, "tasks");
  expect(el.textContent).toContain('Invoice task');
+ expect(el.querySelector('a[href="/tasks/private"]')).toBeNull();
  await act(async()=>root.unmount()); el.remove();
 });
 
@@ -28,7 +34,8 @@ it("opens an authorized agreement from a task backlink query",async()=>{
  const item:WonDeal={id:"deal-1",title:"Chosen deal",organizationName:"Partner",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[],deliverables:[],tasks:[]};
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>{root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal-1"]}><WonDeals loadShared={async()=>({deals:[item]})}/></MemoryRouter>);});
- expect(el.textContent).toContain("Partner · Chosen deal");
+ expect(el.querySelector("h1")?.textContent).toBe("Partner");
+ expect(el.textContent).toContain("Chosen deal");
  expect(el.textContent).toContain("Back to agreements");
  await act(async()=>root.unmount());el.remove();
 });
@@ -38,6 +45,7 @@ it("shows a planned invoice for a later season only when no task exists",async()
  const item:WonDeal={id:"deal",title:"Agreement",organizationName:"Partner",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[{id:"s27",seasonId:"a",seasonCode:"S27",seasonName:"S27",kind:"cash",description:"",amountOre:"10000",invoiceDate:"2026-11-01"},{id:"s28",seasonId:"b",seasonCode:"S28",seasonName:"S28",kind:"cash",description:"",amountOre:"20000",invoiceDate:"2027-11-01"}],deliverables:[],tasks:[{id:"t",title:"Invoice Partner",status:"todo",kind:"invoice",deliverableId:null,seasonId:"a",contributionId:"s27",canOpen:true}]};
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>{root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[item]})}/></MemoryRouter>)});
+ await section(el, "tasks");
  expect(el.textContent).toContain("Invoice Partner · S28");
  expect(el.textContent).toContain("Planned · 200,00 NOK · Invoice date: 2027-11-01");
  expect(el.textContent).not.toContain("Invoice Partner · S27");
@@ -71,9 +79,11 @@ it("offers Finance review during cancellation only for a stale manual item",asyn
  const base:WonDeal={id:"deal",revision:4,title:"Agreement",organizationName:"Partner",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",cancelledAt:"now",contributions:[{id:"cash",seasonId:"s",seasonCode:"S27",seasonName:"S27",kind:"cash",description:"",amountOre:"10000",invoiceDate:"2027-01-01",fundingNeedsReview:true}],deliverables:[],tasks:[],changes:[{id:"change",kind:"cancellation",reason:"Ended",beforeTerms:{title:"Agreement",contactName:"",contactEmail:"",startsOn:null,endsOn:null,agreementLink:"",cashChanges:[],inKindChanges:[],deliverableChanges:[]},proposedTerms:{},status:"pending",createdAt:"now",resolvedAt:null,resolutionNote:null}]};
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>root.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[base],canManage:true})}/></MemoryRouter>));
+ await section(el, "changes");
  expect(el.textContent).not.toContain("Request Finance review");await act(async()=>root.unmount());el.remove();
  const second=document.createElement("div");document.body.append(second);const secondRoot=createRoot(second);const manual={...base,contributions:[{...base.contributions[0],manualHandling:true,manualFinanceReviewed:false}]};
  await act(async()=>secondRoot.render(<MemoryRouter initialEntries={["/partner-deals?deal=deal"]}><WonDeals loadShared={async()=>({deals:[manual],canManage:true})}/></MemoryRouter>));
+ await section(second, "changes");
  expect(second.textContent).toContain("Request Finance review");expect(second.textContent).not.toContain("Record manual funding review");await act(async()=>secondRoot.unmount());second.remove();
 });
 
@@ -99,4 +109,42 @@ it("derives deliverable progress from linked marketing tasks, excluding retired 
  await act(async()=>[...el.querySelectorAll("button")].find(b=>b.textContent==="View agreement")!.click());
  expect(el.textContent).toContain("1 of 2 complete");expect(el.textContent).toContain("Second task · Blocked");expect(el.querySelector('a[href="/tasks/t2"]')).toBeNull();
  await act(async()=>root.unmount());el.remove();
+});
+
+it("shows missing tier benefits separately from real task progress and keeps retired benefits out of the total", async () => {
+ const item: WonDeal = {id:"tier",title:"S27 package",organizationName:"Partner",sponsorLevel:"silver",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[{id:"cash",seasonCode:"S27",seasonName:"Season 2027",kind:"cash",description:"",amountOre:"10000",invoiceDate:null}],deliverables:[{id:"logo",title:"Logo on car and website",description:"Agreed placement",dueDate:null},{id:"retired",title:"CV bank access",description:"Removed by agreement",dueDate:null,retiredAt:"2026-11-01"}],tasks:[{id:"task",title:"Install logo",status:"done",kind:"marketing",deliverableId:"logo",seasonId:null,contributionId:null,canOpen:true}]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async () => root.render(<MemoryRouter initialEntries={["/partner-deals?deal=tier"]}><WonDeals loadShared={async () => ({deals:[item]})}/></MemoryRouter>));
+ expect(el.textContent).toContain("1 of 7 complete");
+ expect(el.textContent).toContain("S27 tier checklist");
+ const rows=[...el.querySelectorAll("li")];
+ expect(rows.find(row => row.textContent?.includes("LinkedIn partnership post"))?.textContent).toContain("Not recorded");
+ expect(rows.find(row => row.textContent?.includes("Logo on car and website"))?.textContent).toContain("Done");
+ expect(el.querySelector('[aria-label="Agreement delivery progress"]')?.getAttribute("aria-valuenow")).toBe("14");
+ expect(el.querySelector('a[href="/tasks/task"]')).not.toBeNull();
+ await act(async () => root.unmount());el.remove();
+});
+
+
+it("shows the primary-season package to a shared viewer without contributions or a season directory", async () => {
+ const item: WonDeal = {id:"primary-season",title:"Agreement",organizationName:"Partner",sponsorLevel:"bronze",seasonCode:"S27",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[],deliverables:[],tasks:[]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async () => root.render(<MemoryRouter initialEntries={["/partner-deals?deal=primary-season"]}><WonDeals loadShared={async () => ({deals:[item],canManage:false,seasons:[]})}/></MemoryRouter>));
+ expect(el.textContent).toContain("0 of 5 complete");
+ expect(el.textContent).toContain("Not recorded");
+ expect(el.textContent).not.toContain("Manage deliverables");
+ expect(el.textContent).not.toContain("CV bank access");
+ await act(async () => root.unmount());el.remove();
+});
+
+it("keeps grants separate from sponsor packages and planned invoices", async () => {
+ const item: WonDeal = {id:"grant",opportunityKind:"grant",title:"Research grant",organizationName:"Foundation",sponsorLevel:"gold",seasonCode:"S27",startsOn:null,endsOn:null,contactName:"",contactEmail:"",agreementLink:"",contributions:[{id:"grant-cash",seasonId:"s27",seasonCode:"S27",seasonName:"Season 2027",kind:"cash",description:"Grant",amountOre:"10000",invoiceDate:null}],deliverables:[],tasks:[]};
+ const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
+ await act(async () => root.render(<MemoryRouter initialEntries={["/partner-deals?deal=grant"]}><WonDeals loadShared={async () => ({deals:[item]})}/></MemoryRouter>));
+ expect(el.textContent).toContain("No deliverables recorded.");
+ expect(el.textContent).not.toContain("S27 tier checklist");
+ await section(el,"tasks");
+ expect(el.textContent).toContain("No tasks recorded.");
+ expect(el.textContent).not.toContain("Invoice Foundation");
+ await act(async () => root.unmount());el.remove();
 });
