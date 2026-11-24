@@ -78,7 +78,7 @@ describe("Pipeline",()=>{
  it("shows the requested deal card details and totals across seasons",async()=>{
   load.mockResolvedValueOnce({...data,deals:[{...deal,ownerMemberId:"m1",sponsorLevel:"silver",probability:75,followUpOn:"2026-11-30",contributions:[...deal.contributions,{seasonId:"s28",kind:"product",description:"Components",amountOre:"50000",invoiceDate:null},{seasonId:"s28",kind:"service",description:"Support",amountOre:null,invoiceDate:null}]}],seasons:[...data.seasons,{id:"s28",code:"S28",name:"2028",startDate:"2027-08-01",endDate:"2028-07-31",status:"planning"}]});
   await render();const text=container.querySelector('[aria-label="Lead"]')!.textContent!;
-  for(const value of ["Partner", "Morgan", "Silver", "S27, S28", "NOK 1\u00a0200,00"]) expect(text).toContain(value);
+  for(const value of ["Partner", "Silver", "S27, S28", "NOK 1\u00a0200,00"]) expect(text).toContain(value);
   expect(container.querySelector('[aria-label="Edit Sponsor level for Engine deal"]')).toBeNull();
   const badges = [...container.querySelectorAll('[data-slot="badge"]')];
   expect(badges.find(badge=>badge.textContent === "Medium")?.className).toContain("amber");
@@ -86,7 +86,10 @@ describe("Pipeline",()=>{
   expect(container.textContent).not.toContain("Medium confidence");
   expect(text).not.toContain("Follow up");
   expect(text).not.toContain("2026-11-30");
-  expect(container.querySelector('[role="img"][aria-label="Morgan"]')).not.toBeNull();
+  const card=container.querySelector('[role="article"][aria-label="Engine deal"]')!;
+  expect(card.textContent).not.toContain("Morgan");
+  expect(card.querySelector('[data-assignee-names]')).toBeNull();
+  expect(card.querySelector('[role="img"][aria-label="Morgan"]')?.getAttribute("title")).toBe("Morgan");
   expect(container.textContent).not.toContain("Linked budget entries");
   await openDetail();
   const panel = document.querySelector('[data-slot="sheet-content"]')!;
