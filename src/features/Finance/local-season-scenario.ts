@@ -1,3 +1,4 @@
+import { isLocalPlatformTester } from "../MemberPlatform/local-platform-profile";
 import { isLocalMemberMode, localMemberSignedIn } from "../MemberPlatform/local-mode";
 import { localMemberHasPartnerSpace } from "../MemberPlatform/member-access-api";
 import { createLocalProjectRepository } from "../ProjectManagement/local-repository";
@@ -45,9 +46,10 @@ async function seed(): Promise<SeasonScenarioSummary> {
   const roles = Object.fromEntries(ROLE_KEYS.map(key => [key, localStorage.getItem(key)]));
   const priorBackup = localStorage.getItem(SEASON_SCENARIO_BACKUP);
   localStorage.setItem(SEASON_SCENARIO_BACKUP, JSON.stringify({ createdAt: new Date().toISOString(), values: backup }));
+  const platformTester = isLocalPlatformTester();
   const select = (role: string) => {
     const url = new URL(window.location.href);
-    url.searchParams.set("memberRole", "default"); url.searchParams.set("budgetRole", role); url.searchParams.set("fundingRole", role);
+    url.searchParams.set("memberRole", platformTester ? "platform_tester" : "default"); url.searchParams.set("budgetRole", role); url.searchParams.set("fundingRole", role);
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   };
   const projects = createLocalProjectRepository(), budgets = createLocalProjectBudgetRepository(), departments = createLocalDepartmentBudgetRepository(), purchases = createLocalProjectPurchaseRepository();

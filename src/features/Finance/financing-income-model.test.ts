@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { financingIncomeRows } from "./financing-income-model";
+import { financingIncomeRows, seasonIncomeTotals } from "./financing-income-model";
 import { funding } from "./budget-dashboard.test-support";
 import type { FinancingView, WonIncomeRecord } from "./types";
 
@@ -36,4 +36,10 @@ it("approved grants await payment without using invoice tasks", () => {
   expect(rows[0].status).toBe("awaiting_payment");
   const paid = financingIncomeRows(view({ funding: [funding("receipt", "1200.50", "2026-11-22")], wonIncome: [{ ...won("grant", false, "receipt"), opportunityKind: "grant" }] }));
   expect(paid).toHaveLength(1); expect(paid[0].status).toBe("received");
+});
+
+it("totals received and confirmed outstanding income without counting linked receipts twice or including applications", () => {
+  const input=view({funding:[funding("receipt","1199.75","2026-11-22"),funding("grant","3000.00","2026-11-20"),funding("applied","9000.00",null,"applied"),funding("deleted","9999.00",null,"deleted")],wonIncome:[won("paid",true,"receipt"),won("invoice",true),{...won("approved-grant"),opportunityKind:"grant"},won("removed",true,"deleted")]});
+  expect(seasonIncomeTotals(input)).toEqual({receivedNok:"4199.75",outstandingNok:"2401.00",totalNok:"6600.75"});
+  expect(seasonIncomeTotals(view())).toEqual({receivedNok:"0.00",outstandingNok:"0.00",totalNok:"0.00"});
 });

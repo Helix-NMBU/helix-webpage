@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({ signals: { enabled: true, loading: false, data
 vi.mock("./use-budget-review-signals", () => ({ useBudgetReviewSignals: () => state.signals }));
 vi.mock("../Workspace/WorkspaceContext", () => ({ useWorkspace: () => ({ data: { departments: state.names.map(name => ({ name })) } }) }));
 let container: HTMLDivElement, root: ReturnType<typeof createRoot>;
-beforeEach(() => { vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function(this: HTMLElement) { const height=this.classList.contains("recharts-legend-wrapper")?24:240; return { width: 840, height, x: 0, y: 0, top: 0, left: 0, right: 840, bottom: height, toJSON: () => ({}) }; }); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = document.createElement("div"); document.body.append(container); root = createRoot(container); state.signals = { enabled: true, loading: false, data: { queue: { packages: [] }, projects: { budgets: [] } } }; });
+beforeEach(() => { vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function(this: HTMLElement) { const height=this.classList.contains("recharts-legend-wrapper")?24:240; return { width: 840, height, x: 0, y: 0, top: 0, left: 0, right: 840, bottom: height, toJSON: () => ({}) }; }); vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); container = document.createElement("div"); document.body.append(container); root = createRoot(container); state.names = ["Mechanical & Production", "Finance"]; state.signals = { enabled: true, loading: false, data: { queue: { packages: [] }, projects: { budgets: [] } } }; });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it("shows approved allocation, current spending, a new package indicator and a stable drill-down link", async () => {
   const budgets = dashboardBudgetFixture([item("P1", "100.00"), item("P2", "99999.00", false)]);
@@ -53,4 +53,17 @@ it("draws three cumulative confidence projections without marking forecast-cover
   expect(container.textContent).toContain("Realistic"); expect(container.textContent).toContain("Optimistic");
   expect(container.textContent).not.toContain("Reached"); expect(container.textContent).toContain("NOK 50.00 to go");
   expect(container.querySelector('svg desc')?.textContent).toContain("planned invoice dates");
+});
+
+
+it("shows one Electrical card and retains changes requested under its Electronics directory name", async () => {
+  const budgets = dashboardBudgetFixture([item("P1", "100.00")]);
+  budgets.departments[0] = { ...budgets.departments[0], departmentKey: "electrical", name: "Electrical" };
+  state.names = ["Electronics", "Finance"];
+  state.signals.data = { queue: { packages: [{ status: "finance_pending", snapshot: { departmentName: "Electronics", seasonCode: "S27" } }] }, projects: { budgets: [] } };
+  await act(async () => root.render(<MemoryRouter><DepartmentBudgetCards budgets={budgets} /></MemoryRouter>));
+  const card = container.querySelector('a[href="/finance/budgets/electrical"]')!;
+  expect(card.textContent).toContain("Changes requested");
+  expect(card.textContent).toContain("NOK 100.00");
+  expect(container.querySelector('a[href="/finance/budgets/electronics"]')).toBeNull();
 });

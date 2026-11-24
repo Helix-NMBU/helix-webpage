@@ -1,3 +1,5 @@
+import { canonicalNokOre } from "./project-budget-diff";
+import { formatOre } from "./money";
 import type { FinancingView, FundingRecord, WonIncomeRecord } from "./types";
 export type IncomeStatus = "received" | "waiting_on_payment" | "invoice_not_sent" | "awaiting_payment";
 export type FinancingIncomeRow = { id: string; sourceName: string; title: string | null; amountNok: string; status: IncomeStatus; receivedDate: string | null; invoiceSentOn: string | null; plannedInvoiceDate: string | null; dealId: string | null; funding: FundingRecord | null; contribution: WonIncomeRecord | null };
@@ -16,4 +18,15 @@ export function financingIncomeRows(view: FinancingView): FinancingIncomeRow[] {
   for (const record of view.funding) if (record.status === "received" && !linked.has(record.id)) rows.push({ id: `funding:${record.id}`, sourceName: record.sourceName, title: null, amountNok: record.amountNok, status: "received", receivedDate: record.receivedDate, invoiceSentOn: null, plannedInvoiceDate: null, dealId: null, funding: record, contribution: null });
   const rank: Record<IncomeStatus,number> = { invoice_not_sent: 0, waiting_on_payment: 1, awaiting_payment: 1, received: 2 };
   return rows.sort((a,b)=>rank[a.status]-rank[b.status] || (b.receivedDate??"").localeCompare(a.receivedDate??"") || a.sourceName.localeCompare(b.sourceName));
+}
+
+/** Uses the same deduplicated, confirmed income rows as the Financing table. */
+export function seasonIncomeTotals(view: FinancingView) {
+  let received = 0n, outstanding = 0n;
+  for (const row of financingIncomeRows(view)) {
+    const amount = canonicalNokOre(row.amountNok);
+    if (row.status === "received") received += amount;
+    else outstanding += amount;
+  }
+  return {receivedNok: formatOre(received), outstandingNok: formatOre(outstanding), totalNok: formatOre(received + outstanding)};
 }

@@ -1,3 +1,4 @@
+import { canonicalDepartment } from "../ProjectManagement/departments";
 import { seasonChartRange } from "../ProjectManagement/progress-chart";
 import { canonicalNokOre } from "./project-budget-diff";
 import type { FundingRecord, PublicBudgetItem, PublicBudgets, PublicDepartmentBudget } from "./types";
@@ -36,5 +37,10 @@ export function seasonIncome(funding: readonly FundingRecord[], season: string, 
 }
 
 export function dashboardDepartments(budgets: PublicBudgets, names: string[] = []): PublicDepartmentBudget[] {
-  return [...budgets.departments, ...names.filter(name => !budgets.departments.some(department => department.name === name)).map(name => ({ departmentKey: name, name, plannedNok: "0.00", actualNok: "0.00", differenceNok: "0.00", unbudgetedNok: "0.00", systems: [] }))];
+  const departments = [...budgets.departments];
+  for (const name of names) {
+    if (departments.some(department => (canonicalDepartment(department.name) ?? department.name) === (canonicalDepartment(name) ?? name))) continue;
+    departments.push({ departmentKey: name, name, plannedNok: "0.00", actualNok: "0.00", differenceNok: "0.00", unbudgetedNok: "0.00", systems: [] });
+  }
+  return departments;
 }

@@ -20,7 +20,7 @@ async function open() { await act(async () => container.querySelector<HTMLButton
 it("shows compact purchase rows with no payment or review forms until opened", async () => {
   await render();
   expect([...container.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Purchase", "Project", "Date", "Amount", "Payment", "Invoice"]);
-  expect(container.textContent).toContain("Chassis development"); expect(container.textContent).not.toContain("Workshop supplier"); expect(container.textContent).toContain("Tube set"); expect(container.textContent).toContain("NOK 1,250.50"); expect(container.textContent).toContain("Link to invoice");
+  expect(container.textContent).toContain("Chassis development"); expect(container.textContent).not.toContain("Workshop supplier"); expect(container.textContent).toContain("Tube set"); expect(container.textContent).toContain("NOK 1,250.50"); expect(container.textContent).not.toContain("Link to invoice"); expect(container.querySelector('[aria-label="Purchase actions for PUR-1"]')).not.toBeNull();
   expect(container.textContent).not.toContain("private-account"); expect(document.querySelector('[role="dialog"]')).toBeNull();
   const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Open purchase PUR-1"]')!;
   trigger.focus(); await open();

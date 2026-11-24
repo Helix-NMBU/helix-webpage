@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approvedAllocation, coverageLevels, seasonIncome } from "./budget-dashboard-model";
+import { approvedAllocation, coverageLevels, dashboardDepartments, seasonIncome } from "./budget-dashboard-model";
 import { item, funding, dashboardBudgetFixture } from "./budget-dashboard.test-support";
 
 describe("approved budget coverage", () => {
@@ -33,4 +33,15 @@ describe("season received-income timeline", () => {
     expect(seasonIncome([], "S26", "2026-11-22").throughDate).toBe("2026-08-01");
     expect(seasonIncome([], "S28", "2026-11-22").points).toEqual([{ date: "2027-08-01", amountOre: 0n }]);
   });
+});
+
+
+it("keeps the populated Electrical budget and omits the Electronics alias placeholder", () => {
+  const budgets = dashboardBudgetFixture();
+  budgets.departments[0] = { ...budgets.departments[0], departmentKey: "electrical", name: "Electrical" };
+  const departments = dashboardDepartments(budgets, ["Electronics", "Electrical", "Finance", "Finance"]);
+  expect(departments.map(department => department.name)).toEqual(["Electrical", "Finance"]);
+  expect(departments[0]).toBe(budgets.departments[0]);
+  expect(departments[0].systems[0].items).toHaveLength(5);
+  expect(budgets.departments).toHaveLength(1);
 });

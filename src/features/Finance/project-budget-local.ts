@@ -1,3 +1,4 @@
+import { isLocalPlatformTester } from "../MemberPlatform/local-platform-profile";
 import { publishFinanceUpdate } from "./finance-events";
 import { loadLocalProjectBudgetFinancials } from "./local-finance-read";
 import { APPROVED_MEMBER_BUDGET_CAPABILITIES, memberApprovedBudgetDetail, memberApprovedBudgetSummary } from "./project-budget-member-view";
@@ -74,6 +75,7 @@ export function localBudgetRole(): Role {
     localStorage.setItem("helix-project-budgets-local-role-v1", selected);
     return selected;
   }
+  if (isLocalPlatformTester()) return "head_of_finance";
   const saved = localStorage.getItem("helix-project-budgets-local-role-v1");
   return valid(saved) ? saved : "project_lead";
 }

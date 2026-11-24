@@ -11,14 +11,15 @@ import { BudgetDashboard } from "./BudgetDashboard";
 import { FinancingPage } from "./FinancingPage";
 import { OverviewBoard } from "./OverviewPage";
 import { SpendingPurchases } from "./SpendingPurchases";
-import { SeasonSpending } from "./SeasonSpending";
+import { FinancingIncome } from "./FinancingIncome";
+import { SeasonFinanceSummary } from "./SeasonSpending";
 import { PurchasesBoard } from "./PurchasesPage";
 import type { FinancePageId } from "./routes";
 
 const pages: { id: FinancePageId; title: string; empty: string; description: string }[] = [
-  { id: "overview", title: "Spending", empty: "No spending recorded yet", description: "Registered purchases for this season." },
+  { id: "overview", title: "Income & Spend", empty: "No income or spending recorded yet", description: "Income, payments and registered purchases for this season." },
   { id: "purchases", title: "Purchases", empty: "No purchases to show", description: "Your requests will appear here." },
-  { id: "budgets", title: "Budgets & Financing", empty: "No budget is published yet", description: "Review department budgets, plan project costs and manage funding." },
+  { id: "budgets", title: "Budgets", empty: "No budget is published yet", description: "Review department budgets and plan project costs." },
   { id: "financing", title: "Financing", empty: "No funding records yet", description: "Funding sources and earmarked parts for the current season." },
 ];
 
@@ -38,9 +39,18 @@ function FinanceSection({ page }: { page: FinancePageId }) {
   }, [page, session.access, session.budgets, session.capabilities?.registerActual, session.loadPage]);
   const financingVersion = session.financing?.viewVersion ?? null;
   useEffect(() => {
-    if (page !== "budgets" || session.access !== "allowed" || !session.capabilities?.financing || session.viewVersion === null || financingVersion === session.viewVersion) return;
+    if ((page !== "budgets" && page !== "overview") || session.access !== "allowed" || !session.capabilities?.financing || session.viewVersion === null || financingVersion === session.viewVersion) return;
     void session.loadPage("financing");
   }, [financingVersion, page, session.access, session.capabilities?.financing, session.loadPage, session.viewVersion]);
+  // Pipeline forecasts can change independently of the Finance view version.
+  useEffect(() => {
+    if ((page !== "overview" && page !== "budgets") || session.access !== "allowed" || !session.capabilities?.financing) return;
+    const refresh = () => { if (document.visibilityState !== "hidden") void session.loadPage("financing"); };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("helix-workspace-updated", refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener("helix-workspace-updated", refresh); };
+  }, [page, session.access, session.capabilities?.financing, session.loadPage]);
   const overviewReady = page === "overview" && Boolean(session.overview) && (
     (session.overview && hasVisibleApprovedFinances(session.overview))
     || (session.overview?.departments.length ?? 0) > 0
@@ -69,16 +79,20 @@ function FinanceSection({ page }: { page: FinancePageId }) {
   );
   return (
     <section className={`mx-auto w-full ${page === "budgets" || page === "overview" ? "max-w-7xl" : "max-w-5xl"} space-y-8 px-2 py-8 sm:px-6`} aria-labelledby="finance-page-title">
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+      <div className="space-y-3">
         <div className="min-w-0 space-y-3">
           <p className="text-sm text-muted-foreground">{page === "purchases" ? "Management" : "Finance"}</p>
           <h1 id="finance-page-title" className="text-3xl font-medium tracking-tight">{current.title}</h1>
           <p className="text-muted-foreground">{current.description}</p>
         </div>
-        {page === "overview" && session.access === "allowed" && session.capabilities?.purchaseRegister && session.purchases && <SeasonSpending purchases={session.purchases.register ?? []} />}
       </div>
+      {page === "overview" && session.access === "allowed" && (session.capabilities?.financing || session.capabilities?.purchaseRegister) && <SeasonFinanceSummary
+        financing={session.capabilities?.financing ? session.financing : undefined}
+        purchases={session.capabilities?.purchaseRegister ? session.purchases ? session.purchases.register ?? [] : null : undefined}
+      />}
       {page !== "overview" && page !== "budgets" && session.profiles?.includes("head_of_finance") && <Button asChild variant="outline"><Link to="/finance/funding-applications">Funding applications</Link></Button>}
-      {page === "overview" && session.capabilities?.purchaseRegister ? <SpendingPurchases /> : page === "budgets" ? (
+      {page === "overview" && session.capabilities?.financing ? <FinancingIncome financing={session.financing} canManage={Boolean(session.capabilities?.manageFunding)} /> : null}
+      {page === "overview" && session.capabilities?.purchaseRegister ? <section aria-labelledby="spending-purchases-title" className="space-y-4"><h2 id="spending-purchases-title" className="text-xl font-medium">Spend</h2><SpendingPurchases /></section> : page === "budgets" ? (
         <BudgetDashboard />
       ) : page === "financing" ? <FinancingPage /> : !loaded ? (
         <FinanceContentSkeleton page={page} canRegister={Boolean(session.capabilities?.registerActual)} />

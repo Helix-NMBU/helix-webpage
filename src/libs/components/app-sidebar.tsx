@@ -73,8 +73,8 @@ export function AppSidebar({
   const financePath = departmentPath("Finance");
   const financeDepartment = workspace?.departments?.find(department => departmentPath(department.name) === financePath);
   const financeItems = finance.access === "allowed" ? [
-    { title: "Spending", url: financeRoutes.overview, icon: IconReceipt },
-    { title: "Budgets & Financing", url: financeRoutes.budgets, icon: IconWallet },
+    { title: "Income & Spend", url: financeRoutes.overview, icon: IconReceipt },
+    { title: "Budgets", url: financeRoutes.budgets, icon: IconWallet },
   ] : [];
   const financeActive = financeItems.some(item => item.url === location.pathname) || location.pathname.startsWith(`${financeRoutes.budgets}/`);
   const spaceItems = [

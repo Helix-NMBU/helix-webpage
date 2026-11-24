@@ -17,7 +17,7 @@ export type FinancePageId = keyof typeof financeRoutes;
 
 const legacyDestinations: Record<string, string> = {
   "/finance/purchases": financeRoutes.purchases,
-  "/finance/financing": financeRoutes.budgets,
+  "/finance/financing": financeRoutes.overview,
   "/teams/finance": financeRoutes.overview,
   "/teams/finance/budget": financeRoutes.budgets,
   "/teams/finance/expenses": financeRoutes.purchases,
@@ -25,10 +25,10 @@ const legacyDestinations: Record<string, string> = {
 
 export function financePageTitle(pathname: string): string | null {
   if (pathname === financeFundingPath) return "Manage financing";
-  if (pathname === financeRoutes.overview) return "Spending";
+  if (pathname === financeRoutes.overview) return "Income & Spend";
   if (pathname === financeRoutes.purchases) return "Purchases";
-  if (pathname === financeRoutes.budgets) return "Budgets & Financing";
-  if (pathname === financeRoutes.financing) return "Budgets & Financing";
+  if (pathname === financeRoutes.budgets) return "Budgets";
+  if (pathname === financeRoutes.financing) return "Income & Spend";
   return null;
 }
 
