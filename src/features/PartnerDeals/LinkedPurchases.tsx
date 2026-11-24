@@ -68,9 +68,10 @@ export function LinkedPurchases({
   const opener = useRef<HTMLButtonElement>(null),
     pendingFocus = useRef(false);
   useEffect(() => {
-    if (!open && !busy && pendingFocus.current) {
-      pendingFocus.current = false;
-      opener.current?.focus();
+    const trigger = opener.current;
+    if (!open && !busy && pendingFocus.current && trigger && !trigger.disabled) {
+      trigger.focus();
+      pendingFocus.current = document.activeElement !== trigger;
     }
   }, [open, busy]);
   function clear() {
@@ -244,8 +245,13 @@ export function LinkedPurchases({
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            if (working.current) pendingFocus.current = true;
-            else opener.current?.focus();
+            pendingFocus.current = true;
+            const trigger = opener.current;
+            // The save can finish before React removes the trigger's disabled state.
+            if (trigger && !trigger.disabled) {
+              trigger.focus();
+              pendingFocus.current = document.activeElement !== trigger;
+            }
           }}
         >
           <DialogHeader className="shrink-0 border-b px-6 pb-4 pt-5 pr-14">

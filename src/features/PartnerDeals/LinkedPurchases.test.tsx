@@ -233,6 +233,19 @@ it("retains selections across department and search filters and applies the comp
     ),
   );
 });
+it("restores focus after the selector closes while its saved entries are still reloading", async () => {
+  await render();
+  await choose("Frame tubes");
+  let finishReload!: (value: DealBudgetLinks) => void;
+  load.mockImplementationOnce(() => new Promise<DealBudgetLinks>(resolve => { finishReload = resolve; }));
+  await click("Apply");
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  const trigger = document.querySelector<HTMLButtonElement>('[aria-label="Manage linked budget entries"]')!;
+  expect(trigger.disabled).toBe(true);
+  await act(async () => finishReload(structuredClone(state)));
+  await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+  expect(trigger.disabled).toBe(false);
+});
 it("dismisses with Escape without saving and restores trigger focus", async () => {
   await render();
   await choose("Battery packs");
