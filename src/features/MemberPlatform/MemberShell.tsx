@@ -47,7 +47,7 @@ function Workspace({ children }: { children?: ReactNode }) {
   const taskBoard = location.pathname === "/tasks" && new URLSearchParams(location.search).get("view") === "board";
   const projectDetail = /^\/projects\/[^/]+\/?$/.test(location.pathname);
   const projectTimeline = (/^\/projects\/?$/.test(location.pathname) || /^\/departments\/[^/]+\/projects\/?$/.test(location.pathname)) && new URLSearchParams(location.search).get("view") === "timeline";
-  const bounded = projectDetail || projectTimeline || taskDetail || taskBoard;
+  const bounded = projectDetail || projectTimeline || taskDetail || taskBoard || /^\/sponsor-pipeline\/?$/.test(location.pathname);
   const page = previewPage(location.pathname);
   const seasonOverview = location.pathname === "/season-overview" || location.pathname.startsWith("/project-management");
   const directory = useWorkspace()?.data;
@@ -143,7 +143,7 @@ function Workspace({ children }: { children?: ReactNode }) {
                       </>
                     )}
                     {(budgetDetail || fundingManagement) && <>
-                      <BreadcrumbItem><BreadcrumbLink asChild><button type="button" disabled={disabled} onClick={event => go(financeRoutes.budgets, event.currentTarget)}>Budgets &amp; Financing</button></BreadcrumbLink></BreadcrumbItem>
+                      <BreadcrumbItem><BreadcrumbLink asChild><button type="button" disabled={disabled} onClick={event => go(financeRoutes.budgets, event.currentTarget)}>Budgets</button></BreadcrumbLink></BreadcrumbItem>
                       <BreadcrumbSeparator />
                     </>}
                     {taskDetail && <>

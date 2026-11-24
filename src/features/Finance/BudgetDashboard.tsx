@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { canonicalDepartment } from "../ProjectManagement/departments";
 import { Link } from "react-router-dom";
 import { Badge } from "@libs/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@libs/components/ui/card";
@@ -6,7 +6,6 @@ import { Skeleton } from "@libs/components/ui/skeleton";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { BudgetRing } from "./BudgetRing";
-import { FinancingIncome } from "./FinancingIncome";
 import { SeasonIncomeChart } from "./SeasonIncomeChart";
 import { approvedAllocation, approvedDepartmentItems, dashboardDepartments } from "./budget-dashboard-model";
 import { formatOre, osloToday } from "./money";
@@ -25,8 +24,9 @@ export function DepartmentBudgetCards({ budgets }: { budgets: PublicBudgets }) {
       const approved = approvedAllocation(department, budgets.budgetStatus);
       const entries = approvedDepartmentItems(department, budgets.budgetStatus);
       const spent = canonicalNokOre(department.actualNok);
-      const pending = signals.data?.queue.packages.filter(packet => packet.status === "finance_pending" && (!budgets.seasonCode || packet.snapshot.seasonCode === budgets.seasonCode) && packet.snapshot.departmentName === department.name) ?? [];
-      const candidates = signals.data?.projects.budgets.filter(budget => budget.responsibleDepartmentName === department.name && (!budgets.seasonCode || budget.seasonCode === budgets.seasonCode) && budget.pendingVersionId) ?? [];
+      const departmentName = canonicalDepartment(department.name) ?? department.name;
+      const pending = signals.data?.queue.packages.filter(packet => packet.status === "finance_pending" && (!budgets.seasonCode || packet.snapshot.seasonCode === budgets.seasonCode) && (canonicalDepartment(packet.snapshot.departmentName) ?? packet.snapshot.departmentName) === departmentName) ?? [];
+      const candidates = signals.data?.projects.budgets.filter(budget => (canonicalDepartment(budget.responsibleDepartmentName ?? "") ?? budget.responsibleDepartmentName) === departmentName && (!budgets.seasonCode || budget.seasonCode === budgets.seasonCode) && budget.pendingVersionId) ?? [];
       const awaitingApproval = pending.length > 0 || candidates.some(budget => budget.pendingStage === "department_pending" || budget.pendingStage === "finance_pending");
       const label = signals.enabled && !signals.loading && !signals.data ? "Change status unavailable" : awaitingApproval ? "Changes requested" : entries.length ? null : candidates.length ? "Draft" : "No approved budget";
       return <Link key={department.departmentKey} to={departmentBudgetPath(department.name)} aria-label={`Open ${department.name} budget`} className="group rounded-xl outline-none transition-shadow hover:ring-1 hover:ring-primary/50 focus-visible:ring-2 focus-visible:ring-ring">
@@ -43,20 +43,10 @@ export function DepartmentBudgetCards({ budgets }: { budgets: PublicBudgets }) {
 }
 export function BudgetDashboard() {
   const session = useFinanceAccess();
-  // Pipeline edits have their own revision, so re-read forecasts even if Finance's version is unchanged.
-  useEffect(() => {
-    if (session.access !== "allowed" || !session.capabilities?.financing) return;
-    const refresh = () => { if (document.visibilityState !== "hidden") void session.loadPage("financing"); };
-    const timer = window.setInterval(refresh, 30000);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("helix-workspace-updated", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener("helix-workspace-updated", refresh); };
-  }, [session.access, session.capabilities?.financing, session.loadPage]);
   const budgets = session.budgets;
   if (!budgets) return <div role="status" aria-label="Loading budget dashboard" className="space-y-6"><Skeleton className="h-96 w-full rounded-xl" /><div className="grid gap-4 lg:grid-cols-2">{[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-56 rounded-xl" />)}</div></div>;
   return <div className="space-y-8">
     {session.capabilities?.financing ? !session.financing ? <Skeleton aria-label="Loading season income" className="h-96 rounded-xl" /> : budgets.seasonCode || session.financing.seasonCode ? <SeasonIncomeChart budgets={budgets} financing={session.financing} today={session.today ?? osloToday()} /> : <Card><CardContent><p className="text-sm text-muted-foreground">Season income will appear when a season is configured.</p></CardContent></Card> : null}
     <DepartmentBudgetCards budgets={budgets} />
-    {session.capabilities?.financing ? <FinancingIncome financing={session.financing} canManage={Boolean(session.capabilities?.manageFunding)} /> : null}
   </div>;
 }

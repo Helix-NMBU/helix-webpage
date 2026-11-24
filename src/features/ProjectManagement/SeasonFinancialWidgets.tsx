@@ -44,7 +44,7 @@ function MonthlyMoneyChart({ flow }: { flow: Extract<SeasonMoneyFlow, { status: 
     return input > max ? (input > output ? input : output) : (output > max ? output : max);
   }, 0n);
   return <TooltipProvider><div className="space-y-3">
-    <div className="flex h-36 items-end gap-1 sm:gap-2" aria-label="Monthly money in and out">
+    <div className="flex h-36 items-end gap-1 sm:gap-2" aria-label="Monthly income and spend">
       {flow.months.map(item => {
         const date = new Date(`${item.month}-01T12:00:00Z`);
         const month = new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(date);
@@ -85,7 +85,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
       const result = await Promise.race([load(owner, controller.signal), timeout]);
       if (!active.current || request !== generation.current) return;
       setSummary(result); setStale(false);
-      if (result.moneyFlow.status === "unavailable") notify("Could not load money in and out", "Please try again.", { id: "season-money-flow-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
+      if (result.moneyFlow.status === "unavailable") notify("Could not load income and spend", "Please try again.", { id: "season-money-flow-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
       if (result.bank.status === "unavailable") notify("Could not load bank balance", "Please try again.", { id: "season-bank-load", variant: "error", href: null, action: { label: "Try again", onClick: () => void refresh() } });
     } catch (error) {
       if (!active.current || request !== generation.current) return;
@@ -118,11 +118,11 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
   const snapshot = bank?.status === "available" ? bank.snapshot : null;
   const flow = summary?.moneyFlow;
   const flowVisible = summary?.seasonCode === season && flow?.status === "available";
-  const flowNote = mismatch ? `${stale ? "Last checked: finance was" : "Finance is"} set to ${summary.seasonCode}, not ${season}.` : flow?.status === "no-season" || (summary && !summary.seasonCode) ? (stale ? "Last checked: no finance season configured." : "No finance season configured.") : flow?.status === "unavailable" || !summary ? "Money in and out unavailable." : stale ? "Last loaded values." : `Recorded for ${season}.`;
+  const flowNote = mismatch ? `${stale ? "Last checked: finance was" : "Finance is"} set to ${summary.seasonCode}, not ${season}.` : flow?.status === "no-season" || (summary && !summary.seasonCode) ? (stale ? "Last checked: no finance season configured." : "No finance season configured.") : flow?.status === "unavailable" || !summary ? "Income and Spend unavailable." : stale ? "Last loaded values." : `Recorded for ${season}.`;
   return <section className="space-y-4" aria-labelledby="season-financial-title">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="season-financial-title" className="text-lg font-medium">Finances</h2><p className="text-sm text-muted-foreground">Planned costs, recorded spending and money in the bank.</p></div>{summary?.canOpenFinancials && <Button asChild variant="outline" size="sm"><Link to={financeRoutes.overview}>Open Financials</Link></Button>}</div>
     <div className="grid gap-3 md:grid-cols-2">
-      <Card role="group" aria-label="Money in and out" className="gap-2 py-5"><div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-5"><CardHeader className="min-w-40 flex-1 px-0"><CardTitle className="text-base font-medium">Money in and out</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader>
+      <Card role="group" aria-label="Income and Spend" className="gap-2 py-5"><div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-5"><CardHeader className="min-w-40 flex-1 px-0"><CardTitle className="text-base font-medium">Income and Spend</CardTitle><CardDescription>{flowNote}</CardDescription></CardHeader>
         <dl className="ml-auto grid justify-end gap-1 tabular-nums">
           <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-primary" />In</dt><dd className="text-2xl font-medium sm:text-3xl">{loading && !summary ? <Skeleton className="h-9 w-32" /> : flowVisible ? money(flow.moneyInNok) : "—"}</dd></div>
           <div className="flex flex-wrap items-baseline justify-end gap-x-3"><dt className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"><span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground" />Out</dt><dd className="text-2xl font-medium sm:text-3xl">{loading && !summary ? <Skeleton className="h-9 w-32" /> : flowVisible ? money(flow.moneyOutNok) : "—"}</dd></div>

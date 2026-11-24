@@ -1,3 +1,5 @@
+import { loadDealBudgetLinks, saveDealBudgetLinks } from "./partner-budget-links.js";
+import type { DealBudgetLinks } from "../../src/features/PartnerDeals/deal-budget-links-types.js";
 import type { InvoiceProgress, InvoiceProgressInput } from "../../src/features/PartnerDeals/invoice-progress-types.js";
 import { parseInvoiceProgress } from "./partner-invoice-validation.js";
 import { loadFundingApplicationCard, mutateFundingApplication } from "./finance-funding-applications.js";
@@ -16,6 +18,8 @@ export type DealWorkspace = { canManage: boolean; canReviewFunding: boolean; can
 export type FundingCandidate = { id: string; revision: number; reference: string; status: string; amountOre: string; expectedDate: string | null };
 export type FundingCandidates = { contributionId: string; amountOre: string; linkedFundingId: string | null; candidates: FundingCandidate[] };
 export interface DealServices {
+  budgetLinks(token:string,dealId:unknown):Promise<DealBudgetLinks>;
+  saveBudgetLinks(token:string,body:Record<string,unknown>):Promise<{ok:true;dealRevision:number;applicationRevision:number}>;
   invoiceProgress(token: string, taskId: unknown): Promise<InvoiceProgress | null>;
   saveInvoiceProgress(token: string, input: unknown): Promise<InvoiceProgress | null>;
   fundingApplicationCard(token: string, dealId: unknown): Promise<{ application: FundingApplicationCard | null }>;
@@ -67,7 +71,7 @@ const readSql = `select caps.pipeline as "canManage",
    'manualReviewToken',case when caps.pipeline and partner_deals.manual_finance_review_ready(c.id) and partner_deals.manual_funding_needs_review(c.id) then partner_deals.manual_funding_review_token(c.id) else null end,
    'fundingNeedsReview',case when caps.pipeline or coalesce((finance.capability_flags($1::uuid)->>'financing')::boolean,false) then c.kind='cash' and c.retired_at is null and case when exists(select 1 from partner_deals.manual_reconciliation_items mr where mr.kind='cash' and mr.item_id=c.id) then partner_deals.manual_funding_needs_review(c.id) else (not exists(select 1 from partner_deals.funding_links fl where fl.contribution_id=c.id) or partner_deals.linked_funding_mismatch(c.id)) end else false end) order by c.id) from partner_deals.contributions c join finance.seasons s on s.id=c.season_id where c.deal_id=d.id and c.pending_change_id is null),'[]'::jsonb),
   'deliverables',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'retiredAt',v.retired_at,'description',v.description,'dueDate',v.due_date,'ownerMemberId',v.owner_member_id) order by v.id) from partner_deals.deliverables v where v.deal_id=d.id and v.pending_change_id is null),'[]'::jsonb)
- ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes) else '{}'::jsonb end || case when caps.pipeline then jsonb_build_object(
+ ) || case when $4='pipeline' then jsonb_build_object('negotiationNotes',d.negotiation_notes,'partnerNotes',coalesce(to_jsonb(d)->>'partner_notes',(select string_agg('- '||c.description,chr(10) order by c.id) from partner_deals.contributions c where c.deal_id=d.id and c.retired_at is null and btrim(c.description)<>''),'')) else '{}'::jsonb end || case when caps.pipeline then jsonb_build_object(
  'financeReviews',coalesce((select jsonb_agg(jsonb_build_object('contributionId',r.contribution_id,'status',case when r.status='linked' and partner_deals.linked_funding_mismatch(c.id) then 'stale' when r.status='separate' and (select a.candidate_snapshot from partner_deals.separate_funding_approvals a where a.contribution_id=c.id) is distinct from partner_deals.funding_candidate_snapshot(c.id) then 'stale' else r.status end))
   from partner_deals.finance_reviews r join partner_deals.contributions c on c.id=r.contribution_id
   where c.deal_id=d.id and (r.organization_name,r.season_id,r.amount_ore)=(o.name,c.season_id,c.amount_ore)),'[]'::jsonb)) else '{}'::jsonb end order by d.updated_at desc,d.id)
@@ -90,6 +94,7 @@ function checkSave(value: unknown): Record<string, unknown> {
     throw new MemberCvError(400, "Check the deal details and try again.");
   }
   if (data.opportunityKind !== undefined && !["deal", "grant"].includes(String(data.opportunityKind))) throw new MemberCvError(400, "Choose Deals or Grants.");
+  if (data.partnerNotes !== undefined && (typeof data.partnerNotes !== "string" || data.partnerNotes.length > 8000)) throw new MemberCvError(400, "Keep partner contribution notes within 8,000 characters.");
   if (data.seasonId != null && typeof data.seasonId !== "string") throw new MemberCvError(400, "Choose a valid season.");
   if (data.probability != null && (typeof data.probability !== "number" || !Number.isInteger(data.probability) || data.probability < 0 || data.probability > 100)) throw new MemberCvError(400, "Enter a probability between 0 and 100.");
   if (data.sponsorLevel != null && !["partner","service","bronze","silver","gold","platinum","main"].includes(String(data.sponsorLevel))) throw new MemberCvError(400, "Choose a valid sponsor level.");
@@ -180,6 +185,8 @@ export function createDealServices(deps: { db: CvDatabase; authenticate(token: s
   }
 
   return {
+    async budgetLinks(token,dealId){return loadDealBudgetLinks(deps.db,await identity(token),dealId);},
+    async saveBudgetLinks(token,body){return saveDealBudgetLinks(deps.db,await identity(token),body);},
     async fundingApplicationCard(token, dealId) {
       try { return await loadFundingApplicationCard(deps.db, await identity(token), dealId); }
       catch (error) { if (error instanceof FinanceError) throw new MemberCvError(error.status, error.message); return errorFor(error); }

@@ -1,0 +1,103 @@
+import { isLocalPlatformTester } from "./local-platform-profile";
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { PLATFORM_SCENARIO_KEY, prepareLocalPlatformScenario } from "./local-platform-scenario";
+import { setLocalMemberSignedIn } from "./local-mode";
+import { localFinanceProfileSelection } from "./local-finance-profile";
+import { localMemberHasFinancials, localMemberHasPartnerSpace, getAccessDirectory } from "./member-access-api";
+import { initialLocalWorkspace, createLocalProjectRepository } from "../ProjectManagement/local-repository";
+import { localBudgetRole } from "../Finance/project-budget-local";
+import { localFundingRole, localDealBudgetLinks, saveLocalDealBudgetLinks } from "../Finance/funding-application-local";
+import { createFinanceApi } from "../Finance/repository";
+import { pipelineRepository } from "../PartnerDeals/repository";
+import { PDFDocument } from "pdf-lib";
+import { localRecruitmentFile, prepareLocalRecruitmentFixtures } from "../Recruitment/local-fixture";
+import { createRecruitmentApi } from "../Recruitment/website-api";
+import { memberGmailRequest } from "./gmail-api";
+
+const snapshot = () => Object.fromEntries(Array.from({length: localStorage.length}, (_,index) => {const key = localStorage.key(index)!; return [key,localStorage.getItem(key)];}));
+beforeEach(() => {
+  vi.stubEnv("DEV",true); vi.stubEnv("MODE","member-local");
+  localStorage.clear();
+  window.history.replaceState({},"","/recruiting?memberRole=platform_tester&testData=full");
+});
+afterEach(() => {vi.useRealTimers(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); window.history.replaceState({},"","/");});
+it("adds a comprehensive local workspace, preserves prior edits, and provides broad access without external calls", async () => {
+  const network = vi.spyOn(globalThis,"fetch").mockRejectedValue(new Error("External calls are forbidden"));
+  const prior=initialLocalWorkspace(); prior.projects[0].description="Keep my edited description";
+  localStorage.setItem("helix-member-local-projects-v1",JSON.stringify(prior));
+  await prepareLocalPlatformScenario();
+  const workspace=await createLocalProjectRepository().load();
+  expect(workspace.members).toHaveLength(16);
+  expect(workspace.departments).toHaveLength(7);
+  for(const department of workspace.departments) {expect(department.memberIds.length).toBeGreaterThanOrEqual(3);expect(department.leadIds).toContain(workspace.viewerId);}
+  for(const status of ["backlog","todo","in_progress","blocked","done"]) expect(workspace.tasks.some(task=>task.status===status)).toBe(true);
+  expect(workspace.projects[0].description).toBe("Keep my edited description");
+  expect(isLocalPlatformTester()).toBe(true);
+  expect(localFinanceProfileSelection()).toBe("head_of_finance");
+  expect(localMemberHasFinancials()).toBe(true);
+  expect(localBudgetRole()).toBe("head_of_finance"); expect(localFundingRole()).toBe("head_of_finance");
+  expect(localMemberHasPartnerSpace("pipeline")).toBe(true);
+  const directory=await getAccessDirectory({current:null});
+  const viewer=directory.members.find(member=>member.id===workspace.viewerId)!;
+  expect(viewer.spaceKeys).toEqual(expect.arrayContaining(["season-overview","financials","recruiting","pipeline","partner-agreements"]));
+  const finance=createFinanceApi({current:null});
+  expect((await finance.capabilities()).capabilities.approveBudget).toBe(true);
+  expect((await finance.purchases()).register?.length).toBeGreaterThanOrEqual(31);
+  const pipeline=await pipelineRepository().load();
+  for(const kind of ["deal","grant"] as const) for(const stage of ["lead","contacted","discussion","proposal","won","lost"]) expect(pipeline.deals.some(deal=>(deal.opportunityKind??"deal")===kind&&deal.stage===stage)).toBe(true);
+  const candidate=pipeline.deals.find(deal=>deal.id.startsWith("face")&&deal.opportunityKind==="grant"&&deal.stage==="proposal")!;
+  let links=localDealBudgetLinks(candidate.id);
+  expect(links.entries.length).toBeGreaterThan(40);
+  saveLocalDealBudgetLinks({action:"saveDealBudgetLinks",requestId:crypto.randomUUID(),dealId:candidate.id,dealExpectedRevision:links.dealRevision,applicationExpectedRevision:links.applicationRevision,entries:[{entryId:links.entries[0].entryId,budgetRevision:links.entries[0].budgetRevision}]});
+  links=localDealBudgetLinks(candidate.id); expect(links.entries.filter(entry=>entry.selected)).toHaveLength(1);
+  saveLocalDealBudgetLinks({action:"saveDealBudgetLinks",requestId:crypto.randomUUID(),dealId:candidate.id,dealExpectedRevision:links.dealRevision,applicationExpectedRevision:links.applicationRevision,entries:[]});
+  expect(localDealBudgetLinks(candidate.id).entries.filter(entry=>entry.selected)).toHaveLength(0);
+  const api=createRecruitmentApi({current:null});
+  expect(await api.positions()).toHaveLength(8);expect(await api.list()).toHaveLength(18);
+  const position=(await api.positions())[0]; await api.savePosition({...position,title:"Edited position"});
+  expect((await createRecruitmentApi({current:null}).positions()).find(item=>item.id===position.id)?.title).toBe("Edited position");
+  expect(await api.reject((await api.list())[0].id)).toEqual({emailStatus:"skipped",cleanupPending:false});
+  expect(await createRecruitmentApi({current:null}).list()).toHaveLength(17);
+  const inbox=await (await memberGmailRequest("/api/gmail?action=messages&folder=inbox",{current:null})).json();expect(inbox.messages.length).toBeGreaterThan(5);
+  await memberGmailRequest("/api/gmail?action=messageAction",{current:null},{method:"POST",body:JSON.stringify({action:"send",to:"recipient@example.invalid",subject:"Local test",body:"Test message"})});
+  const sent=await (await memberGmailRequest("/api/gmail?action=messages&folder=sent",{current:null})).json();expect(sent.messages.some((message:{subject:string})=>message.subject==="Local test")).toBe(true);
+  expect(network).not.toHaveBeenCalled();
+  const before=snapshot();await prepareLocalPlatformScenario();expect(snapshot()).toEqual(before);
+  expect(localStorage.getItem(PLATFORM_SCENARIO_KEY)).not.toBeNull();
+  window.history.replaceState({},"","/?memberRole=default");
+  expect(isLocalPlatformTester()).toBe(false);
+  const ordinary=(await getAccessDirectory({current:null})).members.find(member=>member.id===workspace.viewerId)!;
+  expect(ordinary.spaceKeys).not.toContain("financials");
+  expect(ordinary.roleKeys).not.toContain("financials");
+  expect(localMemberHasFinancials()).toBe(false);
+});
+it.each(["production","ordinary-mode","external-host","signed-out","ordinary-member"])("refuses broad test setup for %s without changing data",condition=>{
+  if(condition==="production")vi.stubEnv("DEV",false);
+  if(condition==="ordinary-mode")vi.stubEnv("MODE","development");
+  if(condition==="external-host")vi.stubGlobal("window",{location:{origin:"https://internal.helixnmbu.no",search:"?memberRole=platform_tester"}});
+  if(condition==="signed-out")setLocalMemberSignedIn(false);
+  if(condition==="ordinary-member")window.history.replaceState({},"","/?memberRole=project_member");
+  isLocalPlatformTester();
+  const before=snapshot(); expect(()=>prepareLocalPlatformScenario()).toThrow(/loopback/);expect(snapshot()).toEqual(before);expect(isLocalPlatformTester()).toBe(false);
+});
+it("keeps explicit narrower role tests available and drops test privileges when switching profile",()=>{
+  expect(isLocalPlatformTester()).toBe(true);
+  window.history.replaceState({},"","/finance?budgetRole=project_lead&fundingRole=marketing&financeRole=finance");
+  expect(localBudgetRole()).toBe("project_lead");expect(localFundingRole()).toBe("marketing");expect(localFinanceProfileSelection()).toBe("finance");
+  window.history.replaceState({},"","/?memberRole=project_member");expect(isLocalPlatformTester()).toBe(false);expect(localMemberHasFinancials()).toBe(false);expect(localMemberHasPartnerSpace("pipeline")).toBe(false);
+});
+
+it("generates a valid local CV download without an external file service", async()=>{
+  prepareLocalRecruitmentFixtures();
+  vi.useFakeTimers();
+  let captured: Blob | undefined;
+  vi.spyOn(URL,"createObjectURL").mockImplementation(blob=>{captured=blob as Blob;return "blob:local-test-cv";});
+  const revoke=vi.spyOn(URL,"revokeObjectURL").mockImplementation(()=>undefined);
+  const result=await localRecruitmentFile("local-application-1","cv");
+  expect(result.url).toBe("blob:local-test-cv");
+  expect(captured?.type).toBe("application/pdf");
+  const pdf=await PDFDocument.load(await captured!.arrayBuffer());
+  expect(pdf.getPageCount()).toBe(1);
+  vi.runAllTimers();expect(revoke).toHaveBeenCalledWith(result.url);
+});

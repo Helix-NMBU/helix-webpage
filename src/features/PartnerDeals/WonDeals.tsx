@@ -79,6 +79,11 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
   const [query, setQuery] = useState("");
   const [detailTab, setDetailTab] = useState("deliverables");
   const selected = search.get("deal");
+  function agreementSearch(id: string) {
+    const next = new URLSearchParams(search);
+    next.set("deal", id);
+    return `?${next}`;
+  }
   function setSelected(id: string | null) {
     setDetailTab("deliverables");
     setSearch(previous => { const next = new URLSearchParams(previous); if (id) next.set("deal", id); else next.delete("deal"); return next; });
@@ -125,12 +130,12 @@ export function WonDeals({ loadShared }: { loadShared?: () => Promise<SharedResu
     {deals && !deal && deals.length > 0 ? <Input aria-label="Search agreements" placeholder="Search companies, agreements or tiers…" value={query} onChange={event => setQuery(event.target.value)} className="max-w-sm" /> : null}
     {deals && !deal && deals.length > 0 ? <Card className="gap-0 py-0"><CardContent className="overflow-x-auto px-0">
       <Table aria-label="Partner agreements"><TableHeader><TableRow>
-        <TableHead className="min-w-44 pl-4">Company</TableHead><TableHead>Agreement</TableHead><TableHead>Season</TableHead><TableHead>Sponsor level</TableHead><TableHead>Deal value</TableHead><TableHead>In-kind value</TableHead><TableHead>Deliverables</TableHead><TableHead>Delivery status</TableHead><TableHead>Progress</TableHead><TableHead>Agreement status</TableHead><TableHead><span className="sr-only">Actions</span></TableHead>
+        <TableHead className="min-w-44 pl-4">Company</TableHead><TableHead>Agreement</TableHead><TableHead>Season</TableHead><TableHead>Sponsor level</TableHead><TableHead>Deal value</TableHead><TableHead>In-kind value</TableHead><TableHead>Deliverables</TableHead><TableHead>Delivery status</TableHead><TableHead>Progress</TableHead><TableHead><span className="sr-only">Actions</span></TableHead>
       </TableRow></TableHeader><TableBody>{visibleDeals?.map(item => {
         const seasonCodes = [...new Set(item.contributions.filter(c => !c.retiredAt).map(c => c.seasonCode).filter(Boolean))];
         const progress = deliverableProgress(item, tierDeliverables(item.opportunityKind === "grant" ? null : item.sponsorLevel, [...item.contributions.filter(c => !c.retiredAt).map(c => c.seasonCode), item.seasonCode ?? seasons.find(season => season.id === item.seasonId)?.code ?? ""]));
         return <TableRow key={item.id}>
-          <TableCell className="py-3 pl-4 font-medium">{item.organizationName}</TableCell><TableCell>{item.title}</TableCell><TableCell className="text-muted-foreground">{seasonCodes.join(", ") || "—"}</TableCell><TableCell className="text-muted-foreground">{item.sponsorLevel ? (sponsorLevelLabels[item.sponsorLevel] ?? item.sponsorLevel) : "—"}</TableCell><TableCell className="tabular-nums">{contributionTotal(item.contributions, true)}</TableCell><TableCell className="tabular-nums">{contributionTotal(item.contributions, false)}</TableCell><TableCell className="tabular-nums">{progress.done} / {progress.total}</TableCell><TableCell>{progress.status}</TableCell><TableCell>{progress.total ? <ProgressRing {...progress} label={`${item.organizationName} deliverables`} unit="deliverables" showTotal={false}/> : "—"}</TableCell><TableCell>{agreementStatus(item)}</TableCell><TableCell className="text-right"><Button type="button" variant="ghost" size="sm" aria-label={`View agreement for ${item.organizationName}: ${item.title}`} onClick={() => setSelected(item.id)}>View agreement</Button></TableCell>
+          <TableCell className="py-3 pl-4 font-medium">{item.organizationName}</TableCell><TableCell>{item.title}</TableCell><TableCell className="text-muted-foreground">{seasonCodes.join(", ") || "—"}</TableCell><TableCell className="text-muted-foreground">{item.sponsorLevel ? (sponsorLevelLabels[item.sponsorLevel] ?? item.sponsorLevel) : "—"}</TableCell><TableCell className="tabular-nums">{contributionTotal(item.contributions, true)}</TableCell><TableCell className="tabular-nums">{contributionTotal(item.contributions, false)}</TableCell><TableCell className="tabular-nums">{progress.done} / {progress.total}</TableCell><TableCell>{progress.status}</TableCell><TableCell>{progress.total ? <ProgressRing {...progress} label={`${item.organizationName} deliverables`} unit="deliverables" showTotal={false}/> : "—"}</TableCell><TableCell className="text-right"><Link to={{ search: agreementSearch(item.id) }} aria-label={`View agreement for ${item.organizationName}: ${item.title}`} onClick={() => setDetailTab("deliverables")} className="rounded-sm text-sm font-medium text-primary underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-ring">View agreement</Link></TableCell>
         </TableRow>;
       })}</TableBody></Table>
     </CardContent></Card> : null}

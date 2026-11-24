@@ -1,3 +1,4 @@
+import { readLocalRecruitment, writeLocalRecruitment, localRecruitmentFile } from "./local-fixture";
 import type { RecruitmentPosition } from "./positions";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "../MemberPlatform/local-mode";
@@ -14,7 +15,6 @@ export class RecruitmentRequestError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 export function createRecruitmentApi(owner: { current: string | null }) {
-  let localPositions: RecruitmentPosition[] = [];
   const local = () => isLocalMemberMode() && localMemberSignedIn();
   async function request<T>(query: string, body?: object): Promise<T> {
     // Read a fresh member JWT for every server-authorized operation.
@@ -28,13 +28,20 @@ export function createRecruitmentApi(owner: { current: string | null }) {
     if (!response.ok) throw new RecruitmentRequestError(result.error || "Could not complete the request. Please try again.", response.status);
     return result as T;
   }
+  async function removeLocal(id: string): Promise<{emailStatus: "skipped"; cleanupPending: boolean}> {
+    const state = readLocalRecruitment();
+    if (!state.applications.some(item => item.id === id)) throw new RecruitmentRequestError("Application not found.", 404);
+    state.applications = state.applications.filter(item => item.id !== id);
+    writeLocalRecruitment(state);
+    return {emailStatus: "skipped", cleanupPending: false};
+  }
   return {
     session: () => {
       if (isLocalMemberMode() && localMemberSignedIn()) return Promise.resolve({ email: localMemberAccount.email, name: localMemberAccount.name });
       return request<{ email: string; name: string }>("?action=session");
     },
     async list() {
-      if (isLocalMemberMode() && localMemberSignedIn()) return [];
+      if (local()) return structuredClone(readLocalRecruitment().applications);
       const applications: ApplicationRow[] = [];
       let offset: number | null = 0;
       while (offset !== null) {
@@ -45,27 +52,31 @@ export function createRecruitmentApi(owner: { current: string | null }) {
       return applications;
     },
     async positions() {
-      if (local()) return localPositions;
+      if (local()) return structuredClone(readLocalRecruitment().positions);
       return (await request<{ positions: RecruitmentPosition[] }>("?action=manage-positions")).positions;
     },
     async savePosition(position: Omit<RecruitmentPosition, "id"> & { id?: string }) {
       if (local()) {
         const saved = { ...position, id: position.id ?? crypto.randomUUID() };
-        localPositions = [...localPositions.filter(row => row.id !== saved.id), saved];
+        const state = readLocalRecruitment();
+        state.positions = [...state.positions.filter(row => row.id !== saved.id), saved];
+        writeLocalRecruitment(state);
         return saved;
       }
       return (await request<{ position: RecruitmentPosition }>("", { action: "save-position", position })).position;
     },
     async deletePosition(id: string) {
-      if (local()) { localPositions = localPositions.filter(row => row.id !== id); return; }
+      if (local()) { const state = readLocalRecruitment(); state.positions = state.positions.filter(row => row.id !== id); writeLocalRecruitment(state); return; }
       await request("", { action: "delete-position", position_id: id });
     },
     async setPositionVisibility(id: string, visible: boolean) {
       if (local()) {
-        const saved = localPositions.find(position => position.id === id);
+        const state = readLocalRecruitment();
+        const saved = state.positions.find(position => position.id === id);
         if (!saved) throw new RecruitmentRequestError("Position not found.", 404);
         const updated = { ...saved, visible };
-        localPositions = localPositions.map(position => position.id === id ? updated : position);
+        state.positions = state.positions.map(position => position.id === id ? updated : position);
+        writeLocalRecruitment(state);
         return updated;
       }
       return (await request<{ position: RecruitmentPosition }>("", { action: "set-position-visibility", id, visible })).position;
@@ -73,9 +84,9 @@ export function createRecruitmentApi(owner: { current: string | null }) {
     managedPositions: async () => (await request<{ positions: RecruitmentPosition[] }>("?action=managed-positions")).positions,
     createPosition: (position: WebsitePositionInput) => request<{ position: WebsitePosition }>("", { action: "create-position", position }),
     updatePosition: (position: WebsitePosition) => request<{ position: WebsitePosition }>("", { action: "update-position", id: position.id, position }),
-    file: (id: string, kind: "cv" | "photo") => request<{ url: string; expiresIn: number }>(`?action=file&id=${encodeURIComponent(id)}&kind=${kind}`),
-    reject: (id: string) => request<{ emailStatus: "sent" | "skipped"; cleanupPending: boolean }>("", { action: "reject", application_id: id }),
-    remove: (id: string) => request<{ emailStatus: "skipped"; cleanupPending: boolean }>("", { action: "delete", application_id: id }),
+    file: (id: string, kind: "cv" | "photo") => local() ? localRecruitmentFile(id, kind) : request<{ url: string; expiresIn: number }>(`?action=file&id=${encodeURIComponent(id)}&kind=${kind}`),
+    reject: (id: string) => local() ? removeLocal(id) : request<{ emailStatus: "sent" | "skipped"; cleanupPending: boolean }>("", { action: "reject", application_id: id }),
+    remove: (id: string) => local() ? removeLocal(id) : request<{ emailStatus: "skipped"; cleanupPending: boolean }>("", { action: "delete", application_id: id }),
   };
 }
 

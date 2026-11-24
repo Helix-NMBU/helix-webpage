@@ -1,3 +1,4 @@
+import { isLocalPlatformTester } from "./local-platform-profile";
 import { isProjectMemberPreview } from "./local-member-profile-selection";
 import { isLocalMemberMode, localMemberSignedIn } from "./local-mode";
 
@@ -20,7 +21,7 @@ export function localFinanceProfileSelection(): LocalFinanceProfile | null | und
     window.addEventListener("helix-member-local-session-changed", () => { selectedProfile = undefined; });
   }
   const value = new URLSearchParams(window.location.search).get("financeRole");
-  if (value === null) return selectedProfile;
+  if (value === null) return isLocalPlatformTester() ? "head_of_finance" : selectedProfile;
   if (value === "finance" || value === "head_of_finance") {
     selectedProfile = value;
     return value;

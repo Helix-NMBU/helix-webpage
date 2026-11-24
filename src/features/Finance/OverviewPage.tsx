@@ -51,7 +51,7 @@ export function OverviewBoard() {
           {` · ${budgetPlanLabel(overview)}`}
         </p>
         <Button asChild variant="outline" size="sm">
-          <Link to={financeRoutes.budgets}>Budgets & Financing</Link>
+          <Link to={financeRoutes.budgets}>Budgets</Link>
         </Button>
       </div>
       {overview.departments.map((department) => {

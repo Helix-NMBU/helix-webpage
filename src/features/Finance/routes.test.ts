@@ -9,7 +9,7 @@ describe("finance return paths", () => {
     expect(financeReturnPath("/finance/purchases?view=open#claims")).toBe("/departments/management/purchases?view=open#claims");
     expect(financeReturnPath("/teams/finance/private")).toBe("/finance");
     expect(financeReturnPath("/finance/budgets/mechanical-and-production?season=S27#entries")).toBe("/finance/budgets/mechanical-and-production?season=S27#entries");
-    expect(financeReturnPath("/finance/financing?season=S27#funding")).toBe("/finance/budgets?season=S27#funding");
+    expect(financeReturnPath("/finance/financing?season=S27#funding")).toBe("/finance?season=S27#funding");
     expect(financeReturnPath("/finance/funding?season=S27#funding")).toBe("/finance/funding?season=S27#funding");
   });
 

@@ -93,6 +93,10 @@ export function MemberAccess({ children }: { children?: ReactNode }) {
           try { const scenarios = await import("../Finance/local-season-scenario"); if (new URLSearchParams(window.location.search).get("financeScenario") === "forecast") await scenarios.prepareLocalPipelineForecastScenario(); else await scenarios.prepareLocalSeasonScenario(); }
           catch (error) { if (active) notify("Could not prepare test data", error instanceof Error ? error.message : "Try again.", { variant: "error", href: null, action: { label: "Try again", onClick: retryAccess } }); }
         }
+        if (import.meta.env.DEV && import.meta.env.MODE === "member-local" && isLocalMemberMode() && next.phase === "signed-in" && new URLSearchParams(window.location.search).get("testData") === "full") {
+          try { await (await import("./local-platform-scenario")).prepareLocalPlatformScenario(); }
+          catch (error) { if (active) notify("Could not prepare test data", error instanceof Error ? error.message : "Try again.", {variant: "error", href: null, action: {label: "Try again", onClick: retryAccess}}); }
+        }
         if (active) setLanding(next);
       })
       .catch(() => {
@@ -204,7 +208,7 @@ export default function MemberPlatform() {
                 <Route path="finance/purchases" element={<LegacyMemberRedirect to={financeRoutes.purchases} />} />
                 <Route path="finance/budgets/:budgetDepartmentSlug" element={<DepartmentBudgetPage />} />
                 <Route path="finance/budgets" element={<FinanceEntry page="budgets" />} />
-                <Route path="finance/financing" element={<LegacyMemberRedirect to={financeRoutes.budgets} />} />
+                <Route path="finance/financing" element={<LegacyMemberRedirect to={financeRoutes.overview} />} />
                 <Route path="finance/funding" element={<FinanceEntry page="financing" />} />
                 <Route path="teams/finance" element={<LegacyMemberRedirect to="/finance" />} />
                 <Route path="teams/finance/budget" element={<LegacyMemberRedirect to="/finance/budgets" />} />

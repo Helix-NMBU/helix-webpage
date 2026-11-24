@@ -34,6 +34,7 @@ beforeAll(async()=>{
  await pg.exec(`alter table partner_deals.deals add column cancelled_at timestamptz; alter table partner_deals.contributions add column retired_at timestamptz; alter table partner_deals.contributions add column pending_change_id uuid; alter table partner_deals.deliverables add column retired_at timestamptz; alter table partner_deals.deliverables add column pending_change_id uuid; create table finance.funding(id uuid,status text,revision integer,received_date date); create table partner_deals.funding_links(contribution_id uuid,funding_id uuid); create table partner_deals.manual_reconciliation_items(change_id uuid,kind text,item_id uuid); create table partner_deals.agreement_changes(id uuid,deal_id uuid,kind text,reason text,before_terms jsonb,proposed_terms jsonb,status text,created_at timestamptz,resolved_at timestamptz,withdrawn_at timestamptz,resolution_note text); create table partner_deals.manual_funding_reviews(id uuid,contribution_id uuid,note text,reviewed_at timestamptz); create function partner_deals.manual_finance_review_ready(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_needs_review(uuid) returns boolean language sql as $$ select false $$; create function partner_deals.manual_funding_review_token(uuid) returns text language sql as $$ select null::text $$; create function partner_deals.linked_funding_mismatch(uuid) returns boolean language sql as $$ select false $$; create table partner_deals.separate_funding_approvals(contribution_id uuid,candidate_snapshot jsonb); create function partner_deals.funding_candidate_snapshot(uuid) returns jsonb language sql as $$ select '[]'::jsonb $$; create table partner_deals.finance_reviews(contribution_id uuid,organization_name text,season_id uuid,amount_ore bigint,status text); create table partner_deals.task_links(id uuid primary key default gen_random_uuid(),deal_id uuid,task_id uuid,kind text,deliverable_id uuid,season_id uuid,contribution_id uuid);`);
  await pg.exec(readFileSync(new URL("../../../db/migrations/059_imported_partner_deals.sql",import.meta.url),"utf8"));
  await pg.exec(readFileSync(new URL("../../../db/migrations/075_partner_grants.sql",import.meta.url),"utf8").split("-- END CLASSIFICATION SAVE")[0]+"\ncommit;");
+ await pg.exec(readFileSync(new URL("../../../db/migrations/081_partner_contribution_notes.sql",import.meta.url),"utf8"));
  await pg.exec(`insert into partner_deals.member_grants values ('${business}','business',true),('${marketing}','marketing',true);`);
  const db: CvDatabase={query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  services=createDealServices({db,authenticate:async token=>{const actor=identities.get(token);if(!actor)throw new MemberCvError(401,"Log in");return actor;}});
@@ -128,6 +129,24 @@ it("persists grant classification and preserves it when older clients omit the f
  await expect(services.save(marketing,grant)).rejects.toMatchObject({status:403});
 });
 
+ it("stores contribution notes independently, preserves them for older clients and keeps them private",async()=>{
+  const draft={...input(),title:"Notes persistence",partnerNotes:"- Workshop access\n- Components"};
+  const {id}=await services.save(business,draft);
+  expect((await services.load(business,"pipeline")).deals.find(value=>(value as {id:string}).id===id)).toMatchObject({partnerNotes:draft.partnerNotes});
+  const financial=async()=> (await pg.query("select season_id,kind,amount_ore::text,invoice_date::text,description from partner_deals.contributions where deal_id=$1 order by kind",[id])).rows;
+  const before=await financial();
+  await services.save(business,{...draft,id,expectedRevision:0,partnerNotes:"- Updated commitments"});
+  expect(await financial()).toEqual(before);
+  await services.save(business,{...input(),id,expectedRevision:1});
+  expect((await pg.query<{partner_notes:string}>("select partner_notes from partner_deals.deals where id=$1",[id])).rows[0].partner_notes).toBe("- Updated commitments");
+  await expect(services.save(business,{...draft,id,expectedRevision:0})).rejects.toMatchObject({status:409});
+  await expect(services.save(marketing,draft)).rejects.toMatchObject({status:403});
+  for(const partnerNotes of [null,42,"x".repeat(8001)])await expect(services.save(business,{...draft,partnerNotes})).rejects.toMatchObject({status:400});
+  await pg.query("update partner_deals.deals set stage='won',won_at=now(),won_by_member_id=$2 where id=$1",[id,business]);
+  const shared=(await services.load(marketing,"shared")).deals.find(value=>(value as {id:string}).id===id);
+  expect(shared).not.toHaveProperty("partnerNotes");
+  expect(JSON.stringify(shared)).not.toContain("Updated commitments");
+ });
  it("rechecks account and grant revocation",async()=>{
   await pg.query("update partner_deals.member_grants set active=false where member_id=$1",[marketing]);
   await expect(services.load(marketing,"shared")).rejects.toMatchObject({status:403});
