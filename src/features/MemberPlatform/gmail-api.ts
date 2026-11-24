@@ -9,6 +9,9 @@ let localConnected = true;
 
 export async function memberGmailRequest(path: string, owner: { current: string | null }, init: RequestInit = {}): Promise<Response> {
   if (isLocalMemberMode() && localMemberSignedIn()) {
+    const seeded = localStorage.getItem("helix-platform-testing-mail-v1");
+    const messages: (typeof localMessages[number] & {folder?: string})[] = seeded?.startsWith("[") ? JSON.parse(seeded) : localMessages;
+    const persist = () => { if (seeded?.startsWith("[")) localStorage.setItem("helix-platform-testing-mail-v1", JSON.stringify(messages)); };
     const url = new URL(path, window.location.origin);
     const action = url.searchParams.get("action") ?? path.split("/api/gmail-")[1];
     if (action === "status") return Response.json({ connected: localConnected, email: localMemberAccount.email });
@@ -16,14 +19,23 @@ export async function memberGmailRequest(path: string, owner: { current: string 
     if (action === "messages") {
       const folder = url.searchParams.get("folder");
       const search = (url.searchParams.get("q") ?? "").toLowerCase();
-      return Response.json({ messages: folder === "inbox" ? localMessages.filter((m) => (!url.searchParams.has("unreadOnly") || m.unread) && `${m.subject} ${m.from} ${m.body}`.toLowerCase().includes(search)) : [], nextPageToken: null });
+      return Response.json({ messages: messages.filter((m) => (folder === "starred" ? m.starred : (m.folder ?? "inbox") === folder) && (!url.searchParams.has("unreadOnly") || m.unread) && `${m.subject} ${m.from} ${m.body}`.toLowerCase().includes(search)), nextPageToken: null });
     }
-    if (action === "message") return Response.json(localMessages.find((m) => m.id === url.searchParams.get("id")) ?? {}, { status: localMessages.some((m) => m.id === url.searchParams.get("id")) ? 200 : 404 });
+    if (action === "message") return Response.json(messages.find((m) => m.id === url.searchParams.get("id")) ?? {}, { status: messages.some((m) => m.id === url.searchParams.get("id")) ? 200 : 404 });
     if (action === "messageAction") {
-      const body = JSON.parse(String(init.body)) as { action: string; id: string };
-      const message = localMessages.find((m) => m.id === body.id);
-      if (message && (body.action === "markRead" || body.action === "markUnread")) message.unread = body.action === "markUnread";
-      else if (message) localMessages.splice(localMessages.indexOf(message), 1);
+      const body = JSON.parse(String(init.body)) as { action: string; id: string; to?: string; subject?: string; body?: string };
+      if (body.action === "send") {
+        const id = crypto.randomUUID();
+        messages.unshift({id,threadId:id,from:`${localMemberAccount.name} <${localMemberAccount.email}>`,replyTo:localMemberAccount.email,subject:body.subject ?? "",date:new Date().toISOString(),snippet:(body.body ?? "").slice(0,120),body:body.body ?? "",htmlBody:"",unread:false,starred:false,folder:"sent"});
+        persist();
+        return Response.json({id});
+      }
+      const message = messages.find((m) => m.id === body.id);
+      if (!message) return Response.json({error: "Message not found."}, {status: 404});
+      if (body.action === "markRead" || body.action === "markUnread") message.unread = body.action === "markUnread";
+      else if (["archive", "trash", "junk"].includes(body.action)) message.folder = body.action === "junk" ? "spam" : body.action;
+      else return Response.json({error: "This action is unavailable."}, {status:400});
+      persist();
       return Response.json({ id: body.id, action: body.action });
     }
     return Response.json({ error: "This action is unavailable." }, { status: 400 });

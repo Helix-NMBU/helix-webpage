@@ -185,7 +185,7 @@ it("places the finance slot between Progress and Projects", async () => {
   expect(children.map(element => element.id || element.getAttribute("aria-labelledby"))).toEqual(["progress-title", "finance-slot", "overview-projects-title"]);
 });
 
-function flowCard() { return container.querySelector<HTMLElement>('[role="group"][aria-label="Money in and out"]')!; }
+function flowCard() { return container.querySelector<HTMLElement>('[role="group"][aria-label="Income and Spend"]')!; }
 
 it("shows agreed sponsor cash separately from actual receipts", async () => {
   await render(async () => ({ ...summary, moneyFlow: { status: "available", months: [{ month: "2026-09", moneyInNok: "120.00", moneyOutNok: "20.00" }], otherInNok: "0.00", otherOutNok: "0.00", agreedSponsorCashNok: "111737.00", moneyInNok: "68737.33", moneyOutNok: "40350.31" } }));
@@ -209,9 +209,9 @@ it("suppresses mismatched seasons and reports unavailable flows with retry", asy
   expect(flowCard().textContent).toContain("Finance is set to S27, not S28");
   expect(flowCard().textContent).not.toContain("NOK 12 345,00");
   await render(async () => ({ ...summary, moneyFlow: { status: "unavailable" } }));
-  expect(flowCard().textContent).toContain("Money in and out unavailable");
+  expect(flowCard().textContent).toContain("Income and Spend unavailable");
   expect(flowCard().textContent).not.toContain("NOK 0,00");
-  expect(container.textContent).toContain("Could not load money in and out Try again");
+  expect(container.textContent).toContain("Could not load income and spend Try again");
 });
 
 it("marks retained money flow and previously absent finance season as stale", async () => {

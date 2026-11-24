@@ -1,3 +1,4 @@
+import { isLocalPlatformTester } from "./local-platform-profile";
 import { isProjectMemberPreview } from "./local-member-profile-selection";
 import { localFinanceProfileSelection } from "./local-finance-profile";
 import { memberSessionToken } from "../MemberCV/session";
@@ -58,10 +59,15 @@ async function localAccessDirectory(): Promise<AccessDirectory> {
       roleKeys: previous?.members.find(item => item.id === member.id)?.roleKeys ?? (member.id === workspace.viewerId ? ["team_member", "platform_administrator"] : ["team_member"]),
     })),
   };
-  return structuredClone(localDirectory);
+  return structuredClone({ ...localDirectory, members: localDirectory.members.map(member =>
+    isLocalPlatformTester() && member.id === workspace.viewerId
+      ? {...member, spaceKeys: WORKSPACE_SPACES.map(space => space.key), roleKeys: roleOptions.map(role => role.key)}
+      : member),
+  });
 }
 
 export function localMemberHasSeasonOverview(): boolean {
+  if (isLocalPlatformTester()) return true;
   if (!localDirectory) return true; // Matches the default local workspace access.
   return localDirectory.members.some(member => member.email === localMemberAccount.email && member.spaceKeys.includes("season-overview"));
 }
@@ -78,6 +84,7 @@ export function localMemberHasFinancials(): boolean {
 export function localMemberHasPartnerSpace(space: "pipeline" | "partner-agreements"): boolean {
   if (isProjectMemberPreview(isLocalMemberMode())) return false;
   if (!isLocalMemberMode() || !localMemberSignedIn()) return false;
+  if (isLocalPlatformTester()) return true;
   const id = "00000000-0000-4000-8000-000000000001";
   const selected = savedLocalSpaces()[id];
   return selected ? selected.includes(space) : true;

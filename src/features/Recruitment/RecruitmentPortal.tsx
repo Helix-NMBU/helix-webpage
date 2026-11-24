@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { IconBriefcase, IconRefresh } from "@tabler/icons-react";
+import { IconBriefcase } from "@tabler/icons-react";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { useRecruitmentAccess } from "../MemberPlatform/RecruitmentAccess";
 import { Button } from "../../libs/components/ui/button";
@@ -43,6 +43,7 @@ export default function RecruitmentPortal() {
     active.current = true;
     return () => { active.current = false; generation.current += 1; };
   }, []);
+  useEffect(() => { void load(); }, [load]);
   const seasons = [...new Set([currentSeason(), ...applications.map(a => a.season)])].sort().reverse();
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -80,10 +81,9 @@ export default function RecruitmentPortal() {
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="text-3xl font-medium">Recruiting</h1></div>
-          <Button variant="outline" size="icon" aria-label="Refresh applications" title="Refresh applications" disabled={loading || busy} onClick={() => void load()}><IconRefresh aria-hidden="true" /></Button>
         </header>
         <Tabs defaultValue="applications">
-          <TabsList aria-label="Recruiting views"><TabsTrigger value="applications">Applications</TabsTrigger><TabsTrigger value="positions">Positions</TabsTrigger></TabsList>
+          <TabsList aria-label="Recruiting views" className="gap-2 rounded-none bg-transparent p-0"><TabsTrigger value="applications" className="h-8 flex-none rounded-full border-border bg-background px-4 text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground dark:data-[state=active]:bg-muted">Applications</TabsTrigger><TabsTrigger value="positions" className="h-8 flex-none rounded-full border-border bg-background px-4 text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground dark:data-[state=active]:bg-muted">Open positions</TabsTrigger></TabsList>
           <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} onVisibilityChange={setPositionVisibility} /></TabsContent>
           <TabsContent value="applications" className="space-y-6">
         {loading && <RecruitmentListSkeleton />}

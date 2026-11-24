@@ -326,7 +326,7 @@ describe("internal member platform", () => {
     expect(container.textContent).not.toContain("Recruiter sign in");
   });
 
-  it("retains preloaded recruiting data while refreshing member access on focus", async () => {
+  it("refreshes recruiting on page entry while checking member access on focus", async () => {
     session.landing.mockResolvedValue(signedIn);
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     recruitment.list.mockResolvedValue([{ id: "app", created_at: "2026-10-26", season: "S27", full_name: "Applicant One", email: "one@example.test", position_title: "Engineer", study_program: "Robotics" }]);
@@ -343,12 +343,13 @@ describe("internal member platform", () => {
     expect(container.textContent).toContain("Applicant One");
     expect(selfRequests()).toHaveLength(2);
     expect(recruitment.session).toHaveBeenCalledOnce();
-    expect(recruitment.list).toHaveBeenCalledOnce();
-    expect(recruitment.positions).toHaveBeenCalledOnce();
+    expect(recruitment.list).toHaveBeenCalledTimes(3);
+    expect(recruitment.positions).toHaveBeenCalledTimes(3);
     recruitment.list.mockResolvedValue([]);
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]')?.click());
+    await act(async () => router.navigate("/profile"));
+    await act(async () => router.navigate("/recruiting"));
     expect(container.textContent).not.toContain("Applicant One");
-    expect(recruitment.list).toHaveBeenCalledTimes(2);
+    expect(recruitment.list).toHaveBeenCalledTimes(4);
     expect(recruitment.session).toHaveBeenCalledOnce();
   });
 
@@ -357,7 +358,8 @@ describe("internal member platform", () => {
     recruitment.session.mockResolvedValue({ email: signedIn.account.email });
     await open("/recruiting");
     recruitment.list.mockRejectedValue(new RecruitmentRequestError("Revoked", 403));
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]')?.click());
+    await act(async () => router.navigate("/profile"));
+    await act(async () => router.navigate("/recruiting"));
     expect(router.state.location.pathname).toBe("/");
     expect(container.querySelector('[aria-label="Recruiting"]')).toBeNull();
     expect(container.textContent).not.toContain("Applications");
@@ -380,8 +382,8 @@ describe("internal member platform", () => {
     expect(container.querySelector('a[href="/finance/financing"]')).toBeNull();
     expect(container.textContent).not.toContain("Expenses");
     await act(async () => router.navigate("/finance/financing"));
-    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/finance/budgets"));
-    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Budgets & Financing"));
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/finance"));
+    await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Income & Spend"));
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("action=financing"))).toBe(false);
     expect(container.textContent).not.toContain("Hidden Supplier");
     await act(async () => router.navigate("/finance/funding"));
@@ -412,16 +414,16 @@ describe("internal member platform", () => {
     expect(container.querySelector('[data-slot="member-page-content"]')).toBe(scrollArea);
     expect(scrollArea.scrollTop).toBe(0);
     const breadcrumb = container.querySelector('[aria-label="breadcrumb"]')!;
-    expect(breadcrumb.textContent).toContain("Budgets & Financing");
+    expect(breadcrumb.textContent).toContain("Budgets");
     expect(breadcrumb.textContent).toContain("Mechanical & Production");
-    const parent = [...breadcrumb.querySelectorAll("button")].find(button => button.textContent === "Budgets & Financing")!;
+    const parent = [...breadcrumb.querySelectorAll("button")].find(button => button.textContent === "Budgets")!;
     scrollArea.scrollTop = 300;
     await act(async () => parent.click());
     expect(scrollArea.isConnected).toBe(true);
     expect(container.querySelector('[data-slot="member-page-content"]')).toBe(scrollArea);
     expect(scrollArea.scrollTop).toBe(0);
     expect(router.state.location.pathname).toBe("/finance/budgets");
-    expect(container.querySelector("h1")?.textContent).toBe("Budgets & Financing");
+    expect(container.querySelector("h1")?.textContent).toBe("Budgets");
     expect(vi.mocked(fetch).mock.calls.some(([url]) => /action=(departmentBudgetPackages|projectBudgets)/.test(String(url)))).toBe(false);
   });
 

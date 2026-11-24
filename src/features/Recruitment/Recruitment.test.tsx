@@ -26,7 +26,7 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 async function open(path: string) {
   router = createMemoryRouter([
-    { path: "/login", element: <p>Member sign in</p> }, { element: <RecruitmentAccessProvider userId="member"><Outlet /></RecruitmentAccessProvider>, children: [{ path: "/recruiting", element: <RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess> }] },
+    { path: "/login", element: <p>Member sign in</p> }, { element: <RecruitmentAccessProvider userId="member"><Outlet /></RecruitmentAccessProvider>, children: [{ path: "/recruiting", element: <RecruitmentAccess><RecruitmentPortal /></RecruitmentAccess> }, {path: "/elsewhere", element: <p>Another page</p>}] },
     { path: "/", element: <p>Home</p> },
   ], { initialEntries: [path] });
   await act(async () => root.render(<RouterProvider router={router} />));
@@ -48,13 +48,31 @@ describe("recruitment Neon UI", () => {
     expect(container.textContent).not.toContain("Test Applicant");
     expect(router.state.location.pathname).toBe("/login");
   });
+  it("loads fresh applications and positions whenever the recruiting page opens", async () => {
+    let name = "First Applicant";
+    fetchMock.mockImplementation(async (url: string) => url.includes("action=session") ? Response.json({email: "member@helixnmbu.no"}) : url.includes("manage-positions") ? Response.json({positions: []}) : Response.json({applications: [{id: "test",created_at: "2026-10-26",season: "S27",full_name: name,email: "test@example.test",position_title: "Engineer",study_program: "Robotics"}],nextOffset: null}));
+    await open("/recruiting");
+    expect(container.textContent).toContain("First Applicant");
+    expect(container.querySelector('[aria-label="Refresh applications"]')).toBeNull();
+    const before = fetchMock.mock.calls.filter(call=>call[0].includes("manage-positions")).length;
+    await act(async()=>router.navigate("/elsewhere"));
+    name = "New Applicant";
+    await act(async()=>router.navigate("/recruiting"));
+    expect(container.textContent).toContain("New Applicant");
+    expect(container.textContent).not.toContain("First Applicant");
+    expect(fetchMock.mock.calls.filter(call=>call[0].includes("manage-positions"))).toHaveLength(before+1);
+  });
   it("reports transient errors through notifications and keeps a retry control", async () => {
     fetchMock.mockImplementation(async (url: string) => url.includes("action=session") ? Response.json({ email: "member@helixnmbu.no" }) : Response.json({ error: "Temporarily unavailable" }, { status: 503 }));
     await open("/recruiting");
     expect(router.state.location.pathname).toBe("/recruiting");
     expect(mocks.error).toHaveBeenCalled();
     expect(container.textContent).not.toContain("Temporarily unavailable");
-    const refresh = container.querySelector<HTMLButtonElement>('[aria-label="Refresh applications"]');
-    expect(refresh?.disabled).toBe(false);
+    expect(container.querySelector('[aria-label="Refresh applications"]')).toBeNull();
+    const recovery = mocks.error.mock.calls.find(call => call[2]?.action)?.[2].action;
+    expect(recovery?.label).toBe("Try again");
+    fetchMock.mockImplementation(async (url: string) => url.includes("manage-positions") ? Response.json({positions: []}) : Response.json({applications: [], nextOffset: null}));
+    await act(async()=>recovery.onClick());
+    expect(container.textContent).toContain("No applications found.");
   });
 });

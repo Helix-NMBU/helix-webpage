@@ -1,3 +1,4 @@
+import { isLocalPlatformTester } from "./local-platform-profile";
 import { isProjectMemberPreview } from "./local-member-profile-selection";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
@@ -56,6 +57,12 @@ async function readMemberAccess(userId: string | null): Promise<MemberFeatureSta
         roles: [{ key: "team_member" as const, label: "Team Member" }],
         features: ["team.mechanical-production"],
       } : {}),
+      ...(isLocalPlatformTester() ? { roles: [
+        ...LOCAL_MEMBER.roles,
+        {key: "project_manager" as const, label: "Project Manager"},
+        {key: "department_lead" as const, label: "Department Lead"},
+        {key: "financials" as const, label: "Head of Finance"},
+      ] } : {}),
       sponsorPages: {
         pipeline: localMemberHasPartnerSpace("pipeline"),
         agreements: localMemberHasPartnerSpace("partner-agreements"),
