@@ -1,3 +1,4 @@
+import { isLocalPlatformTester } from "../MemberPlatform/local-platform-profile";
 import { publishFinanceUpdate } from "./finance-events";
 import {
   isLocalMemberMode,
@@ -65,6 +66,7 @@ export function localFundingRole(): Role {
     localStorage.setItem("helix-funding-applications-local-role-v1", value);
     return value;
   }
+  if (isLocalPlatformTester()) return "head_of_finance";
   const saved = localStorage.getItem(
     "helix-funding-applications-local-role-v1",
   );
@@ -357,7 +359,7 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
     },
     async card(dealId) {
       if (
-        localFundingRole() !== "marketing" ||
+        (localFundingRole() !== "marketing" && !isLocalPlatformTester()) ||
         !localMemberHasPartnerSpace("pipeline")
       )
         fail("Pipeline access is required.");
@@ -678,4 +680,202 @@ export function createLocalFundingApplicationRepository(): FundingApplicationRep
       return result;
     },
   };
+}
+
+function requirePipelineBudgetLinks() {
+  enabled();
+  if (
+    (localFundingRole() !== "marketing" && !isLocalPlatformTester()) ||
+    !localMemberHasPartnerSpace("pipeline")
+  )
+    fail("Pipeline access is required.");
+}
+export function localDealBudgetLinks(
+  dealId: string,
+): import("../PartnerDeals/deal-budget-links-types").DealBudgetLinks {
+  requirePipelineBudgetLinks();
+  const deal = readLocalPartnerState().deals.find((item) => item.id === dealId);
+  if (!deal) fail("This deal is unavailable.", 404);
+  const app = read().applications.find((item) => item.dealId === dealId);
+  const season =
+    localSeasons.find((item) => item.id === (app?.seasonId ?? deal.seasonId)) ??
+    localSeasons.find((item) => item.status === "active");
+  const entries = budgets()
+    .budgets.filter((item) => item.seasonCode === season?.code)
+    .flatMap((budget) =>
+      eligibleFundingEntries(budget).map((entry) => ({
+        entryId: entry.entryId,
+        projectBudgetId: budget.id,
+        budgetRevision: budget.revision,
+        projectName: budget.projectName,
+        departmentName: workspace().departments.find((_,index)=>entry.systemId === `90000000-0000-4000-8000-${String(index+1).padStart(12,"0")}`)?.name ?? budget.responsibleDepartmentName,
+        description: entry.description,
+        plannedNok: entry.plannedNok,
+        ordinaryPriority: entry.ordinaryPriority,
+        priority: mandatory(entry.entryId) ? "P0" : entry.ordinaryPriority,
+        approved: !!budget.approvedVersion?.entries.some(
+          (item) => item.entryId === entry.entryId && !item.removed,
+        ),
+        selected: !!app?.links.some(
+          (item) => item.entryId === entry.entryId && !item.release,
+        ),
+      })),
+    );
+  for (const link of app?.links.filter((item) => !item.release) ?? [])
+    if (!entries.some((item) => item.entryId === link.entryId))
+      entries.push({
+        entryId: link.entryId,
+        projectBudgetId: link.projectBudgetId,
+        budgetRevision:
+          budgets().budgets.find((item) => item.id === link.projectBudgetId)
+            ?.revision ?? 0,
+        projectName: link.projectName,
+        departmentName: budgets().budgets.find(item=>item.id===link.projectBudgetId)?.responsibleDepartmentName ?? "Other departments",
+        description: link.description,
+        plannedNok: link.approvedNok,
+        ordinaryPriority: link.ordinaryPriority ?? "P4",
+        priority: link.mandatory ? "P0" : (link.ordinaryPriority ?? "P4"),
+        approved: false,
+        selected: true,
+        ...{ unavailable: true },
+      });
+  return {
+    dealId,
+    dealRevision: deal.revision,
+    applicationRevision: app?.revision ?? 0,
+    seasonCode: season?.code ?? null,
+    locked: deal.stage === "won" || !!app?.award || season?.status === "closed",
+    entries,
+  };
+}
+export function saveLocalDealBudgetLinks(
+  input: import("../PartnerDeals/deal-budget-links-types").SaveDealBudgetLinks,
+) {
+  requirePipelineBudgetLinks();
+  const state = read(),
+    fingerprint = JSON.stringify(input),
+    key = `pipeline:${input.requestId}`,
+    prior = state.requests[key];
+  if (prior) {
+    if (prior.fingerprint !== fingerprint)
+      fail("Use a new request for this selection.", 409);
+    return;
+  }
+  const current = localDealBudgetLinks(input.dealId),
+    pipeline = readLocalPartnerState(),
+    deal = pipeline.deals.find((item) => item.id === input.dealId)!;
+  if (current.locked)
+    fail("Review the agreement before changing these purchases.", 409);
+  if (
+    current.dealRevision !== input.dealExpectedRevision ||
+    current.applicationRevision !== input.applicationExpectedRevision
+  )
+    fail("The deal or purchase selection changed. Refresh before saving.", 409);
+  if (
+    new Set(input.entries.map((item) => item.entryId)).size !==
+    input.entries.length
+  )
+    fail("Choose each purchase once.", 400);
+  const selected = input.entries.map((item) => {
+    const entry = current.entries.find(
+      (choice) => choice.entryId === item.entryId,
+    );
+    if (
+      !entry ||
+      entry.budgetRevision !== item.budgetRevision ||
+      (entry as { unavailable?: boolean }).unavailable
+    )
+      fail("The budget changed. Refresh before saving.", 409);
+    return entry;
+  });
+  let app = state.applications.find((item) => item.dealId === deal.id);
+  if (!app && selected.length) {
+    const season = localSeasons.find(
+      (item) => item.code === current.seasonCode,
+    )!;
+    app = {
+      id: crypto.randomUUID(),
+      dealId: deal.id,
+      title: deal.title,
+      seasonId: season.id,
+      seasonCode: season.code,
+      purchaseConditions: "",
+      fundingId: null,
+      revision: 0,
+      award: null,
+      links: [],
+      proposals: [],
+    };
+    state.applications.push(app);
+  }
+  if (app) {
+    const now = new Date().toISOString(),
+      actor = workspace().viewerId;
+    for (const link of app.links)
+      if (
+        !link.release &&
+        !selected.some((entry) => entry.entryId === link.entryId)
+      )
+        link.release = {
+          actorMemberId: actor,
+          recordedAt: now,
+          reason: "Unlinked in pipeline before confirmation",
+        };
+    for (const entry of selected)
+      if (
+        !app.links.some(
+          (link) => link.entryId === entry.entryId && !link.release,
+        )
+      )
+        app.links.push({
+          id: crypto.randomUUID(),
+          entryId: entry.entryId,
+          projectBudgetId: entry.projectBudgetId,
+          projectName: entry.projectName,
+          description: entry.description,
+          approvedNok: entry.plannedNok,
+          ordinaryPriority: entry.ordinaryPriority as "P1" | "P2" | "P3" | "P4",
+          mandatory: false,
+          createdByMemberId: actor,
+          createdAt: now,
+          release: null,
+        });
+    app.revision++;
+    deal.revision++;
+    writeLocalPartnerState(pipeline);
+  }
+  state.version++;
+  state.requests[key] = {
+    fingerprint,
+    result: {
+      ok: true,
+      id: app?.id ?? deal.id,
+      revision: app?.revision ?? 0,
+      viewVersion: state.version,
+    },
+  };
+  localStorage.setItem(KEY, JSON.stringify(state));
+  synchronize(state);
+  publishFinanceUpdate();
+}
+export function activateLocalDealBudgetLinks(
+  deal: import("../PartnerDeals/types").Deal,
+) {
+  enabled();
+  const state = read(),
+    app = state.applications.find((item) => item.dealId === deal.id);
+  if (!app || app.award || !app.links.some((item) => !item.release)) return;
+  const now = new Date().toISOString();
+  app.award = {
+    actorMemberId: workspace().viewerId,
+    recordedAt: now,
+    date: now.slice(0, 10),
+    reference: `${deal.opportunityKind === "grant" ? "Grant approved" : "Deal confirmed won"}: ${deal.title}`,
+  };
+  app.revision++;
+  for (const link of app.links) link.mandatory = !link.release;
+  state.version++;
+  localStorage.setItem(KEY, JSON.stringify(state));
+  synchronize(state);
+  publishFinanceUpdate();
 }

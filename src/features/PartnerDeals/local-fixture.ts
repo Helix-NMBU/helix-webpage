@@ -86,7 +86,7 @@ export function localWonDeals() {
  const state=readLocalPartnerState();
  const saved=localStorage.getItem(PROJECT_KEY);const workspace=saved?JSON.parse(saved) as {tasks:Task[]}:null;
  return {deals:state.deals.filter(deal=>deal.stage==='won').map(deal=>({
-  ...deal, seasonCode:localSeasons.find(season=>season.id===deal.seasonId)?.code??null, negotiationNotes:undefined,
+  ...deal, seasonCode:localSeasons.find(season=>season.id===deal.seasonId)?.code??null, negotiationNotes:undefined, partnerNotes:undefined,
   contributions:deal.contributions.map(c=>{const season=localSeasons.find(s=>s.id===c.seasonId);return {...c,id:c.id!,seasonCode:season?.code??'',seasonName:season?.name??''};}),
   deliverables:deal.deliverables.map(d=>({...d,id:d.id!})),
   tasks:state.taskLinks.filter(link=>link.dealId===deal.id).map(link=>{const task=workspace?.tasks.find(t=>t.id===link.taskId)??state.tasks.find(t=>t.id===link.taskId)!;return {id:task.id,title:task.title,status:task.status,kind:link.kind,deliverableId:link.deliverableId,seasonId:link.seasonId,contributionId:link.contributionId??(link.kind==='invoice'?deal.contributions.find(c=>c.kind==='cash'&&c.seasonId===link.seasonId)?.id??null:null),canOpen:true};}),

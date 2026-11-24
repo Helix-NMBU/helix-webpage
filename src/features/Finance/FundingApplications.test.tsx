@@ -5,7 +5,9 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FundingApplications } from "./FundingApplications";
 import { FundingBudgetProposals } from "./FundingBudgetProposals";
-import { FundingApplicationCard } from "../PartnerDeals/FundingApplicationCard";
+import { pipelineRepository } from "../PartnerDeals/repository";
+import { dealBudgetLinksRepository } from "../PartnerDeals/deal-budget-links-repository";
+import { LinkedPurchases } from "../PartnerDeals/LinkedPurchases";
 import {
   fundingFixture,
   fundingRole,
@@ -91,36 +93,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("limited funding application controls", () => {
-  it("classifies a pipeline card without changing its ordinary Won/cash workflow", async () => {
-    fundingRole("marketing");
-    const deal = readLocalPartnerState().deals.find(
-      (item) => item.id !== fixture.deal.id,
-    )!;
-    const changed = vi.fn(async () => undefined);
-    await act(async () =>
-      root.render(
-        <FundingApplicationCard
-          deal={deal}
-          seasons={localSeasons}
-          onChanged={changed}
-          repository={fixture.repository}
-        />,
-      ),
-    );
-    await click("Funding application");
-    await field(
-      "application-conditions",
-      "Purchase equipment under the award.",
-    );
-    await click("Save application");
-    expect(changed).toHaveBeenCalledOnce();
-    expect(
-      (await fixture.repository.card(deal.id)).application?.purchaseConditions,
-    ).toBe("Purchase equipment under the award.");
-    expect(
-      readLocalPartnerState().deals.find((item) => item.id === deal.id)?.stage,
-    ).toBe("proposal");
-    expect(readLocalPartnerState().tasks).toHaveLength(0);
+  it("selects budgeted purchases without changing the deal stage or creating tasks",async()=>{
+    fundingRole("marketing");const deal=readLocalPartnerState().deals.find(item=>item.id!==fixture.deal.id)!;const repository=dealBudgetLinksRepository();const changed=vi.fn(async()=>undefined);
+    await act(async()=>root.render(<LinkedPurchases deal={deal} seasons={localSeasons} onChanged={changed} repository={repository}/>));
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Manage linked budget entries"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item=>item.textContent?.includes("Frame tubes"))!.click());
+    await click("Apply");expect(changed).toHaveBeenCalledOnce();expect((await repository.load(deal.id)).entries.find(item=>item.description==="Frame tubes")?.selected).toBe(true);
+    expect(readLocalPartnerState().deals.find(item=>item.id===deal.id)?.stage).toBe("proposal");expect(readLocalPartnerState().tasks).toHaveLength(0);
+  });
+  it("makes linked purchases P0 in local testing when the card is confirmed Won",async()=>{
+    fundingRole("marketing");const deal=readLocalPartnerState().deals.find(item=>item.id!==fixture.deal.id)!;const repository=dealBudgetLinksRepository();const context=await repository.load(deal.id);const entry=context.entries.find(item=>item.description==="Frame tubes")!;
+    await repository.save({action:"saveDealBudgetLinks",requestId:crypto.randomUUID(),dealId:deal.id,dealExpectedRevision:context.dealRevision,applicationExpectedRevision:context.applicationRevision,entries:[{entryId:entry.entryId,budgetRevision:entry.budgetRevision}]});
+    const linked=await repository.load(deal.id);expect(linked.entries.find(item=>item.entryId===entry.entryId)?.priority).toBe("P2");
+    await pipelineRepository().confirmWon(deal.id,linked.dealRevision);
+    expect((await repository.load(deal.id)).entries.find(item=>item.entryId===entry.entryId)).toMatchObject({priority:"P0",ordinaryPriority:"P2",selected:true});
   });
   it("links, explicitly awards and releases an obligation with the required reason", async () => {
     await page();
@@ -295,47 +281,13 @@ describe("limited funding application controls", () => {
     );
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
-  it("retains classification input while a stale card is explicitly refreshed", async () => {
-    fundingRole("marketing");
-    const deal = readLocalPartnerState().deals.find(
-      (item) => item.id !== fixture.deal.id,
-    )!;
-    const mutate = vi
-      .spyOn(fixture.repository, "mutate")
-      .mockRejectedValueOnce(
-        Object.assign(
-          new Error("This application changed. Refresh before saving."),
-          { status: 409 },
-        ),
-      );
-    await act(async () =>
-      root.render(
-        <FundingApplicationCard
-          deal={deal}
-          seasons={localSeasons}
-          onChanged={async () => undefined}
-          repository={fixture.repository}
-        />,
-      ),
-    );
-    await click("Funding application");
-    await field(
-      "application-conditions",
-      "Keep these edited purchase conditions.",
-    );
-    await click("Save application");
-    const recovery =
-      notify.mock.calls[notify.mock.calls.length - 1][2].action.onClick;
-    await act(async () => recovery());
-    expect(
-      (document.getElementById("application-conditions") as HTMLTextAreaElement)
-        .value,
-    ).toBe("Keep these edited purchase conditions.");
-    await click("Save application");
-    expect(mutate).toHaveBeenCalledTimes(2);
-    expect(
-      (await fixture.repository.card(deal.id)).application?.purchaseConditions,
-    ).toBe("Keep these edited purchase conditions.");
+  it("keeps purchase selections during stale-write recovery",async()=>{
+    fundingRole("marketing");const deal=readLocalPartnerState().deals.find(item=>item.id!==fixture.deal.id)!;const repository=dealBudgetLinksRepository();const save=vi.spyOn(repository,"save").mockRejectedValueOnce(Object.assign(new Error("Refresh the changed selection."),{status:409}));
+    await act(async()=>root.render(<LinkedPurchases deal={deal} seasons={localSeasons} onChanged={async()=>undefined} repository={repository}/>));
+    await act(async()=>document.querySelector<HTMLButtonElement>('[aria-label="Manage linked budget entries"]')!.click());
+    await act(async()=>[...document.querySelectorAll<HTMLElement>('[role="option"]')].find(item=>item.textContent?.includes("Frame tubes"))!.click());
+    await click("Apply");const recovery=notify.mock.calls[notify.mock.calls.length-1][2].action.onClick;await act(async()=>recovery());
+    expect(document.querySelector('[role="option"][aria-label^="Selected: Frame tubes"]')).not.toBeNull();await click("Apply");expect(save).toHaveBeenCalledTimes(2);expect((await repository.load(deal.id)).entries.find(item=>item.description==="Frame tubes")?.selected).toBe(true);
   });
   it("proposes an increase without changing the existing entry identity or optional fields", async () => {
     await page();

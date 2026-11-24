@@ -15,7 +15,9 @@ it("shows agreed contributions and work, but only links authorized tasks",async(
  const loadShared=vi.fn().mockResolvedValue({deals:[item]});
  await act(async()=>{root.render(<MemoryRouter><WonDeals loadShared={loadShared}/></MemoryRouter>)});
  expect(el.textContent).toContain('Acme');
- const button=[...el.querySelectorAll('button')].find(x=>x.textContent==='View agreement')!;
+ expect([...el.querySelectorAll('th')].map(th=>th.textContent)).not.toContain('Agreement status');
+ expect(el.querySelector('a[aria-label="View agreement for Acme: Partnership"]')?.getAttribute('href')).toBe('/?deal=1');
+ const button=[...el.querySelectorAll('a')].find(x=>x.textContent==='View agreement')!;
  await act(async()=>button.click());
  expect(el.textContent).toContain('1 250,00 NOK');
 
@@ -106,7 +108,7 @@ it("derives deliverable progress from linked marketing tasks, excluding retired 
  const el=document.createElement("div");document.body.append(el);const root=createRoot(el);
  await act(async()=>root.render(<MemoryRouter><WonDeals loadShared={async()=>({deals:[item]})}/></MemoryRouter>));
  const row=el.querySelector("tbody tr")!;expect(row.textContent).toContain("1 / 2");expect(row.textContent).toContain("Blocked");expect(row.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("50");
- await act(async()=>[...el.querySelectorAll("button")].find(b=>b.textContent==="View agreement")!.click());
+ await act(async()=>[...el.querySelectorAll("a")].find(b=>b.textContent==="View agreement")!.click());
  expect(el.textContent).toContain("1 of 2 complete");expect(el.textContent).toContain("Second task · Blocked");expect(el.querySelector('a[href="/tasks/t2"]')).toBeNull();
  await act(async()=>root.unmount());el.remove();
 });
