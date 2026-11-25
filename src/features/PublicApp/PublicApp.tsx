@@ -19,7 +19,8 @@ import RecruitmentEntry from "../Recruitment/RecruitmentEntry";
 import SponsorsPage from "../Sponsors/SponsorPage";
 import Members from "../Team/Team";
 
-const loadMemberCV = () => import("../MemberCV/MemberCV");
+const loadMemberProfile = () => import("../MemberPlatform/MemberPlatform")
+  .then(module => ({ default: module.MemberProfileRoute }));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -56,7 +57,7 @@ function PublicAppContent() {
         <Route path="/cv-bank/login" element={<Navigate to="/member/login" replace />} />
         <Route path="/cv-bank/profile" element={<Navigate to="/member/profile" replace />} />
         <Route path="/member/login" element={<CVBankLogin />} />
-        <Route path="/member/profile" element={<DeferredPage load={loadMemberCV} fallback={<ProfileContentSkeleton />} />} />
+        <Route path="/member/profile" element={<DeferredPage load={loadMemberProfile} fallback={<ProfileContentSkeleton />} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {!hideFooter(pathname) && <Footer />}
