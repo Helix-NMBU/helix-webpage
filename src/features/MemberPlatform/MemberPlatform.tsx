@@ -63,7 +63,7 @@ const TaskDetailPage = lazy(() => import("../ProjectManagement/TaskDetail"));
 function MemberProfileRoute() {
   const { hash, search } = useLocation();
   const query = new URLSearchParams(search);
-  const classic = query.get("cv-editor") === "classic" || hash.startsWith("#mcv-")
+  const classic = !isLocalMemberMode() || query.get("cv-editor") === "classic" || hash.startsWith("#mcv-")
     || (isLocalMemberMode() && query.get("cv-prototype") === "0");
   return <DeferredPage key={classic ? "classic" : "sections"} load={classic ? loadMemberCV : loadCvSections} fallback={<ProfileContentSkeleton />} />;
 }
