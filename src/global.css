@@ -6,6 +6,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Sonner's default gray description does not contrast with the public blue popover. */
+.toaster [data-sonner-toast][data-styled="true"] [data-description] {
+  color: inherit;
+}
+
 /* Define Tailwind tokens so utilities like bg-background, text-foreground, border-border work */
 @theme inline {
   --color-background: var(--background);
