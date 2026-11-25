@@ -952,16 +952,9 @@ export default function MemberCV() {
     }
   }
 
-  function openCvSetup() {
+  function openCvEditor() {
     if (!draft || busy || ended) return;
-    autosave.current?.setBlocked(true);
-    setupStart.current = structuredClone({ draft, sharing });
-    setPendingEntryIds({});
-    setNewExperienceIds(new Set());
-    setSetupExitOpen(false);
-    if (!hasRegisteredCv(draft)) setDraft((previous) => previous ? { ...previous, cvRegistered: false, cvLanguage: previous.cvLanguage ?? "nb" } : previous);
-    setWizardStep("basics");
-    setSetupOpen(true);
+    navigate(`${paths.profile}?cv-editor=sections`);
   }
   function requestSetupExit(opener?: HTMLElement) {
     if (busy) return;
@@ -1062,7 +1055,7 @@ export default function MemberCV() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button ref={actionsTrigger} variant="outline" size="icon" className="cv-control size-8" aria-label="CV actions" title="CV actions" disabled={Boolean(busy)}><IconDots aria-hidden="true" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={openCvSetup}>Edit</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={openCvEditor}>Edit</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { setDownloadLanguage("nb"); setDownloadOpen(true); }}>Download</DropdownMenuItem>
                   <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onSelect={() => setDeleteOpen(true)}>Delete</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -1074,7 +1067,7 @@ export default function MemberCV() {
               <EmptyTitle>No CV yet</EmptyTitle>
               <EmptyDescription>You haven't set up your CV yet.<br />Get started by creating your CV.</EmptyDescription>
             </EmptyHeader>
-            <EmptyContent><Button className="cv-control" onClick={openCvSetup} disabled={Boolean(busy)}>Setup CV</Button></EmptyContent>
+            <EmptyContent><Button className="cv-control" onClick={openCvEditor} disabled={Boolean(busy)}>Setup CV</Button></EmptyContent>
           </Empty>}
         </section>}
 
