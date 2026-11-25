@@ -1,57 +1,117 @@
-import { useId, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
-import { IconChevronDown, IconCube, IconDiamonds, IconFilter2 } from "@tabler/icons-react";
+import { IconCube, IconDiamonds, IconFilter2 } from "@tabler/icons-react";
 import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import { Card, CardContent } from "@libs/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@libs/components/ui/collapsible";
 import { Button } from "@libs/components/ui/button";
 import { Label } from "@libs/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
-import { formatDate, osloDate, summarize } from "./model";
+import { formatDate, osloDate, shortDate, summarize } from "./model";
 import { isOrganized } from "./hierarchy";
 import { progressSeries, progressStepPath } from "./progress";
-import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
+import { chartDay, progressChartRange, progressLabelAngle, progressLabelLayout, seasonChartRange } from "./progress-chart";
 import { ProgressRing } from "./ProgressRing";
 import { TaskStatusIndicator } from "./TaskStatus";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { AssigneeAvatars } from "./TaskAssignees";
-import { departmentMemberIds } from "./permissions";
 import { PriorityIndicator, TargetDate } from "./MilestoneTableControls";
 import { OverviewColumnMenu, OVERVIEW_PROJECT_COLUMNS } from "./OverviewColumnMenu";
-import { ORGANIZATION_DEPARTMENTS, type ProjectDepartment, type ProjectWorkspace, type Task } from "./types";
+import { SeasonSchedule, SeasonScheduleActions } from "./SeasonSchedule";
+import { type ProjectMutation, type ProjectWorkspace } from "./types";
 
 const series = [
   { key: "scope", label: "Scoped", description: "All non-cancelled tasks, excluding milestones", color: "var(--muted-foreground)" },
   { key: "started", label: "Started", description: "In progress, blocked and completed tasks", color: "var(--progress-started)" },
   { key: "completed", label: "Completed", description: "Tasks marked Done", color: "var(--progress-completed)" },
 ] as const;
-const shortDate = (date: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
 
-const seasonEventOptions = [
-  { value: "season-start", label: "Season start" },
-  { value: "concept", label: "Concept Event" },
-  { value: "design", label: "Design Event" },
-  { value: "production-start", label: "Production start" },
-  { value: "car-unveiling", label: "Car Unveiling" },
-  { value: "season-end", label: "Season End" },
-] as const;
-type SeasonEvent = typeof seasonEventOptions[number]["value"];
+const eventLabels = {
+  "season-start": "Season start",
+  kickoff: "Season kickoff",
+  "draft-concept": "Draft Concept Review",
+  concept: "Concept Event",
+  design: "Design Event",
+  "production-start": "Construction start",
+  "car-unveiling": "Car Unveiling",
+  "competition-start": "Competition start",
+  "season-end": "Season End",
+} as const;
+type SeasonEvent = keyof typeof eventLabels;
+type ChartEvent = { value: SeasonEvent; label: string; date: string };
+type AxisLabel = { value: SeasonEvent | "today"; label: string; date?: string; position: number };
 
-function seasonEventDate(event: SeasonEvent, startDate: string, endDate: string) {
-  const startYear = startDate.slice(0, 4);
-  const endYear = endDate.slice(0, 4);
-  switch (event) {
-    case "season-start": return startDate;
-    case "concept": return `${startYear}-10-22`;
-    case "design": return `${startYear}-11-25`;
-    case "production-start": return `${endYear}-01-04`;
-    case "car-unveiling": return `${endYear}-05-05`;
-    case "season-end": return endDate;
-  }
+function ProgressEventAxis({ labels, endEventId, children }: { labels: AxisLabel[]; endEventId?: SeasonEvent; children: ReactNode }) {
+  const axisRef = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState<ReturnType<typeof progressLabelLayout>>();
+
+  useLayoutEffect(() => {
+    const axis = axisRef.current;
+    if (!axis || !labels.length) return;
+    const elements = [...axis.querySelectorAll<HTMLElement>("[data-axis-label]")];
+    const measure = () => {
+      const axisWidth = axis.getBoundingClientRect().width;
+      if (axisWidth === 0) return;
+      const next = progressLabelLayout(axisWidth, labels.map((label, index) => ({
+        center: label.position * axisWidth,
+        dateWidth: (elements[index].firstElementChild as HTMLElement).offsetWidth,
+        nameWidth: (elements[index].lastElementChild as HTMLElement).offsetWidth,
+      })));
+      setLayout(previous => previous?.nameHeight === next.nameHeight && previous.anchors.length === next.anchors.length
+        && next.anchors.every((anchor, index) => previous.anchors[index] === anchor)
+        ? previous : next);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(axis);
+    elements.forEach(element => {
+      for (const child of element.children) observer.observe(child);
+    });
+    return () => observer.disconnect();
+  }, [labels]);
+
+  if (!labels.length) return children;
+  const nameHeight = layout?.nameHeight ?? 112;
+  return <div ref={axisRef} className="relative pt-4" style={{ paddingBottom: nameHeight }}>
+    {children}
+    {labels.map(({ value, label, date, position }, index) => <span
+        key={value}
+        className={`pointer-events-none absolute inset-y-0 whitespace-nowrap text-[10px] leading-4 ${value === endEventId ? "text-destructive" : date ? "text-foreground" : "text-muted-foreground"}`}
+        title={date ? `${label}: ${formatDate(date)}` : undefined}
+        data-axis-label=""
+        data-event-label={date ? value : undefined}
+        style={{ left: layout?.anchors[index] ?? `${position * 100}%` }}
+      >
+        {date ? <time className="pointer-events-auto absolute top-0 w-max -translate-x-1/2" dateTime={date}>{shortDate(date)}</time> : <span />}
+        <span
+          className="pointer-events-auto absolute left-0 w-max origin-left"
+          style={{ top: `calc(100% - ${nameHeight - 4}px)`, transform: `rotate(${progressLabelAngle}deg)` }}
+        >{label}</span>
+      </span>)}
+  </div>;
 }
 
-type ChartEvent = { value: SeasonEvent; label: string; date: string };
+function seasonChartEvents(workspace: ProjectWorkspace, { startDate, endDate }: ReturnType<typeof seasonChartRange>) {
+  const dates: Partial<Record<SeasonEvent, string | null>> = { "season-start": startDate, "season-end": endDate };
+  if (workspace.seasonSchedule) {
+    const phases = new Map(workspace.seasonSchedule.phases.map(phase => [phase.id, phase]));
+    Object.assign(dates, {
+      kickoff: phases.get("recruitment")?.endDate,
+      "draft-concept": phases.get("draft-concept")?.endDate,
+      concept: phases.get("concept")?.endDate,
+      design: phases.get("design")?.endDate,
+      "production-start": phases.get("construction")?.startDate,
+      "car-unveiling": phases.get("construction")?.endDate,
+      "competition-start": phases.get("test")?.endDate,
+    });
+  }
+  return (Object.keys(eventLabels) as SeasonEvent[]).flatMap(value => {
+    const date = dates[value];
+    return date ? [{ value, label: eventLabels[value], date }] : [];
+  });
+}
+
 export function ProgressChart({ workspace, compact = true, deadline = null, startDate = null, endDate = null, showDeadlineTail = false, events = [], visibleEventIds = [], startEventId, endEventId, deadlineLabel = "Deadline", footerLabels, heightClassName }: {
   workspace: ProjectWorkspace;
   compact?: boolean;
@@ -76,6 +136,11 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
   const today = osloDate();
   const points = progressSeries(workspace.progressEvents, workspace.tasks, today);
   const current = points[points.length - 1];
+  const hasEvents = events.length > 0;
+  const plotHeightClass = heightClassName ?? (compact ? "h-20" : "h-40");
+  const viewBoxLeft = hasEvents ? 14 : 0;
+  const viewBoxWidth = 640 - viewBoxLeft * 2;
+  const plotPosition = (position: number) => (position - viewBoxLeft) / viewBoxWidth;
   const { start, end } = progressChartRange(points[0].date, today, deadline, { startDate, endDate });
   const maximum = Math.max(1, ...points.map(point => point.scope));
   // Reserve a visible post-deadline tail without changing the season's end date.
@@ -97,22 +162,28 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
   const eventLabels = visibleEvents.map(event => ({ ...event, position: x(event.date) }));
   const redStart = deadline ? boundedX(deadline) : 618;
   const currentVisible = current.date >= start && current.date <= end;
-  const labelStyle = (position: number) => ({
-    left: `${position / 640 * 100}%`,
-    transform: position < 90 ? undefined : position > 550 ? "translateX(-100%)" : "translateX(-50%)",
-  });
-  return <div className="space-y-1.5" data-progress-start={start} data-progress-end={end}>
-    {workspace.tasks.some(task => task.historicalEstimate) && <p className="text-xs text-muted-foreground">Progress includes estimated historical dates.</p>}
-    <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1" style={{ paddingInline: `${22 / 640 * 100}%` }} aria-label={`Progress on ${formatDate(current.date)}`}>
-      {series.map(item => <div key={item.key} className="flex shrink-0 items-baseline gap-1.5 whitespace-nowrap"><div title={item.description} className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="size-1.5" style={{ background: item.color }} />{item.label}</div><div className="text-sm font-medium tabular-nums">{current[item.key]}</div></div>)}
-    </div>
-    <div>
-      <div className={`relative ${heightClassName ?? (compact ? "h-20" : "h-40")}`}>
-        <svg viewBox="0 0 640 180" preserveAspectRatio="none" className="h-full w-full overflow-visible" role="img" aria-label="Task progress over time" aria-describedby={`${chartId}-description`}>
+  const labelToday = today >= start && today <= end && eventLabels.every(event => Math.abs(event.position - x(today)) > 58);
+  const axisLabels: AxisLabel[] = eventLabels.map(event => ({ ...event, position: plotPosition(event.position) }));
+  if (eventLabels.length && labelToday) {
+    axisLabels.push({ value: "today", label: "Today", position: plotPosition(x(today)) });
+  }
+  const totals = <div
+    className={hasEvents ? `mt-4 flex ${plotHeightClass} flex-col justify-center gap-2 pt-2` : "flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1"}
+    style={hasEvents ? undefined : { paddingInline: `${22 / 640 * 100}%` }}
+    aria-label={`Progress on ${formatDate(current.date)}`}
+  >
+    {series.map(item => <div key={item.key} className={`flex shrink-0 items-baseline justify-between whitespace-nowrap ${hasEvents ? "gap-3" : "gap-1.5"}`}>
+      <div title={item.description} className={`flex items-center gap-1.5 ${hasEvents ? "text-sm" : "text-xs text-muted-foreground"}`}>
+        <span className="size-1.5" style={{ background: item.color }} />{item.label}
+      </div>
+      <div className={`tabular-nums ${hasEvents ? "text-lg font-semibold" : "text-sm font-medium"}`}>{current[item.key]}</div>
+    </div>)}
+  </div>;
+  const plot = <ProgressEventAxis labels={axisLabels} endEventId={endEventId}>
+      <div className={`relative ${plotHeightClass}`}>
+        <svg viewBox={`${viewBoxLeft} 0 ${viewBoxWidth} 180`} preserveAspectRatio="none" className="h-full w-full overflow-visible" role="img" aria-label="Task progress over time" aria-describedby={`${chartId}-description`}>
           <desc id={`${chartId}-description`}>
-            Scoped counts include non-cancelled tasks. Started includes in-progress, blocked and completed tasks.
-            The shaded scope area rises from zero to today's task count, then stays level. Started and completed lines show daily states through today with smoothed transitions, including any labeled estimates, without a progress forecast.
-            Displayed range: {formatDate(start)} to {formatDate(end)}.
+            {"Scoped counts include non-cancelled tasks. Started includes in-progress, blocked and completed tasks. The shaded scope area rises from zero to today's task count, then stays level. Started and completed lines show daily states through today with smoothed transitions, including any labeled estimates, without a progress forecast. Displayed range:"} {formatDate(start)} {"to"} {formatDate(end)}.
             {visibleEvents.map(event => ` ${event.label}: ${formatDate(event.date)}.`).join("")}
             {deadline && `${deadlineX !== null ? ` The red line marks the end event on ${formatDate(deadline)}.` : ` The end event on ${formatDate(deadline)} is outside the displayed range.`} Red hatching marks time after the end event.`}
           </desc>
@@ -153,16 +224,21 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
           </g>)}
           </g>
         </svg>
-        {currentVisible && series.map(item => <span key={item.key} aria-hidden="true" className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${x(current.date) / 640 * 100}%`, top: `${y(current[item.key]) / 180 * 100}%`, background: item.color }} />)}
+        {currentVisible && series.map(item => <span key={item.key} aria-hidden="true" className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${plotPosition(x(current.date)) * 100}%`, top: `${y(current[item.key]) / 180 * 100}%`, background: item.color }} />)}
       </div>
       <span className="sr-only" data-chart-boundary="start"><time dateTime={start}>{shortDate(start)}</time></span>
       <span className="sr-only" data-chart-boundary="end"><time dateTime={end}>{shortDate(end)}</time></span>
-      <div className="relative mt-1 h-9 text-[10px] text-muted-foreground [&>span]:whitespace-nowrap">
-        {eventLabels.map(event => <span key={event.value} className={`absolute flex -translate-x-1/2 flex-col items-center text-center leading-4 ${event.value === endEventId ? "text-destructive" : "text-foreground"}`} title={`${event.label}: ${formatDate(event.date)}`} data-event-label={event.value} style={{ left: `${event.position / 640 * 100}%`, top: 0 }}><time dateTime={event.date}>{shortDate(event.date)}</time><span>{event.label}</span></span>)}
-        {today >= start && today <= end && eventLabels.every(event => Math.abs(event.position - x(today)) > 58) && <span className="absolute text-muted-foreground" style={{ ...labelStyle(x(today)), top: "18px" }}>Today</span>}
-      </div>
-    </div>
-    {!events.length && <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+      {!eventLabels.length && <div className="relative mt-1 h-9 text-[10px] text-muted-foreground">
+        {labelToday && <span className="absolute top-[18px] -translate-x-1/2" style={{ left: `${plotPosition(x(today)) * 100}%` }}>Today</span>}
+      </div>}
+  </ProgressEventAxis>;
+  return <div className="grid gap-1.5" data-progress-start={start} data-progress-end={end}>
+    {workspace.tasks.some(task => task.historicalEstimate) && <p className="text-xs text-muted-foreground">Progress includes estimated historical dates.</p>}
+    {hasEvents ? <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+      {plot}
+      {totals}
+    </div> : <>{totals}{plot}</>}
+    {!hasEvents && <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
       <span>{footerLabels?.start ?? (workspace.tasks.some(task => task.historicalEstimate) ? `History includes estimates from ${shortDate(points[0].date)}` : points.length === 1 ? `History begins ${shortDate(current.date)}` : `Recorded since ${shortDate(points[0].date)}`)}</span>
       {deadline && <span className="text-destructive" title="Red hatching marks time after the end event">{footerLabels?.end ?? `End event: ${shortDate(deadline)}`}</span>}
     </div>}
@@ -170,25 +246,24 @@ export function ProgressChart({ workspace, compact = true, deadline = null, star
   </div>;
 }
 
-type AreaRow = { id: string; label: string; tasks: Task[]; department?: ProjectDepartment };
-function OverviewEventFilter({ startEvent, endEvent, eventDates, visibleEventIds, onStartChange, onEndChange, onToggleEvent }: {
+function OverviewEventFilter({ startEvent, endEvent, events, visibleEventIds, onStartChange, onEndChange, onToggleEvent }: {
   startEvent: SeasonEvent;
   endEvent: SeasonEvent;
-  eventDates: Record<SeasonEvent, string>;
+  events: ChartEvent[];
   visibleEventIds: string[];
   onStartChange: (value: SeasonEvent) => void;
   onEndChange: (value: SeasonEvent) => void;
   onToggleEvent: (value: SeasonEvent) => void;
 }) {
-  const startDate = eventDates[startEvent];
-  const endDate = eventDates[endEvent];
+  const startDate = events.find(event => event.value === startEvent)!.date;
+  const endDate = events.find(event => event.value === endEvent)!.date;
   return <Popover><PopoverTrigger asChild><Button variant="outline" size="icon-sm" aria-label="Overview event settings" title="Overview event settings"><IconFilter2 aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
     <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="min-w-0 space-y-1.5"><Label htmlFor="overview-start-event" className="text-xs text-muted-foreground">Start event</Label><Select value={startEvent} onValueChange={value => onStartChange(value as SeasonEvent)}><SelectTrigger id="overview-start-event" className="w-full"><SelectValue /></SelectTrigger><SelectContent position="popper" align="start">{seasonEventOptions.map(event => <SelectItem key={event.value} value={event.value} disabled={eventDates[event.value] >= endDate}>{event.label}<span className="ml-auto pl-3 text-xs text-muted-foreground">{shortDate(eventDates[event.value])}</span></SelectItem>)}</SelectContent></Select></div>
-        <div className="min-w-0 space-y-1.5"><Label htmlFor="overview-end-event" className="text-xs text-muted-foreground">End event</Label><Select value={endEvent} onValueChange={value => onEndChange(value as SeasonEvent)}><SelectTrigger id="overview-end-event" className="w-full"><SelectValue /></SelectTrigger><SelectContent position="popper" align="start">{seasonEventOptions.map(event => <SelectItem key={event.value} value={event.value} disabled={eventDates[event.value] <= startDate}>{event.label}<span className="ml-auto pl-3 text-xs text-muted-foreground">{shortDate(eventDates[event.value])}</span></SelectItem>)}</SelectContent></Select></div>
+        <div className="min-w-0 space-y-1.5"><Label htmlFor="overview-start-event" className="text-xs text-muted-foreground">Start event</Label><Select value={startEvent} onValueChange={value => onStartChange(value as SeasonEvent)}><SelectTrigger id="overview-start-event" className="w-full"><SelectValue /></SelectTrigger><SelectContent position="popper" align="start">{events.map(event => <SelectItem key={event.value} value={event.value} disabled={event.date >= endDate}>{event.label}<span className="ml-auto pl-3 text-xs text-muted-foreground">{shortDate(event.date)}</span></SelectItem>)}</SelectContent></Select></div>
+        <div className="min-w-0 space-y-1.5"><Label htmlFor="overview-end-event" className="text-xs text-muted-foreground">End event</Label><Select value={endEvent} onValueChange={value => onEndChange(value as SeasonEvent)}><SelectTrigger id="overview-end-event" className="w-full"><SelectValue /></SelectTrigger><SelectContent position="popper" align="start">{events.map(event => <SelectItem key={event.value} value={event.value} disabled={event.date <= startDate}>{event.label}<span className="ml-auto pl-3 text-xs text-muted-foreground">{shortDate(event.date)}</span></SelectItem>)}</SelectContent></Select></div>
       </div>
-      <div className="space-y-2"><p className="text-xs text-muted-foreground">Events shown</p><div role="group" aria-label="Events shown in chart" className="flex flex-wrap gap-1.5">{seasonEventOptions.map(event => {
+      <div className="space-y-2"><p className="text-xs text-muted-foreground">Events shown</p><div role="group" aria-label="Events shown in chart" className="flex flex-wrap gap-1.5">{events.map(event => {
         const boundary = event.value === startEvent || event.value === endEvent;
         const active = visibleEventIds.includes(event.value) || boundary;
         return <Button key={event.value} type="button" size="sm" variant={active ? "secondary" : "outline"} aria-pressed={active} disabled={boundary} title={boundary ? `${event.label} is always shown as a chart boundary` : `${active ? "Hide" : "Show"} ${event.label}`} className="h-7 rounded-full px-2.5 text-xs disabled:opacity-100" onClick={() => onToggleEvent(event.value)}>{event.label}</Button>;
@@ -197,56 +272,53 @@ function OverviewEventFilter({ startEvent, endEvent, eventDates, visibleEventIds
   </Popover>;
 }
 
-function ProgressBreakdown({ rows, workspace, busy, onEdit }: { rows: AreaRow[]; workspace: ProjectWorkspace; busy: boolean; onEdit: (department: ProjectDepartment) => void }) {
-  return <Table aria-label="Department progress"><TableHeader><TableRow><TableHead>Department</TableHead><TableHead>Members</TableHead><TableHead>Lead</TableHead><TableHead>Tasks</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{rows.map(row => { const progress = summarize(row.tasks); return <TableRow key={row.id}>
-    <TableCell>{workspace.canManage && row.department ? <button disabled={busy} className="text-left hover:underline" aria-label={`Edit department ${row.label}`} onClick={() => onEdit(row.department!)}>{row.label}</button> : row.label}</TableCell>
-    <TableCell className="tabular-nums text-muted-foreground">{row.department ? departmentMemberIds(row.department).length : <span title={row.id === "unallocated" ? "Work without a department" : "Department membership has not been set up"}>—</span>}</TableCell>
-    <TableCell>{row.department && (row.department.leadIds?.length || row.department.leadId) ? <AssigneeAvatars assigneeIds={row.department.leadIds ?? (row.department.leadId ? [row.department.leadId] : [])} members={workspace.members} assignmentRole="lead" showNames /> : <span className="text-muted-foreground">{row.id === "unallocated" ? "—" : "No Lead"}</span>}</TableCell>
-    <TableCell className="tabular-nums"><span aria-label={`${row.label}: ${progress.done} of ${progress.total} tasks complete`}>{progress.done} / {progress.total}</span></TableCell>
-    <TableCell><ProgressRing {...progress} label={row.label} showTotal={false} /></TableCell>
-  </TableRow>; })}</TableBody></Table>;
-}
-const departmentKey = (name: string) => name.trim().toLowerCase();
-
-export function OverviewProgress({ workspace, busy, projectColumns, onToggleProjectColumn, onSelectProject, onEditDepartment, children }: {
-  children?: ReactNode; workspace: ProjectWorkspace; busy: boolean; projectColumns: string[]; onToggleProjectColumn: (key: string) => void; onSelectProject: (id: string) => void; onEditDepartment: (department: ProjectDepartment) => void;
+export function OverviewProgress({ workspace, busy, projectColumns, onToggleProjectColumn, onSelectProject, onSaveSchedule, children }: {
+  children?: ReactNode; workspace: ProjectWorkspace; busy: boolean; projectColumns: string[]; onToggleProjectColumn: (key: string) => void; onSelectProject: (id: string) => void; onSaveSchedule?: (change: Extract<ProjectMutation, { action: "save_season_schedule" }>) => Promise<boolean>;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const projects = [...workspace.projects].sort((a, b) => (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") || a.name.localeCompare(b.name));
-  const seasonRange = seasonChartRange(workspace.season);
-  const eventDates = Object.fromEntries(seasonEventOptions.map(event => [event.value, seasonEventDate(event.value, seasonRange.startDate, seasonRange.endDate)])) as Record<SeasonEvent, string>;
-  const requestedStart = seasonEventOptions.find(event => event.value === searchParams.get("startEvent"))?.value ?? "season-start";
-  const requestedEnd = seasonEventOptions.find(event => event.value === searchParams.get("endEvent"))?.value ?? "season-end";
-  const startEvent = eventDates[requestedStart] < eventDates[requestedEnd] ? requestedStart : "season-start";
-  const endEvent = eventDates[requestedEnd] > eventDates[startEvent] ? requestedEnd : "season-end";
-  const startEventDate = eventDates[startEvent];
-  const endEventDate = eventDates[endEvent];
-  const events = seasonEventOptions.map(event => ({ ...event, date: eventDates[event.value] }));
-  const visibleEventIds = searchParams.has("events")
-    ? (searchParams.get("events") ?? "").split(",").filter(value => seasonEventOptions.some(event => event.value === value))
-    : seasonEventOptions.map(event => event.value);
+  const events = seasonChartEvents(workspace, seasonChartRange(workspace.season));
+  const first = events.find(event => event.value === "season-start")!;
+  const last = events.find(event => event.value === "season-end")!;
+  const requestedStart = events.find(event => event.value === searchParams.get("startEvent")) ?? first;
+  const requestedEnd = events.find(event => event.value === searchParams.get("endEvent")) ?? last;
+  const startEvent = requestedStart.date < requestedEnd.date ? requestedStart : first;
+  const endEvent = requestedEnd.date > startEvent.date ? requestedEnd : last;
+  function filteredEvents(params: URLSearchParams) {
+    return params.has("events")
+      ? (params.get("events") ?? "").split(",").filter(value => events.some(event => event.value === value))
+      : events.map(event => event.value);
+  }
+  const visibleEventIds = filteredEvents(searchParams);
   const setEventParam = (name: string, value: string, defaultValue: string) => setSearchParams(previous => { const next = new URLSearchParams(previous); if (value === defaultValue) next.delete(name); else next.set(name, value); return next; }, { replace: true });
   const toggleEvent = (value: SeasonEvent) => setSearchParams(previous => {
     const next = new URLSearchParams(previous);
-    const active = previous.has("events") ? (previous.get("events") ?? "").split(",").filter(item => seasonEventOptions.some(event => event.value === item)) : seasonEventOptions.map(event => event.value);
+    const active = filteredEvents(previous);
     const updated = active.includes(value) ? active.filter(item => item !== value) : [...active, value];
-    if (updated.length === seasonEventOptions.length) next.delete("events"); else next.set("events", updated.join(","));
+    if (updated.length === events.length) next.delete("events"); else next.set("events", updated.join(","));
     return next;
   }, { replace: true });
-  const configured = new Map((workspace.departments ?? []).map(department => [departmentKey(department.name), department]));
-  const areaRows: AreaRow[] = ORGANIZATION_DEPARTMENTS.map(name => {
-    const key = departmentKey(name);
-    const projectIds = new Set(workspace.projects.filter(project => project.departments.some(value => departmentKey(value) === key)).map(project => project.id));
-    return { id: `department:${key}`, label: name, department: configured.get(key), tasks: workspace.tasks.filter(task => task.projectId && projectIds.has(task.projectId)) };
-  });
-  const allocatedProjects = new Set(workspace.projects.filter(project => project.departments.length > 0).map(project => project.id));
-  const unallocatedTasks = workspace.tasks.filter(task => isOrganized(task, workspace) && !allocatedProjects.has(task.projectId!));
-  if (summarize(unallocatedTasks).total > 0) areaRows.push({ id: "unallocated", label: "No department", tasks: unallocatedTasks });
   return <div data-project-progress className="grid w-full grid-cols-1 gap-8">
-    <section aria-labelledby="progress-title" className="space-y-3"><div className="flex items-start justify-between"><div><h2 id="progress-title" className="text-base font-medium">Progress</h2><p className="mt-1 text-sm text-muted-foreground">Scoped, started and completed tasks over time.</p></div><OverviewEventFilter startEvent={startEvent} endEvent={endEvent} eventDates={eventDates} visibleEventIds={visibleEventIds} onStartChange={value => setEventParam("startEvent", value, "season-start")} onEndChange={value => setEventParam("endEvent", value, "season-end")} onToggleEvent={toggleEvent} /></div>
-    <Card className="gap-2 py-3"><CardContent className="space-y-2 px-4"><ProgressChart workspace={workspace} heightClassName="h-28" deadline={endEventDate} deadlineLabel={seasonEventOptions.find(event => event.value === endEvent)!.label} startDate={startEventDate} endDate={endEventDate} showDeadlineTail events={events} visibleEventIds={visibleEventIds} startEventId={startEvent} endEventId={endEvent} footerLabels={{ start: `Start event: ${seasonEventOptions.find(event => event.value === startEvent)!.label}`, end: `End event: ${seasonEventOptions.find(event => event.value === endEvent)!.label}` }} /><section className="border-t pt-2" aria-labelledby="progress-distribution-title"><Collapsible defaultOpen><div className="mb-1 flex items-center justify-between"><CollapsibleTrigger asChild><button type="button" className="group flex items-center gap-1.5 text-sm font-medium"><IconChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" /><span id="progress-distribution-title">Distribution</span></button></CollapsibleTrigger></div><CollapsibleContent><ProgressBreakdown rows={areaRows} workspace={workspace} busy={busy} onEdit={onEditDepartment} /></CollapsibleContent></Collapsible></section></CardContent></Card></section>
+    <section aria-labelledby="progress-title" className="space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h2 id="progress-title" className="text-base font-medium">Progress</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Scoped, started and completed tasks over time.</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {workspace.canManage && onSaveSchedule && <SeasonScheduleActions workspace={workspace} busy={busy} save={onSaveSchedule} />}
+          <OverviewEventFilter startEvent={startEvent.value} endEvent={endEvent.value} events={events} visibleEventIds={visibleEventIds} onStartChange={value => setEventParam("startEvent", value, "season-start")} onEndChange={value => setEventParam("endEvent", value, "season-end")} onToggleEvent={toggleEvent} />
+        </div>
+      </div>
+      <Card className="gap-2 py-3">
+        <CardContent className="gap-2 px-4">
+          <ProgressChart workspace={workspace} heightClassName="h-28" deadline={endEvent.date} deadlineLabel={endEvent.label} startDate={startEvent.date} endDate={endEvent.date} showDeadlineTail events={events} visibleEventIds={visibleEventIds} startEventId={startEvent.value} endEventId={endEvent.value} footerLabels={{ start: `Start event: ${startEvent.label}`, end: `End event: ${endEvent.label}` }} />
+          <SeasonSchedule schedule={workspace.seasonSchedule} />
+        </CardContent>
+      </Card>
+    </section>
     {children}
-    <section aria-labelledby="overview-projects-title" className="space-y-3"><div className="flex items-start justify-between"><div><h2 id="overview-projects-title" className="text-base font-medium">Projects <span className="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{projects.length}</span></h2><p className="mt-1 text-sm text-muted-foreground">Open projects due in the next 30 days, nearest deadline first.</p></div><OverviewColumnMenu label="Projects" columns={OVERVIEW_PROJECT_COLUMNS} visible={projectColumns} onToggle={onToggleProjectColumn} /></div><Card className="gap-0 py-0"><CardContent className="overflow-x-auto px-0"><Table aria-label="Season projects"><TableHeader><TableRow><TableHead className="min-w-56 pl-4">Name</TableHead>{projectColumns.includes("department") && <TableHead>Department</TableHead>}{projectColumns.includes("priority") && <TableHead className="text-center">Priority</TableHead>}{projectColumns.includes("leads") && <TableHead>Leads</TableHead>}{projectColumns.includes("start") && <TableHead>Start date</TableHead>}{projectColumns.includes("deadline") && <TableHead>Target date</TableHead>}{projectColumns.includes("milestones") && <TableHead className="text-center">Milestones</TableHead>}{projectColumns.includes("tasks") && <TableHead className="text-center">Tasks</TableHead>}{projectColumns.includes("status") && <TableHead className="text-center">Status</TableHead>}{projectColumns.includes("progress") && <TableHead className="text-center">Progress</TableHead>}</TableRow></TableHeader><TableBody>
+    <section aria-labelledby="overview-projects-title" className="space-y-3"><div className="flex items-start justify-between"><div><h2 id="overview-projects-title" className="text-base font-medium">{"Projects"} <span className="ml-1 text-sm font-normal text-muted-foreground tabular-nums">{projects.length}</span></h2><p className="mt-1 text-sm text-muted-foreground">Open projects due in the next 30 days, nearest deadline first.</p></div><OverviewColumnMenu label="Projects" columns={OVERVIEW_PROJECT_COLUMNS} visible={projectColumns} onToggle={onToggleProjectColumn} /></div><Card className="gap-0 py-0"><CardContent className="overflow-x-auto px-0"><Table aria-label="Season projects"><TableHeader><TableRow><TableHead className="min-w-56 pl-4">Name</TableHead>{projectColumns.includes("department") && <TableHead>Department</TableHead>}{projectColumns.includes("priority") && <TableHead className="text-center">Priority</TableHead>}{projectColumns.includes("leads") && <TableHead>Leads</TableHead>}{projectColumns.includes("start") && <TableHead>Start date</TableHead>}{projectColumns.includes("deadline") && <TableHead>Target date</TableHead>}{projectColumns.includes("milestones") && <TableHead className="text-center">Milestones</TableHead>}{projectColumns.includes("tasks") && <TableHead className="text-center">Tasks</TableHead>}{projectColumns.includes("status") && <TableHead className="text-center">Status</TableHead>}{projectColumns.includes("progress") && <TableHead className="text-center">Progress</TableHead>}</TableRow></TableHeader><TableBody>
       {projects.map(project => { const progress = summarize(workspace.tasks.filter(task => task.projectId === project.id && isOrganized(task, workspace))); const milestones = workspace.tasks.filter(task => task.kind === "milestone" && task.projectId === project.id && isOrganized(task, workspace)); return <TableRow key={project.id}>
         <TableCell className="py-3 pl-4"><div className="flex items-center gap-2"><IconCube aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><button className="text-left font-medium hover:underline" onClick={() => onSelectProject(project.id)}>{project.name}</button></div></TableCell>
         {projectColumns.includes("department") && <TableCell className="max-w-52 text-muted-foreground"><span className="block truncate" title={project.departments.join(", ")}>{project.departments.join(", ") || "—"}</span></TableCell>}

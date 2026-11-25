@@ -16,7 +16,7 @@ import { useMemberFeatureAccess } from "../MemberPlatform/MemberFeatureAccess";
 import { SeasonFinancialWidgets } from "./SeasonFinancialWidgets";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
-import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_STATUSES, type Project, type ProjectDepartment, type ProjectMutation, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
+import { CATEGORY_LABELS, STATUS_LABELS, TASK_CATEGORIES, TASK_STATUSES, type Project, type ProjectMutation, type ProjectRepository, type ProjectWorkspace, type Task, type TaskCategory } from "./types";
 import { addDays, formatDate, isOpen, osloDate, summarize, taskUrgency, validateMilestoneChanges } from "./model";
 import { clearProjectWorkspaceCache, projectRepository, ProjectRequestError } from "./repository";
 import { Choice, ProjectEditor, TaskEditor } from "./TaskEditor";
@@ -29,7 +29,6 @@ import { isOrganized } from "./hierarchy";
 import { milestoneProgress } from "./progress";
 import { ProgressRing } from "./ProgressRing";
 import { ProjectMilestones } from "./ProjectMilestones";
-import { DepartmentEditor } from "./DepartmentEditor";
 import { OverviewProgress } from "./OverviewProgress";
 import { OverviewColumnMenu, OVERVIEW_MILESTONE_COLUMNS, OVERVIEW_PROJECT_COLUMNS, overviewColumns } from "./OverviewColumnMenu";
 import { MilestonePriorityControl, MilestoneLeadsControl, MilestoneDateControl, PriorityIndicator, TargetDate, type SaveMilestone, type MilestoneChanges } from "./MilestoneTableControls";
@@ -94,7 +93,6 @@ export default function ProjectManagement({ personal = false, repository: suppli
   const [view, setView] = useState("tasks");
   const [taskEditor, setTaskEditor] = useState<{ task: Task | null } | null>(null);
   const [projectEditor, setProjectEditor] = useState<{ project: Project | null } | null>(null);
-  const [departmentEditor, setDepartmentEditor] = useState<ProjectDepartment | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [organizationOpen, setOrganizationOpen] = useState(false);
   const [composerKind, setComposerKind] = useState<"task" | "milestone">("task");
@@ -141,7 +139,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
     finally { if (active.current && request === generation.current) setLoading(false); }
   }, [getRepository, report]);
   useEffect(() => { active.current = true; void load(); return () => { active.current = false; generation.current++; }; }, [load, section, personal]);
-  useEffect(() => { setSearch(""); setStatus(personal || section === "partnership-deliverables" ? "all" : "open"); setProjectId("all"); setMilestoneId("all"); setView("tasks"); setTaskEditor(null); setProjectEditor(null); setDepartmentEditor(null); setComposerOpen(false); setOrganizationOpen(false); }, [section, personal]);
+  useEffect(() => { setSearch(""); setStatus(personal || section === "partnership-deliverables" ? "all" : "open"); setProjectId("all"); setMilestoneId("all"); setView("tasks"); setTaskEditor(null); setProjectEditor(null); setComposerOpen(false); setOrganizationOpen(false); }, [section, personal]);
   useEffect(() => {
     if (!requestedProject || !category || !workspace) return;
     if (workspace.projects.some(project => project.id === requestedProject && project.category === category)) { setProjectId(requestedProject); setMilestoneId("all"); setStatus("all"); setSearch(""); setView("tasks"); workItems.current?.scrollIntoView?.({ behavior: "smooth", block: "start" }); }
@@ -167,15 +165,19 @@ export default function ProjectManagement({ personal = false, repository: suppli
     try {
       const next = await (await getRepository()).mutate(mutation);
       if (!active.current) return false;
-      setWorkspace(next); window.dispatchEvent(new Event("helix-workspace-updated")); setTaskEditor(null); setProjectEditor(null); setDepartmentEditor(null);
-      notify(mutation.action === "save_department" ? "Department saved" : mutation.action === "save_project" ? "Project saved" : "Task saved", mutation.action === "save_department" ? "Members and department Lead have been updated." : mutation.action === "save_project" ? "The project is ready to manage." : "Progress and assignments have been updated.", { variant: "success", href: null });
+      setWorkspace(next); window.dispatchEvent(new Event("helix-workspace-updated")); setTaskEditor(null); setProjectEditor(null);
+      if (mutation.action === "save_season_schedule") {
+        notify("Season schedule saved", "The shared timeline has been updated.", { variant: "success", href: null });
+        return true;
+      }
+      notify(mutation.action === "save_project" ? "Project saved" : "Task saved", mutation.action === "save_project" ? "The project is ready to manage." : "Progress and assignments have been updated.", { variant: "success", href: null });
       return true;
     } catch (error) {
       if (!active.current) return false;
       const denied = error instanceof ProjectRequestError && [401, 403].includes(error.status);
       const expired = error instanceof ProjectRequestError && error.status === 401;
-      if (denied) { setWorkspace(null); setTaskEditor(null); setProjectEditor(null); setDepartmentEditor(null); setComposerOpen(false); }
-      notify(expired ? "Sign-in required" : "Could not save changes", `${error instanceof Error ? error.message : "Please try again."}${denied ? "" : " Your input has been kept."}`, { id: "project-management-save", variant: "error", href: null, action: expired ? { label: "Sign in", onClick: () => navigate("/login") } : { label: mutation.action === "save_department" ? "Reload departments" : "Reload tasks", onClick: () => void load() } });
+      if (denied) { setWorkspace(null); setTaskEditor(null); setProjectEditor(null); setComposerOpen(false); }
+      notify(expired ? "Sign-in required" : "Could not save changes", `${error instanceof Error ? error.message : "Please try again."}${denied ? "" : " Your input has been kept."}`, { id: "project-management-save", variant: "error", href: null, action: expired ? { label: "Sign in", onClick: () => navigate("/login") } : { label: "Reload tasks", onClick: () => void load() } });
       return false;
     } finally { saving.current = false; if (active.current) setBusy(false); }
   }
@@ -201,7 +203,7 @@ export default function ProjectManagement({ personal = false, repository: suppli
   </>;
   return <section className="mx-auto w-full max-w-7xl space-y-10 py-6" aria-labelledby="project-page-title" aria-busy={loading || busy}>
     <div className="flex flex-wrap items-start justify-between gap-4"><div className="space-y-2">{category && <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{workspace.season} · Project management</p>}<h1 id="project-page-title" className="text-3xl font-medium tracking-tight">{title}</h1><p className="max-w-2xl text-sm text-muted-foreground">{descriptions[section]}</p></div><div className="flex flex-wrap gap-2">{category && <Button variant="outline" disabled={loading || busy} onClick={() => { clearProjectWorkspaceCache(); void load(); }}>Refresh</Button>}{category && workspace.canManage && <Button variant="outline" disabled={busy} onClick={() => setProjectEditor({ project: null })}>New project</Button>}{category && canManageArea(category, workspace) && <Button disabled={busy || loading} onClick={() => { setComposerKind("task"); setComposerOpen(true); }}>New task</Button>}{category && canManageArea(category, workspace) && <Button variant="outline" disabled={busy || loading} onClick={() => { setComposerKind("milestone"); setComposerOpen(true); }}>New milestone</Button>}</div></div>
-    {!category && <OverviewProgress workspace={directory ? { ...workspace, members: directory.members } : workspace} busy={busy || loading} projectColumns={projectColumns} onToggleProjectColumn={key => toggleOverviewColumn("overviewProjectColumns", key, OVERVIEW_PROJECT_COLUMNS)} onSelectProject={id => navigate(`/projects/${id}`)} onEditDepartment={setDepartmentEditor}>{financialUserId && <SeasonFinancialWidgets key={financialUserId} userId={financialUserId} season={workspace.season} />}</OverviewProgress>}
+    {!category && <OverviewProgress workspace={directory ? { ...workspace, members: directory.members } : workspace} busy={busy || loading} projectColumns={projectColumns} onToggleProjectColumn={key => toggleOverviewColumn("overviewProjectColumns", key, OVERVIEW_PROJECT_COLUMNS)} onSelectProject={id => navigate(`/projects/${id}`)} onSaveSchedule={save}>{financialUserId && <SeasonFinancialWidgets key={financialUserId} userId={financialUserId} season={workspace.season} />}</OverviewProgress>}
     {category && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[{ label: "Task completion", value: `${stats.percent}%`, detail: `${stats.done} of ${stats.total} tasks complete` }, { label: "Overdue", value: stats.overdue, detail: "Open tasks and milestones past deadline" }, { label: "Due within 7 days", value: stats.upcoming, detail: "Including today's deadlines" }, { label: "Blocked", value: stats.blocked, detail: "Work that needs a next step" }].map(item => <Card key={item.label} className="gap-3 py-5"><CardHeader className="px-5"><CardDescription>{item.label}</CardDescription><CardTitle className="text-3xl font-medium tabular-nums">{item.value}</CardTitle></CardHeader><CardContent className="px-5 text-xs text-muted-foreground">{item.detail}</CardContent></Card>)}</div>}
     {category && <p className="text-sm text-muted-foreground">{scope.some(isOpen) ? <>Latest open task or milestone deadline: {formatDate(stats.lastDeadline)}. {stats.unscheduled > 0 ? `${stats.unscheduled} open item${stats.unscheduled === 1 ? " has" : "s have"} no deadline.` : "All open work has a deadline."}</> : "No open tasks or milestones."}</p>}
     {category === "partnership-deliverables" && <PartnerDeliverables tasks={scope} onSelect={partner => { setSearch(partner); setStatus("all"); setProjectId("all"); }} />}
@@ -218,7 +220,6 @@ export default function ProjectManagement({ personal = false, repository: suppli
       <p className="text-xs leading-relaxed text-muted-foreground">Completion uses recorded task status and excludes cancelled work and milestones. Milestone progress uses completed linked tasks; milestone status and deadline are tracked separately. {category === "partnership-deliverables" ? "This list contains recorded obligations for this season." : "Scheduled deadlines do not account for effort, dependencies, or team capacity."}</p>
     </div>}
     {organizationOpen && <OrganizationQueue workspace={workspace} onClose={() => setOrganizationOpen(false)} onOpen={task => { setOrganizationOpen(false); openTask(task); }} onOrganize={task => { setOrganizationOpen(false); setTaskEditor({ task }); }} />}
-    {departmentEditor && <DepartmentEditor key={departmentEditor.id} department={departmentEditor} workspace={directory ? { ...workspace, members: directory.members } : workspace} busy={busy} onSave={save} onClose={() => setDepartmentEditor(null)} />}
     {taskEditor && <TaskEditor key={taskEditor.task?.id ?? "new-task"} task={taskEditor.task} workspace={workspace} category={category ?? "production"} statusOnly={!category} busy={busy} onSave={save} onClose={() => setTaskEditor(null)} />}
     {projectEditor && <ProjectEditor taskLeadCategories={TASK_CATEGORIES.filter(category => canManageArea(category, workspace))} members={workspace.members} key={projectEditor.project?.id ?? "new-project"} project={projectEditor.project} category={category ?? "production"} busy={busy} onSave={save} onClose={() => setProjectEditor(null)} />}
     {composerOpen && category && canManageArea(category, workspace) && <TaskComposer key={`${category}-${composerKind}`} initialKind={composerKind} workspace={workspace} category={category} projectId={projects.some(project => project.id === projectId) ? projectId : null} busy={busy} onSave={save} onClose={() => setComposerOpen(false)} />}

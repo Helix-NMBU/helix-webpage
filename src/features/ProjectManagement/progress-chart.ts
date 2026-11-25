@@ -2,6 +2,35 @@ import { addDays, osloDate } from "./model";
 
 export const chartDay = (date: string) => Date.parse(`${date}T12:00:00Z`) / 86400000;
 
+export const progressLabelAngle = 36;
+const labelRadians = progressLabelAngle * Math.PI / 180;
+const nameLineHeight = 16;
+
+export function progressLabelLayout(axisWidth: number, labels: { center: number; dateWidth: number; nameWidth: number }[]) {
+  const labelsByDate = labels.map((label, index) => ({ ...label, index })).sort((a, b) => a.center - b.center);
+  const diagonalGap = (nameLineHeight + 4) / Math.sin(labelRadians);
+  const gapBetween = (left: number, right: number) =>
+    Math.max(diagonalGap, (labelsByDate[left].dateWidth + labelsByDate[right].dateWidth) / 2 + 6);
+  const nameInset = nameLineHeight / 2 * Math.sin(labelRadians);
+  const latest: number[] = [];
+  for (let index = labelsByDate.length - 1; index >= 0; index--) {
+    const { dateWidth, nameWidth } = labelsByDate[index];
+    const rightInset = Math.max(dateWidth / 2, nameInset + nameWidth * Math.cos(labelRadians));
+    const nextBoundary = index < labelsByDate.length - 1 ? latest[index + 1] - gapBetween(index, index + 1) : axisWidth;
+    latest[index] = Math.min(axisWidth - rightInset, nextBoundary);
+  }
+  const anchors: number[] = [];
+  let previous = 0;
+  labelsByDate.forEach(({ center, dateWidth, index }, order) => {
+    const earliest = order === 0 ? Math.max(dateWidth / 2, nameInset) : previous + gapBetween(order - 1, order);
+    previous = Math.max(earliest, Math.min(center, latest[order]));
+    anchors[index] = previous;
+  });
+  const longestName = Math.max(0, ...labels.map(label => label.nameWidth));
+  const nameHeight = Math.ceil(longestName * Math.sin(labelRadians) + nameLineHeight / 2 * (1 + Math.cos(labelRadians)) + 6);
+  return { anchors, nameHeight };
+}
+
 // Seasons are named for their ending year: S27 is August 2026 through July 2027.
 export function seasonChartRange(season: string, today = osloDate()) {
   const match = /^S(\d{2}|\d{4})$/.exec(season);

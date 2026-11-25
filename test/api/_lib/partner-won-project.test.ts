@@ -12,7 +12,7 @@ beforeAll(async()=>{
  db=new PGlite();
  await db.exec('create schema neon_auth;create table neon_auth."user"(id uuid primary key,name text,email text,"emailVerified" boolean,banned boolean);create table neon_auth.account(id uuid primary key default gen_random_uuid(),"accountId" text,"providerId" text,"userId" uuid references neon_auth."user"(id),"createdAt" timestamptz default now());');
  for(const n of ["001_member_cv","002_member_helix_role","009_platform_access_and_managed_positions","009_project_management","010_department_lead_tasks","011_task_assignees","012_project_milestones","013_project_hierarchy","014_milestone_field_updates","015_project_departments","016_fixed_departments","017_workspace_directory","020_project_start_dates","021_project_creation_milestones","018_department_homes","019_department_settings_permissions","025_workspace_space_access","026_department_access_levels","032_estimated_task_history","033_project_status","022_task_backlog_status"]) await db.exec(read(n));
- await db.exec(`create schema partner; create table partner.organizations(id uuid primary key,name text,active boolean); create schema finance; create table finance.seasons(id uuid primary key,code text,name text,start_date date,end_date date,status text); create table finance.settings(setting_key text,setting_value jsonb);`);
+ await db.exec(`create schema partner; create table partner.organizations(id uuid primary key,name text,active boolean); create schema finance; create table finance.seasons(id uuid primary key,code text unique,name text,start_date date,end_date date,status text); create table finance.settings(setting_key text,setting_value jsonb);`);
  for(const p of people){
   await db.query('insert into neon_auth."user" values($1,$2,$3,true,false)',[p.userId,p.name,p.email]);
   await db.query('insert into neon_auth.account("accountId","providerId","userId") values($1,\'google\',$2)',[p.googleSub,p.userId]);
@@ -23,6 +23,7 @@ beforeAll(async()=>{
  await db.query("insert into project_management.department_members(department_id,member_id,access_level) select id,$1,'member' from project_management.departments where name='Business & Marketing'",[people[2].userId]);
  await db.exec(`insert into partner.organizations values('${id(10)}','Acme',false); insert into finance.seasons values('${id(11)}','S27','S27','2026-08-01','2027-07-31','active'); insert into finance.settings values('current_season','"S27"');`);
  await db.exec(read('035_partner_deals'));
+ await db.exec(read('083_season_schedules'));
  await db.exec("alter table partner_deals.deals add column if not exists primary_season_id uuid");
  await db.exec('create function partner_deals.attach_won_funding(uuid,uuid) returns void language plpgsql as $$ begin return; end $$;');
  await db.exec(read('038_partner_won_handoff'));

@@ -37,8 +37,9 @@ beforeAll(async () => {
   await db.exec(readFileSync(new URL("../db/migrations/028_member_preferences.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../db/migrations/032_estimated_task_history.sql", import.meta.url), "utf8"));
   await db.exec(readFileSync(new URL("../db/migrations/033_project_status.sql", import.meta.url), "utf8"));
-    await db.exec("create schema finance; create table finance.settings(setting_key text,setting_value jsonb);");
+    await db.exec("create schema finance; create table finance.settings(setting_key text,setting_value jsonb); create table finance.seasons(code text primary key,start_date date,end_date date,status text);");
     await db.exec(readFileSync(new URL("../db/migrations/041_project_current_season.sql", import.meta.url), "utf8"));
+    await db.exec(readFileSync(new URL("../db/migrations/083_season_schedules.sql", import.meta.url), "utf8"));
   await db.exec("drop index if exists project_management.project_department_lead_idx");
   await db.exec(readFileSync(new URL("../db/migrations/057_optional_manager_department_membership.sql", import.meta.url), "utf8"));
   await db.exec("create schema partner_deals; create table partner_deals.member_grants(member_id uuid not null,capability text not null,active boolean not null default true,primary key(member_id,capability));");

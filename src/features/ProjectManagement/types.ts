@@ -1,3 +1,5 @@
+import type { SeasonPhase, SeasonSchedule } from "./season-schedule.js";
+
 export const TASK_CATEGORIES = ["production", "partnership-deliverables", "marketing", "operations"] as const;
 export type TaskCategory = typeof TASK_CATEGORIES[number];
 export const TASK_WORKFLOW_STATUSES = ["backlog", "todo", "in_progress", "done", "blocked"] as const;
@@ -66,6 +68,7 @@ export interface ProjectWorkspace {
   season: string;
   viewerId: string;
   canManage: boolean;
+  seasonSchedule?: SeasonSchedule | null;
   taskLeadCategories: TaskCategory[];
   projects: Project[];
   tasks: Task[];
@@ -75,6 +78,7 @@ export interface ProjectWorkspace {
 }
 export type MilestoneChanges = Partial<Pick<TaskInput, "priority" | "assigneeIds" | "deadline">>;
 export type ProjectMutation =
+  | { action: "save_season_schedule"; season: string; expectedRevision: number; phases: SeasonPhase[] }
   | { action: "delete_task"; id: string; expectedRevision: number }
   | { action: "delete_project"; id: string; expectedRevision: number }
   | { action: "save_department"; id: string; expectedRevision: number; department: DepartmentInput }

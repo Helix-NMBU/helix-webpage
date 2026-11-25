@@ -1,3 +1,4 @@
+import { seasonPhaseIds, seasonPhaseStatuses, type SeasonPhase } from "../../src/features/ProjectManagement/season-schedule.js";
 import { MAX_TASK_ASSIGNEES, MAX_PROJECT_MILESTONES, MAX_DEPARTMENT_MEMBERS, ORGANIZATION_DEPARTMENTS, TASK_CATEGORIES, TASK_PRIORITIES, TASK_STATUSES, type MilestoneChanges, type ProjectInput, type ProjectMutation, type TaskInput } from "../../src/features/ProjectManagement/types.js";
 import { MemberCvError } from "./member-cv-error.js";
 
@@ -60,9 +61,23 @@ function project(value: unknown): ProjectInput {
 export function parseProjectMutation(value: unknown): ProjectMutation {
   const body = object(value);
   if (JSON.stringify(body).length > (body.action === "save_project" ? 64000 : 20000)) return invalid("This request is too large.");
-  const id = uuid(body.id);
   const expectedRevision = body.expectedRevision;
   if (typeof expectedRevision !== "number" || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision > 2147483646) return invalid("A valid saved revision is required.");
+  if (body.action === "save_season_schedule") {
+    const season = body.season;
+    if (typeof season !== "string" || !/^S\d{2}$/.test(season)) return invalid("Choose a valid season.");
+    if (!Array.isArray(body.phases) || body.phases.length !== seasonPhaseIds.length) return invalid("Provide all six season phases.");
+    const phases: SeasonPhase[] = seasonPhaseIds.map((id, index) => {
+      const phase = object((body.phases as unknown[])[index]);
+      if (phase.id !== id) return invalid("Keep the season phases in order.");
+      const startDate = date(phase.startDate);
+      const endDate = date(phase.endDate);
+      if (startDate && endDate && startDate > endDate) return invalid("A phase must start on or before its end date.");
+      return { id, startDate, endDate, status: oneOf(phase.status, seasonPhaseStatuses), note: text(phase.note, "phase note", 300) };
+    });
+    return { action: body.action, season, expectedRevision, phases };
+  }
+  const id = uuid(body.id);
   if (body.action === "delete_task" || body.action === "delete_project") {
     if (expectedRevision < 1) return invalid("A saved revision is required.");
     return { action: body.action, id, expectedRevision };
