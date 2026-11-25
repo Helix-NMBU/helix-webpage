@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PositionsPanel } from "./PositionsPanel";
 import type { RecruitmentPosition } from "./positions";
 
+const contact = { id: "10000000-0000-4000-8000-000000000001", name: "Recruiter", email: "recruiter@helixnmbu.no", linkedin: "https://www.linkedin.com/in/recruiter" };
+const loadContacts = vi.fn(async () => [contact]);
+const notify = vi.hoisted(() => vi.fn());
+vi.mock("../MemberPlatform/MemberNotifications", () => ({ useNotify: () => notify }));
 const position: RecruitmentPosition = {
   id: "open-application", title: "Open Application", department: "Open", applyUrl: "/apply/form",
   contact: { name: "Recruiter", email: "recruiter@helixnmbu.no", linkedin: "https://www.linkedin.com/in/recruiter" },
@@ -16,13 +20,15 @@ const save = vi.fn<(position: Omit<RecruitmentPosition, "id"> & { id?: string })
 const visibility = vi.fn<(id: string, visible: boolean) => Promise<void>>();
 const remove = vi.fn<(id: string) => Promise<void>>();
 beforeEach(() => {
+  notify.mockReset();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  loadContacts.mockReset().mockResolvedValue([contact]);
   save.mockReset().mockResolvedValue(undefined); visibility.mockReset().mockResolvedValue(undefined); remove.mockReset().mockResolvedValue(undefined);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 async function render(positions = [position], loading = false) {
-  await act(async () => root.render(<PositionsPanel positions={positions} loading={loading} onSave={save} onDelete={remove} onVisibilityChange={visibility} />));
+  await act(async () => root.render(<PositionsPanel positions={positions} loading={loading} onSave={save} onDelete={remove} onVisibilityChange={visibility} loadContactMembers={loadContacts} />));
 }
 async function click(text: string) {
   const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === text || item.getAttribute("aria-label")?.startsWith(`${text} `));
@@ -43,18 +49,34 @@ async function submit() {
 }
 
 describe("recruitment position editor", () => {
+  it("removes manual URLs and contact fields and requires a selected Management contact", async () => {
+    await render([]); await click("Create position");
+    for (const id of ["position-apply-url", "position-contact-name", "position-contact-email", "position-contact-linkedin"]) expect(document.getElementById(id)).toBeNull();
+    expect(document.getElementById("position-contact")).not.toBeNull();
+    expect([...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Save position")?.disabled).toBe(true);
+    await submit(); expect(save).not.toHaveBeenCalled();
+  });
+  it("uses shared notifications with recovery when contacts fail to load", async () => {
+    loadContacts.mockRejectedValueOnce(new Error("Unavailable"));
+    await render(); await click("Edit");
+    expect(notify).toHaveBeenCalledWith("Could not load Management members", "Unavailable", expect.objectContaining({ variant: "error", action: { label: "Retry", onClick: expect.any(Function) } }));
+    expect(document.body.textContent).not.toContain("Unavailable");
+    await act(async () => notify.mock.calls[0][2].action.onClick());
+    expect(loadContacts).toHaveBeenCalledTimes(2);
+    await submit(); expect(save).toHaveBeenCalledTimes(1);
+  });
   it("creates hidden positions with normalized details and one task/outcome per line", async () => {
     await render([]); await click("Create position");
     expect(document.getElementById("position-visible")?.getAttribute("aria-checked")).toBe("false");
     await fill("position-title", " Software Engineer ");
-    await fill("position-contact-name", " Recruiter ");
-    await fill("position-contact-email", "recruiter@helixnmbu.no");
+    const select = document.getElementById("position-contact")!.parentElement!.querySelector("select")!;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, contact.id); select.dispatchEvent(new Event("change", { bubbles: true })); });
     await fill("position-about", " Build the car. ");
     await fill("position-tasks", " Develop software \n\n Test the car \n");
     await fill("position-outcomes", " Experience \n Teamwork ");
     await submit();
     expect(save).toHaveBeenCalledExactlyOnceWith({ title: "Software Engineer", department: "Software & Autonomous", applyUrl: "",
-      contact: { name: "Recruiter", email: "recruiter@helixnmbu.no" }, about: "Build the car.", tasks: ["Develop software", "Test the car"], achieve: ["Experience", "Teamwork"], visible: false });
+      contactMemberId: contact.id, contact: { name: contact.name, email: contact.email, linkedin: contact.linkedin }, about: "Build the car.", tasks: ["Develop software", "Test the car"], achieve: ["Experience", "Teamwork"], visible: false });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it("keeps all edited details after a failed save and permits retry", async () => {
@@ -62,7 +84,7 @@ describe("recruitment position editor", () => {
     await render(); await click("Edit");
     expect((document.getElementById("position-tasks") as HTMLTextAreaElement).value).toBe("Build\nLearn");
     await fill("position-title", "Open opportunities");
-    await fill("position-contact-linkedin", "https://www.linkedin.com/in/new-contact");
+    expect(document.getElementById("position-contact-linkedin")).toBeNull();
     await act(async () => (document.getElementById("position-visible") as HTMLButtonElement).click());
     await submit();
     expect((document.getElementById("position-title") as HTMLInputElement).value).toBe("Open opportunities");
@@ -70,7 +92,7 @@ describe("recruitment position editor", () => {
     await submit();
     expect(save).toHaveBeenCalledTimes(2);
     expect(save.mock.calls[1][0]).toMatchObject({ id: "open-application", title: "Open opportunities", department: "Open", visible: false,
-      contact: { linkedin: "https://www.linkedin.com/in/new-contact" } });
+      contactMemberId: contact.id, contact: { linkedin: contact.linkedin } });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
   it("prevents duplicate saves and closing the editor while a save is pending", async () => {

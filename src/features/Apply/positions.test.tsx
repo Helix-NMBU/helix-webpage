@@ -63,4 +63,5 @@ it("shows every visible open posting and department supplied by the catalog", as
 it("keeps legacy placeholder application links on the platform form", () => {
   expect(positionApplicationUrl({ id: "open-application", applyUrl: "https://form.typeform.com/to/placeholder" })).toBe("/apply/form?position=open-application");
   expect(positionApplicationUrl({ id: "engineer", applyUrl: "" })).toBe("/apply/form?position=engineer");
+  expect(positionApplicationUrl({ id: "engineer", applyUrl: "https://external.example.test/apply" })).toBe("/apply/form?position=engineer");
 });

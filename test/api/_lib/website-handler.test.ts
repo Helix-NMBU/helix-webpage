@@ -9,7 +9,7 @@ const id = "10000000-0000-4000-8000-000000000001";
 function fixture() {
   const services: WebsiteServices = {
     positions: vi.fn(async () => [{ id: "software", title: "Software Engineer", department: "Software", tasks: ["Build"], applyUrl: "", about: "Join", achieve: [], contact: { name: "Recruiter", email: "test@example.test" } }]),
-    savePosition: vi.fn(), managedPositions: vi.fn(async () => []), createPosition: vi.fn(), updatePosition: vi.fn(), setPositionVisibility: vi.fn(), deletePosition: vi.fn(),
+    contactMembers: vi.fn(async () => []), savePosition: vi.fn(), managedPositions: vi.fn(async () => []), createPosition: vi.fn(), updatePosition: vi.fn(), setPositionVisibility: vi.fn(), deletePosition: vi.fn(),
     submit: vi.fn(async () => ({ id, emailStatus: "skipped" as const })),
     session: vi.fn(), list: vi.fn(), read: vi.fn(), file: vi.fn(), remove: vi.fn(), confirmation: vi.fn(),
   };
@@ -65,13 +65,20 @@ describe("website HTTP boundaries", () => {
   });
   it("rejects anonymous direct reads, signed downloads, deletions and rejection/confirmation requests", async () => {
     const f = fixture(); const handler = createWebsiteHandler(f.get);
-    for (const action of ["session", "applications", "application", "file"]) {
+    for (const action of ["session", "applications", "application", "file", "contact-members"]) {
       expect((await call(handler, { query: { action, id, kind: "cv" } })).status).toBe(401);
     }
     for (const action of ["delete", "reject", "confirmation"]) {
       expect((await call(handler, { method: "POST", body: { action, application_id: id } })).status).toBe(401);
     }
     expect(f.get).not.toHaveBeenCalled();
+  });
+  it("keeps Management contact choices on the authenticated member endpoint", async () => {
+    const f = fixture(); const handler = createWebsiteHandler(f.get);
+    expect((await call(handler, { token: "jwt", query: { action: "contact-members" } })).status).toBe(200);
+    expect(f.services.contactMembers).toHaveBeenCalledExactlyOnceWith("jwt");
+    expect((await call(handler, { token: "jwt", query: { action: "contact-members" }, headers: { origin: "https://www.helixnmbu.no" } })).status).toBe(403);
+    expect(f.services.contactMembers).toHaveBeenCalledTimes(1);
   });
   it("cannot override either fixed legacy endpoint to submit or send to supplied email details", async () => {
     const f = fixture();

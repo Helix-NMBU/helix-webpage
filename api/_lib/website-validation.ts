@@ -10,7 +10,7 @@ export type WebsitePosition = {
   contact: { name: string; email: string; linkedin?: string };
   about: string; tasks: string[]; achieve: string[];
 };
-export type ManagedWebsitePosition = WebsitePosition & { visible: boolean };
+export type ManagedWebsitePosition = WebsitePosition & { visible: boolean; contactMemberId?: string };
 const POSITION_DEPARTMENTS = new Set(["Open", "Finance", "Mechanical & Production", "Electrical", "Software & Autonomous", "Business & Marketing", "Logistics"]);
 export function parseWebsitePosition(value: unknown): WebsitePosition {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position details.");
