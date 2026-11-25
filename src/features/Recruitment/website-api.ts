@@ -2,6 +2,8 @@ import { readLocalRecruitment, writeLocalRecruitment, localRecruitmentFile } fro
 import type { RecruitmentPosition } from "./positions";
 import { memberSessionToken } from "../MemberCV/session";
 import { isLocalMemberMode, localMemberAccount, localMemberSignedIn } from "../MemberPlatform/local-mode";
+import { memberContact, type PositionContactMember } from "./position-contact";
+import { departmentMemberIds } from "../ProjectManagement/permissions";
 
 export type WebsitePosition = RecruitmentPosition;
 export type WebsitePositionInput = Omit<WebsitePosition, "id">;
@@ -35,7 +37,21 @@ export function createRecruitmentApi(owner: { current: string | null }) {
     writeLocalRecruitment(state);
     return {emailStatus: "skipped", cleanupPending: false};
   }
+  async function contactMembers(): Promise<PositionContactMember[]> {
+    if (import.meta.env.DEV && local()) {
+      const { createLocalWorkspaceRepository } = await import("../Workspace/local-repository");
+      const directory = await createLocalWorkspaceRepository().load();
+      const department = directory.departments.find(department => department.name === "Management");
+      const ids = department ? departmentMemberIds(department) : [];
+      return directory.members.filter(member => ids.includes(member.id)).map(member => ({
+        id: member.id, name: member.name, email: member.id === directory.viewerId ? localMemberAccount.email : `${member.name.toLowerCase().replace(/[^a-z]+/g, ".")}@example.invalid`,
+        ...(member.avatarUrl ? { avatarUrl: member.avatarUrl } : {}),
+      }));
+    }
+    return (await request<{ members: PositionContactMember[] }>("?action=contact-members")).members;
+  }
   return {
+    contactMembers,
     session: () => {
       if (isLocalMemberMode() && localMemberSignedIn()) return Promise.resolve({ email: localMemberAccount.email, name: localMemberAccount.name });
       return request<{ email: string; name: string }>("?action=session");
@@ -57,7 +73,9 @@ export function createRecruitmentApi(owner: { current: string | null }) {
     },
     async savePosition(position: Omit<RecruitmentPosition, "id"> & { id?: string }) {
       if (local()) {
-        const saved = { ...position, id: position.id ?? crypto.randomUUID() };
+        const member = (await contactMembers()).find(member => member.id === position.contactMemberId);
+        if (!member) throw new RecruitmentRequestError("Choose a Management member as the contact.", 400);
+        const saved = { ...position, id: position.id ?? crypto.randomUUID(), applyUrl: "", contact: memberContact(member) };
         const state = readLocalRecruitment();
         state.positions = [...state.positions.filter(row => row.id !== saved.id), saved];
         writeLocalRecruitment(state);

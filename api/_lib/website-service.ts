@@ -7,9 +7,14 @@ import { withVerifyFullSsl } from "./pg-ssl.js";
 import { createWebsiteStorage, type WebsiteStorage } from "./website-storage.js";
 import { createWebsiteMailer, type EmailStatus, type WebsiteMailer } from "./website-email.js";
 import { applicationId, isApplicationPath, parseApplication, parseCv, parseWebsitePosition, type ApplicationRow, type ManagedWebsitePosition, type WebsitePosition } from "./website-validation.js";
+import { positionContactMembers, selectedPositionContact } from "./position-contacts.js";
+import { memberContact, type PositionContactMember } from "../../src/features/Recruitment/position-contact.js";
+
+type StoredPosition = WebsitePosition & { contactMemberId?: string };
 
 export interface WebsiteServices {
   positions(): Promise<WebsitePosition[]>;
+  contactMembers(token: string): Promise<PositionContactMember[]>;
   savePosition(token: string, value: unknown): Promise<ManagedWebsitePosition>;
   managedPositions(token: string): Promise<ManagedWebsitePosition[]>;
   createPosition(token: string, body: Record<string, unknown>): Promise<ManagedWebsitePosition>;
@@ -47,9 +52,25 @@ export function createWebsiteServices(deps: {
     if (typeof id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) throw new MemberCvError(400, "A valid position ID is required.");
     return id;
   };
+  async function resolveContacts(positions: StoredPosition[]) {
+    const members = await positionContactMembers(db, [...new Set(positions.flatMap(position => position.contactMemberId ? [position.contactMemberId] : []))]);
+    return positions.map(position => {
+      const member = members.find(member => member.id === position.contactMemberId);
+      return { ...position, applyUrl: "", ...(member ? { contact: memberContact(member) } : {}) };
+    });
+  }
+  async function positionForSave(value: unknown): Promise<StoredPosition> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new MemberCvError(400, "Check the position fields.");
+    const input = value as Record<string, unknown>;
+    const member = await selectedPositionContact(db, input.contactMemberId);
+    return { ...parseWebsitePosition({ ...input, applyUrl: "", contact: memberContact(member) }), contactMemberId: member.id };
+  }
   async function visiblePositions(): Promise<WebsitePosition[]> {
-    const { rows } = await db.query<{ document: WebsitePosition }>("select document from website.positions where visible = true order by display_order, id");
-    return rows.map(row => row.document);
+    const { rows } = await db.query<{ document: StoredPosition }>("select document from website.positions where visible = true order by display_order, id");
+    return (await resolveContacts(rows.map(row => row.document))).map(position => {
+      const { contactMemberId: _memberId, ...publicPosition } = position;
+      return publicPosition;
+    });
   }
   async function readRow(id: string): Promise<ApplicationRow> {
     const row = (await db.query<ApplicationRow>("select * from website.applications where id = $1::uuid", [applicationId(id)])).rows[0];
@@ -63,10 +84,15 @@ export function createWebsiteServices(deps: {
   }
   return {
     positions: visiblePositions,
+    async contactMembers(token) {
+      await authorize(token);
+      return positionContactMembers(db);
+    },
     async managedPositions(token) {
       await authorize(token);
-      const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>("select document, visible from website.positions order by display_order, id");
-      return rows.map(row => ({ ...row.document, visible: row.visible }));
+      const { rows } = await db.query<{ document: StoredPosition; visible: boolean }>("select document, visible from website.positions order by display_order, id");
+      const positions = await resolveContacts(rows.map(row => row.document));
+      return positions.map((position, index) => ({ ...position, visible: rows[index].visible }));
     },
     async savePosition(token, value) {
       await authorize(token);
@@ -75,7 +101,7 @@ export function createWebsiteServices(deps: {
       const isNew = input.id === undefined;
       const id = isNew ? randomUUID() : positionId(input.id as string);
       if (input.visible !== undefined && typeof input.visible !== "boolean") throw new MemberCvError(400, "Check the public visibility field.");
-      const position = parseWebsitePosition({ ...input, id });
+      const position = await positionForSave({ ...input, id });
       const visible = input.visible === true;
       if (isNew) {
         await db.query(`insert into website.positions (id, document, visible, display_order)
@@ -88,7 +114,7 @@ export function createWebsiteServices(deps: {
     },
     async createPosition(token, body) {
       await authorize(token);
-      const position = parseWebsitePosition(body.position ?? body);
+      const position = await positionForSave(body.position ?? body);
       let rows: { document: WebsitePosition; visible: boolean }[];
       try {
         ({ rows } = await db.query<{ document: WebsitePosition; visible: boolean }>(`insert into website.positions (id, document, visible, display_order)
@@ -104,7 +130,7 @@ export function createWebsiteServices(deps: {
     async updatePosition(token, id, body) {
       await authorize(token);
       const key = positionId(id);
-      const position = parseWebsitePosition({ ...(body.position && typeof body.position === "object" ? body.position as object : body), id: key });
+      const position = await positionForSave({ ...(body.position && typeof body.position === "object" ? body.position as object : body), id: key });
       const { rows } = await db.query<{ document: WebsitePosition; visible: boolean }>("update website.positions set document = $2::jsonb, updated_at = now() where id = $1 returning document, visible", [key, JSON.stringify(position)]);
       if (!rows[0]) throw new MemberCvError(404, "Position not found.");
       return { ...rows[0].document, visible: rows[0].visible };

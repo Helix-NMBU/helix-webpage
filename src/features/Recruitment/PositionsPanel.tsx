@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { Button } from "@libs/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
@@ -9,6 +9,9 @@ import { RecruitmentListSkeleton } from "../MemberPlatform/LoadingSkeletons";
 import { Switch } from "@libs/components/ui/switch";
 import { Textarea } from "@libs/components/ui/textarea";
 import type { RecruitmentPosition } from "./positions";
+import { memberContact, type PositionContactMember } from "./position-contact";
+import { PositionContactPicker } from "./PositionContactPicker";
+import { useNotify } from "../MemberPlatform/MemberNotifications";
 
 type PositionInput = Omit<RecruitmentPosition, "id"> & { id?: string };
 type Props = {
@@ -17,6 +20,7 @@ type Props = {
   onSave: (position: PositionInput) => Promise<void>;
   onVisibilityChange: (id: string, visible: boolean) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  loadContactMembers: () => Promise<PositionContactMember[]>;
 };
 type Draft = Omit<PositionInput, "tasks" | "achieve"> & { tasks: string; achieve: string };
 const DEPARTMENTS = ["Finance", "Mechanical & Production", "Electrical", "Software & Autonomous", "Business & Marketing", "Logistics", "Open"];
@@ -26,10 +30,33 @@ const emptyDraft = (): Draft => ({
 });
 const lines = (value: string) => value.split("\n").map(line => line.trim()).filter(Boolean);
 
-export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibilityChange }: Props) {
+export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibilityChange, loadContactMembers }: Props) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [deleting, setDeleting] = useState<RecruitmentPosition | null>(null);
   const [busy, setBusy] = useState(false);
+  const [contacts, setContacts] = useState<PositionContactMember[] | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactRefresh, setContactRefresh] = useState(0);
+  const notify = useNotify();
+  const editorOpen = draft !== null;
+  useEffect(() => {
+    if (!editorOpen) return;
+    let active = true;
+    setContacts(null); setContactsLoading(true);
+    void loadContactMembers().then(members => {
+      if (!active) return;
+      setContacts(members);
+      if (!members.length) notify("No Management contacts available", "Add a member to Management in Workspace, then try again.", {
+        variant: "warning", href: "/members", action: { label: "Retry", onClick: () => setContactRefresh(value => value + 1) },
+      });
+    }).catch(error => {
+      if (active) notify("Could not load Management members", error instanceof Error ? error.message : "Please try again.", {
+        variant: "error", href: null, action: { label: "Retry", onClick: () => setContactRefresh(value => value + 1) },
+      });
+    }).finally(() => { if (active) setContactsLoading(false); });
+    return () => { active = false; };
+  }, [editorOpen, loadContactMembers, notify, contactRefresh]);
+  const selectedContact = contacts?.find(member => draft?.contactMemberId ? member.id === draft.contactMemberId : member.email.toLowerCase() === draft?.contact.email.toLowerCase());
   const pending = useRef(false);
   const departments = [...new Set([...DEPARTMENTS, ...positions.map(position => position.department)])];
   const update = (change: Partial<Draft>) => setDraft(current => current ? { ...current, ...change } : null);
@@ -38,12 +65,12 @@ export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibil
   });
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (!draft || pending.current) return;
+    if (!draft || pending.current || contactsLoading || !selectedContact) return;
     pending.current = true; setBusy(true);
     try {
       await onSave({
-        ...draft, title: draft.title.trim(), applyUrl: draft.applyUrl.trim(), about: draft.about.trim(),
-        contact: { name: draft.contact.name.trim(), email: draft.contact.email.trim(), ...(draft.contact.linkedin?.trim() ? { linkedin: draft.contact.linkedin.trim() } : {}) },
+        ...draft, title: draft.title.trim(), applyUrl: "", about: draft.about.trim(),
+        contactMemberId: selectedContact.id, contact: memberContact(selectedContact),
         tasks: lines(draft.tasks), achieve: lines(draft.achieve),
       });
       setDraft(null);
@@ -87,17 +114,14 @@ export function PositionsPanel({ positions, loading, onSave, onDelete, onVisibil
         {draft && <form onSubmit={event => void save(event)} className="space-y-5">
           <fieldset disabled={busy} className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-title">Title</Label><Input id="position-title" value={draft.title} required maxLength={160} onChange={event => update({ title: event.target.value })} /></div>
-            <div className="space-y-2"><Label htmlFor="position-department">Department</Label><Select value={draft.department} onValueChange={department => update({ department })} disabled={busy}><SelectTrigger id="position-department" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{departments.map(department => <SelectItem key={department} value={department}>{department === "Open" ? "Open application" : department}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-2"><Label htmlFor="position-apply-url">Application URL</Label><Input id="position-apply-url" value={draft.applyUrl} placeholder="Leave blank to use the application form" maxLength={2000} onChange={event => update({ applyUrl: event.target.value })} /></div>
-            <div className="space-y-2"><Label htmlFor="position-contact-name">Contact name</Label><Input id="position-contact-name" value={draft.contact.name} required maxLength={160} onChange={event => update({ contact: { ...draft.contact, name: event.target.value } })} /></div>
-            <div className="space-y-2"><Label htmlFor="position-contact-email">Contact email</Label><Input id="position-contact-email" type="email" value={draft.contact.email} required maxLength={254} onChange={event => update({ contact: { ...draft.contact, email: event.target.value } })} /></div>
-            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-contact-linkedin">Contact LinkedIn (optional)</Label><Input id="position-contact-linkedin" type="url" value={draft.contact.linkedin ?? ""} maxLength={2000} onChange={event => update({ contact: { ...draft.contact, linkedin: event.target.value } })} /></div>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-department">Department</Label><Select value={draft.department} onValueChange={department => update({ department })} disabled={busy}><SelectTrigger id="position-department" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{departments.map(department => <SelectItem key={department} value={department}>{department === "Open" ? "Open application" : department}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-contact">Contact member</Label><PositionContactPicker members={contacts ?? []} value={selectedContact?.id ?? ""} onChange={contactMemberId => update({ contactMemberId })} disabled={busy || contactsLoading || contacts === null} /></div>
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-about">Description</Label><Textarea id="position-about" value={draft.about} required maxLength={5000} rows={4} onChange={event => update({ about: event.target.value })} /></div>
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-tasks">Tasks</Label><Textarea id="position-tasks" value={draft.tasks} maxLength={20000} rows={4} placeholder="One task per line" onChange={event => update({ tasks: event.target.value })} /></div>
             <div className="space-y-2 sm:col-span-2"><Label htmlFor="position-outcomes">Outcomes</Label><Textarea id="position-outcomes" value={draft.achieve} maxLength={20000} rows={4} placeholder="One outcome per line" onChange={event => update({ achieve: event.target.value })} /></div>
             <div className="flex items-center gap-3 sm:col-span-2"><Switch id="position-visible" checked={draft.visible} disabled={busy} onCheckedChange={visible => update({ visible })} /><Label htmlFor="position-visible">Visible on the website</Label></div>
           </fieldset>
-          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save position"}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" disabled={busy || contactsLoading || !selectedContact}>{busy ? "Saving…" : "Save position"}</Button></DialogFooter>
         </form>}
       </DialogContent>
     </Dialog>

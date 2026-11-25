@@ -84,7 +84,7 @@ export default function RecruitmentPortal() {
         </header>
         <Tabs defaultValue="applications">
           <TabsList aria-label="Recruiting views" className="gap-2 rounded-none bg-transparent p-0"><TabsTrigger value="applications" className="h-8 flex-none rounded-full border-border bg-background px-4 text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground dark:data-[state=active]:bg-muted">Applications</TabsTrigger><TabsTrigger value="positions" className="h-8 flex-none rounded-full border-border bg-background px-4 text-muted-foreground data-[state=active]:bg-muted data-[state=active]:text-foreground dark:data-[state=active]:bg-muted">Open positions</TabsTrigger></TabsList>
-          <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} onVisibilityChange={setPositionVisibility} /></TabsContent>
+          <TabsContent value="positions"><PositionsPanel positions={positions} loading={loading} onSave={savePosition} onDelete={deletePosition} onVisibilityChange={setPositionVisibility} loadContactMembers={api.contactMembers} /></TabsContent>
           <TabsContent value="applications" className="space-y-6">
         {loading && <RecruitmentListSkeleton />}
         {ready && !loading && <>
