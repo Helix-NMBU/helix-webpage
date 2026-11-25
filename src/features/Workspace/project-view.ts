@@ -5,13 +5,21 @@ export const PROJECT_COLUMNS = [
   ["leads", "Leads"], ["start", "Start date"], ["deadline", "Target date"], ["tasks", "Tasks"], ["status", "Status"],
 ] as const;
 export type ProjectColumn = typeof PROJECT_COLUMNS[number][0];
+export const PROJECT_COMPLETION_OPTIONS = [
+  { value: "all", label: "All projects" },
+  { value: "open", label: "Hide completed" },
+  { value: "completed", label: "Completed only" },
+  { value: "empty", label: "No tasks yet" },
+];
+
 export function projectView(params: URLSearchParams) {
+  const completion = params.get("completion");
   return {
     view: params.get("view") === "timeline" ? "timeline" : "list",
     department: params.get("department") ?? "all",
     lead: params.get("lead") ?? "all",
     priority: params.get("priority") ?? "all",
-    completion: params.get("completion") ?? "all",
+    completion: PROJECT_COMPLETION_OPTIONS.find(option => option.value === completion)?.value ?? "all",
     sort: params.get("sort") ?? "deadline",
     group: params.get("group") ?? "none",
     scale: params.get("scale") === "month" ? "month" : params.get("scale") === "quarter" ? "quarter" : "year",
@@ -19,7 +27,7 @@ export function projectView(params: URLSearchParams) {
   };
 }
 export type ProjectView = ReturnType<typeof projectView>;
-export const projectComplete = (project: WorkspaceProject) => project.total > 0 && project.done >= project.total;
+export const projectComplete = (project: WorkspaceProject) => project.status === "done" || (project.total > 0 && project.done >= project.total);
 export function visibleProjects(data: WorkspaceDirectory, options: ProjectView, search: string) {
   const department = data.departments.find(item => item.id === options.department);
   const priorityOrder = ["urgent", "high", "normal", "low", "none"];

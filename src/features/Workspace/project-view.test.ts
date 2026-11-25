@@ -44,6 +44,20 @@ describe("project views", () => {
     params.set("completion", "open");
     expect(visibleProjects(data, projectView(params), "chassis")).toEqual([]);
   });
+  it("hides projects marked done even when they have no tasks, in List and Timeline", () => {
+    const data = directoryFixture();
+    const [closed, active] = data.projects;
+    data.projects = [
+      { ...closed, status: "done", total: 0, done: 0 },
+      { ...active, status: "in_progress", total: 2, done: 1 },
+    ];
+    for (const view of ["list", "timeline"]) {
+      const params = new URLSearchParams({ view, completion: "open" });
+      expect(visibleProjects(data, projectView(params), "").map(project => project.id)).toEqual([active.id]);
+      params.set("completion", "completed");
+      expect(visibleProjects(data, projectView(params), "").map(project => project.id)).toEqual([closed.id]);
+    }
+  });
   it("distinguishes undated, unassigned and empty projects and sorts missing dates last", () => {
     const data = directoryFixture();
     data.projects = data.projects.slice(0, 2);

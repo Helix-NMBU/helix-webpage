@@ -58,7 +58,8 @@ export function ProjectTimeline({ projects, groups, directory, scale, timelineRe
   const [viewport, setViewport] = useState({ left: 0, width: 0, label: 0 });
   const [pointerX, setPointerX] = useState<number | null>(null);
   const today = osloDate();
-  const { start, end, months } = timelineRange(projects, today);
+  const { start, end, months } = timelineRange(directory.projects, today);
+  const hasProjects = projects.length > 0;
   const width = Math.max(720, (chartDay(end) - chartDay(start)) * (scale === "month" ? 18 : scale === "quarter" ? 8 : 3));
   const x = (date: string) => (chartDay(date) - chartDay(start)) / (chartDay(end) - chartDay(start)) * width;
   const todayX = x(today);
@@ -81,13 +82,13 @@ export function ProjectTimeline({ projects, groups, directory, scale, timelineRe
     const labelWidth = scroll.current.querySelector<HTMLElement>("[data-timeline-label]")?.offsetWidth ?? 240;
     scroll.current.scrollLeft = Math.max(0, todayX - (scroll.current.clientWidth - labelWidth) / 2);
     updateViewport();
-  }, [todayX, width, projects.length]);
+  }, [todayX, width, hasProjects]);
   useEffect(() => {
     if (!scroll.current) return;
     const observer = new ResizeObserver(updateViewport);
     observer.observe(scroll.current);
     return () => observer.disconnect();
-  }, [projects.length]);
+  }, [hasProjects]);
   const monthLabel = (date: string) => new Intl.DateTimeFormat("en-GB", { month: "short", ...(date.slice(5, 7) === "01" || date === start ? { year: "numeric" } : {}), timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
   return <section aria-label="Project timeline" className="project-timeline flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--timeline-surface)]">
     {!projects.length ? <div className="px-4 py-8 text-center text-sm text-muted-foreground"><EmptyIllustration kind="cube" /><p className="mt-2">No projects to show.</p></div> : <div ref={scroll} onScroll={updateViewport} onPointerMove={event => { if (event.pointerType === "mouse") setPointerX(event.clientX - event.currentTarget.getBoundingClientRect().left); }} onPointerLeave={() => setPointerX(null)} tabIndex={0} role="region" aria-label="Project timeline calendar" className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain [--timeline-label-width:15rem] sm:[--timeline-label-width:19rem]">
