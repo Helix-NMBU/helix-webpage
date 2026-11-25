@@ -58,6 +58,8 @@ Keep both storage buckets private:
 
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `NEON_S3_ENDPOINT`, and `NEON_S3_REGION` must belong to the same Neon branch as the selected database. Applicant CVs are limited to 500 KiB. The server generates paths and returns short-lived signed downloads only after authorization.
 
+If applicants see "Application file storage is unavailable. Please try again later.", the application backend is missing at least one of those four settings or `NEON_APPLICATIONS_BUCKET`. Confirm the private `applications` bucket exists on the selected branch, configure `NEON_APPLICATIONS_BUCKET=applications` on the Vercel project serving `internal.helixnmbu.no`, and release a new deployment with the corrected environment after authorization. Setting the bucket only on the public website project does not configure the internal API. This failure occurs before the application is saved; after the configuration is fixed, applicants can retry. Never substitute the member CV bucket.
+
 Public application submissions are limited to 10 valid submissions per source IP in a one-hour window. The server stores only an HMAC of the IP, keyed with the server-only database URL; stale limiter rows are removed after two days when submissions arrive. Migration 007 creates the private limiter table.
 
 ## Google member login
