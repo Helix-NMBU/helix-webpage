@@ -13,6 +13,8 @@ export interface ProjectServices {
 // A single statement reads one consistent snapshot and the current module grant.
 const workspaceSql = `select project_management.is_department_manager(viewer.id) as "canManage", viewer.id as "viewerId", project_management.current_season() as season,
   '[]'::jsonb as "taskLeadCategories",
+  (select jsonb_build_object('revision',s.revision,'phases',s.phases) from project_management.season_schedules s
+    where s.season_code=project_management.current_season()) as "seasonSchedule",
   coalesce((select jsonb_agg(jsonb_build_object('id',d.id,'season',d.season,'name',d.name,'revision',d.revision,
     'memberIds',coalesce((select jsonb_agg(dm.member_id order by dm.member_id) from project_management.department_members dm where dm.department_id=d.id),'[]'::jsonb),
     'viewerIds',coalesce((select jsonb_agg(dm.member_id) from project_management.department_members dm where dm.department_id=d.id and dm.access_level='viewer'),'[]'::jsonb),
@@ -54,6 +56,8 @@ function projectError(error: unknown): never {
   if (message.includes("project_task_lead_required")) throw new MemberCvError(403, "A Department Lead grant for this area is required to create, edit or assign tasks.");
   if (message.includes("project_forbidden")) throw new MemberCvError(403, "Project management access is required. Contact your project manager.");
   if (message.includes("project_not_found")) throw new MemberCvError(404, "This task or project is no longer available.");
+  if (message.includes("season_schedule_conflict")) throw new MemberCvError(409, "The season schedule changed or is closed. Reload Season Overview before saving.");
+  if (message.includes("season_schedule_invalid")) throw new MemberCvError(400, "Keep phase dates within the season and start testing at Car Unveiling.");
   if (message.includes("project_conflict") || code === "23505") throw new MemberCvError(409, "This task or project changed. Reload the workspace before saving again.");
   if (message.includes("projects_require_lead")) throw new MemberCvError(400, "Assign at least one project Lead before saving.");
   if (message.includes("project_invalid_reference") || code === "23503") throw new MemberCvError(400, "Choose an eligible assignee and a milestone in the same project and area. Place milestones in a project before assigning tasks. Linked milestones cannot be moved or converted while their tasks would become invalid.");
@@ -77,7 +81,7 @@ export function createProjectServices(deps: { db: CvDatabase; authenticate(token
       try {
         const identity = await deps.authenticate(token);
         const change = parseProjectMutation(body);
-        await deps.db.query(change.action === "estimate_history" ? "select project_management.estimate_task_history($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_project" && change.milestones !== undefined ? "select project_management.create_project_with_milestones($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
+        await deps.db.query(change.action === "save_season_schedule" ? "select project_management.save_season_schedule($1::uuid,$2,$3,$4::jsonb)" : change.action === "estimate_history" ? "select project_management.estimate_task_history($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_department" ? "select project_management.save_department($1::uuid,$2,$3,$4::jsonb)" : change.action === "save_project" && change.milestones !== undefined ? "select project_management.create_project_with_milestones($1::uuid,$2,$3,$4::jsonb)" : "select project_management.mutate($1::uuid,$2,$3,$4::jsonb)", [identity.userId, identity.googleSub, identity.email, JSON.stringify(change)]);
         return await read(identity);
       } catch (error) { return projectError(error); }
     },

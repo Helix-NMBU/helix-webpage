@@ -106,7 +106,7 @@ function TaskDetail({ taskId, repository: supplied, loadPartnerDeal }: { taskId:
   }, [taskId, visibleTask?.id, workspace?.viewerId, access, loadPartnerDeal]);
 
   async function save(change: ProjectMutation) {
-    if (saving.current || change.id !== taskId || !["save_task", "set_status", "delete_task", "estimate_history"].includes(change.action)) return false;
+    if (saving.current || change.action === "save_season_schedule" || change.id !== taskId || !["save_task", "set_status", "delete_task", "estimate_history"].includes(change.action)) return false;
     saving.current = true; setBusy(true); generation.current++;
     try {
       const next = await (await getRepository()).mutate(change);

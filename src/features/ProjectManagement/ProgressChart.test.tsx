@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ProgressChart } from "./OverviewProgress";
 import { initialLocalWorkspace } from "./local-repository";
 import { addDays, osloDate } from "./model";
-import { chartDay, progressChartRange, seasonChartRange } from "./progress-chart";
+import { chartDay, progressChartRange, progressLabelLayout, seasonChartRange } from "./progress-chart";
 
 const today = osloDate();
 function render(deadline: string | null, bounds: { startDate?: string | null; endDate?: string | null; showDeadlineTail?: boolean; events?: { value: "production-start"; label: string; date: string }[]; visibleEventIds?: string[]; startEventId?: "season-start" | "concept" | "design" | "production-start" | "car-unveiling" | "season-end"; endEventId?: "season-start" | "concept" | "design" | "production-start" | "car-unveiling" | "season-end" } = {}) {
@@ -15,6 +15,21 @@ function render(deadline: string | null, bounds: { startDate?: string | null; en
 }
 
 describe("deadline progress charts", () => {
+  it("spaces nearby diagonal labels while leaving isolated dates on their markers", () => {
+    const labels = [
+      { center: 16, dateWidth: 28, nameWidth: 70 },
+      { center: 140, dateWidth: 28, nameWidth: 65 },
+      { center: 140, dateWidth: 32, nameWidth: 110 },
+      { center: 160, dateWidth: 28, nameWidth: 48 },
+      { center: 290, dateWidth: 28, nameWidth: 76 },
+      { center: 389, dateWidth: 28, nameWidth: 76 },
+    ];
+    const { anchors, nameHeight } = progressLabelLayout(400, labels);
+    expect(anchors.slice(0, 5)).toEqual([16, 140, 176, 212, 290]);
+    expect(anchors[5]).toBeLessThan(350);
+    expect(nameHeight).toBeGreaterThan(progressLabelLayout(400, labels.filter(label => label.nameWidth < 110)).nameHeight);
+  });
+
   it("places the red boundary at the supplied deadline and leaves visible hatching after it", () => {
     const deadline = addDays(today, 40);
     const container = render(deadline);

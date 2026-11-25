@@ -323,13 +323,16 @@ describe("project management interface", () => {
   it("shows observed progress and project completion in Overview", async () => {
     await open();
     expect(container.querySelector('[aria-label="Task progress over time"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scoped5Started4Completed1");
+    const totals = container.querySelector('[aria-label^="Progress on"]')!;
+    expect(totals.textContent).toBe("Scoped5Started4Completed1");
     expect(container.querySelector('[aria-label="Chassis & assembly: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
     expect(container.querySelector("[data-scope-area]")).not.toBeNull();
     expect(container.querySelector('[data-progress-start]')?.getAttribute('data-progress-start')).toBe('2026-08-01');
     expect(container.querySelector('[data-progress-end]')?.getAttribute('data-progress-end')).toBe('2027-07-31');
     expect(container.querySelector("[data-progress-deadline]")?.getAttribute("data-progress-deadline")).toBe("2027-07-31");
-    expect(container.querySelector('[data-event-label="production-start"] time')?.getAttribute("datetime")).toBe("2027-01-04");
+    const productionDate = container.querySelector('[data-event-label="production-start"] time')!;
+    expect(productionDate.getAttribute("datetime")).toBe("2027-01-04");
+    expect(productionDate.compareDocumentPosition(totals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(button("Refresh")).toBeUndefined();
     expect(container.textContent).not.toContain("Completion by department");
     expect(container.textContent).not.toContain("View progress data");
@@ -620,7 +623,6 @@ describe("project management interface", () => {
     load.mockResolvedValue({ ...initialLocalWorkspace(), tasks: [], projects: [], progressEvents: [], departments: [], taskLeadCategories: [] });
     await open();
     expect(container.querySelector('[aria-label^="Progress on"]')?.textContent).toBe("Scoped0Started0Completed0");
-    expect(container.querySelectorAll('table[aria-label="Department progress"] tbody tr')).toHaveLength(7);
     expect(container.textContent).toContain("No projects yet.");
     expect(container.querySelector('[data-empty-illustration="cube"]')).not.toBeNull();
     expect(container.querySelector('[data-empty-illustration="diamond"]')).not.toBeNull();
@@ -664,99 +666,49 @@ describe("project management interface", () => {
     const tables = container.querySelectorAll("table");
     expect(tables[tables.length - 1].textContent).toContain("Complete chassis design review");
   });
-  it("shows one department per table row with members, Lead, task count and circular status", async () => {
+  it("shows the compact season timeline below the Progress chart", async () => {
     await open();
-    const areas = container.querySelector('section[aria-labelledby="progress-distribution-title"]')!;
-    expect(areas.querySelector("#progress-distribution-title")?.textContent).toBe("Distribution");
-    expect(areas.querySelector('[aria-label="Mechanical & Production: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
-    expect(areas.querySelector('[aria-label="Electronics: 1 of 3 tasks complete, 33%"]')).not.toBeNull();
-    expect([...areas.querySelectorAll("tbody td:first-child")].map(cell => cell.textContent)).not.toContain("Production");
-    expect(areas.textContent).toContain("Alex Example");
-    const table = areas.querySelector("table")!;
-    expect([...table.querySelectorAll("thead th")].map(cell => cell.textContent)).toEqual(["Department", "Members", "Lead", "Tasks", "Status"]);
-    const mechanical = areas.querySelector('[aria-label="Edit department Mechanical & Production"]')!.closest("tr")!;
-    expect(mechanical.querySelectorAll("td")[1].textContent).toBe("2");
-    expect(mechanical.querySelectorAll("td")[3].textContent).toBe("1 / 3");
-    expect(mechanical.querySelector('[aria-label="Leads: Alex Example"]')).not.toBeNull();
-    expect(container.querySelector('[role="tablist"][aria-label="Progress breakdown"]')).toBeNull();
-  });
-  it("retains unallocated work in the department breakdown", async () => {
-    const workspace = initialLocalWorkspace();
-    load.mockResolvedValue({ ...workspace, projects: workspace.projects.map(project => ({ ...project, departments: [] })) });
-    await open();
-    const areas = container.querySelector('section[aria-labelledby="progress-distribution-title"]')!;
-    expect(areas.querySelector('[aria-label="No department: 1 of 5 tasks complete, 20%"]')).not.toBeNull();
+    const widget = container.querySelector('section[aria-labelledby="progress-title"]')!;
+    const chart = widget.querySelector("[data-progress-start]")!;
+    const timeline = chart.nextElementSibling!;
+    expect(timeline.querySelector("h3")?.textContent).toBe("Season timeline");
+    expect(timeline.querySelectorAll("ol > li")).toHaveLength(6);
+    const current = timeline.querySelector('[aria-current="step"]');
+    expect(current?.textContent).toContain("Design");
+    expect(current?.textContent).toContain("In progress");
+    expect(current?.querySelector('time[dateTime="2026-11-26"]')?.textContent).toBe("26 Nov");
+    expect(timeline.textContent).not.toContain("Build readiness");
+    expect(widget.textContent).not.toContain("Distribution");
   });
 
-  it("edits members and Lead for a fixed department without offering department creation", async () => {
+  it("edits multiple phases in one draft and carries Car Unveiling into the Test phase", async () => {
     await open();
-    expect(button("Add department")).toBeUndefined();
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Software & Autonomous"]')!.click());
-    expect((document.getElementById("department-name") as HTMLInputElement).readOnly).toBe(true);
-    await act(async () => document.getElementById("department-members")!.click());
-    for (const name of ["Alex Example", "Sam Example"]) await act(async () => document.querySelector<HTMLButtonElement>(`[aria-label="Add ${name} to department"]`)!.click());
+    const actions = container.querySelector<HTMLButtonElement>('[aria-label="Schedule actions"]')!;
+    expect(actions.nextElementSibling?.getAttribute("aria-label")).toBe("Overview event settings");
+    await act(async () => actions.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    const edit = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === "Edit schedule")!;
+    await act(async () => edit.click());
+    const tab = (name: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(item => item.firstElementChild?.textContent === name)!;
+    expect(tab("Design").getAttribute("aria-selected")).toBe("true");
+    expect(button("Save schedule").disabled).toBe(true);
+    await fill("schedule-design-note", "Final design presented.");
+    await act(async () => tab("Construction").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    const unveiling = document.querySelector<HTMLButtonElement>('[aria-label="Choose Car Unveiling date"]')!;
+    await act(async () => unveiling.click());
+    await fill("schedule-construction-end", "2027-05-12");
     await click("Done");
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
-    await act(async () => document.getElementById("department-lead")!.click());
-    const samLead = document.querySelector<HTMLButtonElement>('[aria-label="Assign Sam Example as lead"]');
-    expect(samLead).not.toBeNull();
-    await act(async () => samLead!.click());
-    await click("Done");
-    await click("Save department");
-    const workspace = initialLocalWorkspace();
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Software & Autonomous", memberIds: workspace.members.map(member => member.id), leadId: workspace.members[1].id, leadIds: [workspace.members[1].id] } }));
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => tab("Test").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    expect(document.querySelector('[role="tabpanel"][data-state="active"]')?.textContent).toContain("12 May 2027");
+    await click("Save schedule");
+    const phases = initialLocalWorkspace().seasonSchedule!.phases.map(phase => {
+      if (phase.id === "design") return { ...phase, note: "Final design presented." };
+      if (phase.id === "construction") return { ...phase, endDate: "2027-05-12" };
+      if (phase.id === "test") return { ...phase, startDate: "2027-05-12" };
+      return phase;
+    });
+    expect(mutate).toHaveBeenCalledWith({ action: "save_season_schedule", season: "S27", expectedRevision: 1, phases });
   });
-  it("removes the Lead when that member is removed from a department", async () => {
-    await open(); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Mechanical & Production"]')!.click());
-    expect((document.getElementById("department-name") as HTMLInputElement).readOnly).toBe(true);
-    await act(async () => document.getElementById("department-members")!.click());
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Add Alex Example to department"]')!.click());
-    await click("Done");
-    expect(document.getElementById("department-lead")?.textContent).toBe("Add leads…");
-    await click("Save department");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", expectedRevision: 1, department: { name: "Mechanical & Production", memberIds: [initialLocalWorkspace().members[1].id], leadId: null, leadIds: [] } }));
-  });
-  it("does not display Viewers as department members and preserves their access when saving", async () => {
-    const workspace = initialLocalWorkspace();
-    const [viewer, member] = workspace.members;
-    workspace.departments = workspace.departments.map(d => d.name === "Mechanical & Production" ? { ...d, memberIds: [viewer.id, member.id], viewerIds: [viewer.id], leadId: member.id, leadIds: [member.id] } : d);
-    load.mockResolvedValue(workspace);
-    await open();
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Mechanical & Production"]')!.click());
-    expect(document.getElementById("department-members-summary")?.textContent).toBe("Members: Sam Example.");
-    await click("Save department");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", department: expect.objectContaining({ memberIds: [member.id, viewer.id], viewerIds: [viewer.id], leadIds: [member.id] }) }));
-  });
-  it("changes a Viewer to a Member only when explicitly selected", async () => {
-    const workspace = initialLocalWorkspace();
-    const [viewer, member] = workspace.members;
-    workspace.departments = workspace.departments.map(d => d.name === "Mechanical & Production" ? { ...d, memberIds: [viewer.id, member.id], viewerIds: [viewer.id], leadId: member.id, leadIds: [member.id] } : d);
-    load.mockResolvedValue(workspace);
-    await open();
-    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Mechanical & Production"]')!.click());
-    await act(async () => document.getElementById("department-members")!.click());
-    const viewerChoice = document.querySelector<HTMLButtonElement>('[aria-label="Add Alex Example to department"]')!;
-    expect(viewerChoice.getAttribute("aria-checked")).toBe("false");
-    await act(async () => viewerChoice.click());
-    await click("Done");
-    await click("Save department");
-    expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ action: "save_department", department: expect.objectContaining({ memberIds: [member.id, viewer.id], viewerIds: [], leadIds: [member.id] }) }));
-  });
-  it("retains a department draft after a save conflict", async () => {
-    mutate.mockRejectedValueOnce(new ProjectRequestError("This department changed. Reload before saving.", 409));
-    await open(); await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Edit department Software & Autonomous"]')!.click()); await click("Save department");
-    expect((document.getElementById("department-name") as HTMLInputElement).value).toBe("Software & Autonomous");
-    expect(container.querySelector('[data-testid="notifications"]')?.textContent).toContain("Reload departments");
-  });
-  it("always shows the seven departments in organization order, including departments without projects", async () => {
-    const workspace = initialLocalWorkspace(); load.mockResolvedValue({ ...workspace, projects: [], tasks: [] });
-    await open();
-    const rows = [...container.querySelectorAll('table[aria-label="Department progress"] tbody tr')];
-    expect(rows.map(row => row.querySelector("td")?.textContent)).toEqual([...ORGANIZATION_DEPARTMENTS]);
-    expect(rows[0].querySelectorAll("td")[1].textContent).toBe("0");
-    expect(rows[0].querySelectorAll("td")[3].textContent).toBe("0 / 0");
-  });
+
   it("offers only the fixed departments when editing a project", async () => {
     await open("production"); await click("New project");
     await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Departments"]')!.click());
@@ -764,11 +716,11 @@ describe("project management interface", () => {
     expect([...group.querySelectorAll('[role="checkbox"]')].map(checkbox => checkbox.getAttribute("aria-label"))).toEqual([...ORGANIZATION_DEPARTMENTS]);
     expect(group.querySelector('input[type="text"]')).toBeNull();
   });
-  it("hides department management from members without project-management access", async () => {
-    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: ["production"] }); await open();
-    expect(button("Add department")).toBeUndefined();
-    expect(container.querySelector('[aria-label="Edit department Mechanical & Production"]')).toBeNull();
-    expect(container.querySelector('section[aria-labelledby="progress-distribution-title"]')?.textContent).toContain("Mechanical & Production");
+  it("shows the timeline to members without schedule editing access", async () => {
+    load.mockResolvedValue({ ...initialLocalWorkspace(), canManage: false, taskLeadCategories: ["production"] });
+    await open();
+    expect(container.querySelector('section[aria-labelledby="progress-title"]')?.textContent).toContain("Season timeline");
+    expect(container.querySelector('[aria-label="Schedule actions"]')).toBeNull();
   });
 
 });

@@ -16,6 +16,7 @@ beforeAll(async () => {
   const migrations = new URL("../../../db/migrations/", import.meta.url);
   for (const filename of readdirSync(migrations).filter(name => /^0(1[1-9]|2[01])_finance_.*\.sql$/.test(name)).sort()) await db.exec(readFileSync(new URL(filename, migrations), "utf8"));
   await db.exec(read("024_financials_member_role")); await db.exec(read("065_finance_historical_purchases"));
+  await db.exec(read("083_season_schedules"));
   await db.exec("create schema partner_deals;create table partner_deals.deals(id uuid primary key);");
   await setupFundingPipelineFixture(db);
   for (const role of ["lead", "departmentLead", "finance", "head", "outsider"] as const) {

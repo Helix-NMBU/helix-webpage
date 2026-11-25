@@ -179,7 +179,7 @@ it("reports zero-budget cases without dividing by zero or hiding an overrun", as
 });
 
 it("places the finance slot between Progress and Projects", async () => {
-  await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><OverviewProgress workspace={initialLocalWorkspace()} busy={false} projectColumns={[]} onToggleProjectColumn={() => {}} onSelectProject={() => {}} onEditDepartment={() => {}}><div id="finance-slot">Season finances</div></OverviewProgress></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
+  await act(async () => root.render(<MemoryRouter><MemberThemeProvider><MemberNotificationsProvider renderToaster={false}><OverviewProgress workspace={initialLocalWorkspace()} busy={false} projectColumns={[]} onToggleProjectColumn={() => {}} onSelectProject={() => {}}><div id="finance-slot">Season finances</div></OverviewProgress></MemberNotificationsProvider></MemberThemeProvider></MemoryRouter>));
   const headings = container.querySelector("[data-project-progress]")!;
   const children = Array.from(headings.children);
   expect(children.map(element => element.id || element.getAttribute("aria-labelledby"))).toEqual(["progress-title", "finance-slot", "overview-projects-title"]);

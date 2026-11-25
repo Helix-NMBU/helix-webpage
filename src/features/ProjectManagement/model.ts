@@ -37,6 +37,12 @@ export function formatDate(value: string | null): string {
   return value ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`)) : "No deadline";
 }
 
+const shortDateFormatter = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
+export function shortDate(value: string): string {
+  return shortDateFormatter.format(new Date(`${value}T12:00:00Z`));
+}
+
 function text(value: unknown, label: string, max: number, required = false): string {
   if (typeof value !== "string" || value.trim().length > max || (required && !value.trim())) throw new Error(`${label} ${required ? `must contain 1–${max}` : `must contain at most ${max}`} characters.`);
   return value.trim();

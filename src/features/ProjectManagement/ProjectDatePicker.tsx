@@ -4,16 +4,10 @@ import { Button } from "@libs/components/ui/button";
 import { Input } from "@libs/components/ui/input";
 import { Label } from "@libs/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
-import { osloDate } from "./model";
+import { formatDate, osloDate, shortDate } from "./model";
 import { ProjectCalendar, projectCalendarMonth } from "./ProjectCalendar";
 
-const dayDate = (value: string) => new Date(`${value}T12:00:00Z`);
-const shortDate = new Intl.DateTimeFormat("en-GB", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-/** Shared date field for the project composer and its initial milestone drafts. */
+/** Shared date field for project and season planning. */
 export function ProjectDatePicker({
   id,
   label,
@@ -24,6 +18,7 @@ export function ProjectDatePicker({
   disabled = false,
   required = false,
   inline = false,
+  showYear = false,
 }: {
   id: string;
   label: string;
@@ -34,6 +29,7 @@ export function ProjectDatePicker({
   disabled?: boolean;
   required?: boolean;
   inline?: boolean;
+  showYear?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const initialMonth = projectCalendarMonth(value ?? osloDate(), minimum, maximum);
@@ -54,10 +50,11 @@ export function ProjectDatePicker({
           variant={inline ? "ghost" : "outline"}
           disabled={disabled}
           aria-label={label}
+          aria-description={value ? formatDate(value) : undefined}
           className={inline ? "-mx-2 h-8 gap-2 px-2 font-normal" : "h-8 gap-2 rounded-full bg-muted/40 px-3 font-normal shadow-none"}
         >
           <IconCalendar className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          {value ? shortDate.format(dayDate(value)) : label}
+          {value ? (showYear ? formatDate(value) : shortDate(value)) : label}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -107,13 +104,13 @@ export function ProjectDatePicker({
                 setOpen(false);
               }}
             >
-              Clear date
+              {"Clear date"}
             </Button>
           ) : (
             <span />
           )}
           <Button type="button" size="sm" disabled={disabled} onClick={() => setOpen(false)}>
-            Done
+            {"Done"}
           </Button>
         </div>
       </PopoverContent>

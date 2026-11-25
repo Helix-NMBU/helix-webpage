@@ -1,0 +1,8 @@
+[
+  {"id":"recruitment","status":"done","startDate":null,"endDate":"2026-09-07","note":"August to early September. Kickoff was scheduled for 7 September."},
+  {"id":"draft-concept","status":"done","startDate":"2026-09-07","endDate":"2026-10-01","note":"First concept presentations. 1 October was the planned review checkpoint."},
+  {"id":"concept","status":"done","startDate":"2026-10-01","endDate":"2026-10-22","note":"22 October was the revised event date. The 29 October debrief confirms the event took place."},
+  {"id":"design","status":"in_progress","startDate":"2026-10-22","endDate":"2026-11-26","note":"Final designs are presented at the Design Event. Build readiness is tracked separately in each project."},
+  {"id":"construction","status":"planned","startDate":"2027-01-04","endDate":"2027-05-05","note":"Car Unveiling is planned for early May. 5 May is a provisional marker."},
+  {"id":"test","status":"planned","startDate":"2027-05-05","endDate":null,"note":"Test and resolve issues after Car Unveiling. The first July competition date is to be confirmed."}
+]

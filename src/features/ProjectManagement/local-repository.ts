@@ -1,3 +1,5 @@
+import s27Schedule from "./s27-schedule.json";
+import type { SeasonPhase } from "./season-schedule";
 import { projectMemberWorkspace } from "./local-member-preview";
 import { canManageTask, canManageProject, canUpdateTaskStatus } from "./permissions";
 import { isLocalMemberMode } from "../MemberPlatform/local-mode";
@@ -27,7 +29,7 @@ export function initialLocalWorkspace(): ProjectWorkspace {
       task(17, "Partner launch commitments", "partnership-deliverables", 14, { kind: "milestone", partnerName: "Example Engineering" }),
       task(18, "Campaign launch", "marketing", 14, { kind: "milestone" }),
   ];
-  return { season: "S27", viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
+  return { season: "S27", seasonSchedule: { phases: s27Schedule as SeasonPhase[], revision: 1 }, viewerId: id(1), canManage: true, taskLeadCategories: [...TASK_CATEGORIES],
     departments: fixedDepartmentRecords([{ id: id(300), season: "S27", revision: 1, name: "Mechanical & Production", memberIds: [id(1), id(2)], leadId: id(1) }, { id: id(301), season: "S27", revision: 1, name: "Electronics", memberIds: [id(2)], leadId: id(2) }]),
     members: [{ id: id(1), name: "Alex Example" }, { id: id(2), name: "Sam Example" }],
     projects: [{ id: id(100), season: "S27", name: "Chassis & assembly", description: "Coordinate fabrication, electronics fit and final assembly.", category: "production", departments: ["Mechanical & Production", "Electronics"], leadIds: [id(1)], startDate: addDays(today, -7), deadline: addDays(today, 35), revision: 1 },
@@ -46,6 +48,7 @@ export function createLocalProjectRepository(): ProjectRepository {
   function read(): ProjectWorkspace {
     const saved = localStorage.getItem(KEY);
     const workspace = saved ? JSON.parse(saved) as ProjectWorkspace : initialLocalWorkspace();
+    if (workspace.season === "S27" && !workspace.seasonSchedule) workspace.seasonSchedule = initialLocalWorkspace().seasonSchedule;
     // Upgrade permissions and older single-person assignments only in dedicated local fixtures.
     const tasks = workspace.tasks.map(item => {
       const { assigneeId: legacy, ...task } = item as Task & { assigneeId?: string | null };
@@ -65,6 +68,14 @@ export function createLocalProjectRepository(): ProjectRepository {
     async mutate(mutation) {
       const original = read();
       const workspace = projectMemberWorkspace(original);
+      if (mutation.action === "save_season_schedule") {
+        const revision = workspace.seasonSchedule?.revision ?? 0;
+        if (!workspace.canManage) throw new ProjectRequestError("Project management access is required.", 403);
+        if (workspace.season !== mutation.season || revision !== mutation.expectedRevision) throw new ProjectRequestError("The schedule changed. Reload before saving again.", 409);
+        original.seasonSchedule = { phases: mutation.phases, revision: revision + 1 };
+        localStorage.setItem(KEY, JSON.stringify(original));
+        return projectMemberWorkspace(original);
+      }
       const collection = mutation.action === "save_department" ? workspace.departments : (mutation.action === "save_project" || mutation.action === "delete_project") ? workspace.projects : workspace.tasks;
       const current = collection.find(item => item.id === mutation.id);
       const completing=mutation.action==='set_status'&&mutation.status==='done'||mutation.action==='save_task'&&mutation.task.status==='done'||mutation.action==='estimate_history';
