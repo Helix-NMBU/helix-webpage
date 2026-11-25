@@ -55,7 +55,9 @@ it("adds a comprehensive local workspace, preserves prior edits, and provides br
   expect(localDealBudgetLinks(candidate.id).entries.filter(entry=>entry.selected)).toHaveLength(0);
   const api=createRecruitmentApi({current:null});
   expect(await api.positions()).toHaveLength(8);expect(await api.list()).toHaveLength(18);
-  const position=(await api.positions())[0]; await api.savePosition({...position,title:"Edited position"});
+  const contact=(await api.contactMembers()).find(member=>member.id===workspace.viewerId)!;
+  expect(contact).toMatchObject({id:workspace.viewerId,email:"alex@example.invalid"});
+  const position=(await api.positions())[0]; await api.savePosition({...position,title:"Edited position",contactMemberId:contact.id});
   expect((await createRecruitmentApi({current:null}).positions()).find(item=>item.id===position.id)?.title).toBe("Edited position");
   expect(await api.reject((await api.list())[0].id)).toEqual({emailStatus:"skipped",cleanupPending:false});
   expect(await createRecruitmentApi({current:null}).list()).toHaveLength(17);
