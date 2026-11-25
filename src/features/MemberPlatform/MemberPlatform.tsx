@@ -60,12 +60,12 @@ const DepartmentTasksPage = lazy(() => import("../Workspace/DepartmentViews").th
 const ProjectManagement = lazy(() => import("../ProjectManagement/ProjectManagement"));
 const TaskDetailPage = lazy(() => import("../ProjectManagement/TaskDetail"));
 
-function MemberProfileRoute() {
-  const { hash, search } = useLocation();
+export function MemberProfileRoute() {
+  const { search } = useLocation();
   const query = new URLSearchParams(search);
-  const classic = !isLocalMemberMode() || query.get("cv-editor") === "classic" || hash.startsWith("#mcv-")
-    || (isLocalMemberMode() && query.get("cv-prototype") === "0");
-  return <DeferredPage key={classic ? "classic" : "sections"} load={classic ? loadMemberCV : loadCvSections} fallback={<ProfileContentSkeleton />} />;
+  const sections = query.get("cv-editor") === "sections"
+    || (isLocalMemberMode() && query.get("cv-prototype") === "1");
+  return <DeferredPage key={sections ? "sections" : "profile"} load={sections ? loadCvSections : loadMemberCV} fallback={<ProfileContentSkeleton />} />;
 }
 
 export function MemberAccess({ children }: { children?: ReactNode }) {

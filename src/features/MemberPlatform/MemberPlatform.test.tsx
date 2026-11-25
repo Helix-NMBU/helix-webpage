@@ -140,13 +140,21 @@ describe("internal member platform", () => {
     await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="classic"]')).not.toBeNull());
   });
 
-  it("keeps the section-based editor in dedicated loopback development mode", async () => {
+  it("opens the section editor explicitly and returns to the full profile", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/profile?cv-editor=sections");
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="sections"]')).not.toBeNull());
+    await act(async () => router.navigate("/profile"));
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="classic"]')).not.toBeNull());
+  });
+
+  it("uses the same full profile and section editor entry in loopback development", async () => {
     session.landing.mockResolvedValue(signedIn);
     vi.stubEnv("DEV", true); vi.stubEnv("MODE", "member-local");
     await open("/profile");
-    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="sections"]')).not.toBeNull());
-    await act(async () => router.navigate("/profile?cv-prototype=0"));
     await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="classic"]')).not.toBeNull());
+    await act(async () => router.navigate("/profile?cv-editor=sections"));
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="sections"]')).not.toBeNull());
   });
 
   it("redirects old access links to Members and removes the separate sidebar entry", async () => {

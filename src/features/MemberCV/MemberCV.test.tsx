@@ -57,7 +57,7 @@ describe("member profile", () => {
       <MemberThemeProvider><MemberNotificationsProvider><MemberNavigationProvider>{controls}<MemberAccountProvider account={{ name: "Alex Example", email: "alex@example.invalid", role: "Admin", helixRole: "Mechanical team member" }}>
         <MemberCV />
       </MemberAccountProvider></MemberNavigationProvider></MemberNotificationsProvider></MemberThemeProvider>,
-    }], { initialEntries: [`/profile${hash}`] });
+    }], { initialEntries: [`/profile?cv-editor=classic${hash}`] });
     await act(async () => root.render(<RouterProvider router={router} />));
   }
   function button(name: string, scope: ParentNode = document) {

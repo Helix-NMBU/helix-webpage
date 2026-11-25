@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IconArrowLeft, IconChevronRight, IconDots, IconPlus, IconX } from "@tabler/icons-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import type { CountryCode } from "libphonenumber-js/min";
 import { Avatar, AvatarFallback } from "@libs/components/ui/avatar";
 import { Badge } from "@libs/components/ui/badge";
@@ -24,7 +24,7 @@ import { isLocalMemberMode } from "../MemberPlatform/local-mode";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
 import { ProfileContent } from "../SponsorWorkspace/DirectoryPanel";
 import { CvTemplatePreview } from "./CvTemplatePreview";
-import { fictionalCv } from "./demo";
+import { createDemoRepository, fictionalCv } from "./demo";
 import { localizeCvError } from "./errors";
 import { sharedCvData, validateCvData } from "./model";
 import { nmbuStudyFieldLabel, nmbuStudyFields } from "./nmbu-study-fields";
@@ -583,6 +583,7 @@ export default function MemberCvSections() {
   const account = useMemberAccount();
   const local = isLocalMemberMode();
   const navigate = useNavigate();
+  const editorRoute = new URLSearchParams(useLocation().search).get("cv-editor") === "sections";
   const setEditor = useMemberNavigation()?.setEditor;
   const boundUserId = useRef<string | null>(null);
   const revision = useRef(0);
@@ -590,13 +591,16 @@ export default function MemberCvSections() {
   const alive = useRef(true);
   const operation = useRef(false);
   const dirty = useRef(false);
-  const repository = useMemo(() => local ? null : createCvRepository(() => memberSessionToken(boundUserId)), [local]);
-  const [saved, setSaved] = useState<Saved | null>(() => local ? loadDraft() : null);
-  const [view, setView] = useState<View>("profile");
+  const repository = useMemo(() => local
+    ? editorRoute ? createDemoRepository(localStorage, import.meta.env.DEV, fictionalCv()) : null
+    : createCvRepository(() => memberSessionToken(boundUserId)), [local, editorRoute]);
+  const [saved, setSaved] = useState<Saved | null>(() => local && !editorRoute ? loadDraft() : null);
+  const [view, setView] = useState<View>(editorRoute ? "overview" : "profile");
   const [sectionReturn, setSectionReturn] = useState<"overview" | "review">("overview");
-  const [loading, setLoading] = useState(!local);
+  const [loading, setLoading] = useState(!local || editorRoute);
   const [saving, setSaving] = useState(false);
   const [leave, setLeave] = useState<{ proceed: () => void } | null>(null);
+  const leaveOpener = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const notify = useNotify();
   const login = memberPaths().login;
@@ -604,12 +608,16 @@ export default function MemberCvSections() {
 
   function changeView(next: View) {
     dirty.current = false;
-    setView(next);
+    if (next === "profile" && editorRoute) navigate(memberPaths().profile);
+    else setView(next);
   }
 
   function confirmLeave(proceed: () => void) {
     if (operation.current) return;
-    if (dirty.current) setLeave({ proceed });
+    if (dirty.current) {
+      leaveOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setLeave({ proceed });
+    }
     else proceed();
   }
 
@@ -623,7 +631,7 @@ export default function MemberCvSections() {
       publishedRevision.current = envelope.document.publishedRevision;
       dirty.current = false;
       setSaved(stateFromEnvelope(envelope));
-      setView("profile");
+      setView(editorRoute ? "overview" : "profile");
     } catch (error) {
       if (!alive.current) return;
       const failure = memberLoadFailure(error);
@@ -634,7 +642,7 @@ export default function MemberCvSections() {
     } finally {
       if (alive.current) setLoading(false);
     }
-  }, [language, navigate, notify, repository, uiText]);
+  }, [editorRoute, language, navigate, notify, repository, uiText]);
   const initialLoad = useRef(reload);
   useEffect(() => {
     alive.current = true;
@@ -859,7 +867,10 @@ export default function MemberCvSections() {
       </div>
     </>}
     <Dialog open={leave !== null} onOpenChange={open => { if (!open) setLeave(null); }}>
-      <DialogContent showCloseButton={false}>
+      <DialogContent showCloseButton={false} onCloseAutoFocus={event => {
+        event.preventDefault();
+        if (leaveOpener.current?.isConnected) leaveOpener.current.focus();
+      }}>
         <DialogHeader>
           <DialogTitle>{uiText("Discard unsaved changes?")}</DialogTitle>
           <DialogDescription>{uiText("Changes in this section are kept when you save it.")}</DialogDescription>

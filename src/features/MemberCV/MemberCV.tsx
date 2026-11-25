@@ -954,6 +954,10 @@ export default function MemberCV() {
 
   function openCvSetup() {
     if (!draft || busy || ended) return;
+    if (new URLSearchParams(location.search).get("cv-editor") !== "classic") {
+      navigate(`${paths.profile}?cv-editor=sections`);
+      return;
+    }
     autosave.current?.setBlocked(true);
     setupStart.current = structuredClone({ draft, sharing });
     setPendingEntryIds({});
