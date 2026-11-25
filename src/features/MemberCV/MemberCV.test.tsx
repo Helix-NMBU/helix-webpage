@@ -23,7 +23,7 @@ function SignOutControl() {
   </>;
 }
 
-describe("member profile", () => {
+describe("member profile and legacy CV deep links", () => {
   let root: Root;
   let container: HTMLDivElement;
   let router: ReturnType<typeof createMemoryRouter>;
@@ -65,6 +65,9 @@ describe("member profile", () => {
   }
   async function click(name: string) { await act(async () => button(name).click()); }
 
+  async function openLegacyEditor() {
+    await act(async () => router.navigate("/profile?cv-editor=classic#mcv-basics"));
+  }
   async function cvMenu(name: string) {
     await act(async () => button("CV actions").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(element => element.textContent === name)!;
@@ -91,7 +94,7 @@ describe("member profile", () => {
     expect(container.querySelector("textarea")).toBeNull();
     const actions = [...container.querySelectorAll('[aria-labelledby="member-cv-title"] button')].map(item => item.getAttribute("aria-label"));
     expect(actions.filter(Boolean)).toEqual(["Preview CV", "CV actions"]);
-    await cvMenu("Edit");
+    await openLegacyEditor();
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Step 1 of 8");
     expect(document.querySelectorAll(".mcv-wizard-progress-bar span")).toHaveLength(8);
     expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Contact details");
@@ -121,16 +124,16 @@ describe("member profile", () => {
     const emptyState = container.querySelector('[data-slot="empty"]')!;
     expect([...emptyState.querySelectorAll("button")].map(item => item.textContent)).toEqual(["Setup CV"]);
     expect(emptyState.textContent).not.toContain("Learn More");
-    await click("Setup CV");
+    await openLegacyEditor();
     await click("Close");
     await click("Discard changes");
     expect(container.textContent).toContain("No CV yet");
-    await click("Setup CV");
+    await openLegacyEditor();
     await click("Close");
     await click("Save as draft");
     expect(container.textContent).toContain("No CV yet");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.cvRegistered).toBe(false);
-    await click("Setup CV");
+    await openLegacyEditor();
     for (const title of ["About you", "Education", "Experience", "Projects", "Languages", "Social links", "References"]) {
       await click("Next step");
       expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe(title);
@@ -270,7 +273,7 @@ describe("member profile", () => {
     expect(saved.document.draft.education).toEqual(fictionalCv().education);
     expect(saved.document.draft.helixRole).toBeUndefined();
     expect(saved.document.draft.fullName).toBe("Alex Example");
-    await cvMenu("Edit");
+    await openLegacyEditor();
     expect([...document.querySelectorAll('[role="dialog"] label')].map(item => item.textContent)).not.toContain("Name");
     expect(document.querySelector('[aria-label="Translations for Name"]')).toBeNull();
   });
@@ -278,7 +281,7 @@ describe("member profile", () => {
   it("reports discarded setup changes as a notification and restores the saved draft", async () => {
     await open();
     const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education;
-    await cvMenu("Edit");
+    await openLegacyEditor();
     expect(document.querySelector('[role="dialog"] [role="status"]')).toBeNull();
     await click("Next");
     await click("Next");
@@ -288,7 +291,7 @@ describe("member profile", () => {
     expect(container.querySelector('[role="alert"], .mcv-notice')).toBeNull();
     expect(document.querySelector('[data-sonner-toast][data-type="info"]')?.textContent).toContain("Changes discarded");
     expect(JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft.education).toEqual(before);
-    await cvMenu("Edit");
+    await openLegacyEditor();
     await click("Next");
     await click("Next");
     expect(button("Remove MSc Mechanical engineering")).toBeDefined();
@@ -304,7 +307,7 @@ describe("member profile", () => {
     stored.document.draft.education[0].fieldOfStudy = "Mechanical engineering";
     localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
     await open();
-    await cvMenu("Edit");
+    await openLegacyEditor();
     await click("Next");
     await click("Next");
     const section = document.querySelector("#mcv-education")!;
@@ -330,7 +333,7 @@ describe("member profile", () => {
     stored.document.draft.education = [];
     localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
     await open();
-    await cvMenu("Edit");
+    await openLegacyEditor();
     await click("Next");
     await click("Next");
     await click("+ Add education");
@@ -364,7 +367,7 @@ describe("member profile", () => {
     stored.document.draft.education = [];
     localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(stored));
     await open();
-    await cvMenu("Edit");
+    await openLegacyEditor();
     await click("Next");
     await click("Next");
     await click("+ Add education");
@@ -409,7 +412,7 @@ describe("member profile", () => {
   });
   it("edits languages and social links in separate steps", async () => {
     await open();
-    await cvMenu("Edit");
+    await openLegacyEditor();
     expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Contact details");
     for (let index = 0; index < 5; index += 1) await click("Next step");
     expect(document.querySelector("#mcv-introduction")).toBeNull();
@@ -462,7 +465,7 @@ describe("member profile", () => {
   ] as const)("does not save an empty $section creation form", async ({ section, title, add }) => {
     const before = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY)!).document.draft[section];
     await open();
-    await cvMenu("Edit");
+    await openLegacyEditor();
     for (let index = 0; index < (section === "languages" ? 5 : 6); index += 1) await click("Next step");
     expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe(title);
     await click(add);
@@ -475,7 +478,7 @@ describe("member profile", () => {
   });
   it("keeps an invalid social link in its form and reports the problem as a notification", async () => {
     await open();
-    await cvMenu("Edit");
+    await openLegacyEditor();
     for (let index = 0; index < 6; index += 1) await click("Next step");
     await click("+ Add link");
     const form = document.querySelector("#mcv-links .mcv-entry-form")!;

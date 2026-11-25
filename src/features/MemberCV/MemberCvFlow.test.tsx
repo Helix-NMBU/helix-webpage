@@ -18,7 +18,10 @@ vi.mock("./session", async original => ({
   watchMemberSession: () => () => undefined,
 }));
 
-it.each([false, true])("uses the new section editor from the full profile (existing CV: %s)", async registered => {
+it.each([
+  { registered: false, search: "" }, { registered: true, search: "" },
+  { registered: false, search: "?cv-editor=classic" }, { registered: true, search: "?cv-editor=classic" },
+])("uses the new section editor from the full profile ($registered, $search)", async ({ registered, search }) => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubEnv("VITE_MEMBER_PLATFORM", "true");
   vi.stubEnv("MODE", "test");
@@ -52,7 +55,7 @@ it.each([false, true])("uses the new section editor from the full profile (exist
         <MemberProfileRoute />
       </MemberAccountProvider>
     </MemberNavigationProvider></MemberNotificationsProvider></MemberThemeProvider>,
-  }], { initialEntries: ["/profile"] });
+  }], { initialEntries: [`/profile${search}`] });
   const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")]
     .find(item => item.textContent?.trim() === name || item.getAttribute("aria-label") === name)!;
   const click = async (name: string) => { expect(button(name), name).toBeDefined(); await act(async () => button(name).click()); };
@@ -82,7 +85,7 @@ it.each([false, true])("uses the new section editor from the full profile (exist
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Discard unsaved changes?");
     await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
-    expect(document.activeElement).toBe(button("Cancel"));
+    await vi.waitFor(() => expect(document.activeElement).toBe(button("Cancel")));
     expect(introduction.value).toBe("Saved through the new CV editor.");
     await click("Save section");
     await heading("Your CV");
