@@ -36,6 +36,7 @@ export function createWebsiteHandler(getServices: () => WebsiteServices = neonWe
         if (publicOrigin) throw new MemberCvError(403, "Use the member platform for this request.");
         const token = bearer(req.headers.authorization);
         const services = getServices();
+        if (action === "contact-members") return res.status(200).json({ members: await services.contactMembers(token) });
         if (action === "managed-positions" || action === "manage-positions") return res.status(200).json({ positions: await services.managedPositions(token) });
         if (action === "session") return res.status(200).json(await services.session(token));
         if (action === "applications") {

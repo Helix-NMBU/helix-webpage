@@ -25,11 +25,27 @@ beforeAll(async () => {
   await pg.exec(migration);
   await pg.exec(migration); // idempotent without broadening permissions
   await pg.exec(readFileSync(new URL("../../../db/migrations/007_application_submission_limits.sql", import.meta.url), "utf8"));
+  await pg.exec(`alter table identity.members add column full_name text default 'Test Recruiter', add column auth_user_id text;
+    create schema neon_auth;
+    create table neon_auth."user" (id text primary key, email text, "emailVerified" boolean, banned boolean, image text);
+    create table neon_auth.account ("userId" text, "providerId" text, "accountId" text);
+    insert into neon_auth."user" values ('auth-member','recruiter@helixnmbu.no',true,false,null);
+    insert into neon_auth.account values ('auth-member','google','google-member');
+    create schema project_management;
+    create table project_management.departments (id uuid primary key, name text, season text);
+    create table project_management.department_members (department_id uuid, member_id uuid references identity.members(id) on delete cascade, access_level text);
+    create function project_management.current_season() returns text language sql as $$select 'S27'::text$$;
+    insert into project_management.departments values ('30000000-0000-4000-8000-000000000001','Management','S27');
+    create schema cv;
+    create table cv.documents (member_id uuid references identity.members(id) on delete cascade, draft jsonb);
+  `);
   db = { query: async <T>(sql: string, params?: unknown[]) => ({ rows: (await pg.query<T>(sql, params)).rows }) };
 }, 30000);
 beforeEach(async () => {
   await pg.exec("truncate website.applications, website.recruiters, website.application_uploads, website.email_events, website.file_cleanup, website.application_submission_limits, website.positions, identity.members cascade");
-  await db.query("insert into identity.members values ($1, 'google-member', 'recruiter@helixnmbu.no')", [member]);
+  await db.query("insert into identity.members (id, google_sub, email, auth_user_id) values ($1, 'google-member', 'recruiter@helixnmbu.no', 'auth-member')", [member]);
+  await pg.exec("update neon_auth.\"user\" set banned=false, image=null");
+  await db.query("insert into project_management.department_members values ('30000000-0000-4000-8000-000000000001', $1, 'member')", [member]);
   for (const position of positions) await db.query("insert into website.positions (id, document, visible) values ($1, $2::jsonb, true)", [position.id, JSON.stringify(position)]);
 });
 afterAll(async () => { await pg.close(); });
@@ -63,7 +79,7 @@ function submit(f: ReturnType<typeof fixture>, body: Record<string, unknown> = i
 describe("website access and submission against PostgreSQL", () => {
   it("saves catalog drafts atomically, publishes them and retains applications after deletion", async () => {
     await allow(); const f = fixture();
-    const details = { title: "Controls Engineer", department: "Software & Autonomous", applyUrl: "",
+    const details = { contactMemberId: member, title: "Controls Engineer", department: "Software & Autonomous", applyUrl: "",
       contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build controls.\nTest on the car.", tasks: ["Build"], achieve: ["Learn"] };
     const draft = await f.service.savePosition("member", details);
     expect(draft.visible).toBe(false);
@@ -80,14 +96,50 @@ describe("website access and submission against PostgreSQL", () => {
     await expect(f.service.file("member", id, "cv")).resolves.toMatchObject({ expiresIn: 120 });
     await expect(f.service.savePosition("member", published)).rejects.toMatchObject({ status: 404 });
   });
-  it("denies catalog management without a feature grant and rejects unsafe edited links", async () => {
-    const f = fixture(); const details = { title: "Engineer", department: "Finance", contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build", tasks: [], achieve: [] };
+  it("denies ungranted edits and ignores manually supplied application and contact links", async () => {
+    const f = fixture(); const details = { contactMemberId: member, title: "Engineer", department: "Finance", contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build", tasks: [], achieve: [] };
     await expect(f.service.savePosition("member", details)).rejects.toMatchObject({ status: 403 });
     await expect(f.service.managedPositions("member")).rejects.toMatchObject({ status: 403 });
     await allow();
-    for (const applyUrl of ["javascript:alert(1)", "//example.test", "/\\example.test"]) await expect(f.service.savePosition("member", { ...details, applyUrl })).rejects.toMatchObject({ status: 400 });
+    for (const applyUrl of ["javascript:alert(1)", "//example.test", "/\\example.test"]) expect((await f.service.savePosition("member", { ...details, applyUrl })).applyUrl).toBe("");
     await expect(f.service.savePosition("member", { ...details, visible: "true" })).rejects.toMatchObject({ status: 400 });
-    await expect(f.service.savePosition("member", { ...details, contact: { ...details.contact, linkedin: "https://example.test\" onclick=\"alert(1)" } })).rejects.toMatchObject({ status: 400 });
+    expect((await f.service.savePosition("member", { ...details, contact: { name: "Forged", email: "forged@example.test", linkedin: "javascript:alert(1)" } })).contact).toEqual({ name: "Test Recruiter", email: "recruiter@helixnmbu.no" });
+  });
+  it("offers only current Management members and protects contact choices with recruitment access", async () => {
+    const f = fixture();
+    await expect(f.service.contactMembers("member")).rejects.toMatchObject({ status: 403 });
+    await allow();
+    await db.query("insert into identity.members (id,email,full_name) values ($1,'viewer@example.test','Management Viewer')", [recruiterId]);
+    await db.query("insert into project_management.department_members values ('30000000-0000-4000-8000-000000000001',$1,'viewer')", [recruiterId]);
+    expect(await f.service.contactMembers("member")).toEqual([{ id: member, name: "Test Recruiter", email: "recruiter@helixnmbu.no" }]);
+    await db.query("update project_management.department_members set access_level='lead' where member_id=$1", [recruiterId]);
+    expect(await f.service.contactMembers("member")).toContainEqual(expect.objectContaining({ id: recruiterId, name: "Management Viewer" }));
+    await pg.exec("update project_management.departments set season='S26'");
+    expect(await f.service.contactMembers("member")).toEqual([]);
+    await pg.exec("update project_management.departments set season='S27'");
+  });
+  it("resolves linked contact profiles on read without exposing the member ID or private CV fields", async () => {
+    await allow(); const f = fixture();
+    await db.query("insert into cv.documents values ($1,$2::jsonb)", [member, JSON.stringify({ contactEmail: "private@example.test", phone: "private", links: [{ url: "https://linkedin.com.attacker.test/in/fake" }, { url: "https://www.linkedin.com/in/recruiter" }] })]);
+    await pg.exec("update neon_auth.\"user\" set image='https://images.example.test/avatar.png'");
+    expect(await f.service.contactMembers("member")).toEqual([{ id: member, name: "Test Recruiter", email: "recruiter@helixnmbu.no", linkedin: "https://www.linkedin.com/in/recruiter", avatarUrl: "https://images.example.test/avatar.png" }]);
+    const position = await f.service.savePosition("member", { title: "R&D Engineer", department: "Mechanical & Production", contactMemberId: member, about: "Investigate concepts.", tasks: [], achieve: [], visible: true });
+    expect(position.contactMemberId).toBe(member);
+    await db.query("update identity.members set full_name='Updated Recruiter' where id=$1", [member]);
+    await db.query("update cv.documents set draft=$2::jsonb where member_id=$1", [member, JSON.stringify({ links: [{ url: "https://www.linkedin.com/in/updated" }] })]);
+    const published = (await f.service.positions()).find(item => item.id === position.id)!;
+    expect(published).toMatchObject({ applyUrl: "", contact: { name: "Updated Recruiter", email: "recruiter@helixnmbu.no", linkedin: "https://www.linkedin.com/in/updated" } });
+    expect(published).not.toHaveProperty("contactMemberId");
+    expect(JSON.stringify(published)).not.toContain("private@example.test");
+    expect((await f.service.managedPositions("member")).find(item => item.id === position.id)?.contactMemberId).toBe(member);
+  });
+  it("requires a valid current Management contact when saving a position", async () => {
+    await allow(); const f = fixture();
+    const inputPosition = { title: "Engineer", department: "Finance", about: "Build.", tasks: [], achieve: [], contact: { name: "Forged", email: "forged@example.test" } };
+    for (const contactMemberId of [undefined, "invalid", recruiterId]) await expect(f.service.savePosition("member", { ...inputPosition, contactMemberId })).rejects.toMatchObject({ status: 400 });
+    const saved = await f.service.savePosition("member", { ...inputPosition, contactMemberId: member });
+    await db.query("delete from project_management.department_members where member_id=$1", [member]);
+    await expect(f.service.savePosition("member", saved)).rejects.toMatchObject({ status: 400 });
   });
   it("denies every protected operation to a member without recruitment access", async () => {
     const f = fixture();
@@ -108,7 +160,7 @@ describe("website access and submission against PostgreSQL", () => {
   it("creates positions hidden, then publishes and permanently deletes them", async () => {
     const f = fixture();
     const inputPosition = {
-      title: "Finance Lead", department: "Finance", applyUrl: "https://apply.example.test/finance",
+      contactMemberId: member, title: "Finance Lead", department: "Finance", applyUrl: "https://apply.example.test/finance",
       contact: { name: "Recruiter", email: "recruiter@example.test" }, about: "Build the finance function.",
       tasks: ["Plan the budget"], achieve: ["Lead finance"],
     };
