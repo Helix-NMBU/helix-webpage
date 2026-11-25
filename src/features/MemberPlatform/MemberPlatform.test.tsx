@@ -30,7 +30,15 @@ vi.mock("../MemberCV/MemberCvSections", () => ({ default: function Editor() {
     setEditor?.({ busy: false, navigate: session.editorNavigate, signOut: session.editorSignOut });
     return () => setEditor?.(null);
   }, [setEditor]);
-  return <p>Private CV editor</p>;
+  return <p data-profile-editor="sections">Private CV editor</p>;
+} }));
+vi.mock("../MemberCV/MemberCV", () => ({ default: function Editor() {
+  const setEditor = useMemberNavigation()?.setEditor;
+  useLayoutEffect(() => {
+    setEditor?.({ busy: false, navigate: session.editorNavigate, signOut: session.editorSignOut });
+    return () => setEditor?.(null);
+  }, [setEditor]);
+  return <p data-profile-editor="classic">Private CV editor</p>;
 } }));
 
 const memberCapabilities = {
@@ -117,6 +125,29 @@ describe("internal member platform", () => {
   async function profileMenu() {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Profile menu"]')?.click());
   }
+
+  it("opens the established profile directly without requiring Advanced CV settings", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/profile");
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="classic"]')).not.toBeNull());
+    expect(container.querySelector('[data-profile-editor="sections"]')).toBeNull();
+    expect(router.state.location.search).toBe("");
+  });
+
+  it("preserves the explicit classic profile URL", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    await open("/profile?cv-editor=classic");
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="classic"]')).not.toBeNull());
+  });
+
+  it("keeps the section-based editor in dedicated loopback development mode", async () => {
+    session.landing.mockResolvedValue(signedIn);
+    vi.stubEnv("DEV", true); vi.stubEnv("MODE", "member-local");
+    await open("/profile");
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="sections"]')).not.toBeNull());
+    await act(async () => router.navigate("/profile?cv-prototype=0"));
+    await vi.waitFor(() => expect(container.querySelector('[data-profile-editor="classic"]')).not.toBeNull());
+  });
 
   it("redirects old access links to Members and removes the separate sidebar entry", async () => {
     session.landing.mockResolvedValue(signedIn);
