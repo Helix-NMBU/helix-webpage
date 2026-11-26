@@ -29,7 +29,7 @@ import {
 import { ProjectDetail } from "./ProjectDetail";
 import { ProjectViewMenu } from "./ProjectViewMenu";
 import { ProjectTimeline } from "./ProjectTimeline";
-import { PROJECT_COLUMNS, PROJECT_COMPLETION_OPTIONS, projectView, visibleProjects, projectGroups, type ProjectColumn } from "./project-view";
+import { PROJECT_COLUMNS, PROJECT_COMPLETION_OPTIONS, defaultProjectGrouping, projectView, visibleProjects, projectGroups, type ProjectColumn } from "./project-view";
 import { Choice, ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { TaskStatusIndicator } from "../ProjectManagement/TaskStatus";
 import {
@@ -162,14 +162,14 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
   function change(key: string, value: string) {
     if (departmentIdScope && key === "department") return;
     const next = new URLSearchParams(params);
-    const defaults: Record<string, string> = { view: "list", department: "all", lead: "all", priority: "all", completion: "all", sort: "deadline", group: "none", scale: "year" };
+    const defaults: Record<string, string> = { view: "list", department: "all", lead: "all", priority: "all", completion: "all", sort: "deadline", group: defaultProjectGrouping(scopedOptions.view), scale: "year" };
     if (value === defaults[key]) next.delete(key);
     else next.set(key, value);
     setParams(next);
   }
   function clearFilters() {
     const next = new URLSearchParams(params);
-    for (const key of ["department", "lead", "priority", "completion", "search"]) next.delete(key);
+    for (const key of ["department", "lead", "priority", "completion", "search", "group", "sort", "columns"]) next.delete(key);
     setParams(next);
   }
   async function save(change: ProjectMutation) {
@@ -209,35 +209,24 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
           {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
         </div>}
         toolbar={<div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Project layout" className="flex items-center rounded-lg border bg-muted/30 p-0.5">
-              {(["list", "timeline"] as const).map(view => <Button
-                key={view}
-                type="button"
-                variant={scopedOptions.view === view ? "secondary" : "ghost"}
-                size="sm"
-                className="h-7 px-2.5"
-                aria-pressed={scopedOptions.view === view}
-                onClick={() => change("view", view)}
-              >{view === "list" ? "List" : "Timeline"}</Button>)}
-            </div>
-            <div className="w-36">
-              <Choice
-                id="project-filter-completion"
-                ariaLabel="Project completion"
-                value={scopedOptions.completion}
-                onChange={value => change("completion", value)}
-                options={PROJECT_COMPLETION_OPTIONS}
-              />
-            </div>
+          <div className="w-36">
+            <Choice
+              id="project-filter-completion"
+              ariaLabel="Project completion"
+              value={scopedOptions.completion}
+              onChange={value => change("completion", value)}
+              options={PROJECT_COMPLETION_OPTIONS}
+            />
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            {scopedOptions.view === "timeline" && <>
+              <div className="w-28">
+                <Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scopedOptions.scale} onChange={value => change("scale", value)} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button>
+            </>}
             <ProjectViewMenu data={data} options={scopedOptions} onChange={change} onReset={clearFilters} hideDepartmentFilter={Boolean(departmentIdScope)} />
           </div>
-          {scopedOptions.view === "timeline" && <div className="flex items-center gap-2">
-            <div className="w-28">
-              <Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scopedOptions.scale} onChange={value => change("scale", value)} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} />
-            </div>
-            <Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button>
-          </div>}
         </div>}
       >
         <>

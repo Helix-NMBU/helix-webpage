@@ -66,6 +66,15 @@ describe("project views", () => {
     expect(visibleProjects(data, projectView(new URLSearchParams()), "").map(item => item.id)).toEqual([data.projects[1].id, data.projects[0].id]);
     expect(visibleProjects(data, projectView(new URLSearchParams("lead=none&completion=empty")), "").map(item => item.id)).toEqual([data.projects[0].id]);
   });
+  it("defaults to department grouping in the timeline and honors a saved grouping choice", () => {
+    expect(projectView(new URLSearchParams()).group).toBe("none");
+    const params = new URLSearchParams({ view: "timeline" });
+    expect(projectView(params).group).toBe("department");
+    params.set("group", "none");
+    expect(projectView(params).group).toBe("none");
+    params.set("group", "lead");
+    expect(projectView(params).group).toBe("lead");
+  });
   it("places a shared project in each participating department or Lead group", () => {
     const data = directoryFixture(); const project = data.projects[0]; project.leadIds = data.members.map(member => member.id);
     expect(projectGroups([project], data, "department").map(group => group.name).sort()).toEqual([...project.departments].sort());

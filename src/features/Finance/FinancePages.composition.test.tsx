@@ -14,7 +14,7 @@ vi.mock("./use-budget-review-signals", () => ({useBudgetReviewSignals: () => ({e
 vi.mock("./DepartmentBudgetsPanel", () => ({ DepartmentBudgetsPanel: () => <h2>Department budget submissions</h2> }));
 vi.mock("./ProjectBudgetsPanel", () => ({ ProjectBudgetsPanel: () => <h2>Project budgets</h2> }));
 vi.mock("./BudgetsPage", () => ({ BudgetsBoard: () => <p>Season budget entries</p> }));
-vi.mock("./SpendingPurchases", () => ({ SpendingPurchases: () => <div>Registered purchase table</div> }));
+vi.mock("./SpendingPurchases", () => ({ SpendingPurchases: () => <div>Registered purchase cards</div> }));
 vi.mock("./FinancingIncome", () => ({ FinancingIncome: () => <h2>Financing</h2> }));
 const container = document.createElement("div");
 let root: ReturnType<typeof createRoot>;
@@ -50,7 +50,7 @@ it.each([false, true])("shows financing on Income & Spend only with financing ac
   };
   await act(async()=>root.render(<MemoryRouter><FinanceEntry page="overview"/></MemoryRouter>));
   expect(container.querySelector("h1")?.textContent).toBe("Income & Spend");
-  expect(container.textContent).toContain("Registered purchase table");
+  expect(container.textContent).toContain("Registered purchase cards");
   expect([...container.querySelectorAll("h2")].some(heading=>heading.textContent==="Financing")).toBe(financing);
   expect(mocks.loadPage.mock.calls).toEqual(financing ? [["financing"]] : []);
   const summary=container.querySelector('[aria-label="Season income and spend"]')!;
@@ -71,6 +71,6 @@ it("shows Season Income for an authorized income-only reader without requesting 
   expect(summary.textContent).toContain("Season Income");
   expect([...summary.querySelectorAll("dd")].map(row=>row.textContent)).toEqual(["NOK 900.25","NOK 0.00","NOK 900.25"]);
   expect(summary.textContent).not.toContain("Season Spend");
-  expect(container.textContent).not.toContain("Registered purchase table");
+  expect(container.textContent).not.toContain("Registered purchase cards");
   expect(mocks.loadPage).not.toHaveBeenCalledWith("purchases");
 });

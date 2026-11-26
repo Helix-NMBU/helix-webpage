@@ -20,7 +20,7 @@ export function SpendingPurchases() {
   if (!session.purchases) return <FinanceContentSkeleton page="purchases" label="Loading registered purchases" />;
   const register = session.purchases.register ?? [];
   return <PurchaseRegister
-    presentation="table"
+    presentation="summary"
     register={register}
     unpaidCount={session.purchases.unpaidCount ?? register.filter(row => row.unpaid).length}
     unpaidOnly={unpaidOnly}
