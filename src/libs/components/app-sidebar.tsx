@@ -13,6 +13,7 @@ import {
   IconReceipt,
   IconWallet,
   IconUsersGroup,
+  IconSitemap,
 } from "@tabler/icons-react";
 import { useLocation } from "react-router-dom";
 import { NavMain } from "@libs/components/nav-main";
@@ -33,6 +34,7 @@ import { useRecruitmentAccess } from "@/features/MemberPlatform/RecruitmentAcces
 import { useFinanceAccess } from "@/features/MemberPlatform/FinanceAccess";
 import { useMemberFeatureAccess } from "@/features/MemberPlatform/MemberFeatureAccess";
 import { financeRoutes } from "@/features/Finance/routes";
+import { canManageVehicleCatalog, vehicleCatalogPath } from "@/features/VehicleCatalog/access";
 
 export type MemberSidebarActions = {
   onNavigate: (to: string, opener?: HTMLElement) => void;
@@ -67,6 +69,7 @@ export function AppSidebar({
   const managementDepartment = workspace?.departments?.find(department => departmentPath(department.name) === managementPath);
   const recruitingAllowed = featureAccess.canAccess("recruitment.manage") && recruitment.access === "allowed";
   const managementItems = [
+    ...(canManageVehicleCatalog(workspace) ? [{ title: "Vehicle systems", url: vehicleCatalogPath, icon: IconSitemap }] : []),
     ...(recruitingAllowed ? [{ title: "Recruiting", url: "/recruiting", icon: IconUsersGroup }] : []),
   ];
   const managementActive = managementItems.some(item => item.url === location.pathname);

@@ -1,0 +1,22 @@
+{
+  "systems": [
+    {"code":"CB","name":"Chassis","description":"The spaceframe and its structural mounts.","subsystems":[["CB-FRAME","Spaceframe"]]},
+    {"code":"SU","name":"Suspension and running gear","description":"Wheel location, damping, hubs and braking.","subsystems":[["SU-UPRIGHT","Uprights"],["SU-ARMS","Wishbones"],["SU-DAMP","Dampers, rockers and pushrods"],["WT-HUBS","Wheel hubs"],["BR-HYD","Braking system"]]},
+    {"code":"AERO","name":"Aerodynamics","description":"The aerodynamic package and exterior bodywork.","subsystems":[["AERO-FLOOR","Floor and sidepods"],["AERO-FRONT","Front wing"],["AERO-REAR","Rear wing"],["CB-BODY","Bodywork and nose"]]},
+    {"code":"COCKPIT","name":"Cockpit","description":"Driver controls, fit and protection.","subsystems":[["ST-RACK","Mechanical steering"],["CP-SEAT","Seat and headrest"],["BR-PEDAL","Pedal box"],["CP-SAFETY","Firewall, cockpit floor and harness"]]},
+    {"code":"DT","name":"Drivetrain","description":"The engine and mechanical power transmission.","subsystems":[["ET-ENGINE","Engine overhaul"],["DT-DIFF","Engine mounts, differential and driveshafts"],["ET-COOL","Cooling and fuel"],["ET-INTAKE","Intake"],["ET-EXH","Exhaust"],["DT-CHAIN","Chain and sprockets"],["ET-TURBO","Turbo"]]},
+    {"code":"LV","name":"Electronics","description":"Vehicle electronics, controls and instrumentation.","subsystems":[["LV-SHUT","Shutdown circuit and BSPD"],["LV-SHIFT","Gear shifting"],["LV-WHEEL","Steering-wheel electronics"],["LV-DASH","Dashboard"],["LV-ECU","Sensors and other electronics"]]}
+  ],
+  "assignments": [
+    {"id":"f7670cf5-2fc2-4958-8c30-d5f67ea06475","name":"S27 Brake System [BR]","component":"BR-HYD"},
+    {"id":"4726cfde-7756-4a3f-b85c-b9270e7a22d3","name":"S27 Chassis and Body [CB]","component":"CB"},
+    {"id":"0d457f1d-84e0-4081-bfd2-954e56ae048e","name":"S27 Drivetrain [DT]","component":"DT"},
+    {"id":"6246b74a-77d9-4411-8ce6-5812d3fb9952","name":"S27 Engine and Tractive System [ET]","component":"DT"},
+    {"id":"8248c27a-2a2f-42d5-9018-31235d67acd2","name":"S27 Steering System [ST]","component":"ST-RACK"},
+    {"id":"47b707b9-d764-42fc-82ff-3d5b698a7466","name":"S27 Suspension System [SU]","component":"SU"},
+    {"id":"bd934306-d613-4e92-8ea9-c542ea4490c9","name":"S27 Wheels, Wheel Bearings and Tires [WT]","component":"SU"},
+    {"id":"d8b01544-3771-43a7-8abe-2d82da4062c1","name":"S27 Grounded Low Voltage System [LV]","component":"LV"}
+  ],
+  "movedProjectLinks": {"BR": "BR-HYD", "ET": "DT", "ST": "ST-RACK", "WT": "SU", "CB-COCKPIT": "COCKPIT", "AERO-WINGS": "AERO", "BR-WHEEL": "BR-HYD", "ST-COLUMN": "ST-RACK", "WT-TIRES": "SU", "LV-POWER": "LV-ECU"},
+  "retired": ["BR", "ET", "ST", "WT", "CB-COCKPIT", "AERO-WINGS", "BR-WHEEL", "ST-COLUMN", "WT-TIRES", "LV-POWER", "AT", "AT-SENSE", "AT-CTRL"]
+}

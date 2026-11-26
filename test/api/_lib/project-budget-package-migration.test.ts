@@ -1,5 +1,6 @@
+import { projectBudgetMigrationFiles } from "./project-budget-test-db.js";
 import {randomUUID} from "node:crypto";
-import {readFileSync,readdirSync} from "node:fs";
+import {readFileSync} from "node:fs";
 import {PGlite} from "@electric-sql/pglite";
 import {it,expect} from "vitest";
 import {createFinanceServices} from "../../../api/_lib/finance-service.js";
@@ -7,7 +8,7 @@ import {setupProjectBudgetBase,seedProjectBudgetLegacy,projectBudgetFixture as f
 it("requires a genuine new department send for pre074 Finance-pending versions and preserves their real prior decision",async()=>{
  const pg=new PGlite(),db:ProjectBudgetTestDatabase={exec:sql=>pg.exec(sql),query:async<T>(sql:string,params?:unknown[])=>({rows:(await pg.query<T>(sql,params)).rows})};
  try{
-  await setupProjectBudgetBase(db);await seedProjectBudgetLegacy(db);const directory=new URL("../../../db/migrations/",import.meta.url);for(const name of readdirSync(directory).filter(name=>/^0(6[6-9]|7[0-3])_.*\.sql$/.test(name)).sort())await db.exec(readFileSync(new URL(name,directory),"utf8"));
+  await setupProjectBudgetBase(db);await seedProjectBudgetLegacy(db);const directory=new URL("../../../db/migrations/",import.meta.url);for(const name of projectBudgetMigrationFiles.filter(name => name < "074"))await db.exec(readFileSync(new URL(name,directory),"utf8"));
   const services=createFinanceServices({db,authenticate:async role=>projectBudgetIdentity(role as ProjectBudgetFixtureRole)}),mutate=(role:ProjectBudgetFixtureRole,body:Record<string,unknown>)=>services.mutate(role,{requestId:randomUUID(),...body});
   const created=await mutate("lead",{action:"createProjectBudget",projectId:f.project,responsibleDepartmentId:f.department});let budget=await services.projectBudget("lead",created.id!);
   for(const [role,action,fields] of[["lead","saveProjectBudgetEntry",{entry:{systemId:f.system,description:"Pre074 submitted material",category:"material",plannedNok:"100",ordinaryPriority:"P2",reuseStatus:"new",status:"planned"}}],["lead","submitProjectBudget",{}],["departmentLead","approveDepartmentBudget",{}]] as const){await mutate(role,{action,projectBudgetId:budget.id,expectedRevision:budget.revision,...fields});budget=await services.projectBudget("lead",budget.id);}

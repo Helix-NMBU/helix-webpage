@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { projectBudgetMigrationFiles } from "./project-budget-test-db.js";
+import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, it } from "vitest";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
@@ -23,9 +24,7 @@ describe("invoice migration readiness", () => {
       await setupProjectBudgetBase(db);
       await seedProjectBudgetLegacy(db);
       const directory = new URL("../../../db/migrations/", import.meta.url);
-      for (const name of readdirSync(directory)
-        .filter((n) => /^0(6[6-9]|70|72)_.*\.sql$/.test(n))
-        .sort())
+      for (const name of projectBudgetMigrationFiles.filter(name => name < "073" && !name.startsWith("071")))
         await db.exec(readFileSync(new URL(name, directory), "utf8"));
       await db.query(
         "insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','\"S27\"','Test',$1::uuid)",

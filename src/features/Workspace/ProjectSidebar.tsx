@@ -30,6 +30,7 @@ import type { WorkspaceDirectory, WorkspaceProject } from "./types";
 import { ProjectDatePicker } from "../ProjectManagement/ProjectDatePicker";
 import { PriorityGlyph } from "../ProjectManagement/PriorityGlyph";
 import { TaskStatusIcon, TaskStatusIndicator } from "../ProjectManagement/TaskStatus";
+import { ProjectVehicleField } from "../VehicleCatalog/ProjectVehicleField";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 function Property({ label, children }: { label: string; children: ReactNode }) {
@@ -111,6 +112,7 @@ export function ProjectSidebar({
         title="Properties"
       >
         <dl className="space-y-5">
+          <Property label="Vehicle system"><ProjectVehicleField key={project.id} projectId={project.id} busy={busy} /></Property>
           <Property label="Status">
             {canEdit ? <Select value={status} disabled={busy} onValueChange={value => void onSaveProject({ status: value as ProjectInput["status"] })}><SelectTrigger aria-label="Project status" className="-mx-2 h-8 w-auto gap-2 border-transparent bg-transparent px-2 shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted [&>svg:last-child]:opacity-0"><TaskStatusIcon status={status} /><SelectValue /></SelectTrigger><SelectContent>{[...TASK_WORKFLOW_STATUSES, ...(status === "cancelled" ? ["cancelled" as const] : [])].map(value => <SelectItem key={value} value={value}>{STATUS_LABELS[value]}</SelectItem>)}</SelectContent></Select> : <TaskStatusIndicator status={status} />}
           </Property>

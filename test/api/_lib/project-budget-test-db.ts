@@ -132,12 +132,21 @@ export async function seedProjectBudgetLegacy(db: ProjectBudgetTestDatabase) {
   `);
 }
 
-/** Include every reserved feature migration actually present, not the old 011-029 filter. */
+export const projectBudgetMigrationFiles = [
+  "066_project_budget_foundation.sql",
+  "067_finance_retire_purchase_threshold.sql",
+  "068_project_budget_approval.sql",
+  "069_project_budget_revisions.sql",
+  "070_project_budget_purchases.sql",
+  "071_drive_invoice_transfers.sql",
+  "072_funding_application_obligations.sql",
+  "073_finance_registered_allocation_facts.sql",
+  "074_department_budget_packages.sql",
+] as const;
+
 export async function applyProjectBudgetMigrations(db: ProjectBudgetTestDatabase) {
-  const files = readdirSync(migrationDirectory).filter(name => /^0(6[6-9]|7[0-4])_.*\.sql$/.test(name)).sort();
-  if (!files.includes("066_project_budget_foundation.sql")) throw new Error("Project budget foundation migration is missing.");
-  for (const file of files) await db.exec(read(file));
-  return files;
+  for (const file of projectBudgetMigrationFiles) await db.exec(read(file));
+  return [...projectBudgetMigrationFiles];
 }
 
 /** Genuine revision-2 approval helpers. No direct SQL approval or test-only service bypass. */
