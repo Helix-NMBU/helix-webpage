@@ -1,3 +1,4 @@
+import type { IncomeInput, IncomeReceipts } from "./income-receipts.js";
 import type { FinanceInvoiceRecoveryRow, InvoiceEvidenceSummary } from "./invoice-types.js";
 import type { InvoiceStorageBackend, InvoiceTransferStatus, OrdinaryBudgetPriority, ProjectBudgetCompletion, ProjectBudgetInvoiceReference } from "./project-budget-types.js";
 export const FINANCE_PROFILES = ["business", "finance", "head_of_finance"] as const;
@@ -512,6 +513,7 @@ export type FinancingView = {
   scenarios: FundingScenario[];
   pipelineForecast?: PipelineIncomeRecord[];
   wonIncome?: WonIncomeRecord[];
+  incomeReceipts?: IncomeReceipts;
 };
 
 export type FinanceUnchanged = { unchanged: true; viewVersion: number };
@@ -623,6 +625,8 @@ type MutationBase = { requestId: string; expectedRevision?: number };
 export type BankSnapshot = { amountNok: string; asOfDate: string; updatedAt: string; revision: number };
 
 export type FinanceMutation =
+  | (MutationBase & IncomeInput & { action: "registerIncome"; seasonCode: string })
+  | (MutationBase & { action: "voidIncome"; seasonCode: string; receiptId: string; reason: string })
   | (MutationBase & { action: "setBankSnapshot"; amountNok: string; asOfDate: string })
   | (MutationBase & { action: "createBudget" })
   | (MutationBase & { action: "approveBudget"; reason?: string })

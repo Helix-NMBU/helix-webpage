@@ -101,6 +101,8 @@ const REVISION_ACTIONS = new Set<FinanceAction>([
 ]);
 
 const ACTION_CAPABILITY: Record<FinanceAction, keyof FinanceCapabilitySet> = {
+  registerIncome: "purchaseRegister",
+  voidIncome: "purchaseRegister",
   setBankSnapshot: "draftBudgetItems",
   createBudget: "createBudget",
   approveBudget: "approveBudget",

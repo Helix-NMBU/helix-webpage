@@ -1,3 +1,4 @@
+import { loadLocalIncomeReceipts, localIncomeVersion } from "./local-income-receipts";
 import { normalizeInvoiceDriveUrl, purchaseInvoiceReference } from "./invoice-link";
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
 import { capabilitiesForProfiles } from "./access";
@@ -125,6 +126,7 @@ export function localFinanceVersion(bankVersion: number): number {
 function combinedVersion(bankVersion: number) {
   return (
     bankVersion +
+    localIncomeVersion() +
     saved(BUDGETS, { version: 0 }).version +
     saved(AWARDS, { version: 0 }).version +
     saved(LEDGER, { version: 0 }).version +
@@ -289,7 +291,13 @@ export function loadLocalProjectBudgetFinancials(projectId: string) {
 export function loadLocalFinanceViews(bankVersion: number) {
   guard("finance");
   const views = projectLocalFinance(readFacts(bankVersion));
-  return { ...views, financing: { ...views.financing, pipelineForecast: localPipelineIncomeForecast(views.financing.seasonCode), wonIncome: localWonIncome(views.financing.seasonCode) } };
+  const { seasonCode } = views.financing;
+  return { ...views, financing: {
+    ...views.financing,
+    pipelineForecast: localPipelineIncomeForecast(seasonCode),
+    wonIncome: localWonIncome(seasonCode),
+    ...(seasonCode ? { incomeReceipts: loadLocalIncomeReceipts(seasonCode) } : {}),
+  } };
 }
 /** Explicit allowlist: no invoice references, item IDs, application context or private funding fields. */
 export function loadLocalSeasonFinances(

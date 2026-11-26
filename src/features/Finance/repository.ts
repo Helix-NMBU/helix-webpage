@@ -1,3 +1,5 @@
+import { isIncomeAction } from "./income-receipts";
+import { mutateLocalIncome } from "./local-income-receipts";
 import { publishFinanceUpdate } from "./finance-events";
 import { loadLocalFinanceViews, localFinanceVersion, mutateLocalPurchase } from "./local-finance-read";
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
@@ -50,7 +52,7 @@ export function localFinanceRevisionForDevelopment():number {
   return isLocalMemberMode()&&localMemberSignedIn()?localBankVersion:0;
 }
 function localRead<T>(read:()=>T):Promise<T> {
-  return Promise.resolve().then(read).catch((error:unknown)=>{if(error instanceof FinanceRequestError)throw error;const status=error&&typeof error==="object"&&"status" in error?Number(error.status):503;throw new FinanceRequestError(error instanceof Error?error.message:"Could not load finance.",status);});
+  return Promise.resolve().then(read).catch((error:unknown)=>{if(error instanceof FinanceRequestError)throw error;const status=error&&typeof error==="object"&&"status" in error?Number(error.status):503;throw new FinanceRequestError(error instanceof Error?error.message:"Could not load finance.",status, error instanceof Error && "errors" in error && Array.isArray(error.errors) ? error.errors : []);});
 }
 
 export function createFinanceApi(owner: { current: string | null }) {
@@ -78,6 +80,15 @@ export function createFinanceApi(owner: { current: string | null }) {
       }
       if (action.action === "downloadDocument") return {ok:true,viewVersion:localFinanceVersion(localBankVersion),warnings:[],errors:[],...await createLocalInvoiceEvidenceApi().open(String(action.documentId))};
       if (!localMemberHasFinancials()) throw new FinanceRequestError("Finance access is required.",403);
+      if (isIncomeAction(action.action)) {
+        return localRead(() => {
+          if (localFinanceProfileSelection() === null) throw new FinanceRequestError("Finance access is required.", 403);
+          const season = loadLocalFinanceViews(localBankVersion).financing.seasonCode;
+          if (!season) throw new FinanceRequestError("No finance season is configured.", 409);
+          const id = mutateLocalIncome(action, season);
+          return { ok: true, viewVersion: localFinanceVersion(localBankVersion), id, warnings: [], errors: [] };
+        });
+      }
       if (action.action !== "setBankSnapshot") return localRead(()=>mutateLocalPurchase(action,localBankVersion));
       if (action.expectedRevision !== (localBankSnapshot?.revision ?? 0)) throw new FinanceRequestError("The balance changed. Reload it before saving.", 409);
       let amount: bigint | null;
