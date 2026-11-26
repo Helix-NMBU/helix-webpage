@@ -3,7 +3,7 @@ import { Button } from "@libs/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@libs/components/ui/popover";
 import { PriorityGlyph } from "../ProjectManagement/PriorityGlyph";
 import { Choice, Field } from "../ProjectManagement/TaskEditor";
-import { defaultProjectGrouping, PROJECT_COLUMNS, type ProjectView } from "./project-view";
+import { defaultProjectGrouping, PROJECT_COLUMNS, PROJECT_COMPLETION_OPTIONS, type ProjectView } from "./project-view";
 import type { WorkspaceDirectory } from "./types";
 
 export function ProjectViewMenu({ data, options, onChange, onReset, hideDepartmentFilter = false }: {
@@ -11,7 +11,12 @@ export function ProjectViewMenu({ data, options, onChange, onReset, hideDepartme
   onChange: (key: string, value: string) => void; onReset: () => void;
   hideDepartmentFilter?: boolean;
 }) {
-  const active = (!hideDepartmentFilter && options.department !== "all") || options.lead !== "all" || options.priority !== "all" || options.group !== defaultProjectGrouping(options.view);
+  const active = (!hideDepartmentFilter && options.department !== "all")
+    || options.lead !== "all"
+    || options.priority !== "all"
+    || options.completion !== "all"
+    || options.group !== defaultProjectGrouping(options.view)
+    || (options.view === "timeline" && options.scale !== "year");
   return <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="icon-sm" className="relative shrink-0" aria-label="Project filters and display settings" title="Project filters and display settings">
     <IconFilter2 aria-hidden="true" className="size-4" />
     {active && <span aria-label="Filters active" className="absolute right-1 top-1 size-1.5 rounded-full bg-primary" />}
@@ -30,8 +35,20 @@ export function ProjectViewMenu({ data, options, onChange, onReset, hideDepartme
     <div className="space-y-3 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">
       <Field id="project-group" label="Grouping"><Choice id="project-group" value={options.group} onChange={value => onChange("group", value)} options={[{ value: "none", label: "No grouping" }, { value: "department", label: "Department" }, { value: "lead", label: "Lead" }]} /></Field>
       <Field id="project-sort" label="Ordering"><Choice id="project-sort" value={options.sort} onChange={value => onChange("sort", value)} options={[{ value: "deadline", label: "Target date" }, { value: "start", label: "Start date" }, { value: "name", label: "Name" }, { value: "priority", label: "Priority" }, { value: "progress", label: "Progress" }]} /></Field>
+      {options.view === "timeline" && (
+        <Field id="project-timeline-scale" label="Timeline scale">
+          <Choice id="project-timeline-scale" value={options.scale} onChange={value => onChange("scale", value)} options={[
+            { value: "month", label: "Month" },
+            { value: "quarter", label: "Quarter" },
+            { value: "year", label: "Year" },
+          ]} />
+        </Field>
+      )}
     </div>
     <div className="space-y-3 border-t pt-4 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">
+      <Field id="project-filter-completion" label="Completion">
+        <Choice id="project-filter-completion" ariaLabel="Project completion" value={options.completion} onChange={value => onChange("completion", value)} options={PROJECT_COMPLETION_OPTIONS} />
+      </Field>
       {!hideDepartmentFilter && <Field id="project-filter-department" label="Department"><Choice id="project-filter-department" value={options.department} onChange={value => onChange("department", value)} options={[{ value: "all", label: "All departments" }, ...data.departments.map(item => ({ value: item.id, label: item.name }))]} /></Field>}
       <Field id="project-filter-lead" label="Lead"><Choice id="project-filter-lead" value={options.lead} onChange={value => onChange("lead", value)} options={[{ value: "all", label: "All Leads" }, { value: "none", label: "No Lead" }, ...data.members.map(item => ({ value: item.id, label: item.name }))]} /></Field>
       <Field id="project-filter-priority" label="Priority"><Choice id="project-filter-priority" value={options.priority} onChange={value => onChange("priority", value)} options={[{ value: "all", label: "All priorities" }, ...(["urgent", "high", "normal", "low", "none"] as const).map(value => ({ value, icon: <PriorityGlyph priority={value} />, label: value === "normal" ? "Medium" : value === "none" ? "No priority" : value[0].toUpperCase() + value.slice(1) }))]} /></Field>

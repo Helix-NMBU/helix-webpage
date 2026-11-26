@@ -29,8 +29,8 @@ import {
 import { ProjectDetail } from "./ProjectDetail";
 import { ProjectViewMenu } from "./ProjectViewMenu";
 import { ProjectTimeline } from "./ProjectTimeline";
-import { PROJECT_COLUMNS, PROJECT_COMPLETION_OPTIONS, defaultProjectGrouping, projectView, visibleProjects, projectGroups, type ProjectColumn } from "./project-view";
-import { Choice, ProjectEditor } from "../ProjectManagement/TaskEditor";
+import { PROJECT_COLUMNS, defaultProjectGrouping, projectView, visibleProjects, projectGroups, type ProjectColumn } from "./project-view";
+import { ProjectEditor } from "../ProjectManagement/TaskEditor";
 import { TaskStatusIndicator } from "../ProjectManagement/TaskStatus";
 import {
   PriorityIndicator,
@@ -169,7 +169,7 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
   }
   function clearFilters() {
     const next = new URLSearchParams(params);
-    for (const key of ["department", "lead", "priority", "completion", "search", "group", "sort", "columns"]) next.delete(key);
+    for (const key of ["department", "lead", "priority", "completion", "search", "group", "sort", "columns", "scale"]) next.delete(key);
     setParams(next);
   }
   async function save(change: ProjectMutation) {
@@ -206,27 +206,11 @@ export function ProjectsPage({ departmentIdScope }: { departmentIdScope?: string
           {departmentId && <span className="text-sm text-muted-foreground">{department?.name ?? "Unknown department"}</span>}
           {departmentId && !departmentIdScope && <Button variant="ghost" size="sm" onClick={() => { const next = new URLSearchParams(params); next.delete("department"); setParams(next); }}>All projects</Button>}
           <div className="w-48 max-w-full sm:w-64"><Search outside label="Find projects" value={search} onChange={setSearch} /></div>
+          {scopedOptions.view === "timeline" && (
+            <Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button>
+          )}
+          <ProjectViewMenu data={data} options={scopedOptions} onChange={change} onReset={clearFilters} hideDepartmentFilter={Boolean(departmentIdScope)} />
           {canCreate && <Button size="sm" disabled={busy} onClick={() => setEditing(true)}>+ New project</Button>}
-        </div>}
-        toolbar={<div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="w-36">
-            <Choice
-              id="project-filter-completion"
-              ariaLabel="Project completion"
-              value={scopedOptions.completion}
-              onChange={value => change("completion", value)}
-              options={PROJECT_COMPLETION_OPTIONS}
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            {scopedOptions.view === "timeline" && <>
-              <div className="w-28">
-                <Choice id="project-timeline-scale" ariaLabel="Timeline scale" value={scopedOptions.scale} onChange={value => change("scale", value)} options={[{ value: "month", label: "Month" }, { value: "quarter", label: "Quarter" }, { value: "year", label: "Year" }]} />
-              </div>
-              <Button variant="outline" size="sm" onClick={() => timelineRef.current?.centerToday()}>Today</Button>
-            </>}
-            <ProjectViewMenu data={data} options={scopedOptions} onChange={change} onReset={clearFilters} hideDepartmentFilter={Boolean(departmentIdScope)} />
-          </div>
         </div>}
       >
         <>
