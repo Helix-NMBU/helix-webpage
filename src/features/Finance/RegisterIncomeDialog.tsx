@@ -14,8 +14,8 @@ import type { FinanceFieldError } from "./types";
 const sourceExamples: Record<IncomeInput["category"], string> = {
   "": "e.g. member name, buyer, or sale event",
   membership_dues: "e.g. member name or S27 dues batch",
-  merch: "e.g. hoodies at the welcome event",
-  other_sales: "e.g. used equipment sale to NMBU",
+  sales: "e.g. welcome event merch or equipment sale",
+  donations: "e.g. an alumnus or supporter",
   other_income: "e.g. name of the payer or event",
 };
 
@@ -112,15 +112,15 @@ export function RegisterIncomeDialog({ seasonCode }: { seasonCode: string }) {
       <form className="space-y-5" noValidate onSubmit={event => { void submit(event); }}>
         <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor={`${id}-category`}>Income source</Label>
+            <Label htmlFor={`${id}-category`}>Income type</Label>
             <Select value={fields.category} onValueChange={value => change("category", value as IncomeInput["category"])} disabled={saving} required>
-              <SelectTrigger {...fieldProps("category")} className="w-full"><SelectValue placeholder="Choose a source" /></SelectTrigger>
+              <SelectTrigger {...fieldProps("category")} className="w-full"><SelectValue placeholder="Choose a type" /></SelectTrigger>
               <SelectContent>{Object.entries(INCOME_CATEGORIES).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
             </Select>
             {fieldError("category")}
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor={`${id}-source`}>Source name</Label>
+            <Label htmlFor={`${id}-source`}>Source</Label>
             <Input {...fieldProps("source")} value={fields.source} onChange={event => change("source", event.target.value)} placeholder={sourceExamples[fields.category]} maxLength={INCOME_SOURCE_MAX} required />
             {fieldError("source")}
           </div>

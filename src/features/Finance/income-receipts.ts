@@ -3,8 +3,8 @@ import type { FinanceFieldError } from "./types.js";
 
 export const INCOME_CATEGORIES = {
   membership_dues: "Membership dues",
-  merch: "Merch",
-  other_sales: "Other sales",
+  sales: "Sales",
+  donations: "Donations",
   other_income: "Other income",
 } as const;
 export type IncomeCategory = keyof typeof INCOME_CATEGORIES;
@@ -102,7 +102,7 @@ export function parseIncomeChange(body: Record<string, unknown>, today: string):
   try { receivedOn = parseIsoDate(typeof body.receivedOn === "string" ? body.receivedOn : ""); } catch { /* Validated below. */ }
 
   const errors: FinanceFieldError[] = [];
-  if (!category) errors.push({ field: "category", message: "Choose an income source." });
+  if (!category) errors.push({ field: "category", message: "Choose an income type." });
   if (!source || source.length > INCOME_SOURCE_MAX) errors.push({ field: "source", message: "Enter the payer, group or sale this payment came from." });
   if (amount === null || amount <= 0n) errors.push({ field: "amountNok", message: "Enter a positive amount in NOK." });
   if (!receivedOn || receivedOn > today) errors.push({ field: "receivedOn", message: "Enter a date on or before today." });

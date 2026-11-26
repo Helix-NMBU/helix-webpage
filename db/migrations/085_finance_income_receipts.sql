@@ -3,7 +3,7 @@ begin;
 create table finance.income_receipts (
   id uuid primary key default gen_random_uuid(),
   season_id uuid not null references finance.seasons(id),
-  category text not null check (category in ('membership_dues', 'merch', 'other_sales', 'other_income')),
+  category text not null check (category in ('membership_dues', 'sales', 'donations', 'other_income')),
   source text not null check (char_length(btrim(source)) between 1 and 120),
   amount_ore bigint not null check (amount_ore > 0),
   received_on date not null,

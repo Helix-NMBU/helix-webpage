@@ -12,7 +12,17 @@ type IncomeState = {
 
 function readIncomeState(): IncomeState {
   const raw = localStorage.getItem(key);
-  return raw ? JSON.parse(raw) as IncomeState : { version: 0, receipts: [], mutations: {} };
+  if (!raw) return { version: 0, receipts: [], mutations: {} };
+  const saved = JSON.parse(raw) as Omit<IncomeState, "receipts"> & {
+    receipts: Array<Omit<LocalReceipt, "category"> & { category: LocalReceipt["category"] | "merch" | "other_sales" }>;
+  };
+  return {
+    ...saved,
+    receipts: saved.receipts.map(row => ({
+      ...row,
+      category: row.category === "merch" || row.category === "other_sales" ? "sales" : row.category,
+    })),
+  };
 }
 
 export function localIncomeVersion() {

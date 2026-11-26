@@ -31,7 +31,7 @@ it("registers and voids sourced payments, without exposing details to aggregate 
       values ('current_season', '"S27"', 'Current season', $1)`, [finance.userId]);
     const service = createFinanceServices({ db, authenticate: async token => token === "finance" ? finance : member });
     const command = {
-      action: "registerIncome", requestId: crypto.randomUUID(), seasonCode: "S27", category: "merch",
+      action: "registerIncome", requestId: crypto.randomUUID(), seasonCode: "S27", category: "sales",
       source: "Welcome event hoodies", amountNok: "1 234,56", receivedOn: "2026-11-20", method: "vipps", reference: "SETTLEMENT-1",
     };
     await expect(service.mutate("member", command)).rejects.toMatchObject({ status: 403 });
@@ -48,7 +48,7 @@ it("registers and voids sourced payments, without exposing details to aggregate 
     });
     const income = await loadIncomeReceipts(db, "S27", true);
     expect(income).toEqual({ receivedNok: "1234.56", records: [{
-      id: saved.id, category: "merch", source: "Welcome event hoodies", amountNok: "1234.56",
+      id: saved.id, category: "sales", source: "Welcome event hoodies", amountNok: "1234.56",
       receivedOn: "2026-11-20", method: "vipps", reference: "SETTLEMENT-1", voidReason: null,
     }] });
     expect(await loadIncomeReceipts(db, "S27", false)).toEqual({ receivedNok: "1234.56" });
@@ -65,6 +65,15 @@ it("registers and voids sourced payments, without exposing details to aggregate 
       .toEqual([{ new_value: "recorded" }, { new_value: "voided" }]);
     await expect(service.mutate("finance", { ...command, requestId: crypto.randomUUID(), amountNok: "100.00" })).resolves.toMatchObject({ ok: true });
     expect(await loadIncomeReceipts(db, "S27", false)).toEqual({ receivedNok: "100.00" });
+
+    await expect(service.mutate("finance", {
+      ...command, requestId: crypto.randomUUID(), category: "donations",
+      source: "Alumni supporter", amountNok: "50", reference: null,
+    })).resolves.toMatchObject({ ok: true });
+    expect(await loadIncomeReceipts(db, "S27", true)).toMatchObject({
+      receivedNok: "150.00",
+      records: expect.arrayContaining([expect.objectContaining({ category: "donations", source: "Alumni supporter" })]),
+    });
   } finally {
     await pg.close();
   }
