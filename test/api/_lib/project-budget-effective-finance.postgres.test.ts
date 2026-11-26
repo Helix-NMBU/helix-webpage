@@ -1,6 +1,7 @@
+import { projectBudgetMigrationFiles } from "./project-budget-test-db.js";
 import { submitProjectBudgetDepartmentPackage, approveProjectBudgetDepartmentPackage } from "./project-budget-test-db.js";
 import { randomUUID } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createFinanceServices } from "../../../api/_lib/finance-service.js";
@@ -38,7 +39,7 @@ describe.skipIf(!url)("canonical Finance approval/actual atomicity on PostgreSQL
     const resource=createPostgresTestPool({connectionString:connection.toString(),max:8});pool=resource.pool;close=resource.close;
     db={exec:sql=>pool.query(sql),query:async<T>(sql:string,params?:unknown[])=>{try{return{rows:(await pool.query(sql,params)).rows as T[]};}catch(error){const fault=error as {code?:string;constraint?:string};console.error("Synthetic Finance PostgreSQL failure",{action:sql.match(/finance\.[a-z_]+/)?.[0],code:fault.code,constraint:fault.constraint});throw error;}}};
     await setupProjectBudgetBase(db);await seedProjectBudgetLegacy(db);
-    for(const name of readdirSync(migrationDirectory).filter(name=>/^0(6[6-9]|7[0-2])_.*\.sql$/.test(name)).sort())await db.exec(readFileSync(new URL(name,migrationDirectory),"utf8"));
+    for(const name of projectBudgetMigrationFiles.filter(name => name < "073"))await db.exec(readFileSync(new URL(name,migrationDirectory),"utf8"));
     originalCore=(await pool.query<{definition:string}>("select pg_get_functiondef('finance.register_purchase_before_project_tracking(uuid,uuid,text,jsonb)'::regprocedure) as definition")).rows[0].definition;
     await db.exec(migration); await db.exec(readFileSync(new URL("074_department_budget_packages.sql",migrationDirectory),"utf8")); await db.query("insert into finance.settings(setting_key,setting_value,description,updated_by_member_id) values('current_season','\"S27\"','Test',$1::uuid)",[f.head]);
     await db.query("update finance.budgets set status='draft',approved_by_member_id=null,approved_on=null where id=$1::uuid",[f.legacyBudget]);

@@ -26,6 +26,7 @@ import { previewPage } from "./workspace-preview-data";
 import { departmentBudgetPath, financeFundingPath, financePageTitle, financeRoutes } from "../Finance/routes";
 import { useFinanceAccess } from "./FinanceAccess";
 import { useWorkspace } from "../Workspace/WorkspaceContext";
+import { vehicleCatalogPath } from "../VehicleCatalog/access";
 import { departmentPath } from "../Workspace/types";
 import { MemberPagePreferences } from "./MemberPagePreferences";
 import { RegisterPurchaseDialog } from "../Finance/RegisterPurchaseDialog";
@@ -61,7 +62,7 @@ function Workspace({ children }: { children?: ReactNode }) {
     ? location.pathname.slice(departmentPath(department.name).length + 1).split("/")[0]
     : null;
   const workspaceTitle = location.pathname.startsWith("/members") ? "Members" : location.pathname.startsWith("/projects") ? project?.name ?? "Projects" : location.pathname.startsWith("/departments") ? department ? departmentSubpage ? departmentSubpage[0].toUpperCase() + departmentSubpage.slice(1) : department.name : "Departments" : null;
-  const pageTitle = (location.pathname === "/finance/sponsor-reviews" ? "Sponsor funding reviews" : location.pathname === "/sponsor-pipeline" ? "Pipeline" : location.pathname === "/partner-deals" ? "Partner agreements" : null) ?? (budgetDetail ? budgetDepartment?.name ?? "Department budget" : null) ?? financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
+  const pageTitle = (location.pathname === vehicleCatalogPath ? "Vehicle systems" : location.pathname === "/finance/sponsor-reviews" ? "Sponsor funding reviews" : location.pathname === "/sponsor-pipeline" ? "Pipeline" : location.pathname === "/partner-deals" ? "Partner agreements" : null) ?? (budgetDetail ? budgetDepartment?.name ?? "Department budget" : null) ?? financePageTitle(location.pathname) ?? workspaceTitle ?? (seasonOverview ? "Season Overview" : location.pathname.startsWith("/tasks") ? taskDetail ? "Task details" : "Tasks" : profile
     ? "Profile"
     : location.pathname === "/settings"
       ? "Settings"

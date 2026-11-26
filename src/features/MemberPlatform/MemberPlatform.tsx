@@ -23,6 +23,7 @@ import { MemberViewportGate } from "./MemberViewportGate";
 import { MemberThemeProvider } from "./MemberTheme";
 import { MemberNavigationProvider } from "./MemberNavigation";
 import { MemberShell } from "./MemberShell";
+import { vehicleCatalogPath } from "../VehicleCatalog/access";
 import { MemberNotificationsProvider, MemberNotificationsPage, MemberNotificationToaster, useNotify } from "./MemberNotifications";
 import { MemberAccountProvider } from "./MemberAccountContext";
 import { MemberLanguageProvider } from "./MemberLanguage";
@@ -55,6 +56,7 @@ const FinanceEntry = lazy(() => import("../Finance/FinancePages").then(module =>
 const MembersPage = lazy(() => import("../Workspace/MembersPage").then(module => ({ default: module.MembersPage })));
 const ProjectsPage = lazy(() => import("../Workspace/ProjectsPage").then(module => ({ default: module.ProjectsPage })));
 const DepartmentsPage = lazy(() => import("../Workspace/DepartmentsPage").then(module => ({ default: module.DepartmentsPage })));
+const VehicleCatalogPage = lazy(() => import("../VehicleCatalog/VehicleCatalogPage"));
 const DepartmentProjectsPage = lazy(() => import("../Workspace/DepartmentViews").then(module => ({ default: module.DepartmentProjectsPage })));
 const DepartmentTasksPage = lazy(() => import("../Workspace/DepartmentViews").then(module => ({ default: module.DepartmentTasksPage })));
 const ProjectManagement = lazy(() => import("../ProjectManagement/ProjectManagement"));
@@ -221,6 +223,8 @@ export default function MemberPlatform() {
                 <Route path="projects/:projectId" element={<ProjectsPage />} />
                 <Route path="departments" element={<DepartmentsPage />} />
                 <Route path="departments/:departmentId/tasks" element={<DepartmentTasksPage />} />
+                <Route path={vehicleCatalogPath.slice(1)} element={<VehicleCatalogPage />} />
+                <Route path="departments/management/season-structure" element={<LegacyMemberRedirect to={vehicleCatalogPath} />} />
                 <Route path="departments/:departmentId/projects" element={<DepartmentProjectsPage />} />
                 <Route path="departments/:departmentId" element={<DepartmentsPage />} />
                 <Route path="tasks" element={<ProjectManagement personal />} />

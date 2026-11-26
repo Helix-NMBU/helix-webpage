@@ -89,12 +89,16 @@ export function createProjectServices(deps: { db: CvDatabase; authenticate(token
 }
 
 let pool: pg.Pool | undefined;
-export function neonProjectServices(): ProjectServices {
+export function neonProjectDependencies(): Parameters<typeof createProjectServices>[0] {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new MemberCvError(503, "Project management is not configured.");
   pool ??= new pg.Pool({ connectionString: withVerifyFullSsl(connectionString), max: 1 });
-  return createProjectServices({
+  return {
     db: { async query<T>(sql: string, params?: unknown[]) { return { rows: (await pool!.query(sql, params)).rows as T[] }; } },
     authenticate: token => neonCvServices().authenticate(token),
-  });
+  };
+}
+
+export function neonProjectServices(): ProjectServices {
+  return createProjectServices(neonProjectDependencies());
 }
