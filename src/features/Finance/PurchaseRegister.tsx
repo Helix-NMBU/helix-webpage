@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { Badge } from "@libs/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@libs/components/ui/sheet";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { PurchaseInvoice } from "./PurchaseInvoice";
 import { PurchasePanel } from "./PurchasePanel";
 import { purchasePaymentLabel, purchaseReviewLabels, purchaseTitle } from "./purchase-presentation";
@@ -11,7 +10,7 @@ import { projectBudgetMoney } from "./project-budget-diff";
 import { InvoiceEvidence } from "./InvoiceEvidence";
 import type { InvoiceEvidenceActions } from "./invoice-repository";
 import { Button } from "@libs/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@libs/components/ui/card";
 import { Checkbox } from "@libs/components/ui/checkbox";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
@@ -69,7 +68,7 @@ export function PurchaseRegister({
   onAccessEnded,
   presentation = "cards",
 }: {
-  presentation?: "cards" | "table";
+  presentation?: "cards" | "summary";
   register: FinancePurchaseSummary[];
   unpaidCount: number;
   unpaidOnly: boolean;
@@ -195,10 +194,10 @@ export function PurchaseRegister({
     const dateKey = `paid-${row.id}`;
     const paidDate = paidOn[row.id] ?? today;
     return (
-      <Card key={row.id} className={presentation === "table" ? "rounded-none border-0 shadow-none" : undefined}>
-        {presentation === "cards" ? <CardHeader>
+      <Card key={row.id}>
+        <CardHeader>
           <CardTitle className="text-base">{row.publicRef} · {paymentState(row)}</CardTitle>
-        </CardHeader> : null}
+        </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>{[row.supplierName, row.buyerName, row.requesterName].filter(Boolean).join(" · ")}</p>
           <p>{row.purchaseDate} · {row.totalNok} NOK</p>
@@ -349,8 +348,8 @@ export function PurchaseRegister({
     .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate) || b.publicRef.localeCompare(a.publicRef));
   return <section className="space-y-4" aria-label="Purchase register">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className={presentation === "table" ? "sr-only" : "text-xl font-medium"}>Purchase register</h2>
-      {presentation === "table" ? <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:flex-1">
+      <h2 className={presentation === "summary" ? "sr-only" : "text-xl font-medium"}>Purchase register</h2>
+      {presentation === "summary" ? <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:flex-1">
         <Input aria-label="Search purchases" type="search" placeholder="Search purchases…" value={search} onChange={event => setSearch(event.target.value)} className="w-full sm:w-56" />
         <PurchaseFilter label="Filter by department" value={departmentFilter} allLabel="All departments" options={departments} onChange={value => { setDepartmentFilter(value); setProjectFilter("all"); }} />
         <PurchaseFilter label="Filter by project" value={projectFilter} allLabel="All projects" options={projects} onChange={setProjectFilter} />
@@ -359,23 +358,41 @@ export function PurchaseRegister({
       <div className="flex items-center gap-2"><Checkbox id="unpaid-only" checked={unpaidOnly} onCheckedChange={checked => onToggleUnpaid(checked === true)} /><Label htmlFor="unpaid-only">Unpaid only ({unpaidCount})</Label></div>
     </div>
     {presentation === "cards" ? register.length ? register.map(purchaseDetails) : <p className="text-sm text-muted-foreground">{unpaidOnly ? "No unpaid purchases." : "No purchases in this season."}</p> :
-    <div className="overflow-hidden rounded-xl border"><Table><TableHeader><TableRow>
-      <TableHead>Purchase</TableHead><TableHead>Project</TableHead><TableHead>Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Payment</TableHead><TableHead>Invoice</TableHead>
-    </TableRow></TableHeader><TableBody>{rows.map(row => {
+    rows.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{rows.map(row => {
       const description = purchaseTitle(row);
-      const reviewLabels = row.status === "registered" ? [...new Set(row.exceptions.filter(review => review.reviewStatus === "open").map(review => purchaseReviewLabels[review.kind]))] : [];
-      const state = purchasePaymentLabel(row);
+      const reviewLabels = row.status === "registered"
+        ? [...new Set(row.exceptions.filter(review => review.reviewStatus === "open").map(review => purchaseReviewLabels[review.kind]))]
+        : [];
       return <Sheet key={row.id} open={selectedId === row.id} onOpenChange={open => setSelectedId(open ? row.id : null)}>
-        <TableRow className={row.status === "voided" ? "text-muted-foreground" : undefined}>
-          <TableCell className="min-w-48 max-w-xs whitespace-normal"><SheetTrigger asChild><button type="button" aria-label={`Open purchase ${row.publicRef}`} className="rounded-sm text-left font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring">{description || row.publicRef}</button></SheetTrigger><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>{row.publicRef}</span>{reviewLabels.map(label => <Badge key={label} variant={label === "Over budget" || label === "Unbudgeted" ? "destructive" : "secondary"} className={label === "Over budget" || label === "Unbudgeted" ? undefined : "bg-[var(--warning)] text-[var(--warning-foreground)]"}>{label}</Badge>)}</div></TableCell>
-          <TableCell className="max-w-52 whitespace-normal">{row.projectName || "No project"}</TableCell>
-          <TableCell><time dateTime={row.purchaseDate}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.purchaseDate}T12:00:00Z`))}</time></TableCell>
-          <TableCell className="text-right font-medium tabular-nums">{projectBudgetMoney(row.totalNok)}</TableCell>
-          <TableCell><Badge variant="secondary" className={row.status === "voided" ? undefined : row.unpaid ? "bg-[var(--warning)] text-[var(--warning-foreground)]" : "bg-[var(--success)] text-[var(--success-foreground)]"}>{state}</Badge></TableCell>
-          <TableCell><PurchaseInvoice row={row} canLink={canAct} busy={busy !== null} onRun={run} actions={invoiceActions} onChanged={onChanged} onAccessEnded={clearPrivateAccess} /></TableCell>
-        </TableRow>
-        <SheetContent className="gap-0 overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-lg"><PurchasePanel row={row} today={today} canAct={canAct} busy={busy !== null} onRun={run} invoiceActions={invoiceActions} onChanged={onChanged} onAccessEnded={clearPrivateAccess} /></SheetContent>
+        <Card role="article" size="sm" className={row.status === "voided" ? "min-w-0 gap-3 text-muted-foreground" : "min-w-0 gap-3"}>
+          <CardHeader>
+            <h3 className="min-w-0">
+              <SheetTrigger asChild>
+                <button type="button" aria-label={`Open purchase ${row.publicRef}`} className="break-words rounded-sm text-left font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+                  {description || row.publicRef}
+                </button>
+              </SheetTrigger>
+            </h3>
+            <p className="break-words text-xs text-muted-foreground">{row.publicRef} · {row.projectName || "No project"}</p>
+            <CardAction><PurchaseInvoice row={row} canLink={canAct} busy={busy !== null} onRun={run} actions={invoiceActions} onChanged={onChanged} onAccessEnded={clearPrivateAccess} /></CardAction>
+          </CardHeader>
+          <CardContent className="mt-auto">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="text-base font-medium tabular-nums">{projectBudgetMoney(row.totalNok)}</p>
+              <time className="text-xs text-muted-foreground" dateTime={row.purchaseDate}>
+                {new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.purchaseDate}T12:00:00Z`))}
+              </time>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className={row.status === "voided" ? undefined : row.unpaid ? "bg-[var(--warning)] text-[var(--warning-foreground)]" : "bg-[var(--success)] text-[var(--success-foreground)]"}>{purchasePaymentLabel(row)}</Badge>
+              {reviewLabels.map(label => <Badge key={label} variant={label === "Over budget" || label === "Unbudgeted" ? "destructive" : "secondary"}>{label}</Badge>)}
+            </div>
+          </CardContent>
+        </Card>
+        <SheetContent className="gap-0 overflow-hidden data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
+          <PurchasePanel row={row} today={today} canAct={canAct} busy={busy !== null} onRun={run} invoiceActions={invoiceActions} onChanged={onChanged} onAccessEnded={clearPrivateAccess} />
+        </SheetContent>
       </Sheet>;
-    })}{!rows.length ? <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">{query || departmentFilter !== "all" || projectFilter !== "all" ? "No purchases match your filters." : unpaidOnly ? "No unpaid purchases." : "No purchases in this season."}</TableCell></TableRow> : null}</TableBody></Table></div>}
+    })}</div> : <p className="text-sm text-muted-foreground">{query || departmentFilter !== "all" || projectFilter !== "all" ? "No purchases match your filters." : unpaidOnly ? "No unpaid purchases." : "No purchases in this season."}</p>}
   </section>;
 }

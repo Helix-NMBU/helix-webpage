@@ -12,16 +12,21 @@ export const PROJECT_COMPLETION_OPTIONS = [
   { value: "empty", label: "No tasks yet" },
 ];
 
+export function defaultProjectGrouping(view: "list" | "timeline") {
+  return view === "timeline" ? "department" : "none";
+}
+
 export function projectView(params: URLSearchParams) {
+  const view: "list" | "timeline" = params.get("view") === "timeline" ? "timeline" : "list";
   const completion = params.get("completion");
   return {
-    view: params.get("view") === "timeline" ? "timeline" : "list",
+    view,
     department: params.get("department") ?? "all",
     lead: params.get("lead") ?? "all",
     priority: params.get("priority") ?? "all",
     completion: PROJECT_COMPLETION_OPTIONS.find(option => option.value === completion)?.value ?? "all",
     sort: params.get("sort") ?? "deadline",
-    group: params.get("group") ?? "none",
+    group: params.get("group") ?? defaultProjectGrouping(view),
     scale: params.get("scale") === "month" ? "month" : params.get("scale") === "quarter" ? "quarter" : "year",
     columns: PROJECT_COLUMNS.map(([key]) => key).filter(key => !params.has("columns") || params.get("columns")!.split(",").includes(key)),
   };

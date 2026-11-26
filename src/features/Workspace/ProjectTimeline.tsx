@@ -1,6 +1,8 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { IconArrowLeft, IconArrowRight, IconCube } from "@tabler/icons-react";
+import { IconArrowLeft, IconArrowRight, IconChevronRight, IconCube } from "@tabler/icons-react";
+import { Button } from "@libs/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@libs/components/ui/collapsible";
 import { EmptyIllustration } from "../MemberPlatform/EmptyIllustration";
 import { addDays, formatDate, osloDate } from "../ProjectManagement/model";
 import { chartDay } from "../ProjectManagement/progress-chart";
@@ -100,8 +102,23 @@ export function ProjectTimeline({ projects, groups, directory, scale, timelineRe
           {pointerX !== null && <div aria-hidden="true" className="pointer-events-none sticky left-0 z-20 h-full w-0 shrink-0"><span className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap rounded bg-muted px-1 text-[10px] text-foreground" style={{ left: timelinePointerPosition(pointerX, viewport.label) }}>{formatDate(timelinePointerDate(start, end, width / (chartDay(end) - chartDay(start)), pointerX, viewport.label, viewport.left))}</span></div>}
           <div className="relative ml-[var(--timeline-label-width)] shrink-0" style={{ width }}>{months.map(month => <span key={month} className="absolute top-1 whitespace-nowrap pl-1 text-xs text-muted-foreground" style={{ left: x(month) }}>{monthLabel(month)}</span>)}{ticks.filter(tick => tick.position >= viewport.left - viewport.label - 50 && tick.position <= viewport.left + viewport.width + 50).map(({ date, position }) => <span key={date} className="absolute bottom-1 -translate-x-1/2 text-[10px] tabular-nums text-muted-foreground" title={formatDate(date)} style={{ left: position }}>{Number(date.slice(8, 10))}</span>)}<span className="absolute bottom-0 z-10 -translate-x-1/2 rounded bg-primary px-1 text-[10px] text-primary-foreground" style={{ left: todayX }}>{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${today}T12:00:00Z`))}</span></div>
         </div>
-        {groups.map(group => <div key={group.id}>
-          {group.name && <div className="sticky left-0 z-30 w-[var(--timeline-label-width)] bg-muted/40 px-4 py-2 text-xs font-medium">{group.name}</div>}
+        {groups.map(group => <Collapsible key={group.id} defaultOpen>
+          {group.name && <div className="sticky left-0 z-[36] w-full px-2 py-1" style={{ width: viewport.width || undefined }}>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-9 w-full cursor-pointer justify-start rounded-lg bg-muted px-0 text-xs hover:bg-accent focus-visible:ring-inset aria-expanded:hover:bg-accent dark:hover:bg-accent"
+              >
+                <span data-timeline-label className="flex w-[var(--timeline-label-width)] min-w-0 items-center gap-2 px-2">
+                  <IconChevronRight aria-hidden="true" className="size-4 transition-transform group-data-[state=open]/button:rotate-90" />
+                  <span className="truncate">{group.name}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">{group.projects.length}</span>
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+          </div>}
+          <CollapsibleContent>
           {group.projects.map(project => {
             const markers = milestonePositions(project.milestones, x);
             const hasRange = Boolean(project.startDate && project.deadline);
@@ -131,7 +148,8 @@ export function ProjectTimeline({ projects, groups, directory, scale, timelineRe
               })}
             </div>
           </div>; })}
-        </div>)}
+          </CollapsibleContent>
+        </Collapsible>)}
       </div>
     </div>}
   </section>;

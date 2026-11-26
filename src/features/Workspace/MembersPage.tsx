@@ -162,6 +162,7 @@ export function MembersPage() {
   if (!data) return <LoadDirectory title="Members" columns={4} />;
   const canEdit = data.canAdmin || canManageAccess;
   const groups = memberGroups(data, options, search);
+  const visibleMemberCount = new Set(groups.flatMap(group => group.members.map(member => member.id))).size;
   const columnCount = 1 + options.columns.length + (canEdit ? 1 : 0);
   const changeView = (key: string, value: string) => setParams(previous => {
     const next = new URLSearchParams(previous);
@@ -192,7 +193,13 @@ export function MembersPage() {
   }
   return (
     <>
-      <Directory title="Members" action={<div className="flex min-w-0 flex-wrap items-center gap-2"><div className="w-48 max-w-full sm:w-64"><Search outside label="Find members" value={search} onChange={setSearch} /></div>
+      <Directory title="Members" action={<div className="flex min-w-0 items-center gap-2">
+        <span aria-live="polite" aria-atomic="true" className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+          Showing {visibleMemberCount} {visibleMemberCount === 1 ? "member" : "members"}
+        </span>
+        <div className="w-48 min-w-0 sm:w-64">
+          <Search outside label="Find members" value={search} onChange={setSearch} />
+        </div>
         <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="icon-sm" aria-label="Member view settings" title="Member view settings"><IconFilter2 aria-hidden="true" className="size-4" /></Button></PopoverTrigger>
           <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-5">
             <div className="space-y-3 [&>div]:grid [&>div]:grid-cols-[5.5rem_minmax(0,1fr)] [&>div]:items-center [&>div]:gap-3 [&>div]:space-y-0 [&_label]:text-xs [&_label]:text-muted-foreground">

@@ -18,11 +18,10 @@ it.each([false, true])("shows financing and preserves funding management only fo
   financing.wonIncome!.push({ ...financing.wonIncome![0], contributionId: "grant", opportunityKind: "grant", sourceName: "Grant award" });
   await act(async () => root.render(<MemoryRouter><FinancingIncome financing={financing} canManage={canManage} /></MemoryRouter>));
   expect(Boolean(container.querySelector('a[href="/finance/funding"]'))).toBe(canManage);
-  expect([...container.querySelectorAll("th")].map(cell => cell.textContent)).toEqual(["Source", "Amount", "Status", "Received"]);
   expect(container.textContent).toContain("Ready to invoice"); expect(container.textContent).toContain("Awaiting payment"); expect(container.textContent).toContain("Invoice sent");
-  expect(container.querySelectorAll("tbody tr")).toHaveLength(4);
+  expect(container.querySelectorAll('[role="article"][data-slot="card"]')).toHaveLength(4);
   const source = container.querySelector('a[href="/partner-deals?deal=0"]');
   expect(source?.textContent).toBe("Vehicle partnership");
-  expect(source?.closest("td")?.textContent).toBe("Vehicle partnershipNew partner");
+  expect(source?.closest('[data-slot="card-header"]')?.textContent).toBe("Vehicle partnershipNew partner");
   expect(container.querySelector('time[datetime="2026-11-22"]')?.textContent).toBe("22 Nov 2026");
 });
