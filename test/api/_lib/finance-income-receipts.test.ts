@@ -88,6 +88,10 @@ it("registers and voids sourced payments, without exposing details to aggregate 
     await expect(service.mutate("finance", legacyMatch)).rejects.toMatchObject({
       status: 409, errors: [expect.objectContaining({ field: "acceptSimilarIncome" })],
     });
+    await pg.query("update finance.funding set received_date = null where public_ref = 'F-S27-900'");
+    await expect(service.mutate("finance", legacyMatch)).rejects.toMatchObject({
+      status: 409, errors: [expect.objectContaining({ field: "acceptSimilarIncome" })],
+    });
     const separatePayment = { ...legacyMatch, source: "Another member" };
     await expect(service.mutate("finance", separatePayment)).resolves.toMatchObject({ ok: true });
     const matchingReceipt = { ...separatePayment, requestId: crypto.randomUUID(), reference: null };
@@ -106,6 +110,7 @@ it("registers and voids sourced payments, without exposing details to aggregate 
     const addFunding = { action: "addFunding", requestId: crypto.randomUUID(), funding: reverseFunding };
     const match = { status: 409, errors: [expect.objectContaining({ field: "acceptSimilarIncome" })] };
     await expect(service.mutate("finance", addFunding)).rejects.toMatchObject(match);
+    await expect(service.mutate("finance", { ...addFunding, funding: { ...reverseFunding, receivedDate: null } })).rejects.toMatchObject(match);
     const draft = await service.mutate("finance", { ...addFunding, funding: { ...reverseFunding, status: "secured" } });
     const mark = { action: "editFunding", requestId: crypto.randomUUID(), fundingId: draft.id, expectedRevision: draft.revision,
       patch: { status: "received" } };

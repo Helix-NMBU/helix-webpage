@@ -70,11 +70,11 @@ export function applyLocalFundingChange(
     fail(503, "This operation is unavailable. Try again later.");
   }
   const source = next.sourceName.trim().toLowerCase();
-  if (next.status === "received" && next.receivedDate && (previous?.status !== "received"
+  if (next.status === "received" && (previous?.status !== "received"
     || previous.sourceName.trim().toLowerCase() !== source || previous.amountNok !== next.amountNok || previous.receivedDate !== next.receivedDate)
     && body[similarIncomeField] !== true
     && loadLocalIncomeReceipts(seasonCode, true).records?.some(row => row.voidReason === null
-      && row.source.trim().toLowerCase() === source && row.amountNok === next.amountNok && row.receivedOn === next.receivedDate)) {
+      && row.source.trim().toLowerCase() === source && row.amountNok === next.amountNok && (!next.receivedDate || row.receivedOn === next.receivedDate))) {
     fail(409, similarIncomePayment, [{ field: similarIncomeField, message: similarIncomePayment }]);
   }
   if (previous && previous.status !== "deleted" && next.status === "deleted") priorStatuses[next.id] = previous.status;

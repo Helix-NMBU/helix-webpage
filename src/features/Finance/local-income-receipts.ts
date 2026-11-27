@@ -67,7 +67,7 @@ export function mutateLocalIncome(body: Record<string, unknown>, currentSeason: 
     const similar = state.receipts.some(row => row.voidReason === null && row.seasonCode === currentSeason
       && row.method === method && (!row.reference || !reference) && row.receivedOn === receivedOn
       && row.amountNok === amountNok && row.source.toLowerCase() === source.toLowerCase())
-      || funding.some(row => row.status === "received" && row.receivedDate === receivedOn
+      || funding.some(row => row.status === "received" && (!row.receivedDate || row.receivedDate === receivedOn)
         && row.amountNok === amountNok && row.sourceName.trim().toLowerCase() === source.toLowerCase());
     if (similar && body[similarIncomeField] !== true) {
       fail(similarIncomePayment, 409, [{ field: similarIncomeField, message: similarIncomePayment }]);

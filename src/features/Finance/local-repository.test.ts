@@ -25,6 +25,7 @@ it("warns before adding, receiving or restoring local funding that resembles a r
  const funding = { sourceName: source.toUpperCase(), ownerName: "Finance", fundingType: "membership", amountNok: "25.50",
    receivedDate: receivedOn };
  await expect(api.mutate({ action: "addFunding", requestId: crypto.randomUUID(), funding: { ...funding, status: "received" } })).rejects.toMatchObject(match);
+ await expect(api.mutate({ action: "addFunding", requestId: crypto.randomUUID(), funding: { ...funding, status: "received", receivedDate: null } })).rejects.toMatchObject(match);
  const secured = await api.mutate({ action: "addFunding", requestId: crypto.randomUUID(), funding: { ...funding, status: "secured" } });
  const edit = { action: "editFunding", requestId: crypto.randomUUID(), fundingId: secured.id, expectedRevision: secured.revision,
    patch: { status: "received" } };

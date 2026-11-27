@@ -27,10 +27,10 @@ create unique index income_receipts_active_reference_key
   on finance.income_receipts (season_id, method, lower(btrim(reference)))
   where voided_at is null and reference is not null;
 
-create function finance.lock_income_payment_match(p_season uuid, p_source text, p_amount bigint, p_received date)
+create function finance.lock_income_payment_match(p_season uuid, p_source text, p_amount bigint)
 returns void language sql set search_path = pg_catalog as $$
   select pg_advisory_xact_lock(hashtextextended('finance-income-similarity:' ||
-    jsonb_build_array(p_season, lower(btrim(p_source)), p_amount, p_received)::text, 0));
+    jsonb_build_array(p_season, lower(btrim(p_source)), p_amount)::text, 0));
 $$;
 
 -- Scope the check to the manual financing surface. The sponsor invoice flow
@@ -55,18 +55,18 @@ returns trigger language plpgsql set search_path = pg_catalog as $$
 declare
   guard_mode text := coalesce(current_setting('finance.income_duplicate_guard', true), '');
 begin
-  if guard_mode not in ('check', 'confirmed') or new.status <> 'received' or new.received_date is null then
+  if guard_mode not in ('check', 'confirmed') or new.status <> 'received' then
     return new;
   end if;
   if tg_op = 'UPDATE' and old.status = 'received' and old.season_id = new.season_id
     and lower(btrim(old.source_name)) = lower(btrim(new.source_name))
-    and old.amount_ore = new.amount_ore and old.received_date = new.received_date then
+    and old.amount_ore = new.amount_ore and old.received_date is not distinct from new.received_date then
     return new;
   end if;
-  perform finance.lock_income_payment_match(new.season_id, new.source_name, new.amount_ore, new.received_date);
+  perform finance.lock_income_payment_match(new.season_id, new.source_name, new.amount_ore);
   if exists (
     select 1 from finance.income_receipts r where r.season_id = new.season_id and r.voided_at is null
-      and r.received_on = new.received_date and r.amount_ore = new.amount_ore
+      and (new.received_date is null or r.received_on = new.received_date) and r.amount_ore = new.amount_ore
       and lower(r.source) = lower(btrim(new.source_name))
   ) then
     if guard_mode <> 'confirmed' then raise exception 'finance:INCOME_SIMILAR_PAYMENT'; end if;
@@ -80,7 +80,7 @@ $$;
 create trigger finance_funding_income_match before insert or update on finance.funding
 for each row execute function finance.guard_funding_income_match();
 
-revoke all on function finance.lock_income_payment_match(uuid, text, bigint, date),
+revoke all on function finance.lock_income_payment_match(uuid, text, bigint),
   finance.apply_funding_change(uuid, uuid, text, jsonb, boolean),
   finance.apply_funding_change_before_income(uuid, uuid, text, jsonb, boolean),
   finance.guard_funding_income_match() from public;
@@ -131,8 +131,8 @@ begin
       raise exception 'finance:INCOME_FUTURE_DATE';
     end if;
 
-    -- Serialize matching payments even when their references are missing.
-    perform finance.lock_income_payment_match(season.id, payment_source, payment_amount, payment_date);
+    -- Lock by source and amount so a legacy record with no date can match either writer.
+    perform finance.lock_income_payment_match(season.id, payment_source, payment_amount);
     if exists (
       select 1 from finance.income_receipts r where r.season_id = season.id and r.voided_at is null
         and r.method = payment_method and lower(btrim(r.reference)) = lower(payment_reference)
@@ -145,7 +145,7 @@ begin
         and lower(r.source) = lower(payment_source) and (r.reference is null or payment_reference is null)
     ) or exists (
       select 1 from finance.funding f where f.season_id = season.id and f.status = 'received'
-        and f.received_date = payment_date and f.amount_ore = payment_amount
+        and (f.received_date is null or f.received_date = payment_date) and f.amount_ore = payment_amount
         and lower(btrim(f.source_name)) = lower(payment_source)
     ) into similar_payment;
     if similar_payment and p_input->'acceptSimilarIncome' is distinct from 'true'::jsonb then

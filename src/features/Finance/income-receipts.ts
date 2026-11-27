@@ -91,7 +91,7 @@ export function isIncomeAction(value: unknown): value is IncomeAction {
 
 export const duplicateIncomeReference = "That payment reference is already registered for this method and season.";
 export const similarIncomeField = "acceptSimilarIncome";
-export const similarIncomePayment = "A payment with this source, amount and date is already recorded. Review the register and financing before continuing.";
+export const similarIncomePayment = "A payment with a matching source and amount is already recorded. Check the dates in the register and financing before continuing.";
 
 export function parseIncomeChange(body: Record<string, unknown>, today: string):
   { change: IncomeChange; errors?: never } | { change?: never; errors: FinanceFieldError[] } {
