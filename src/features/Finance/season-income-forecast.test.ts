@@ -33,3 +33,13 @@ it("limits projections to the next 30 days and caps them at the season boundary"
  expect(seasonIncomeForecast(view([]),"S26","2026-11-22").hasForecast).toBe(false);
  expect(seasonIncomeForecast(view([]),"S28","2026-11-22").hasForecast).toBe(false);
 });
+
+it("plots registered receipts by date and includes them in the forecast baseline", () => {
+ const input = { ...view([record("high", "high", "20.25", "2026-12-01")]), incomeReceipts: {
+   receivedNok: "6.30", receivedByDate: [{ receivedDate: "2026-10-01", amountNok: "5.10" }, { receivedDate: "2026-07-31", amountNok: "1.20" }],
+ } };
+ const result = seasonIncomeForecast(input, "S27", "2026-11-22");
+ expect(result.points.find(point => point.date === "2026-10-01")?.received).toBe(10511n);
+ expect(result.income).toMatchObject({ plottedOre: 10511n, unplacedOre: 120n, totalOre: 10631n });
+ expect(result.high).toBe(12536n);
+});

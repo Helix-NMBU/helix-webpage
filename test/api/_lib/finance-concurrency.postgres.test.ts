@@ -87,6 +87,9 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
     services = createFinanceServices({ db, financeStorage: storage, authenticate: async (token) => identities[token] });
     await pool.query("select finance.configure_current_season($1::uuid, 'S27', 'Test season', '2026-01-01', '2027-12-31')", [operator]);
     await pool.query("select finance.set_member_grant($1::uuid, $2::uuid, 'head_of_finance', true, 'Test')", [operator, head]);
+    // This fixture starts with legacy finance flags. The receipt API additionally requires the Financials role.
+    await pool.query("insert into identity.member_roles values ($1, 'financials')", [head]);
+    await pool.query(readFileSync(new URL("085_finance_income_receipts.sql", migrations), "utf8"));
     const system = await pool.query("insert into finance.systems (department_key, code, name, active) values ('mechanical-production', 'SYS-FR', 'Frame', true) returning id");
     systemId = system.rows[0].id;
     await seedHistoricalApprovedSeasonBudget(db, head);
@@ -116,6 +119,45 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
     expect(first.id).toBe(second.id);
     const rows = await pool.query("select count(*)::int as count from finance.purchases where id = $1::uuid", [first.id]);
     expect(rows.rows[0].count).toBe(1);
+  }, 30000);
+
+  it("collapses concurrent receipt retries and detects similar payments with different request IDs", async () => {
+    const command = { action: "registerIncome", requestId: randomUUID(), seasonCode: "S27", category: "sales",
+      source: "Concurrent receipt test", amountNok: "120.25", receivedOn: osloToday(), method: "vipps" };
+    const [first, replay] = await Promise.all([services.mutate("head", command), services.mutate("head", command)]);
+    expect(replay).toEqual(first);
+    const otherPayment = { ...command, source: "Similar receipt test" };
+    const outcomes = await Promise.allSettled([
+      services.mutate("head", { ...otherPayment, requestId: randomUUID() }),
+      services.mutate("head", { ...otherPayment, requestId: randomUUID() }),
+    ]);
+    expect(outcomes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: "fulfilled" }),
+      expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ status: 409,
+        errors: [expect.objectContaining({ field: "acceptSimilarIncome" })] }) }),
+    ]));
+    const { rows } = await pool.query("select count(*)::int as count, sum(amount_ore)::text as total from finance.income_receipts");
+    expect(rows[0]).toEqual({ count: 2, total: "24050" });
+  }, 30000);
+
+  it("serializes the income register and manual funding when both submit the same payment", async () => {
+    const source = "Cross-register payment test";
+    const amount = "120.25";
+    const receivedDate = osloToday();
+    const results = await Promise.allSettled([
+      mutate("head", { action: "registerIncome", seasonCode: "S27", category: "membership_dues", source,
+        amountNok: amount, receivedOn: receivedDate, method: "bank_transfer" }),
+      mutate("head", { action: "addFunding", funding: { sourceName: source.toUpperCase(), ownerName: "Finance",
+        amountNok: amount, fundingType: "membership", status: "received", receivedDate } }),
+    ]);
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: "fulfilled" }),
+      expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ status: 409,
+        errors: [expect.objectContaining({ field: "acceptSimilarIncome" })] }) }),
+    ]));
+    const { rows } = await pool.query(`select ((select count(*) from finance.income_receipts where lower(source) = lower($1))
+      + (select count(*) from finance.funding where lower(source_name) = lower($1)))::int as count`, [source]);
+    expect(rows[0].count).toBe(1);
   }, 30000);
 
   it("serializes concurrent fulfillments against one approved line", async () => {

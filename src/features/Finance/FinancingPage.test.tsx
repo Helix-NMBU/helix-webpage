@@ -244,6 +244,27 @@ describe("financing page", () => {
     expect(document.querySelector("form")).toBeNull();
   });
 
+  it("requires a fresh acknowledgement if funding fields change after a duplicate warning", async () => {
+    const duplicate = new FinanceRequestError("A similar payment is already recorded.", 409, [
+      { field: "acceptSimilarIncome", message: "A similar payment is already recorded." },
+    ]);
+    api.mutate.mockRejectedValueOnce(duplicate).mockRejectedValueOnce(duplicate);
+    await render();
+    await click("Add funding");
+    await fill("funding-source", "Initial source");
+    await fill("funding-owner", "Finance");
+    await fill("funding-amount", "125.00");
+    await submit();
+    expect(button("Save anyway")).toBeTruthy();
+    expect(notify).toHaveBeenCalledWith("Possible duplicate payment", expect.any(String), expect.objectContaining({ variant: "warning" }));
+    await fill("funding-source", "Edited source");
+    expect(button("Save anyway")).toBeUndefined();
+    await submit();
+    expect(api.mutate.mock.calls[1][0]).not.toHaveProperty("acceptSimilarIncome");
+    await click("Save anyway");
+    expect(api.mutate.mock.calls[2][0]).toEqual({ ...api.mutate.mock.calls[1][0], acceptSimilarIncome: true });
+  });
+
   it("edits a part, warns when the part exceeds the funding, and soft-deletes the source", async () => {
     await render();
     await click("View funding");

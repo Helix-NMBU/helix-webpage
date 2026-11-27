@@ -1,8 +1,10 @@
 import { BudgetRing, budgetUsage } from "../Finance/BudgetRing";
+import { IconChevronDown } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@libs/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@libs/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@libs/components/ui/collapsible";
 import { Skeleton } from "@libs/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@libs/components/ui/tooltip";
 import { CvRequestError } from "../MemberCV/repository";
@@ -12,7 +14,7 @@ import { getDepartmentIcon } from "../Workspace/department-icons";
 import { hasVisibleApprovedFinances, nokToOre } from "../Finance/finance-calculations";
 import { budgetPlanLabel } from "../Finance/budget-plan-label";
 import { loadSeasonFinancialSummary, SeasonFinancialRequestError } from "./season-financials-repository";
-import type { SeasonFinancialDepartment, SeasonFinancialSummary, SeasonMoneyFlow } from "./season-financials-types";
+import type { SeasonFinancialDepartment, SeasonFinancialSummary, SeasonFinancialSystem, SeasonMoneyFlow } from "./season-financials-types";
 
 // Format canonical decimal strings without converting large values to a floating-point number.
 function money(value: string): string {
@@ -26,16 +28,55 @@ function snapshotDate(value: string): string {
   return `${parts.find(part => part.type === "day")?.value}. ${parts.find(part => part.type === "month")?.value}`;
 }
 
+function SpendingComparison({ item }: { item: SeasonFinancialDepartment | SeasonFinancialSystem }) {
+  const spent = money(item.actualNok);
+  const allocated = money(item.plannedNok);
+  const percent = budgetUsage(item.actualNok, item.plannedNok);
+  const over = nokToOre(item.actualNok) > nokToOre(item.plannedNok);
+  const unbudgeted = nokToOre(item.unbudgetedNok) > 0n ? money(item.unbudgetedNok) : null;
+  const value = `${spent} spent of ${allocated} allocated${over ? ", over budget" : ""}${unbudgeted ? `, ${unbudgeted} unbudgeted` : ""}`;
+
+  return <div className="min-w-0 space-y-1 text-right text-xs tabular-nums [overflow-wrap:anywhere]">
+    <div aria-hidden="true" className="text-muted-foreground">{spent} / {allocated}</div>
+    <div role="progressbar" aria-label={item.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={value} className="h-2 overflow-hidden rounded-full bg-muted">
+      <div className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${percent}%` }} />
+    </div>
+    {(over || unbudgeted) && <div aria-hidden="true" className="flex flex-wrap justify-end gap-x-2 text-muted-foreground">
+      {over && <span className="text-destructive">Over budget</span>}
+      {unbudgeted && <span>Unbudgeted {unbudgeted}</span>}
+    </div>}
+  </div>;
+}
 
 function DepartmentRow({ department }: { department: SeasonFinancialDepartment }) {
   const Icon = getDepartmentIcon(department.name);
-  const percent = budgetUsage(department.actualNok, department.plannedNok);
-  const over = nokToOre(department.actualNok) > nokToOre(department.plannedNok);
-  const label = `${department.name}: ${money(department.actualNok)} spent of ${money(department.plannedNok)} allocated${over ? ", over budget" : ""}${nokToOre(department.unbudgetedNok) > 0n ? `, ${money(department.unbudgetedNok)} unbudgeted` : ""}`;
-  return <li className="grid grid-cols-[minmax(0,1fr)_minmax(4rem,1fr)] items-center gap-4 py-2">
-    <div className="flex min-w-0 items-center gap-2 text-sm"><Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span>{department.name}</span></div>
-    <div className="min-w-0 space-y-1"><div aria-hidden="true" className="text-right text-xs tabular-nums text-muted-foreground">{money(department.actualNok)} / {money(department.plannedNok)}</div><div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={label} title={label} className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`} style={{ width: `${percent}%` }} /></div></div>
-  </li>;
+  const name = <><Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 [overflow-wrap:anywhere]">{department.name}</span></>;
+  const hasSystems = department.systems.length > 0;
+
+  return <Collapsible asChild>
+    <li className="min-w-0 py-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+        {hasSystems ? <CollapsibleTrigger asChild>
+          <Button variant="ghost" aria-label={`${department.name} systems`} className="h-auto min-h-9 min-w-0 justify-start gap-2 px-1 text-left font-normal whitespace-normal">
+            {name}
+            <IconChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-data-[state=open]/button:rotate-180" />
+          </Button>
+        </CollapsibleTrigger> : <div className="flex min-w-0 items-center gap-2 px-1 text-sm">{name}</div>}
+        <SpendingComparison item={department} />
+      </div>
+      {hasSystems && <CollapsibleContent className="mt-2 rounded-lg bg-muted/40 px-3 py-1">
+        <ul className="divide-y">
+          {department.systems.map(system => <li key={system.id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 py-2">
+            <div className="min-w-0 text-sm [overflow-wrap:anywhere]">
+              {system.name}
+              {!system.active && <div className="text-xs text-muted-foreground">Inactive</div>}
+            </div>
+            <SpendingComparison item={system} />
+          </li>)}
+        </ul>
+      </CollapsibleContent>}
+    </li>
+  </Collapsible>;
 }
 
 function MonthlyMoneyChart({ flow }: { flow: Extract<SeasonMoneyFlow, { status: "available" }> }) {
@@ -147,7 +188,7 @@ export function SeasonFinancialWidgets({ season, userId, load = loadSeasonFinanc
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-3 tabular-nums"><div><dt className="text-sm text-muted-foreground">Season budget</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.plannedNok !== null ? money(summary.plannedNok) : "—"}</dd></div><div><dt className="text-sm text-muted-foreground">Recorded spending</dt><dd className="text-xl font-medium">{loading && !summary ? <Skeleton className="h-7 w-24" /> : visible && summary.actualNok !== null ? money(summary.actualNok) : "—"}</dd></div></dl>
               </div>
               {visible && summary.plannedNok !== null && summary.actualNok !== null && nokToOre(summary.actualNok) > nokToOre(summary.plannedNok) && <p className="text-xs text-destructive">Over budget</p>}
-              <p className="sr-only">Includes unpaid invoices. This is not cash paid.{stale && summary ? " Last loaded value." : ""}</p>
+              <p className="text-xs text-muted-foreground">Includes unpaid invoices.</p>
             </div>
           </div>
           {visible && <><div aria-hidden="true" className="h-px bg-border md:my-3 md:h-auto md:w-px" /><div className="space-y-3">{stale && <p className="text-xs text-muted-foreground">Last loaded values.</p>}{summary.departments.length ? <ul>{summary.departments.map(department => <DepartmentRow key={department.departmentKey} department={department} />)}</ul> : <p className="text-sm text-muted-foreground">No departments to show.</p>}</div></>}

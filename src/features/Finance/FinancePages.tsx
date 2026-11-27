@@ -12,6 +12,8 @@ import { FinancingPage } from "./FinancingPage";
 import { OverviewBoard } from "./OverviewPage";
 import { SpendingPurchases } from "./SpendingPurchases";
 import { FinancingIncome } from "./FinancingIncome";
+import { RegisterIncomeDialog } from "./RegisterIncomeDialog";
+import { IncomeReceiptList } from "./IncomeReceiptList";
 import { SeasonFinanceSummary } from "./SeasonSpending";
 import { PurchasesBoard } from "./PurchasesPage";
 import type { FinancePageId } from "./routes";
@@ -77,13 +79,21 @@ function FinanceSection({ page }: { page: FinancePageId }) {
         : page === "purchases" ? session.purchases?.ownRequests.length === 0 && (session.purchases.register?.length ?? 0) === 0
           : session.financing?.funding.length === 0
   );
+  const incomeSeason = page === "overview" && session.access === "allowed" && session.capabilities?.purchaseRegister
+    ? session.financing?.seasonCode
+    : null;
+  const incomeRecords = incomeSeason ? session.financing?.incomeReceipts?.records : undefined;
+
   return (
     <section className={`mx-auto w-full ${page === "budgets" || page === "overview" ? "max-w-7xl" : "max-w-5xl"} space-y-8 px-2 py-8 sm:px-6`} aria-labelledby="finance-page-title">
       <div className="space-y-3">
-        <div className="min-w-0 space-y-3">
-          <p className="text-sm text-muted-foreground">{page === "purchases" ? "Management" : "Finance"}</p>
-          <h1 id="finance-page-title" className="text-3xl font-medium tracking-tight">{current.title}</h1>
-          <p className="text-muted-foreground">{current.description}</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0 space-y-3">
+            <p className="text-sm text-muted-foreground">{page === "purchases" ? "Management" : "Finance"}</p>
+            <h1 id="finance-page-title" className="text-3xl font-medium tracking-tight">{current.title}</h1>
+            <p className="text-muted-foreground">{current.description}</p>
+          </div>
+          {incomeRecords && incomeSeason && <RegisterIncomeDialog seasonCode={incomeSeason} />}
         </div>
       </div>
       {page === "overview" && session.access === "allowed" && (session.capabilities?.financing || session.capabilities?.purchaseRegister) && <SeasonFinanceSummary
@@ -92,6 +102,7 @@ function FinanceSection({ page }: { page: FinancePageId }) {
       />}
       {page !== "overview" && page !== "budgets" && session.profiles?.includes("head_of_finance") && <Button asChild variant="outline"><Link to="/finance/funding-applications">Funding applications</Link></Button>}
       {page === "overview" && session.capabilities?.financing ? <FinancingIncome financing={session.financing} canManage={Boolean(session.capabilities?.manageFunding)} /> : null}
+      {incomeRecords && incomeSeason && <IncomeReceiptList records={incomeRecords} seasonCode={incomeSeason} />}
       {page === "overview" && session.capabilities?.purchaseRegister ? <section aria-labelledby="spending-purchases-title" className="space-y-4"><h2 id="spending-purchases-title" className="text-xl font-medium">Spend</h2><SpendingPurchases /></section> : page === "budgets" ? (
         <BudgetDashboard />
       ) : page === "financing" ? <FinancingPage /> : !loaded ? (

@@ -1,3 +1,5 @@
+import { loadLocalIncomeReceipts, localIncomeVersion } from "./local-income-receipts";
+import { applyLocalFundingChange, type LocalFundingState } from "./local-funding-sources";
 import { normalizeInvoiceDriveUrl, purchaseInvoiceReference } from "./invoice-link";
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
 import { capabilitiesForProfiles } from "./access";
@@ -34,7 +36,6 @@ import { stableJson } from "./funding";
 import type {
   FinanceMutationResult,
   FundingPartRecord,
-  FundingRecord,
   PublicBudgetItem,
 } from "./types";
 import type { LocalInvoiceFact } from "./invoice-local";
@@ -86,13 +87,12 @@ export interface LocalPurchaseState {
     >
   >;
 }
-export interface LocalFinanceFixtureLedger {
+export interface LocalFinanceFixtureLedger extends LocalFundingState {
   version: number;
   seasonCode: string;
   budgetStatus: "absent" | "draft" | "approved";
   approvedOn: string | null;
   items: PublicBudgetItem[];
-  funding?: FundingRecord[];
   parts?: FundingPartRecord[];
   commitments?: LocalFinanceProjectionInput["commitments"];
 }
@@ -125,6 +125,7 @@ export function localFinanceVersion(bankVersion: number): number {
 function combinedVersion(bankVersion: number) {
   return (
     bankVersion +
+    localIncomeVersion() +
     saved(BUDGETS, { version: 0 }).version +
     saved(AWARDS, { version: 0 }).version +
     saved(LEDGER, { version: 0 }).version +
@@ -289,7 +290,14 @@ export function loadLocalProjectBudgetFinancials(projectId: string) {
 export function loadLocalFinanceViews(bankVersion: number) {
   guard("finance");
   const views = projectLocalFinance(readFacts(bankVersion));
-  return { ...views, financing: { ...views.financing, pipelineForecast: localPipelineIncomeForecast(views.financing.seasonCode), wonIncome: localWonIncome(views.financing.seasonCode) } };
+  const { seasonCode } = views.financing;
+  const profile = localFinanceProfileSelection();
+  return { ...views, financing: {
+    ...views.financing,
+    pipelineForecast: localPipelineIncomeForecast(seasonCode),
+    wonIncome: localWonIncome(seasonCode),
+    ...(seasonCode ? { incomeReceipts: loadLocalIncomeReceipts(seasonCode, profile !== null && capabilitiesForProfiles([profile ?? "finance"]).purchaseRegister) } : {}),
+  } };
 }
 /** Explicit allowlist: no invoice references, item IDs, application context or private funding fields. */
 export function loadLocalSeasonFinances(
@@ -339,6 +347,24 @@ export function loadLocalSeasonFinances(
       ? { status: "unavailable" }
       : { status: "no-season" },
   };
+}
+
+export function mutateLocalFunding(body: Record<string, unknown>, bankVersion: number): FinanceMutationResult {
+  guard("finance");
+  const profile = localFinanceProfileSelection();
+  if (profile === null || !capabilitiesForProfiles([profile ?? "finance"]).manageFunding) {
+    throw Object.assign(new Error("Finance access is required."), { status: 403 });
+  }
+  const ledger = saved<LocalFinanceFixtureLedger>(LEDGER, {
+    version: 0, seasonCode: saved("helix-member-local-projects-v1", initialLocalWorkspace()).season, budgetStatus: "absent", approvedOn: null, items: [],
+  });
+  const before = combinedVersion(bankVersion);
+  const result = applyLocalFundingChange(ledger, ledger.seasonCode, before, body);
+  if (result.viewVersion > before) {
+    ledger.version += 1;
+    localStorage.setItem(LEDGER, JSON.stringify(ledger));
+  }
+  return result;
 }
 
 /** Processing uses the same persisted purchase facts; it never edits the dated bank balance. */

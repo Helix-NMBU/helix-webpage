@@ -44,6 +44,43 @@ it("shows exact amounts, a dated manual balance, and accessible department spend
   expect(bar?.getAttribute("aria-valuenow")).toBe("100");
 });
 
+it("reveals exact spending for a department's systems and preserves keyboard focus when toggled", async () => {
+  const [mechanical] = summary.departments;
+  const fixture: SeasonFinancialSummary = {
+    ...summary,
+    departments: [
+      { ...mechanical, systems: [{ ...mechanical.systems[0], active: false }] },
+      { departmentKey: "unassigned-purchases", name: "Unassigned purchases", plannedNok: "0.00", actualNok: "25.00", unbudgetedNok: "25.00", systems: [] },
+    ],
+  };
+  await render(async () => fixture);
+  const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Mechanical systems"]')!;
+  const systemBar = () => container.querySelector('[role="progressbar"][aria-label="Frame"]');
+  expect(trigger.type).toBe("button");
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(systemBar()).toBeNull();
+  expect(container.querySelector('button[aria-label="Unassigned purchases systems"]')).toBeNull();
+  expect(container.textContent).toContain("Unbudgeted NOK 25,00");
+
+  trigger.focus();
+  await act(async () => trigger.click());
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  const panel = document.getElementById(trigger.getAttribute("aria-controls")!)!;
+  expect(panel.contains(systemBar())).toBe(true);
+  expect(panel.textContent).toContain("Frame");
+  expect(panel.textContent).toContain("Inactive");
+  expect(panel.textContent).toContain("NOK 1 250,50 / NOK 1 000,00");
+  expect(panel.textContent).toContain("Over budget");
+  expect(panel.textContent).toContain("Unbudgeted NOK 100,00");
+  expect(systemBar()?.getAttribute("aria-valuetext")).toBe("NOK 1 250,50 spent of NOK 1 000,00 allocated, over budget, NOK 100,00 unbudgeted");
+  expect(document.activeElement).toBe(trigger);
+
+  await act(async () => trigger.click());
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(systemBar()).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
 it("distinguishes a zero snapshot from an absent budget and hides restricted Financials links", async () => {
   await render(async () => ({ ...summary, seasonCode: null, budgetStatus: "absent", plannedNok: null, actualNok: null, departments: [], canOpenFinancials: false, bank: { status: "available", snapshot: { amountNok: "0.00", asOfDate: "2026-10-01", updatedAt: "x" } } }));
   expect(container.textContent).toContain("No season budget yet");

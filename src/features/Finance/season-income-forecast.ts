@@ -7,7 +7,7 @@ export type IncomePoint = { date: string } & Record<IncomeSeries, bigint | null>
 
 /** Scenario totals use full cash values, not invented probability weights. */
 export function seasonIncomeForecast(financing: FinancingView, season: string, today: string) {
-  const income = seasonIncome(financing.funding, season, today);
+  const income = seasonIncome(financing.funding, season, today, financing.incomeReceipts?.receivedByDate);
   const nextMonth = new Date(Date.parse(`${today}T12:00:00Z`) + 30 * 86400000).toISOString().slice(0, 10);
   const horizonDate = nextMonth < income.endDate ? nextMonth : income.endDate;
   const points = new Map<string, IncomePoint>();

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { FinanceError } from "./finance-error.js";
 import { concurrentFundingRequestMessage, deleteWithOtherChangesMessage, fundingWarnings, parseFundingChange, stableJson } from "../../src/features/Finance/funding.js";
+import { similarIncomeField, similarIncomePayment } from "../../src/features/Finance/income-receipts.js";
 import type { CvDatabase } from "./member-cv-service.js";
 import type { FinanceMutationResult } from "./finance-types.js";
 
@@ -31,6 +32,9 @@ export function mapFundingDatabaseError(error: unknown): FinanceError {
   if (error instanceof FinanceError) return error;
   const message = messageOf(error);
   const code = codeOf(error);
+  if (message.includes("INCOME_SIMILAR_PAYMENT")) {
+    return new FinanceError(409, similarIncomePayment, [{ field: similarIncomeField, message: similarIncomePayment }]);
+  }
   if (message.includes("finance:NO_SEASON")) return new FinanceError(409, "An operator has not configured the current season.");
   if (message.includes("finance:SEASON_CLOSED") || message.includes("This season is closed")) return new FinanceError(403, "This season is closed.");
   if (message.includes("finance:REVISION_CONFLICT")) return new FinanceError(409, "This record was updated by someone else. Reload the page and try again.");
@@ -70,9 +74,10 @@ export async function applyFundingMutation(db: CvDatabase, actorId: string, body
   const requestId = typeof body.requestId === "string" ? body.requestId : "";
   const hash = createHash("sha256").update(stableJson(parsed.change)).digest("hex");
   try {
+    const command = { ...parsed.change, ...(body[similarIncomeField] === true ? { [similarIncomeField]: true } : {}) };
     const result = await db.query<{ result: unknown }>(
       "select finance.apply_funding_change($1::uuid, $2::uuid, $3, $4::jsonb, $5::boolean) as result",
-      [actorId, requestId, hash, JSON.stringify(parsed.change), includeDraftItems],
+      [actorId, requestId, hash, JSON.stringify(command), includeDraftItems],
     );
     const saved = asResult(result.rows[0]?.result);
     return {

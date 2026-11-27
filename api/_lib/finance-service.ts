@@ -1,3 +1,5 @@
+import { loadIncomeReceipts, applyIncomeMutation } from "./finance-income-receipts.js";
+import { isIncomeAction } from "../../src/features/Finance/income-receipts.js";
 import { createManagementPurchaseServices, MANAGEMENT_PURCHASE_ACTIONS } from "./management-purchases.js";
 import type { ManagementPurchaseChoices } from "../../src/features/Finance/management-purchase-types.js";
 import { linkPurchaseInvoice } from "./finance-invoice-links.js";
@@ -355,14 +357,15 @@ export function createFinanceServices(deps: {
         }
         try {
           const today = osloToday();
-          const [loaded, scenarios, pipelineForecast, wonIncome] = await Promise.all([
+          const [loaded, scenarios, pipelineForecast, wonIncome, incomeReceipts] = await Promise.all([
             loadFundingRecords(db.query.bind(db), current.seasonCode, today, current.capabilities.draftBudgetItems),
             loadFundingScenarios(db.query.bind(db), current.seasonCode, current.capabilities.draftBudgetItems),
             loadPipelineIncomeForecast(db.query.bind(db), current.seasonCode),
             loadWonIncome(db.query.bind(db), current.seasonCode),
+            loadIncomeReceipts(db, current.seasonCode, current.capabilities.purchaseRegister),
           ]);
           if ((await context(token)).viewVersion === current.viewVersion) {
-            return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios, pipelineForecast, wonIncome };
+            return { viewVersion: current.viewVersion, seasonCode: current.seasonCode, ...loaded, scenarios, pipelineForecast, wonIncome, ...(incomeReceipts ? { incomeReceipts } : {}) };
           }
         } catch (error) {
           if (error instanceof FinanceError) throw error;
@@ -417,6 +420,7 @@ export function createFinanceServices(deps: {
           throw new FinanceError(400, "A valid revision is required.");
         }
       }
+      if (isIncomeAction(action)) return applyIncomeMutation(db, current.memberId, body);
       if (action === "setBankSnapshot") return setBankSnapshot(db, current.memberId, body);
       if (isFundingAction(action)) return applyFundingMutation(db, current.memberId, body, current.capabilities.draftBudgetItems);
       if (["createBudget", "approveBudget", "addItem", "editItem", "cancelItem", "restoreItem"].includes(action)) throw new FinanceError(409, "Edit a project Draft and submit it for both approvals. Season budget history is read-only.");
