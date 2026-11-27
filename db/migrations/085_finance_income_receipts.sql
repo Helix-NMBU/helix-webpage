@@ -36,10 +36,20 @@ declare
   receipt finance.income_receipts%rowtype;
   replay jsonb;
   violated_constraint text;
+  payment_date date;
+  payment_source text;
+  payment_amount bigint;
+  payment_method text;
+  payment_reference text;
+  similar_payment boolean;
 begin
   if action is null or action not in ('registerIncome', 'voidIncome') then
     raise exception 'finance:INVALID_INCOME';
   end if;
+  -- Keep the explicit Financials role stable through the receipt transaction.
+  perform 1 from identity.member_roles where member_id = p_actor and role_key = 'financials' for key share;
+  if not found then raise exception 'FINANCE|denied|Finance access is required.'; end if;
+
   -- Serialize retries even before the first request has an idempotency row.
   perform pg_advisory_xact_lock(hashtextextended('finance-income:' || p_actor::text || ':' || p_request::text, 0));
   replay := finance.begin_purchase_mutation(p_actor, p_request, action, p_hash, 'purchaseRegister');
@@ -54,14 +64,42 @@ begin
   if not found or season.status = 'closed' then raise exception 'finance:INCOME_SEASON_CLOSED'; end if;
 
   if action = 'registerIncome' then
-    if (p_input->>'receivedOn')::date > (statement_timestamp() at time zone 'Europe/Oslo')::date then
+    payment_date := (p_input->>'receivedOn')::date;
+    payment_source := btrim(p_input->>'source');
+    payment_amount := (p_input->>'amountOre')::bigint;
+    payment_method := p_input->>'method';
+    payment_reference := nullif(btrim(p_input->>'reference'), '');
+    if payment_date > (statement_timestamp() at time zone 'Europe/Oslo')::date then
       raise exception 'finance:INCOME_FUTURE_DATE';
     end if;
+
+    -- Serialize matching payments even when their references are missing.
+    perform pg_advisory_xact_lock(hashtextextended('finance-income-similarity:' ||
+      jsonb_build_array(season.id, lower(payment_source), payment_amount, payment_date)::text, 0));
+    if exists (
+      select 1 from finance.income_receipts r where r.season_id = season.id and r.voided_at is null
+        and r.method = payment_method and lower(btrim(r.reference)) = lower(payment_reference)
+    ) then
+      raise exception 'finance:INCOME_DUPLICATE_REFERENCE';
+    end if;
+    select exists (
+      select 1 from finance.income_receipts r where r.season_id = season.id and r.voided_at is null
+        and r.method = payment_method and r.received_on = payment_date and r.amount_ore = payment_amount
+        and lower(r.source) = lower(payment_source) and (r.reference is null or payment_reference is null)
+    ) or exists (
+      select 1 from finance.funding f where f.season_id = season.id and f.status = 'received'
+        and f.received_date = payment_date and f.amount_ore = payment_amount
+        and lower(btrim(f.source_name)) = lower(payment_source)
+    ) into similar_payment;
+    if similar_payment and p_input->'acceptSimilarIncome' is distinct from 'true'::jsonb then
+      raise exception 'finance:INCOME_SIMILAR_PAYMENT';
+    end if;
+
     insert into finance.income_receipts (season_id, category, source, amount_ore, received_on, method, reference, created_by)
-    values (season.id, p_input->>'category', btrim(p_input->>'source'), (p_input->>'amountOre')::bigint,
-      (p_input->>'receivedOn')::date, p_input->>'method', nullif(btrim(p_input->>'reference'), ''), p_actor)
+    values (season.id, p_input->>'category', payment_source, payment_amount, payment_date, payment_method, payment_reference, p_actor)
     returning * into receipt;
-    perform finance.append_audit(p_actor, 'income_receipt', receipt.id::text, 'status', null, 'recorded', null);
+    perform finance.append_audit(p_actor, 'income_receipt', receipt.id::text, 'status', null, 'recorded',
+      case when similar_payment then 'Similar payment confirmed' else null end);
   else
     update finance.income_receipts
       set voided_by = p_actor, voided_at = now(), void_reason = btrim(p_input->>'reason')

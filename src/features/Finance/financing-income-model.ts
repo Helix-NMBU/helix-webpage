@@ -20,7 +20,7 @@ export function financingIncomeRows(view: FinancingView): FinancingIncomeRow[] {
   return rows.sort((a,b)=>rank[a.status]-rank[b.status] || (b.receivedDate??"").localeCompare(a.receivedDate??"") || a.sourceName.localeCompare(b.sourceName));
 }
 
-/** Uses the same deduplicated, confirmed income rows as the Financing table. */
+/** Combines registered receipts with the deduplicated Financing table. */
 export function seasonIncomeTotals(view: FinancingView) {
   let received = canonicalNokOre(view.incomeReceipts?.receivedNok ?? "0.00");
   let outstanding = 0n;

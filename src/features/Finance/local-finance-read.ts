@@ -292,11 +292,12 @@ export function loadLocalFinanceViews(bankVersion: number) {
   guard("finance");
   const views = projectLocalFinance(readFacts(bankVersion));
   const { seasonCode } = views.financing;
+  const profile = localFinanceProfileSelection();
   return { ...views, financing: {
     ...views.financing,
     pipelineForecast: localPipelineIncomeForecast(seasonCode),
     wonIncome: localWonIncome(seasonCode),
-    ...(seasonCode ? { incomeReceipts: loadLocalIncomeReceipts(seasonCode) } : {}),
+    ...(seasonCode ? { incomeReceipts: loadLocalIncomeReceipts(seasonCode, profile !== null && capabilitiesForProfiles([profile ?? "finance"]).purchaseRegister) } : {}),
   } };
 }
 /** Explicit allowlist: no invoice references, item IDs, application context or private funding fields. */

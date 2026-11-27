@@ -1,6 +1,6 @@
-import { duplicateIncomeReference, parseIncomeChange, type IncomeReceipt, type IncomeReceipts } from "./income-receipts";
-import { formatOre, osloToday, parseNokToOre } from "./money";
-import type { FinanceFieldError } from "./types";
+import { duplicateIncomeReference, parseIncomeChange, similarIncomeField, similarIncomePayment, summarizeIncomeReceipts, type IncomeReceipt, type IncomeReceipts } from "./income-receipts";
+import { formatOre, osloToday } from "./money";
+import type { FinanceFieldError, FundingRecord } from "./types";
 
 const key = "helix-finance-local-income-receipts-v1";
 type LocalReceipt = IncomeReceipt & { seasonCode: string };
@@ -29,25 +29,24 @@ export function localIncomeVersion() {
   return readIncomeState().version;
 }
 
-export function loadLocalIncomeReceipts(seasonCode: string): IncomeReceipts {
+export function loadLocalIncomeReceipts(seasonCode: string, includeDetails: boolean): IncomeReceipts {
   const records = readIncomeState().receipts
     .filter(row => row.seasonCode === seasonCode)
     .map(({ seasonCode: _seasonCode, ...row }) => row)
     .sort((first, second) => second.receivedOn.localeCompare(first.receivedOn));
-  const receivedNok = formatOre(records.reduce((total, row) => total + (row.voidReason === null ? parseNokToOre(row.amountNok) ?? 0n : 0n), 0n));
-  return { records, receivedNok };
+  return { ...summarizeIncomeReceipts(records), ...(includeDetails ? { records } : {}) };
 }
 
 function fail(message: string, status: number, errors: FinanceFieldError[] = []): never {
   throw Object.assign(new Error(message), { status, errors });
 }
 
-export function mutateLocalIncome(body: Record<string, unknown>, currentSeason: string) {
+export function mutateLocalIncome(body: Record<string, unknown>, currentSeason: string, funding: readonly FundingRecord[]) {
   const parsed = parseIncomeChange(body, osloToday());
   if (!parsed.change) fail(parsed.errors[0].message, 400, parsed.errors);
   const { change } = parsed;
   const state = readIncomeState();
-  if (typeof body.requestId !== "string" || !/^[0-9a-f-]{36}$/i.test(body.requestId)) fail("A valid request ID is required.", 400);
+  if (typeof body.requestId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.requestId)) fail("A valid request ID is required.", 400);
   const fingerprint = JSON.stringify(change);
   const previous = state.mutations[body.requestId];
   if (previous) {
@@ -63,9 +62,18 @@ export function mutateLocalIncome(body: Record<string, unknown>, currentSeason: 
       && row.reference?.toLowerCase() === change.reference?.toLowerCase())) {
       fail(duplicateIncomeReference, 409, [{ field: "reference", message: duplicateIncomeReference }]);
     }
-    id = crypto.randomUUID();
     const { category, source, amountOre, receivedOn, method, reference } = change;
-    state.receipts.unshift({ id, seasonCode: currentSeason, category, source, amountNok: formatOre(BigInt(amountOre)), receivedOn, method, reference, voidReason: null });
+    const amountNok = formatOre(BigInt(amountOre));
+    const similar = state.receipts.some(row => row.voidReason === null && row.seasonCode === currentSeason
+      && row.method === method && (!row.reference || !reference) && row.receivedOn === receivedOn
+      && row.amountNok === amountNok && row.source.toLowerCase() === source.toLowerCase())
+      || funding.some(row => row.status === "received" && row.receivedDate === receivedOn
+        && row.amountNok === amountNok && row.sourceName.trim().toLowerCase() === source.toLowerCase());
+    if (similar && body[similarIncomeField] !== true) {
+      fail(similarIncomePayment, 409, [{ field: similarIncomeField, message: similarIncomePayment }]);
+    }
+    id = crypto.randomUUID();
+    state.receipts.unshift({ id, seasonCode: currentSeason, category, source, amountNok, receivedOn, method, reference, voidReason: null });
   } else {
     const receipt = state.receipts.find(row => row.id === change.receiptId && row.seasonCode === currentSeason && row.voidReason === null);
     if (!receipt) fail("This income entry is no longer available to void. Reload Income & Spend.", 409);

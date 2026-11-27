@@ -83,9 +83,9 @@ export function createFinanceApi(owner: { current: string | null }) {
       if (isIncomeAction(action.action)) {
         return localRead(() => {
           if (localFinanceProfileSelection() === null) throw new FinanceRequestError("Finance access is required.", 403);
-          const season = loadLocalFinanceViews(localBankVersion).financing.seasonCode;
-          if (!season) throw new FinanceRequestError("No finance season is configured.", 409);
-          const id = mutateLocalIncome(action, season);
+          const { seasonCode, funding } = loadLocalFinanceViews(localBankVersion).financing;
+          if (!seasonCode) throw new FinanceRequestError("No finance season is configured.", 409);
+          const id = mutateLocalIncome(action, seasonCode, funding);
           return { ok: true, viewVersion: localFinanceVersion(localBankVersion), id, warnings: [], errors: [] };
         });
       }

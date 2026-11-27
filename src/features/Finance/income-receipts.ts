@@ -1,4 +1,4 @@
-import { isSeasonCode, parseIsoDate, parseNokToOre } from "./money.js";
+import { formatOre, isSeasonCode, parseIsoDate, parseNokToOre } from "./money.js";
 import type { FinanceFieldError } from "./types.js";
 
 export const INCOME_CATEGORIES = {
@@ -33,10 +33,30 @@ export type IncomeReceipt = {
   voidReason: string | null;
 };
 
+export type DatedIncomeAmount = { receivedDate: string; amountNok: string };
+
 export type IncomeReceipts = {
   receivedNok: string;
+  receivedByDate: DatedIncomeAmount[];
   records?: IncomeReceipt[];
 };
+
+export function summarizeIncomeAmounts(amountsByDate: Map<string, bigint>): Omit<IncomeReceipts, "records"> {
+  const receivedByDate = [...amountsByDate].sort(([first], [second]) => first.localeCompare(second))
+    .map(([receivedDate, ore]) => ({ receivedDate, amountNok: formatOre(ore) }));
+  const receivedNok = formatOre([...amountsByDate.values()].reduce((total, ore) => total + ore, 0n));
+  return { receivedNok, receivedByDate };
+}
+
+export function summarizeIncomeReceipts(records: readonly IncomeReceipt[]): Omit<IncomeReceipts, "records"> {
+  const amountsByDate = new Map<string, bigint>();
+  for (const record of records) {
+    if (record.voidReason !== null) continue;
+    const amount = parseNokToOre(record.amountNok) ?? 0n;
+    amountsByDate.set(record.receivedOn, (amountsByDate.get(record.receivedOn) ?? 0n) + amount);
+  }
+  return summarizeIncomeAmounts(amountsByDate);
+}
 
 export type IncomeInput = {
   category: IncomeCategory | "";
@@ -70,6 +90,8 @@ export function isIncomeAction(value: unknown): value is IncomeAction {
 }
 
 export const duplicateIncomeReference = "That payment reference is already registered for this method and season.";
+export const similarIncomeField = "acceptSimilarIncome";
+export const similarIncomePayment = "A payment with this source, amount and date is already recorded. Review the register and financing before continuing.";
 
 export function parseIncomeChange(body: Record<string, unknown>, today: string):
   { change: IncomeChange; errors?: never } | { change?: never; errors: FinanceFieldError[] } {

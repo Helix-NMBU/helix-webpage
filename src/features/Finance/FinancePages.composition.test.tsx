@@ -74,3 +74,22 @@ it("shows Season Income for an authorized income-only reader without requesting 
   expect(container.textContent).not.toContain("Registered purchase cards");
   expect(mocks.loadPage).not.toHaveBeenCalledWith("purchases");
 });
+
+it.each([false, true])("limits the income register and source details to Finance access %s", async purchaseRegister => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  document.body.append(container);
+  root = createRoot(container);
+  mocks.session = {
+    access: "allowed", capabilities: { financing: true, purchaseRegister }, profiles: [], viewVersion: 1,
+    financing: { viewVersion: 1, seasonCode: "S27", funding: [], parts: [], scenarios: [], incomeReceipts: {
+      receivedNok: "120.00", receivedByDate: [{ receivedDate: "2026-11-20", amountNok: "120.00" }],
+      records: [{ id: "124", category: "membership_dues", source: "Member payment batch", amountNok: "120.00",
+        receivedOn: "2026-11-20", method: "bank_transfer", reference: "BANK-1", voidReason: null }],
+    } },
+    loadPage: mocks.loadPage,
+  };
+  await act(async () => root.render(<MemoryRouter><FinanceEntry page="overview" /></MemoryRouter>));
+  expect(container.querySelector('[aria-labelledby="season-income-summary-title"]')?.textContent).toContain("NOK 120.00");
+  expect(container.textContent?.includes("Member payment batch")).toBe(purchaseRegister);
+  expect([...container.querySelectorAll("button")].some(button => button.textContent === "Register income")).toBe(purchaseRegister);
+});

@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Button } from "@libs/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@libs/components/ui/dialog";
 import { Input } from "@libs/components/ui/input";
@@ -6,7 +6,7 @@ import { Label } from "@libs/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@libs/components/ui/select";
 import { useFinanceAccess } from "../MemberPlatform/FinanceAccess";
 import { useNotify } from "../MemberPlatform/MemberNotifications";
-import { INCOME_CATEGORIES, INCOME_METHODS, INCOME_REFERENCE_MAX, INCOME_SOURCE_MAX, parseIncomeChange, type IncomeInput } from "./income-receipts";
+import { INCOME_CATEGORIES, INCOME_METHODS, INCOME_REFERENCE_MAX, INCOME_SOURCE_MAX, parseIncomeChange, similarIncomeField, type IncomeInput } from "./income-receipts";
 import { osloToday } from "./money";
 import { FinanceRequestError } from "./repository";
 import type { FinanceFieldError } from "./types";
@@ -32,12 +32,22 @@ export function RegisterIncomeDialog({ seasonCode }: { seasonCode: string }) {
   const [formSeason, setFormSeason] = useState(seasonCode);
   const [fields, setFields] = useState(() => startingFields(today));
   const [errors, setErrors] = useState<FinanceFieldError[]>([]);
+  const [similar, setSimilar] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
 
+  const setFormDirty = session.setFormDirty;
+  useEffect(() => {
+    setFormDirty?.(id, open && dirty);
+    return () => setFormDirty?.(id, false);
+  }, [dirty, id, open, setFormDirty]);
+
   function change<K extends keyof IncomeInput>(field: K, value: IncomeInput[K]) {
     setFields(current => ({ ...current, [field]: value }));
+    setDirty(true);
+    setSimilar(false);
     setErrors(current => current.filter(error => error.field !== field));
   }
 
@@ -47,6 +57,8 @@ export function RegisterIncomeDialog({ seasonCode }: { seasonCode: string }) {
       setFormSeason(seasonCode);
       setFields(startingFields(today));
       setErrors([]);
+      setDirty(false);
+      setSimilar(false);
       request.current = null;
     }
     setOpen(next);
@@ -82,10 +94,18 @@ export function RegisterIncomeDialog({ seasonCode }: { seasonCode: string }) {
     inFlight.current = true;
     setSaving(true);
     try {
-      await session.mutate({ ...body, requestId: request.current.id });
+      await session.mutate({ ...body, requestId: request.current.id, [similarIncomeField]: similar });
       setOpen(false);
       notify("Income registered", `The payment was added to ${formSeason} received income.`, { variant: "success", href: null });
     } catch (error) {
+      if (error instanceof FinanceRequestError && error.errors.some(issue => issue.field === similarIncomeField)) {
+        setSimilar(true);
+        notify("Possible duplicate payment", error.message, {
+          variant: "warning", href: null,
+          action: { label: "Review entry", onClick: () => document.getElementById(`${id}-source`)?.focus() },
+        });
+        return;
+      }
       if (error instanceof FinanceRequestError && error.errors.length) {
         setErrors(error.errors);
         requestAnimationFrame(() => document.getElementById(`${id}-${error.errors[0].field}`)?.focus());
@@ -150,7 +170,7 @@ export function RegisterIncomeDialog({ seasonCode }: { seasonCode: string }) {
         </fieldset>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={saving} onClick={() => changeOpen(false)}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? "Registering…" : "Register income"}</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Registering…" : similar ? "Register anyway" : "Register income"}</Button>
         </DialogFooter>
       </form>
     </DialogContent>

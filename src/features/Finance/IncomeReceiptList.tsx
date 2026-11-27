@@ -91,7 +91,7 @@ export function IncomeReceiptList({ records, seasonCode }: { records: IncomeRece
   const [search, setSearch] = useState("");
   const query = search.trim().toLowerCase();
   const visible = records.filter(record => [
-    record.source, record.reference, INCOME_CATEGORIES[record.category], INCOME_METHODS[record.method],
+    record.source, record.reference, record.receivedOn, INCOME_CATEGORIES[record.category], INCOME_METHODS[record.method],
   ].some(value => value?.toLowerCase().includes(query)));
 
   return <section aria-labelledby="registered-income-title" className="space-y-4">
