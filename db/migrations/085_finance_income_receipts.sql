@@ -27,6 +27,64 @@ create unique index income_receipts_active_reference_key
   on finance.income_receipts (season_id, method, lower(btrim(reference)))
   where voided_at is null and reference is not null;
 
+create function finance.lock_income_payment_match(p_season uuid, p_source text, p_amount bigint, p_received date)
+returns void language sql set search_path = pg_catalog as $$
+  select pg_advisory_xact_lock(hashtextextended('finance-income-similarity:' ||
+    jsonb_build_array(p_season, lower(btrim(p_source)), p_amount, p_received)::text, 0));
+$$;
+
+-- Scope the check to the manual financing surface. The sponsor invoice flow
+-- keeps its own task and payment gates.
+alter function finance.apply_funding_change(uuid, uuid, text, jsonb, boolean) rename to apply_funding_change_before_income;
+create function finance.apply_funding_change(p_actor uuid, p_request uuid, p_hash text, p_command jsonb, p_include_draft boolean)
+returns jsonb language plpgsql set search_path = pg_catalog as $$
+declare
+  previous_guard text := coalesce(current_setting('finance.income_duplicate_guard', true), '');
+  result jsonb;
+begin
+  perform set_config('finance.income_duplicate_guard',
+    case when p_command->'acceptSimilarIncome' = 'true'::jsonb then 'confirmed' else 'check' end, true);
+  result := finance.apply_funding_change_before_income(p_actor, p_request, p_hash, p_command, p_include_draft);
+  perform set_config('finance.income_duplicate_guard', previous_guard, true);
+  return result;
+end;
+$$;
+
+create function finance.guard_funding_income_match()
+returns trigger language plpgsql set search_path = pg_catalog as $$
+declare
+  guard_mode text := coalesce(current_setting('finance.income_duplicate_guard', true), '');
+begin
+  if guard_mode not in ('check', 'confirmed') or new.status <> 'received' or new.received_date is null then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.status = 'received' and old.season_id = new.season_id
+    and lower(btrim(old.source_name)) = lower(btrim(new.source_name))
+    and old.amount_ore = new.amount_ore and old.received_date = new.received_date then
+    return new;
+  end if;
+  perform finance.lock_income_payment_match(new.season_id, new.source_name, new.amount_ore, new.received_date);
+  if exists (
+    select 1 from finance.income_receipts r where r.season_id = new.season_id and r.voided_at is null
+      and r.received_on = new.received_date and r.amount_ore = new.amount_ore
+      and lower(r.source) = lower(btrim(new.source_name))
+  ) then
+    if guard_mode <> 'confirmed' then raise exception 'finance:INCOME_SIMILAR_PAYMENT'; end if;
+    perform finance.append_audit(new.updated_by_member_id, 'funding', new.id::text,
+      'income_match_confirmation', null, 'confirmed', 'Similar payment confirmed');
+  end if;
+  return new;
+end;
+$$;
+
+create trigger finance_funding_income_match before insert or update on finance.funding
+for each row execute function finance.guard_funding_income_match();
+
+revoke all on function finance.lock_income_payment_match(uuid, text, bigint, date),
+  finance.apply_funding_change(uuid, uuid, text, jsonb, boolean),
+  finance.apply_funding_change_before_income(uuid, uuid, text, jsonb, boolean),
+  finance.guard_funding_income_match() from public;
+
 create function finance.apply_income_change(p_actor uuid, p_request uuid, p_hash text, p_input jsonb)
 returns jsonb language plpgsql security invoker set search_path = pg_catalog as $fn$
 declare
@@ -74,8 +132,7 @@ begin
     end if;
 
     -- Serialize matching payments even when their references are missing.
-    perform pg_advisory_xact_lock(hashtextextended('finance-income-similarity:' ||
-      jsonb_build_array(season.id, lower(payment_source), payment_amount, payment_date)::text, 0));
+    perform finance.lock_income_payment_match(season.id, payment_source, payment_amount, payment_date);
     if exists (
       select 1 from finance.income_receipts r where r.season_id = season.id and r.voided_at is null
         and r.method = payment_method and lower(btrim(r.reference)) = lower(payment_reference)

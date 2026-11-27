@@ -140,6 +140,26 @@ describe.skipIf(!testUrl)("Finance concurrency on separate PostgreSQL connection
     expect(rows[0]).toEqual({ count: 2, total: "24050" });
   }, 30000);
 
+  it("serializes the income register and manual funding when both submit the same payment", async () => {
+    const source = "Cross-register payment test";
+    const amount = "120.25";
+    const receivedDate = osloToday();
+    const results = await Promise.allSettled([
+      mutate("head", { action: "registerIncome", seasonCode: "S27", category: "membership_dues", source,
+        amountNok: amount, receivedOn: receivedDate, method: "bank_transfer" }),
+      mutate("head", { action: "addFunding", funding: { sourceName: source.toUpperCase(), ownerName: "Finance",
+        amountNok: amount, fundingType: "membership", status: "received", receivedDate } }),
+    ]);
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: "fulfilled" }),
+      expect.objectContaining({ status: "rejected", reason: expect.objectContaining({ status: 409,
+        errors: [expect.objectContaining({ field: "acceptSimilarIncome" })] }) }),
+    ]));
+    const { rows } = await pool.query(`select ((select count(*) from finance.income_receipts where lower(source) = lower($1))
+      + (select count(*) from finance.funding where lower(source_name) = lower($1)))::int as count`, [source]);
+    expect(rows[0].count).toBe(1);
+  }, 30000);
+
   it("serializes concurrent fulfillments against one approved line", async () => {
     const draft = { supplierName: "Example Supplier", justification: "Material for the frame", plannedDate: thirdOsloDayFrom(osloToday()),
       lines: [{ budgetItemId: itemId, description: "Tube", estimatedNok: "10000.00" }] };

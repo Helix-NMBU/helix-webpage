@@ -22,7 +22,7 @@ it("registers and voids sourced payments, without exposing details to aggregate 
     for (const actor of [finance, member]) {
       await pg.query("insert into identity.members values ($1, $2, $3, $4)", [actor.userId, actor.googleSub, actor.email, actor.name]);
     }
-    for (const migration of ["011_finance_core", "014_finance_register_purchases", "024_financials_member_role", "085_finance_income_receipts"]) {
+    for (const migration of ["011_finance_core", "013_finance_funding", "014_finance_register_purchases", "024_financials_member_role", "085_finance_income_receipts"]) {
       await pg.exec(readFileSync(new URL(`../../../db/migrations/${migration}.sql`, import.meta.url), "utf8"));
     }
     expect((await pg.query(`select has_table_privilege('authenticated', 'finance.income_receipts', 'SELECT,INSERT,UPDATE,DELETE') as receipts,
@@ -81,7 +81,7 @@ it("registers and voids sourced payments, without exposing details to aggregate 
     });
     await pg.query(`insert into finance.funding (season_id, public_ref, source_name, owner_name, funding_type, amount_ore,
       status, received_date, created_by_member_id, updated_by_member_id)
-      select id, 'F-S27-001', 'Member A', 'Finance', 'membership', 12500, 'received', '2026-11-20', $1, $1
+      select id, 'F-S27-900', 'Member A', 'Finance', 'membership', 12500, 'received', '2026-11-20', $1, $1
       from finance.seasons where code = 'S27'`, [finance.userId]);
     const legacyMatch = { ...command, requestId: crypto.randomUUID(), category: "membership_dues",
       source: "member a", amountNok: "125", reference: "BANK-123" };
@@ -101,6 +101,26 @@ it("registers and voids sourced payments, without exposing details to aggregate 
     await expect(service.mutate("finance", { ...legacyMatch, requestId: crypto.randomUUID(), acceptSimilarIncome: true })).rejects.toMatchObject({
       status: 409, errors: [expect.objectContaining({ field: "reference" })],
     });
+    const reverseFunding = { sourceName: "Another member", ownerName: "Finance", fundingType: "membership",
+      amountNok: "125", status: "received", receivedDate: "2026-11-20" };
+    const addFunding = { action: "addFunding", requestId: crypto.randomUUID(), funding: reverseFunding };
+    const match = { status: 409, errors: [expect.objectContaining({ field: "acceptSimilarIncome" })] };
+    await expect(service.mutate("finance", addFunding)).rejects.toMatchObject(match);
+    const draft = await service.mutate("finance", { ...addFunding, funding: { ...reverseFunding, status: "secured" } });
+    const mark = { action: "editFunding", requestId: crypto.randomUUID(), fundingId: draft.id, expectedRevision: draft.revision,
+      patch: { status: "received" } };
+    await expect(service.mutate("finance", mark)).rejects.toMatchObject(match);
+    const received = await service.mutate("finance", { ...mark, acceptSimilarIncome: true });
+    expect(await service.mutate("finance", mark)).toEqual(received);
+    const metadataEdit = await service.mutate("finance", { ...mark, requestId: crypto.randomUUID(), expectedRevision: received.revision,
+      patch: { note: "Reconciled as a distinct payment" } });
+    const deleted = await service.mutate("finance", { ...mark, action: "deleteFunding", requestId: crypto.randomUUID(),
+      expectedRevision: metadataEdit.revision });
+    const restore = { ...mark, action: "restoreFunding", requestId: crypto.randomUUID(), expectedRevision: deleted.revision };
+    await expect(service.mutate("finance", restore)).rejects.toMatchObject(match);
+    await expect(service.mutate("finance", { ...restore, acceptSimilarIncome: true })).resolves.toMatchObject({ ok: true });
+    expect((await pg.query("select new_value from finance.audit_log where entity_id = $1 and field_name = 'income_match_confirmation'", [draft.id])).rows)
+      .toEqual([{ new_value: "confirmed" }, { new_value: "confirmed" }]);
     await pg.query("delete from identity.member_roles where member_id = $1", [finance.userId]);
     await expect(service.mutate("finance", matchingReceipt)).rejects.toMatchObject({ status: 403 });
     await expect(service.financing("finance")).rejects.toMatchObject({ status: 403 });

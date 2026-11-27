@@ -16,6 +16,7 @@ import { Badge } from "@libs/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@libs/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@libs/components/ui/table";
 import { formatOre, parseNokToOre } from "./money";
+import { similarIncomeField } from "./income-receipts";
 import { FinanceRequestError } from "./repository";
 import {
   FUNDING_CONFIDENCE,
@@ -104,6 +105,7 @@ export function FinancingPage() {
   const seenVersion = useRef<number | null>(null);
   const savedVersion = useRef<number | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [similarRequest, setSimilarRequest] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [query, setQuery] = useState("");
@@ -112,6 +114,7 @@ export function FinancingPage() {
   const returnFocus = useRef<HTMLElement | null>(null);
   const showDeletedId = useId();
   const canEdit = Boolean(session.capabilities?.manageFunding && session.seasonCode);
+  const confirmingSimilar = editor?.kind === "funding" && editor.requestId === similarRequest;
   useEffect(() => {
     session.setFormDirty("financing-editor", editor !== null);
     return () => session.setFormDirty("financing-editor", false);
@@ -190,7 +193,7 @@ export function FinancingPage() {
     }
     setSaving(true);
     try {
-      const result = await session.mutate(body);
+      const result = await session.mutate(confirmingSimilar ? { ...body, [similarIncomeField]: true } : body);
       savedVersion.current = result.viewVersion;
       setEditor(null);
       const warning = result.warnings.map((item) => item.message).join(" ");
@@ -203,6 +206,14 @@ export function FinancingPage() {
     } catch (error) {
       if (await showSavedFinancing(error)) return;
       const fieldErrors = error instanceof FinanceRequestError ? error.errors ?? [] : [];
+      if (editor.kind === "funding" && fieldErrors.some(issue => issue.field === similarIncomeField)) {
+        setSimilarRequest(editor.requestId);
+        notify("Possible duplicate payment", error instanceof Error ? error.message : "Review the registered payment before continuing.", {
+          id: "financing-similar-income", variant: "warning", href: null,
+          action: { label: "Review fields", onClick: () => formRef.current?.querySelector<HTMLInputElement>("#funding-source")?.focus() },
+        });
+        return;
+      }
       if (fieldErrors.length) focusErrors(fieldErrors);
       notify("Could not save financing", error instanceof Error ? error.message : "Please try again.", {
         id: "financing-save-failed",
@@ -215,11 +226,11 @@ export function FinancingPage() {
     }
   }
 
-  async function runStatus(record: FundingRecord, action: "deleteFunding" | "restoreFunding") {
+  async function runStatus(record: FundingRecord, action: "deleteFunding" | "restoreFunding", requestId = crypto.randomUUID(), confirmed = false) {
     if (saving) return;
     setSaving(true);
     try {
-      const result = await session.mutate({ action, requestId: crypto.randomUUID(), fundingId: record.id, expectedRevision: record.revision });
+      const result = await session.mutate({ action, requestId, fundingId: record.id, expectedRevision: record.revision, ...(confirmed ? { [similarIncomeField]: true } : {}) });
       savedVersion.current = result.viewVersion;
       const warning = result.warnings.map((item) => item.message).join(" ");
       notify(action === "deleteFunding" ? "Funding deleted" : "Funding restored", warning || (action === "deleteFunding" ? "Show deleted funding to see the record." : "The previous status was restored."), {
@@ -231,6 +242,13 @@ export function FinancingPage() {
       await session.loadPage("financing");
     } catch (error) {
       if (await showSavedFinancing(error)) return;
+      if (action === "restoreFunding" && error instanceof FinanceRequestError && error.errors.some(issue => issue.field === similarIncomeField)) {
+        notify("Possible duplicate payment", error.message, {
+          id: "financing-restore-similar-income", variant: "warning", href: null,
+          action: { label: "Restore anyway", onClick: () => { void runStatus(record, action, requestId, true); } },
+        });
+        return;
+      }
       notify(action === "deleteFunding" ? "Could not delete funding" : "Could not restore funding", error instanceof Error ? error.message : "Please try again.", {
         id: `financing-${action}-failed`,
         variant: "error",
@@ -271,7 +289,8 @@ export function FinancingPage() {
       <Dialog open={Boolean(editor || selectedRecord)} onOpenChange={open => { if (!open && !saving) { setEditor(null); setSelectedId(null); } }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" onPointerDownOutside={event => { if (editor) event.preventDefault(); }} onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }}>
           <DialogHeader><DialogTitle>{editor ? editor.kind === "funding" ? editor.mode === "create" ? "Add funding" : "Edit funding" : editor.mode === "create" ? "Add earmarked part" : "Edit earmarked part" : selectedRecord?.sourceName}</DialogTitle><DialogDescription>{editor ? "Save your changes or cancel to return to the funding source." : "Funding details, payment dates and earmarked funds."}</DialogDescription></DialogHeader>
-          {editor ? <EditorForm editor={editor} saving={saving} formRef={formRef} onSubmit={submit} onChange={setEditor} onCancel={() => setEditor(null)} /> : selectedRecord ? <FundingCard
+          {editor ? <EditorForm editor={editor} saving={saving} confirmingSimilar={confirmingSimilar} formRef={formRef} onSubmit={submit}
+            onChange={next => { setSimilarRequest(null); setEditor(next); }} onCancel={() => setEditor(null)} /> : selectedRecord ? <FundingCard
             record={selectedRecord} parts={partsFor(selectedRecord.id)} canEdit={canEdit && !saving}
             onEdit={() => setEditor({ kind: "funding", mode: "edit", requestId: crypto.randomUUID(), fundingId: selectedRecord.id, expectedRevision: selectedRecord.revision, values: fundingValues(selectedRecord), errors: {} })}
             onAddPart={() => setEditor({ kind: "part", mode: "create", requestId: crypto.randomUUID(), fundingId: selectedRecord.id, fundingLabel: selectedRecord.sourceName, expectedRevision: selectedRecord.revision, values: { purpose: "", amountNok: "", spendBy: "", conditions: "" }, errors: {} })}
@@ -329,9 +348,10 @@ function partBody(editor: Extract<Editor, { kind: "part" }>): Record<string, unk
   return { action: "editEarmark", requestId: editor.requestId, partId: editor.partId, expectedRevision: editor.expectedRevision, patch: { purpose: part.purpose, amountNok: part.amountNok, spendBy: part.spendBy, conditions: part.conditions } };
 }
 
-function EditorForm({ editor, saving, formRef, onSubmit, onChange, onCancel }: {
+function EditorForm({ editor, saving, confirmingSimilar, formRef, onSubmit, onChange, onCancel }: {
   editor: Editor;
   saving: boolean;
+  confirmingSimilar: boolean;
   formRef: RefObject<HTMLFormElement | null>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onChange: (editor: Editor) => void;
@@ -347,11 +367,13 @@ function EditorForm({ editor, saving, formRef, onSubmit, onChange, onCancel }: {
         </CardDescription>
       </CardHeader>
       <form ref={formRef} onSubmit={onSubmit} autoComplete="off">
-        <CardContent className="grid gap-4 px-0 sm:grid-cols-2">
-          {editor.kind === "funding" ? <FundingFields editor={editor} onChange={onChange} /> : <PartFields editor={editor} onChange={onChange} />}
+        <CardContent className="px-0">
+          <fieldset disabled={saving} className="grid gap-4 sm:grid-cols-2">
+            {editor.kind === "funding" ? <FundingFields editor={editor} onChange={onChange} /> : <PartFields editor={editor} onChange={onChange} />}
+          </fieldset>
         </CardContent>
         <CardFooter className="mt-6 flex flex-wrap gap-2 px-0">
-          <Button type="submit" disabled={saving} aria-busy={saving}>{editor.kind === "funding" ? "Save funding" : "Save part"}</Button>
+          <Button type="submit" disabled={saving} aria-busy={saving}>{confirmingSimilar ? "Save anyway" : editor.kind === "funding" ? "Save funding" : "Save part"}</Button>
           <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>Cancel</Button>
         </CardFooter>
       </form>

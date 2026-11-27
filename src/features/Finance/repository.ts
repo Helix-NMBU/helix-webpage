@@ -1,7 +1,8 @@
 import { isIncomeAction } from "./income-receipts";
 import { mutateLocalIncome } from "./local-income-receipts";
+import { isManualFundingAction } from "./local-funding-sources";
 import { publishFinanceUpdate } from "./finance-events";
-import { loadLocalFinanceViews, localFinanceVersion, mutateLocalPurchase } from "./local-finance-read";
+import { loadLocalFinanceViews, localFinanceVersion, mutateLocalFunding, mutateLocalPurchase } from "./local-finance-read";
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
 import { createLocalInvoiceEvidenceApi, localInvoiceRecovery } from "./invoice-local";
 import { createInvoiceContinuation } from "./invoice-continuation";
@@ -89,6 +90,7 @@ export function createFinanceApi(owner: { current: string | null }) {
           return { ok: true, viewVersion: localFinanceVersion(localBankVersion), id, warnings: [], errors: [] };
         });
       }
+      if (isManualFundingAction(action.action)) return localRead(() => mutateLocalFunding(action, localBankVersion));
       if (action.action !== "setBankSnapshot") return localRead(()=>mutateLocalPurchase(action,localBankVersion));
       if (action.expectedRevision !== (localBankSnapshot?.revision ?? 0)) throw new FinanceRequestError("The balance changed. Reload it before saving.", 409);
       let amount: bigint | null;

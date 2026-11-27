@@ -1,4 +1,5 @@
 import { loadLocalIncomeReceipts, localIncomeVersion } from "./local-income-receipts";
+import { applyLocalFundingChange, type LocalFundingState } from "./local-funding-sources";
 import { normalizeInvoiceDriveUrl, purchaseInvoiceReference } from "./invoice-link";
 import { localFinanceProfileSelection } from "../MemberPlatform/local-finance-profile";
 import { capabilitiesForProfiles } from "./access";
@@ -35,7 +36,6 @@ import { stableJson } from "./funding";
 import type {
   FinanceMutationResult,
   FundingPartRecord,
-  FundingRecord,
   PublicBudgetItem,
 } from "./types";
 import type { LocalInvoiceFact } from "./invoice-local";
@@ -87,13 +87,12 @@ export interface LocalPurchaseState {
     >
   >;
 }
-export interface LocalFinanceFixtureLedger {
+export interface LocalFinanceFixtureLedger extends LocalFundingState {
   version: number;
   seasonCode: string;
   budgetStatus: "absent" | "draft" | "approved";
   approvedOn: string | null;
   items: PublicBudgetItem[];
-  funding?: FundingRecord[];
   parts?: FundingPartRecord[];
   commitments?: LocalFinanceProjectionInput["commitments"];
 }
@@ -348,6 +347,24 @@ export function loadLocalSeasonFinances(
       ? { status: "unavailable" }
       : { status: "no-season" },
   };
+}
+
+export function mutateLocalFunding(body: Record<string, unknown>, bankVersion: number): FinanceMutationResult {
+  guard("finance");
+  const profile = localFinanceProfileSelection();
+  if (profile === null || !capabilitiesForProfiles([profile ?? "finance"]).manageFunding) {
+    throw Object.assign(new Error("Finance access is required."), { status: 403 });
+  }
+  const ledger = saved<LocalFinanceFixtureLedger>(LEDGER, {
+    version: 0, seasonCode: saved("helix-member-local-projects-v1", initialLocalWorkspace()).season, budgetStatus: "absent", approvedOn: null, items: [],
+  });
+  const before = combinedVersion(bankVersion);
+  const result = applyLocalFundingChange(ledger, ledger.seasonCode, before, body);
+  if (result.viewVersion > before) {
+    ledger.version += 1;
+    localStorage.setItem(LEDGER, JSON.stringify(ledger));
+  }
+  return result;
 }
 
 /** Processing uses the same persisted purchase facts; it never edits the dated bank balance. */
