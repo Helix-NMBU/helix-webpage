@@ -15,7 +15,14 @@ it('posts credentials only to the fixed production runner and refuses redirects'
   });
 });
 
-it.each([{ created: 1, failed: 1 }, { created: -1, failed: 0 }, { created: 1 }, null])(
+it.each([
+  { created: 1, failed: 1, failures: [{}] },
+  { created: -1, failed: 0, failures: [] },
+  { created: 1, failed: 0, failures: [{}] },
+  { created: 1, failed: 0 },
+  { created: 1 },
+  null,
+])(
   'rejects incomplete or invalid success results (%j)',
   async result => {
     const request = vi.fn().mockResolvedValue(Response.json(result));

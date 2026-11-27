@@ -17,7 +17,9 @@ export async function runPartnerInvoices(secret, request = fetch) {
     throw new Error('Invoice catch-up could not reach the production runner. Check the route for redirects or timeouts, then rerun this workflow.');
   }
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result || !Number.isSafeInteger(result.created) || result.created < 0 || result.failed !== 0) {
+  const complete = result && Number.isSafeInteger(result.created) && result.created >= 0
+    && result.failed === 0 && Array.isArray(result.failures) && result.failures.length === 0;
+  if (!response.ok || !complete) {
     // Do not print response bodies or credentials into GitHub logs.
     throw new Error(`Invoice catch-up failed (HTTP ${response.status}). Check the runner secret, season setup, verified Finance lead and pending agreement reviews, then rerun this workflow.`);
   }
